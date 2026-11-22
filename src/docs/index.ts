@@ -6,6 +6,7 @@ import verification from '../../docs/VERIFICATION-PLAN.md?raw'
 import uat from '../../docs/UAT-PLAN.md?raw'
 import azureSetup from '../../docs/azure-devops-connection.md?raw'
 import projectPlan from '../../docs/PROJECT-PLAN.md?raw'
+import codeReviewBacklog from '../../docs/CODE-REVIEW-BACKLOG.md?raw'
 import validationPackage from '../../docs/VALIDATION-PACKAGE.md?raw'
 import traceability from '../../docs/TRACEABILITY-MATRIX.md?raw'
 import knownIssues from '../../docs/KNOWN-ISSUES.md?raw'
@@ -36,5 +37,6 @@ export const projectDocs: ProjectDoc[] = [
   { file: 'DEVELOPMENT-PROCESS.md', label: 'Development process', source: process },
   { file: 'CONFIGURATION-MANAGEMENT.md', label: 'Configuration management', source: configuration },
   { file: 'PROJECT-PLAN.md', label: 'Project plan', source: projectPlan },
+  { file: 'CODE-REVIEW-BACKLOG.md', label: 'Code review backlog', source: codeReviewBacklog },
   { file: 'CP_Release_Reporting_Implementation.md', label: 'CP release reporting brief', source: cpReporting },
 ]
