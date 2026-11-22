@@ -15,7 +15,7 @@ import type { PageProps } from './types'
 import { FeatureEditor, type FeatureEditorMode } from '../components/FeatureEditor'
 import { StoryEditor } from '../components/StoryEditor'
 import { WorkItemEditor } from '../components/WorkItemEditor'
-import type { FeatureSetups } from '../featureSetup'
+import { completeChildrenOn, type FeatureSetups } from '../featureSetup'
 
 type Log = { tone: 'success' | 'error' | 'info'; text: string }
 const stateTone = (state: string): Tone => /new|proposed|to do/i.test(state) ? 'info' : /active|in progress|committed|doing/i.test(state) ? 'open' : 'neutral'
@@ -129,7 +129,7 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
                 { id: 'state', label: 'State', value: (row) => row.item.state, render: (row) => <Pill tone={stateTone(row.item.state)}>{row.item.state}</Pill> },
                 { id: 'feature', label: 'Feature', value: (row) => row.depth ? row.top.title : row.feature && row.feature.id !== row.item.id ? row.feature.title : '', render: (row) => row.depth ? <small className="plain">{row.top.title}</small> : row.feature && row.feature.id !== row.item.id ? <small className="plain">{row.feature.title}</small> : '—' },
                 { id: 'iteration', label: 'Iteration', value: (row) => shortPath(row.item.iterationPath), render: (row) => <small className="plain">{shortPath(row.item.iterationPath)}</small> },
-                { id: 'action', label: 'Action', sortable: false, export: false, render: (row) => { if (row.depth === 0) { const item = row.item; return <>{action(item)}{item.workItemType === 'Feature' && !hasOptionalStories(azure.items, item) && <button type="button" className="text-button" disabled={Boolean(blocked)} title="Add the missing User Stories and this month's Time Writing task under this Feature" onClick={() => setEditor({ resume: item })}>Complete children</button>}{editButton(item)}{monthButton(item)}{item.workItemType === 'Feature' && <button type="button" className="text-button" disabled={Boolean(blocked)} title="Create a User Story under this Feature" onClick={() => setStoryOf(item)}>＋ User Story</button>}</> } const entry = row.item; return <>{isMine(entry, my.me) && nextStateFor(entry, azure.items) && /new|active/i.test(entry.state) ? action(entry) : <small className="muted">{isMine(entry, my.me) ? '—' : 'Not mine'}</small>}{editButton(entry)}{monthButton(entry)}</> } },
+                { id: 'action', label: 'Action', sortable: false, export: false, render: (row) => { if (row.depth === 0) { const item = row.item; return <>{action(item)}{item.workItemType === 'Feature' && completeChildrenOn(featureSetup, item.parentId) && !hasOptionalStories(azure.items, item) && <button type="button" className="text-button" disabled={Boolean(blocked)} title="Add the missing User Stories and this month's Time Writing task under this Feature" onClick={() => setEditor({ resume: item })}>Complete children</button>}{editButton(item)}{monthButton(item)}{item.workItemType === 'Feature' && <button type="button" className="text-button" disabled={Boolean(blocked)} title="Create a User Story under this Feature" onClick={() => setStoryOf(item)}>＋ User Story</button>}</> } const entry = row.item; return <>{isMine(entry, my.me) && nextStateFor(entry, azure.items) && /new|active/i.test(entry.state) ? action(entry) : <small className="muted">{isMine(entry, my.me) ? '—' : 'Not mine'}</small>}{editButton(entry)}{monthButton(entry)}</> } },
               ]} />
           })()}
         </TablePanel>

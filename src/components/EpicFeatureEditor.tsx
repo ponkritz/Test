@@ -88,6 +88,15 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, qeColumnNames 
     if (!value.inherits?.length) delete value.inherits
     putLayer(next)
   }
+  // BKL-38: Complete children per Epic, in the shared setup only (a team decision); on unless turned off.
+  const completeChildrenHere = isAll || setupFor(sharedFile, epicId)?.completeChildren !== false
+  const setCompleteChildren = (on: boolean) => {
+    const next = structuredClone(sharedFile)
+    let value = next.epics.find((item) => item.epicId === epicId)
+    if (!value) { value = { ...emptySetup(epicId, known.get(epicId) ?? ''), inherits: [...inheritFields] }; next.epics.push(value) }
+    if (on) delete value.completeChildren; else value.completeChildren = false
+    setShared(next); setResult(null)
+  }
   const changeDefaults = (update: (value: SetupDefaults) => void) => { const next = structuredClone(sharedFile); const value = { ...(next.defaults ?? {}) }; update(value); next.defaults = value; setShared(next); setResult(null) }
   const changeFields = (update: (value: EpicFields) => void) => {
     const value: EpicFields = structuredClone(fieldsEntry ?? { epicId, epicTitle: known.get(epicId) ?? '', fields: [] })
@@ -230,6 +239,12 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, qeColumnNames 
         <header><span className="efe-n">{isAll ? 3 : 4}</span><div><h3>Month Task</h3><small>The Time Writing Task’s default estimate</small></div>{switchView('task', 'Month Task')}</header>
         {!isAll && !custom.task ? fromDefaults(defaults.originalEstimate != null ? `${defaults.originalEstimate} hours` : 'No default estimate') : <label className="efe-field efe-inline">Default Original Estimate<input type="number" min="0" max="1000000" step="0.25" value={(isAll ? defaults.originalEstimate : entry?.task.originalEstimate) ?? ''} disabled={!editable} onChange={(event) => { const raw = event.target.value.trim(), hours = raw === '' || !Number.isFinite(Number(raw)) || Number(raw) < 0 ? undefined : Number(raw); if (isAll) changeDefaults((value) => { if (hours == null) delete value.originalEstimate; else value.originalEstimate = hours }); else changeEntry((value) => { if (hours == null) delete value.task.originalEstimate; else value.task.originalEstimate = hours }) }} />hours</label>}
       </section>
+
+      {!isAll && <section className="efe-section" aria-label="Complete children">
+        <header><span className="efe-n">5</span><div><h3>Complete children</h3><small>Offered on this Epic’s Features — a team setting (shared setup)</small></div></header>
+        <label className="checkbox-label"><input type="checkbox" checked={completeChildrenHere} disabled={!canShared} onChange={(event) => setCompleteChildren(event.target.checked)} />Offer “Complete children” on the Features of this Epic</label>
+        <small className="muted">{completeChildrenHere ? 'A Feature without optional User Stories shows Complete children; its pop-up lists this Epic’s User Stories, none ticked, so the person decides which to add.' : 'Hidden on this Epic’s Features; single User Stories are still added with ＋ User Story.'}</small>
+      </section>}
 
       {!isAll && entry && editable && <div className="button-row"><button type="button" className="text-button danger-text" onClick={() => { if (!window.confirm(`${useMine ? 'Remove your own version of' : 'Reset'} ${title}${useMine ? '' : ' to the defaults'}? Save to keep it.`)) return; putLayer({ ...layerFile, epics: layerFile.epics.filter((item) => item.epicId !== epicId) }) }}>{useMine ? 'Remove my own version' : 'Reset this Epic to the defaults'}</button>
         {useMine && can('setup.feature') && canShared && <button type="button" className="ghost" onClick={() => { const next = structuredClone(sharedFile); next.epics = [...next.epics.filter((item) => item.epicId !== epicId), structuredClone(entry)]; setShared(next); setResult({ tone: 'success', text: 'Your version will be the shared one — Save to keep it.' }) }}>Share my version with everyone</button>}

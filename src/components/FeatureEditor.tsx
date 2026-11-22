@@ -103,7 +103,8 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   const title = fieldsMakeTitle && !titleTyped ? (fromFields ? fromFields.title : fieldTitle(fieldValues)) : titleText
   const offListFields = epicEntry ? offList(epicEntry, fieldValues, epicFile) : []
   const setTitle = (value: string) => { setTitleText(value); setTitleTyped(true) }
-  const [skipStories, setSkipStories] = useState<number[]>([])
+  // BKL-38: Complete children lists the Epic's User Stories unticked: the person decides which to add.
+  const [skipStories, setSkipStories] = useState<number[]>(() => resumeFeature && epicSetup ? epicSetup.stories.map((_, index) => index) : [])
   // The built-in "Review of Deliverables - <Feature>" story: optional, in the Sprint chosen. It and the milestone /
   // optional stories exclude each other: ticking one side clears the other. By default the stories are ticked and it
   // is not, unless there are no stories to tick.
@@ -184,7 +185,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
       }
       let storyText = ''
       const own = { title: ownStory.title.trim(), description: ownStory.description.trim(), comment: ownStory.comment.trim() }
-      if (!resumeFeature && own.title) {
+      if (own.title) {
         try {
           progress('Adding your User Story…')
           const { story, commentError } = await addUserStory(config, token, { parentId: bundle.feature.id, title: own.title, description: own.description, acceptanceCriteria: '', iterationPath: sprintPath, assignedTo: assignee, comment: own.comment })
@@ -298,7 +299,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
         {showPat ? <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => { setPat(event.target.value); setIterationChoices([]); setIterationPath(''); setSprintPath('') }} disabled={creating} /><small>Saved in this browser only. Enter it, then ↻ Reload the schedule.</small></label>
           : <p className="muted nf-pat">Using your saved Azure DevOps token. <button type="button" className="text-button" disabled={creating} onClick={() => setShowPat(true)}>Use another token</button></p>}
         {missingNote(0)}
-        {resumeFeature && <p className="muted">Adds the missing children of #{resumeFeature.id} without recreating the Feature. Existing children with the same title are reused.</p>}
+        {resumeFeature && <p className="muted">Adds the missing children of #{resumeFeature.id} without recreating the Feature. Tick the User Stories to add — none is ticked — or add one of your own. Existing children with the same title are reused.</p>}
       </section>
       {isNew && <section className={sectionClass(1)} hidden={!shown(1)} aria-label="Section 2: Definition of Done" tabIndex={-1}>
         {heading(1)}
@@ -320,11 +321,11 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
           </fieldset>
           <p className="muted nf-always">Always: {title.trim() ? <>“{title.trim()} - Time Writing” at {config.project} (project root), with the Task “{monthLabel} | {title.trim()}”{months.length > 1 ? ` and one for each month up to ${months[months.length - 1]}` : ''}{epicSetup.task.originalEstimate != null ? ` (${epicSetup.task.originalEstimate}h by default)` : ''}.</> : 'the Time Writing User Story and the month Task (enter the title to see them).'}</p>
         </> : null}
-        {!resumeFeature && <fieldset className="milestone-choices nf-own-story" disabled={creating}><legend>Your own User Story <small className="muted">(optional)</small></legend>
+        {<fieldset className="milestone-choices nf-own-story" disabled={creating}><legend>Your own User Story <small className="muted">(optional)</small></legend>
           <label>User Story title<input value={ownStory.title} maxLength={255} placeholder="Leave empty for none" onChange={(event) => setOwnStory((current) => ({ ...current, title: event.target.value }))} /></label>
           <label>User Story description<textarea value={ownStory.description} rows={2} placeholder="What needs to be done, and why" onChange={(event) => setOwnStory((current) => ({ ...current, description: event.target.value }))} /></label>
           <label>Comment <small className="muted">(optional, added to its Discussion)</small><textarea value={ownStory.comment} rows={2} onChange={(event) => setOwnStory((current) => ({ ...current, comment: event.target.value }))} /></label>
-          <small className="muted">Created under the new Feature in the Sprint chosen, assigned like the Feature.</small>
+          <small className="muted">Created under {resumeFeature ? 'the' : 'the new'} Feature in the Sprint chosen, assigned like the Feature.</small>
         </fieldset>}
         {missingNote(2)}
         <p className="info-line"><Info label="Paths and assignment">Feature → {resumeFeature ? resumeFeature.iterationPath : iterationPath || 'the PI chosen'}. Optional User Stories → {sprintPath || 'the Sprint chosen'}. Time Writing story and Task → {config.project}, never the Sprint, in the Feature’s Area Path (the same on every page; an existing month Task of the person is reused). Area: the Feature and its User Stories take the Epic’s Area Path. Every new item is assigned to {assignee || 'the person chosen'}. {month ? `Time Writing month: ${monthLabel}.` : 'Current date uses India time.'}</Info></p>

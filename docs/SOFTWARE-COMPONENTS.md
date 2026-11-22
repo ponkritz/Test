@@ -81,7 +81,7 @@ This document lists every software component of the system: the in-house source 
 | DpBoardColumn | `src/components/DpBoardColumn.tsx` | DP table and Windchill releases cell showing the matching QMS-0025 Feature/User Story, or Create Feature when nothing matches. | QV |
 | DpMonthCounts | `src/components/DpMonthCounts.tsx` | Table of a month's DP Supported Releases with milestones passed (DT, SFV, PRD, RPE) and dates. | QV, OVR |
 | ErrorBoundary | `src/components/ErrorBoundary.tsx` | Catches render errors in a view and shows what failed with a way back instead of a blank app. | UI |
-| FeatureEditor | `src/components/FeatureEditor.tsx` | The one New Feature form (BKL-26): add a Feature under an Epic or complete a Feature's children, used by Backlogs, My Tasks [Board], Release Details and Time Writing; the Parent Epic starts blank. | ATM, CON, BKL, ACT |
+| FeatureEditor | `src/components/FeatureEditor.tsx` | The one New Feature form (BKL-26): add a Feature under an Epic or complete a Feature's children (its Epic's stories none ticked, BKL-38), used by Backlogs, My Tasks [Board], Release Details and Time Writing; the Parent Epic starts blank. | ATM, CON, BKL, ACT |
 | MonthTasksDialog | `src/components/MonthTasksDialog.tsx` | ＋ Time Writing Task: the months (header month first, ＋ Add month) and the hours of each (BKL-34); Assigned to and the warning on a month that already has a Task (BKL-35). | BKL |
 | JobsIndicator | `src/components/JobsIndicator.tsx` | Top-bar list of the background jobs: running count, results, Clear finished; asks before leaving the page while one runs. | NAV |
 | MonthlyPackPanel | `src/components/MonthlyPackPanel.tsx` | Pulse Check → Monthly pack: the two slides as boxes with generated lines and the month's text, Save to Git, copy, Download .pptx. | PCK |
@@ -123,7 +123,7 @@ This document lists every software component of the system: the in-house source 
 | usageCounts | `src/usageCounts.ts` | My page usage: opt-in page-opening counts in this browser's local storage, read safely, deleted when turned off (NAV-45). | NAV |
 | onPremValues | `src/onPremValues.ts` | The values of an on-prem field in the fetched data, for the drop-down of an Epic setup field (EPS-06). | EPS |
 | QePick | `src/components/QePick.tsx` | The person drop-down of a release in the bulk Create Features pop-ups (DPF-06). | DPF |
-| EpicFeatureEditor | `src/components/EpicFeatureEditor.tsx` | Admin → Epic & Feature setup → Setup per Epic: the Epic list, the preview and the four sections with Customize switches, my own version, one Save (CON-97). | CON, EPS |
+| EpicFeatureEditor | `src/components/EpicFeatureEditor.tsx` | Admin → Epic & Feature setup → Setup per Epic: the Epic list, the preview and the four sections with Customize switches, the Complete children setting (BKL-38), my own version, one Save (CON-97). | CON, EPS, BKL |
 | StoryTemplatesPanel | `src/components/StoryTemplatesPanel.tsx` | Admin → Epic & Feature setup → User Story templates: the shared library with Epic and Release Classification tags (STT-01). | STT |
 | AdminOverview | `src/components/AdminOverview.tsx` | Admin → Overview: setup health with links, unsaved shared changes with Save to Git, latest changes (ADM-01, ADM-02). | ADM |
 | UsagePanel | `src/components/UsagePanel.tsx` | My settings → My page usage: the opt-in tick, the counts most used first, Start again from zero (NAV-45). | NAV |
@@ -171,7 +171,7 @@ This document lists every software component of the system: the in-house source 
 | ioccMilestones | `src/ioccMilestones.ts` | IOCC document type from the Title (Release Plan, Release Notes, Verification Report), the release a document belongs to, and the unique Completed and Supported Releases signed in a month. | QV |
 | nestedGroups | `src/nestedGroups.ts` | Nested grouping of a list by several levels, with a unique key per group path (IOCC releases). | QV |
 | dpReleases | `src/dpReleases.ts` | DP releases from Pedestal Release items dated by matching DHFI documents (exact version). | QV |
-| featureSetup | `src/featureSetup.ts` | Per-Epic Feature setup (stories, Time Writing story, task defaults), placeholders, shared/personal layers, parse/serialise. | CON |
+| featureSetup | `src/featureSetup.ts` | Per-Epic Feature setup (stories, Time Writing story, task defaults), placeholders, shared/personal layers, parse/serialise; Complete children per Epic (BKL-38). | CON, BKL |
 | homeTiles | `src/homeTiles.ts` | The Home tiles and links: types and the search over them (NAV-43, NAV-44); the tile / classic view choice (NAV-46). | NAV |
 | featureMonths | `src/featureMonths.ts` | The Time Writing months of a new Feature from its Start date and Target date (BKL-31, BKL-32). | BKL |
 | format | `src/format.ts` | Display formatting: hours, percent, dates in viewer time zone, month names, relative time. | UI |

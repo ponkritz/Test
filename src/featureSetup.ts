@@ -24,7 +24,7 @@ export interface TitleField { label: string; source: string }
 // (QE, possible QEs, Create Features); built-in values when the setup has none.
 export interface ReleaseTypeSetup { featureDoD: string; stories: StoryTemplate[] }
 export interface QeMapColumns { matchColumn: string; qeColumn: string }
-export interface EpicSetup { epicId: number; epicTitle: string; inherits?: InheritField[]; featureDoD: string; stories: StoryTemplate[]; timeWritingStory: TimeWritingStoryTemplate; task: TaskTemplate; titleFields?: TitleField[]; qeColumns?: QeMapColumns; classSets?: Record<string, ReleaseTypeSetup> }
+export interface EpicSetup { epicId: number; epicTitle: string; inherits?: InheritField[]; featureDoD: string; stories: StoryTemplate[]; timeWritingStory: TimeWritingStoryTemplate; task: TaskTemplate; titleFields?: TitleField[]; qeColumns?: QeMapColumns; classSets?: Record<string, ReleaseTypeSetup>; completeChildren?: false }
 // CON-95: the shared file may hold defaults for all Epics; an Epic's setup (shared or mine) may leave fields to the
 // layer above (inherits): Built in → All Epics → Epic (shared) → Mine.
 export type InheritField = 'featureDoD' | 'stories' | 'estimate'
@@ -148,7 +148,7 @@ export function cleanSetup(input: Partial<Record<keyof EpicSetup, unknown>>): Ep
   // DPF-09: the old Release / PU sets (releaseTypes) are no longer read; a save drops them.
   const qeColumns = cleanQeColumns(input.qeColumns), classSets = cleanClassSets(input.classSets)
   const inherits = Array.isArray(input.inherits) ? inheritFields.filter((field) => (input.inherits as unknown[]).includes(field)) : []
-  return { epicId, epicTitle: text(input.epicTitle, 255), ...(inherits.length ? { inherits } : {}), featureDoD: text(input.featureDoD, 100000), stories, timeWritingStory: cleanTimeWritingStory(input.timeWritingStory as Partial<Record<keyof TimeWritingStoryTemplate, unknown>> | undefined), task: cleanTask(input.task as Partial<Record<keyof TaskTemplate, unknown>> | undefined), ...(qeColumns ? { qeColumns } : {}), ...(classSets ? { classSets } : {}) }
+  return { epicId, epicTitle: text(input.epicTitle, 255), ...(inherits.length ? { inherits } : {}), featureDoD: text(input.featureDoD, 100000), stories, timeWritingStory: cleanTimeWritingStory(input.timeWritingStory as Partial<Record<keyof TimeWritingStoryTemplate, unknown>> | undefined), task: cleanTask(input.task as Partial<Record<keyof TaskTemplate, unknown>> | undefined), ...(qeColumns ? { qeColumns } : {}), ...(classSets ? { classSets } : {}), ...(input.completeChildren === false ? { completeChildren: false as const } : {}) }
 }
 
 export function parseFeatureSetup(raw: string): FeatureSetupFile {
@@ -300,3 +300,7 @@ export function templateUses(file: FeatureSetupFile | null | undefined, id: stri
   return lists.reduce((sum, stories) => sum + stories.filter((story) => story.templateId === id).length, 0)
 }
 
+
+// BKL-38: "Complete children" is offered per Epic — a team decision in the shared setup (Admin → Epic & Feature setup),
+// on unless the Epic's shared setup turns it off; an Epic without a setup keeps it on.
+export const completeChildrenOn = (setups: FeatureSetups | null | undefined, epicId: number | undefined) => epicId == null || setupFor(setups?.shared ?? null, epicId)?.completeChildren !== false

@@ -416,6 +416,12 @@ test('TC-EPS-01: Epic setup — its fields appear in New Feature (a value list, 
   assert.equal(await page.getByLabel('Field 1 label').inputValue(), 'Platform')
   assert.equal(await page.getByLabel('Field 1 label').isDisabled(), true, 'read-only without Git storage')
   assert.match(await text(page.locator('.efe-preview')), /Title Platform 1\.0 \| Feature title.*Description .*Program : Program.*Owner : Owner/s)
+  // BKL-38: Complete children is a per-Epic choice, on by default; read-only without Git storage (TC-BKL-27).
+  const complete = page.getByRole('region', { name: 'Complete children' }).or(page.locator('section[aria-label="Complete children"]'))
+  const offer = complete.getByRole('checkbox', { name: /Offer “Complete children” on the Features of this Epic/ })
+  assert.equal(await offer.isChecked(), true, 'on by default')
+  assert.equal(await offer.isDisabled(), true, 'a team setting: read-only without Git storage')
+  assert.match(await text(complete), /none ticked, so the person decides which to add/)
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Value lists' }).click()
   assert.equal(await page.getByLabel('Values of Platform').inputValue(), 'Platform 1.0\nPlatform 2.0')
   assert.deepEqual(errors, [])
