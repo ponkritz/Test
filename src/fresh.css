@@ -908,3 +908,6 @@ html{scroll-padding-bottom:calc(var(--app-footer-h) + 8px)}
    shrinking to its content and being centred both ways by .content's auto margins. */
 .app-shell>main>.content,.app-shell>main>.data-notices{width:100%;box-sizing:border-box;margin-left:auto;margin-right:auto;flex:0 0 auto}
 .app-shell>main>.content{margin-top:0;margin-bottom:0}
+/* ACT-22: the Time Writing cards stay at the top, under the top bar, however far the page scrolls. */
+.act-top.act-sticky{position:sticky;top:var(--topbar-h,64px);z-index:6;background:var(--bg);padding:10px 0 12px;margin:-10px 0 8px;box-shadow:0 10px 12px -12px #0f2a4a40}
+@media(max-width:800px){.act-top.act-sticky{position:static;box-shadow:none;margin:0 0 20px;padding:0}}

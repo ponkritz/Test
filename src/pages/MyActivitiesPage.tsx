@@ -332,17 +332,11 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   const chosenEpic = epics.find((epic) => epic.id === Number(stream))
 
   return <Page className="activities-page">
-    <header className="act-header">
-      <div><h2>Add activities</h2><p>Record your activities for {label}. Copy your recurring activities or add a new one.</p></div>
-      <div className="act-header-tools">
-        {my.known && <button type="button" className="act-primary act-add-open" onClick={() => setAddOpen(true)}>＋ Add a new activity</button>}
-      </div>
-    </header>
     {!self && my.known && <div className="act-message act-info" role="status">Showing {my.me.name}'s activities. {assignee ? `What you save here is written for ${my.me.name} (assigned to them).` : 'Saving is not available for another person here.'} Choose “Me” to go back.</div>}
     {message && <div className={`act-message act-${message.tone}`} role="status">{message.text}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setMessage(null)}>×</button></div>}
     {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set your work email in Admin → Streams, or choose your name with Person at the top right, to see your activities." /> : <>
     {/* One row of equal tiles (ACT-11, ACT-05): the hours, the tasks, the monthly update and the last day. */}
-    <div className="act-top">
+    <div className="act-top act-sticky">
     <Metrics>
       <Metric label="Capacity" value={capacity == null ? '—' : `${formatHours(capacity)}h`} hint={capacity != null ? 'Working days less absence' : capacityWhy ?? 'Your name is not known yet'} />
       <Metric label="Planned hours" value={<>{formatHours(kpi.plan.value)}{pctOf(kpi.plan.value, capacity)}</>} hint="Original Estimate · % of capacity" />
@@ -367,10 +361,12 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
       <div className="act-main">
       <section className="act-card" aria-labelledby="act-copy">
         <div className="act-card-head"><h3 id="act-copy">Your activities for {label}</h3>
+          {/* ACT-20: an action of the list, not a heading of the page. */}
+          <button type="button" className="ghost act-add-open" disabled={saving} onClick={() => setAddOpen(true)}>＋ Add a new activity</button>
           <label className="act-close-mode" title="Tick Features in the list to close your open Tasks and User Stories under them (and the Feature when nothing else is open); their month Tasks become read-only"><input type="checkbox" checked={closeMode} disabled={saving} onChange={(event) => { setCloseMode(event.target.checked); setClosing({}) }} />Close Features</label>
           {closeMode ? <button type="button" className="act-primary act-save-top" disabled={!closingRows.length || saving} onClick={closeFeatures}>{closingRows.length ? `Close ${closingRows.length} Feature${closingRows.length === 1 ? '' : 's'}` : 'Tick Features to close'}</button>
             : <button type="button" className="act-primary act-save-top" disabled={!pendingCount || saving} onClick={saveAll}>{saving ? 'Saving…' : pendingCount ? `Save ${pendingCount} activit${pendingCount === 1 ? 'y' : 'ies'}` : 'Nothing to save'}</button>}</div>
-        <p className="act-sub">Your {label} tasks with their hours. Activities you add from the suggestions appear here until you save; enter or change hours and save once.</p>
+        <p className="act-sub">Record your activities for {label}: your tasks with their hours. Add one from the suggestions (they appear here until you save) or with ＋ Add a new activity; enter or change hours and save once.</p>
         <table className="act-table">
           <thead><tr><th aria-label="Add" /><th className="act-stream">Epic</th><th>Activity</th><th>Planned</th><th>Actual</th></tr></thead>
           <tbody>

@@ -842,8 +842,16 @@ test('TC-ACT-02: Time Writing shows the person\'s KPI cards, month tasks, hours 
   assert.equal(await content.locator('.act-table').first().getByRole('checkbox', { name: /^Close / }).count(), 0, 'the tick boxes go with Close mode')
   await content.getByRole('textbox', { name: /^Actual hours for / }).first().fill('1')
   assert.match(await text(content.locator('.act-top .metric-grid')), /Unsaved changes/)
-  // ACT-20: ＋ Add a new activity sits at the top next to "Activities of" and opens a pop-up; the list keeps the full width.
-  assert.equal(await content.locator('.act-header-tools').getByRole('button', { name: '＋ Add a new activity' }).count(), 1)
+  // ACT-20: ＋ Add a new activity is a button of the list (in its heading row, not a page heading) and opens a pop-up.
+  assert.equal(await content.locator('.act-card-head').getByRole('button', { name: '＋ Add a new activity' }).count(), 1)
+  assert.equal(await content.getByRole('heading', { name: 'Add activities' }).count(), 0, 'no “Add activities” heading')
+  // ACT-22: the cards stay at the top under the top bar when the page scrolls.
+  await page.setViewportSize({ width: 1280, height: 520 })
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const stuck = await page.evaluate(() => Math.abs(document.querySelector('.act-top').getBoundingClientRect().top - document.querySelector('header.topbar').getBoundingClientRect().bottom))
+  assert.ok(stuck <= 1, `the cards sit under the top bar (${stuck}px)`)
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.evaluate(() => window.scrollTo(0, 0))
   assert.equal(await content.locator('.act-grid.act-add-folded').count(), 1)
   await content.getByRole('button', { name: '＋ Add a new activity' }).click()
   const dialog = page.getByRole('dialog', { name: 'Add a new activity' })
