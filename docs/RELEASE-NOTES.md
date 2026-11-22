@@ -2,6 +2,24 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v7.52.0 — 2026-11-22
+
+**Added**
+- **Profile** at the top right — My settings, Classic / Tile view, View as…, Search settings and Customize menu, moved from the menu (NAV-48, SET-15, NAV-46).
+- **Footer** on every page — where data is saved, the desktop app, zoom (desktop app), the version and build with Check for updates / Force Update; sticky at the bottom and never covering the page: content ends where the footer starts and the Unsaved changes bar sits above it (NAV-49, NAV-15).
+- **⟳ Time Writing** in the top bar — fetches only the Time Writing connection now, as Fetch in Admin → Streams does (FET-22).
+
+**Changed**
+- **Person** — one picker in the top bar on Time Writing, My Tasks [Board] and Sprint check, in place of Show work for / Activities of; My dashboard always shows you (NAV-47, ACT-14, MYD-01).
+- ↻ Refresh fetches the Time Writing connection first, so a slow on-prem view no longer holds it up (FET-22, KB-60).
+
+**Future plan**
+- Hiding the side menu in the tile view is recorded as OI-16.
+
+TC-NAV-47, TC-NAV-48, TC-FET-10; KB-60, OI-16.
+
+PR #335.
+
 ## v7.51.0 — 2026-11-22
 
 **Changed**
