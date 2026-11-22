@@ -220,12 +220,17 @@ test('TC-NAV-31: at phone width the navigation sits behind a menu button and the
 
 test('TC-UPD-02: Force Update shows the running version, build number and build id', async () => {
   const { page, context, errors } = await openPage(app)
-  await page.locator('footer.app-footer button', { hasText: /Force Update/ }).first().click()
+  // NAV-49: the footer shows only the version and build, with Force Update; the rest is in its window.
+  const footer = page.locator('footer.app-footer')
+  assert.match(await text(footer), /^(⬇ Desktop app )?v\d+\.\d+\.\d+ \(Build [\d—]+\) ↻ Force Update$/, 'the desktop app download, the version (build) and Force Update only')
+  assert.equal(await footer.getByRole('link', { name: /Desktop app/ }).or(footer.getByRole('button', { name: /Desktop app/ })).count(), 1, 'the desktop app download is in the footer')
+  await footer.getByRole('button', { name: /Force Update/ }).click()
   const dialog = page.getByRole('dialog').filter({ hasText: 'Force Update' })
   await dialog.waitFor()
   const body = await text(dialog)
   assert.match(body, /v\d+\.\d+\.\d+/)
   assert.match(body, /Build number \d+/)
+  assert.match(body, /Build ID .*Built .*Data saved: /, 'the build ID, build time and where data is saved')
   assert.deepEqual(errors, [])
   await context.close()
 })
