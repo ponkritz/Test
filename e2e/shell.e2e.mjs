@@ -40,6 +40,16 @@ test('TC-NAV-48: the profile at the top right holds My settings, the view switch
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   const gap = await page.evaluate(() => { const top = document.querySelector('footer.app-footer').getBoundingClientRect().top; return Math.max(...[...document.querySelectorAll('main > *:not(footer)')].map((element) => element.getBoundingClientRect().bottom)) - top })
   assert.ok(gap <= 1, `nothing ends under the footer (${gap}px)`)
+  // KB-61: a short page keeps the full width and starts at the top — every My settings section the same width.
+  await profileItem(page, 'My settings')
+  await page.locator('.settings-sections').waitFor()
+  const widths = []
+  for (const name of ['Your work email', 'Servers and PATs', 'My views', 'My naming patterns', 'My page usage']) {
+    await page.getByRole('tab', { name }).click()
+    widths.push(await page.evaluate(() => { const tabs = document.querySelector('.settings-sections').getBoundingClientRect(), block = document.querySelector('.settings-sections').parentElement.lastElementChild.getBoundingClientRect(), content = document.querySelector('main > .content').getBoundingClientRect(); return [Math.round(tabs.width), Math.round(block.width), Math.round(content.top)] }))
+  }
+  assert.equal(new Set(widths.map(([tabs, block]) => `${tabs}/${block}`)).size, 1, `one width for every section: ${JSON.stringify(widths)}`)
+  assert.ok(widths.every(([, , top]) => top < 200), `the page starts at the top: ${JSON.stringify(widths)}`)
   // NAV-47: Person in the top bar on the person-based pages only; My dashboard is always you.
   const person = page.locator('header.topbar').getByRole('combobox', { name: 'Person' })
   assert.equal(await person.count(), 0, 'not on Team overview')

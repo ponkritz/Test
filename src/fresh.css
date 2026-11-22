@@ -904,3 +904,7 @@ kbd{font-size:11px;border:1px solid var(--accent-line);border-radius:4px;padding
 .update-toast{bottom:calc(var(--app-footer-h) + 12px)}
 html{scroll-padding-bottom:calc(var(--app-footer-h) + 8px)}
 @media(max-width:700px){.app-footer{position:static;padding:8px 12px}.app-footer .build-status{margin-left:0}.efe-savebar{bottom:0}.update-toast{bottom:20px}}
+/* NAV-49: main is a flex column (the footer ends it); the page keeps its full width and starts at the top instead of
+   shrinking to its content and being centred both ways by .content's auto margins. */
+.app-shell>main>.content,.app-shell>main>.data-notices{width:100%;box-sizing:border-box;margin-left:auto;margin-right:auto;flex:0 0 auto}
+.app-shell>main>.content{margin-top:0;margin-bottom:0}
