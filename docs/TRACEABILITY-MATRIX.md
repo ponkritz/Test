@@ -188,7 +188,7 @@ Ver. = verification method (T test, D demonstration, I inspection, A analysis); 
 | NAV-46 | SR-01 | UR-01, UR-20 | T | S | TC-NAV-46 | — | `home-tiles.test.mjs` | OI-16 |
 | NAV-47 | SR-01 | UR-01, UR-20 | T | S | TC-NAV-47 | — | `app-frame.test.mjs` | — |
 | NAV-48 | SR-01 | UR-01, UR-20 | T | S | TC-NAV-48 | — | — | — |
-| NAV-49 | SR-01 | UR-01, UR-20 | T | S | TC-NAV-48 | — | — | — |
+| NAV-49 | SR-01 | UR-01, UR-20 | T | S | TC-NAV-48 | — | — | KB-61 |
 | OV-11 | SR-09 | UR-07 | T | S | TC-OV-11 | 4 | `dashboard.test.mjs` | — |
 | OV-12 | SR-09 | UR-07 | T | S | TC-OV-12 | — | `dashboard.test.mjs` | — |
 | OV-13 *(retired)* | SR-09 | UR-07 | T | S | TC-OV-13 | 4 | `insights.test.mjs` | — |
