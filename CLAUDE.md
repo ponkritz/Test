@@ -44,3 +44,7 @@ Seven Claude Code agents in `.claude/agents/` share the work of a change (see `d
 (DFMEA.md) and `security` (review and SECURITY-ASSESSMENT.md). Start every change with `requirement-gathering`; run the
 specialists its brief names (agents do not start other agents); finish with the lead's checklist. Open questions go to
 the user before any specialist starts.
+
+A separate **independent review team** of seven read-only agents (`review-lead`, `review-developer`, `review-tester`,
+`review-peer`, `review-code`, `review-uiux`, `review-defaults`) reviews the code itself when asked; it never edits code.
+Run `review-lead` to plan, each reviewer on its slices, then `review-lead` to merge — see `docs/reviews/README.md`.

@@ -37,7 +37,8 @@ points to it and repeats what must never be missed. Where the two differ, `CLAUD
 `.claude/agents/*.md` describe seven roles (requirement gathering as the lead, settings, export, test protocol,
 automation testing, DFMEA, security) and what each owns; `docs/DEVELOPMENT-PROCESS.md` §4 shows the order. An agent that
 cannot run them as sub-agents reads them as checklists and does each role's part itself. Open questions go to the user
-before the work starts, instead of assumptions.
+before the work starts, instead of assumptions. A second, read-only **independent review team** (`review-lead` and six reviewers: developer, tester, peer, code,
+UI/UX, design defaults) reviews the code without editing it; its method is in `docs/reviews/README.md`.
 
 ## Working next to another agent
 
