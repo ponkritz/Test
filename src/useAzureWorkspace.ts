@@ -8,6 +8,7 @@ import { loadAzurePat, saveAzurePat, forgetAzurePat, listAzureConnectionProfiles
 import { approvalDateFrom, checkWorkItemQuery, defaultReleaseQuery, fetchReleaseSource, normalizeReleaseSourceSettings, projectQuery, runWorkItemQuery, withAncestors } from './releaseSource'
 import { sampleDataset, sampleProfiles, sampleReleaseScopes } from './sampleData'
 import { indiaMonth } from './azureInsights'
+import { fetchAllOrder } from './fetchOrder'
 import { syncTitlesAfterSave } from './monthTaskAction'
 import { columnName, pickFields, queryLayout } from './queryView'
 import { duplicateOf, markResetApplied, promoteToTimeWriting, removeAllConnections } from './viewDefinitions'
@@ -391,10 +392,25 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
   // Fetches the active Time Writing connection and every read-only connection, one after another.
   async function fetchAll() {
     setError(''); setMessage('')
-    const targets = connectionProfiles.filter((profile) => profile.role !== 'time-tracking' || profile.id === activeTimeWriting())
+    // FET-22: the Time Writing connection first, so a slow or failing read-only view (an on-prem server without VPN)
+    // never holds it up.
+    const timeWriting = activeTimeWriting()
+    const targets = fetchAllOrder(connectionProfiles, timeWriting)
     let ok = 0
     for (const profile of targets) if (await fetchConnection(profile.id)) ok += 1
     setMessage(`${ok} of ${targets.length} connection${targets.length === 1 ? '' : 's'} fetched and saved.`)
+  }
+
+  // FET-22: Fetch Time Writing — only the Time Writing connection, now, from the top bar (the same fetch as its Fetch in
+  // Admin → Streams). A fetch already running is waited for, then fetched again so the result is fresh.
+  async function fetchTimeWriting() {
+    setError(''); setMessage('')
+    const id = activeTimeWriting()
+    if (!id) { setError('No Time Writing connection is set up here (My settings → Servers and PATs).'); return false }
+    if (timeWritingRun.current) await timeWritingRun.current.catch(() => false)
+    const ok = await fetchConnection(id)
+    if (ok) setMessage(`Time Writing fetched from Azure DevOps and saved (${connectionProfiles.find((entry) => entry.id === id)?.reason ?? 'Time Writing'}).`)
+    return ok
   }
 
   // At start: the cloud (Azure DevOps Services) connections of fetchAll that have a PAT here are fetched again, so the
@@ -460,7 +476,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
     return replaced
   }
 
-  return { fetchProblem, clearFetchProblem: () => setFetchProblem(null), removeAllConnectionsHere, reloadConnectionProfiles, makeTimeWriting, projectUrl, changeProjectUrl, team, setTeam, pat, setPat, creatorEmail, setCreatorEmail, role, setRole, connectionStatus, saveConnection, removeConnection, fetchConnection, loadFromGit: (id: string) => loadFromGit(id), canLoadFromGit, fetchAll, fetchCloud, testConnection, applyWorkItems, isSample, loadSampleData, connectionProfiles, activeConnectionProfileId, selectConnectionProfile, saveConnectionProfile, forgetConnectionProfile, busy, error, setError, message, setMessage, preview, setPreview, saved, items, config, needsScopedRefresh, fetchPreview, refresh, lastRefreshed, rememberPat, forgetPat, featureCreated, savePreview, saveTimeWritingEffort }
+  return { fetchProblem, clearFetchProblem: () => setFetchProblem(null), removeAllConnectionsHere, reloadConnectionProfiles, makeTimeWriting, projectUrl, changeProjectUrl, team, setTeam, pat, setPat, creatorEmail, setCreatorEmail, role, setRole, connectionStatus, saveConnection, removeConnection, fetchConnection, loadFromGit: (id: string) => loadFromGit(id), canLoadFromGit, fetchAll, fetchTimeWriting, fetchCloud, testConnection, applyWorkItems, isSample, loadSampleData, connectionProfiles, activeConnectionProfileId, selectConnectionProfile, saveConnectionProfile, forgetConnectionProfile, busy, error, setError, message, setMessage, preview, setPreview, saved, items, config, needsScopedRefresh, fetchPreview, refresh, lastRefreshed, rememberPat, forgetPat, featureCreated, savePreview, saveTimeWritingEffort }
 }
 
 export type AzureWorkspace = ReturnType<typeof useAzureWorkspace>

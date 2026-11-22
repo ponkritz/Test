@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { loadSample, navigate, openPage, startApp, text } from './helpers.mjs'
+import { loadSample, navigate, openPage, profileItem, startApp, text } from './helpers.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
 // TC-UPD-02, TC-GIT-06, TC-SET-05), automated against the built web app.
@@ -16,9 +16,37 @@ test('TC-NAV-01 / TC-NAV-17: the sidebar shows the groups in order, with Documen
   assert.deepEqual(groups.map((group) => group.replace(/^[▾▸]\s*/, '').trim().toLowerCase()), ['data insights', 'my work', 'i&d board', 'release details', 'data & governance', 'admin'])
   const entries = (await page.locator('.sidebar nav .nav-items button').allInnerTexts()).map((entry) => entry.replace(/\s+/g, ' ').trim())
   for (const entry of ['My dashboard', 'Team overview', 'Pulse Check', 'My Tasks [Board]', 'Time Writing', 'Sprint check', 'Backlog Health', 'Streams', 'Stream options', 'Data & sharing', 'People & roles', 'Epic & Feature setup', 'Documentation']) assert.ok(entries.some((item) => item.endsWith(entry)), `${entry} is in the menu`)
-  assert.match(await text(page.locator('.sidebar-footer')), /v\d+\.\d+\.\d+/, 'the footer shows the version (NAV-15)')
-  assert.equal(await page.getByRole('button', { name: /^My settings/ }).count(), 1, 'My settings opens from your name (SET-15)')
+  assert.match(await text(page.locator('footer.app-footer')), /v\d+\.\d+\.\d+/, 'the footer shows the version (NAV-15, NAV-49)')
+  assert.equal(await page.locator('header.topbar').getByRole('button', { name: /^Profile/ }).count(), 1, 'My settings opens from the profile at the top right (SET-15, NAV-48)')
   assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages', async () => {
+  const { page, context, errors } = await openPage(app)
+  await loadSample(page)
+  await page.setViewportSize({ width: 1280, height: 720 })
+  // NAV-48: the profile menu.
+  await page.locator('header.topbar').getByRole('button', { name: /^Profile/ }).click()
+  const menu = page.getByRole('menu', { name: 'Profile' })
+  assert.deepEqual((await menu.getByRole('menuitem').allInnerTexts()).map((entry) => entry.replace(/^\S+\s*/, '').trim()), ['My settings', 'Classic view', 'Search settings', 'Customize menu'])
+  await page.keyboard.press('Escape')
+  assert.equal(await menu.count(), 0, 'Escape closes it')
+  // NAV-49: the footer — version and build — at the end of the page; the page content ends where the footer starts.
+  const footer = page.locator('footer.app-footer')
+  assert.match(await text(footer), /v\d+\.\d+\.\d+.*Build/)
+  await navigate(page, 'Team overview')
+  await page.locator('.content').first().waitFor()
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const gap = await page.evaluate(() => { const top = document.querySelector('footer.app-footer').getBoundingClientRect().top; return Math.max(...[...document.querySelectorAll('main > *:not(footer)')].map((element) => element.getBoundingClientRect().bottom)) - top })
+  assert.ok(gap <= 1, `nothing ends under the footer (${gap}px)`)
+  // NAV-47: Person in the top bar on the person-based pages only; My dashboard is always you.
+  const person = page.locator('header.topbar').getByRole('combobox', { name: 'Person' })
+  assert.equal(await person.count(), 0, 'not on Team overview')
+  for (const name of ['Time Writing', 'My Tasks [Board]', 'Sprint check']) { await navigate(page, name); assert.equal(await person.count(), 1, `on ${name}`) }
+  await navigate(page, 'My dashboard')
+  assert.equal(await person.count(), 0, 'not on My dashboard')
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
 })
 
@@ -26,13 +54,13 @@ test('TC-NAV-46: the menu switches between the tile view (opens on Home) and the
   const { page, context, errors } = await openPage(app)
   await loadSample(page)
   assert.equal(await text(page.locator('header.topbar h1')), 'Home', 'the tile view by default')
-  await page.locator('.sidebar').getByRole('button', { name: 'Classic view' }).click()
+  await profileItem(page, 'Classic view')
   assert.equal(await text(page.locator('header.topbar h1')), 'My dashboard', 'the classic view opens My dashboard')
   assert.equal(await page.locator('.sidebar nav button', { hasText: /^\S*\s*Home$/ }).count(), 0, 'no Home in the menu')
   await page.reload()
   await page.locator('header.topbar h1').waitFor()
   assert.equal(await text(page.locator('header.topbar h1')), 'My dashboard', 'the choice is kept after a reload')
-  await page.locator('.sidebar').getByRole('button', { name: 'Tile view' }).click()
+  await profileItem(page, 'Tile view')
   assert.equal(await text(page.locator('header.topbar h1')), 'Home', 'back to the tiles')
   assert.equal(await page.locator('.sidebar nav .nav-home button').count(), 1, 'Home is in the menu again')
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
@@ -182,7 +210,7 @@ test('TC-NAV-31: at phone width the navigation sits behind a menu button and the
 
 test('TC-UPD-02: Force Update shows the running version, build number and build id', async () => {
   const { page, context, errors } = await openPage(app)
-  await page.locator('.sidebar-footer button', { hasText: /Force Update/ }).first().click()
+  await page.locator('footer.app-footer button', { hasText: /Force Update/ }).first().click()
   const dialog = page.getByRole('dialog').filter({ hasText: 'Force Update' })
   await dialog.waitFor()
   const body = await text(dialog)
@@ -559,7 +587,7 @@ test('TC-ACC-04: an Admin views the app as a role, read only, and exits', async 
   // An access policy cached in this browser whose default role is Admin (no Git storage in the test).
   const policy = { schema: 1, defaultRole: 'Admin', roles: { 'Admin': { areas: ['overview', 'insights', 'mywork', 'monthly', 'bulk', 'board', 'health', 'release', 'baselines', 'qemapping', 'snapshots', 'docs'], actions: ['azure.write', 'settings.manage', 'access.manage'] }, 'Product Owner': { areas: [], actions: [] }, 'People Manager': { areas: [], actions: [] }, 'Scrum Master': { areas: [], actions: [] }, 'Team Member': { areas: ['overview', 'mywork', 'docs'], actions: [] } }, members: {} }
   const { page, context, errors } = await openPage(app, { init: (text) => localStorage.setItem('demand-planning-access-v1', text), initArg: JSON.stringify(policy) })
-  await page.getByRole('button', { name: 'View as…' }).click()
+  await profileItem(page, 'View as…')
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: 'A role' }).check()
   await dialog.getByRole('combobox', { name: 'Role' }).selectOption('Team Member')
@@ -621,8 +649,8 @@ test('TC-SET-06: Admin lists the shared setup pages, My settings opens from your
   await navigate(page, /Streams$/)
   await navigate(page, 'Data & sharing')
   assert.equal(await sections.getByRole('tab', { name: 'Other views' }).getAttribute('aria-selected'), 'true')
-  // My settings: from the name in the sidebar, everything that is only yours.
-  await page.getByRole('button', { name: /^My settings/ }).click()
+  // My settings: from the profile at the top right (NAV-48), everything that is only yours.
+  await profileItem(page, 'My settings')
   assert.equal(await text(page.locator('header.topbar h1')), 'My settings')
   assert.deepEqual((await sections.getByRole('tab').allInnerTexts()).map((label) => label.trim()), ['Your work email', 'Servers and PATs', 'My views', 'My naming patterns', 'My page usage'])
   assert.match(await text(page.locator('.scope-line')), /Only you · This computer/)
@@ -686,7 +714,7 @@ test('TC-MYD-04: a person hides and moves the sections of My dashboard and pins 
   await content.getByRole('button', { name: 'Done' }).click()
   const order = async () => content.locator('.layout-section').evaluateAll((sections) => sections.map((section) => section.getAttribute('data-section')))
   assert.deepEqual(await order(), ['streams', 'hours', 'releasecounts', 'signed'], 'hidden section gone, moved section first')
-  await page.getByRole('button', { name: 'Customize menu' }).click()
+  await profileItem(page, 'Customize menu')
   await page.getByRole('checkbox', { name: 'Pin Pulse Check' }).check()
   await page.getByRole('button', { name: 'Done' }).click()
   assert.match(await text(page.locator('.nav-pinned')), /PINNED.*Pulse Check/s)
@@ -928,8 +956,8 @@ test('TC-ACT-10: Time Writing can show another person, chosen at the top right',
   await navigate(page, 'Time Writing')
   const content = page.locator('.content')
   await content.getByRole('heading', { name: /Your activities for/ }).waitFor()
-  const picker = content.locator('.act-header').getByRole('combobox', { name: 'Activities of' })
-  assert.equal(await picker.count(), 1, 'the person picker is in the header row')
+  const picker = page.locator('header.topbar').getByRole('combobox', { name: 'Person' })
+  assert.equal(await picker.count(), 1, 'the person picker is in the top bar (NAV-47)')
   const before = await text(content.locator('.act-table').first())
   await picker.click()
   await page.keyboard.type('Fatima')
@@ -1004,7 +1032,7 @@ test('TC-KPT-01: the KPI tracker page is hidden from the menu (kept in the build
   const { page, context, errors } = await openPage(app)
   await page.locator('.sidebar nav').waitFor()
   assert.equal(await page.locator('.sidebar nav button', { hasText: 'KPI tracker' }).count(), 0, 'not in the menu')
-  await page.getByRole('button', { name: 'Customize menu' }).click()
+  await profileItem(page, 'Customize menu')
   assert.equal(await page.getByText('KPI tracker', { exact: true }).count(), 0, 'not offered in Customize menu')
   assert.deepEqual(errors, [])
   await context.close()
@@ -1243,7 +1271,7 @@ test('TC-SET-07: My views — a view of your own on a server you have a PAT for,
   await context.route('https://dev.azure.com/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
   const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
   await guide.waitFor({ timeout: 3000 }).then(() => guide.getByRole('button', { name: 'Close', exact: true }).last().click()).catch(() => undefined)
-  await page.getByRole('button', { name: /^My settings/ }).click()
+  await profileItem(page, 'My settings')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'My views' }).click()
   const form = page.getByRole('form', { name: 'Add my view' })
   await form.getByLabel('Name').fill('DP')
@@ -1348,7 +1376,7 @@ test('TC-SMP-02: Reset synthetic MVP data asks first and is recorded in History'
 
 test('TC-QV-41: My settings → My naming patterns — your own patterns for IOCC, Content and Tool Validations, kept on this computer, back to the shared ones', async () => {
   const { page, context, errors } = await openPage(app)
-  await page.getByRole('button', { name: /^My settings/ }).click()
+  await profileItem(page, 'My settings')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'My naming patterns' }).click()
   const panel = page.locator('.my-naming-patterns')
   assert.deepEqual((await panel.getByLabel('Stream for naming patterns').locator('option').allInnerTexts()).map((entry) => entry.trim()), ['IOCC', 'Content', 'Tool Validations'], 'never DP or CP')

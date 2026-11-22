@@ -5,7 +5,6 @@ import { azureInsights, isTimeWritingStory, timeWritingMonth } from '../azureIns
 import { capacityContext, capacityGap, capacityModel } from '../capacity'
 import { closeFeatureItems, featureClosePlan, featureCloseQuestion } from '../closeChain'
 import { FeatureEditor } from '../components/FeatureEditor'
-import { PersonPicker } from '../components/PersonPicker'
 import { SearchSelect } from '../components/SearchSelect'
 import { EmptyState, Metric, Metrics, Modal, Page } from '../components/ui'
 import { personMonths, totals } from '../dashboard'
@@ -337,12 +336,11 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
       <div><h2>Add activities</h2><p>Record your activities for {label}. Copy your recurring activities or add a new one.</p></div>
       <div className="act-header-tools">
         {my.known && <button type="button" className="act-primary act-add-open" onClick={() => setAddOpen(true)}>＋ Add a new activity</button>}
-        <label className="act-person">Activities of<PersonPicker label="Activities of" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={assign?.me || azure.creatorEmail ? 'Me' : 'Choose a person…'} /></label>
       </div>
     </header>
     {!self && my.known && <div className="act-message act-info" role="status">Showing {my.me.name}'s activities. {assignee ? `What you save here is written for ${my.me.name} (assigned to them).` : 'Saving is not available for another person here.'} Choose “Me” to go back.</div>}
     {message && <div className={`act-message act-${message.tone}`} role="status">{message.text}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setMessage(null)}>×</button></div>}
-    {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set your work email in Admin → Streams, or choose your name above, to see your activities." /> : <>
+    {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set your work email in Admin → Streams, or choose your name with Person at the top right, to see your activities." /> : <>
     {/* One row of equal tiles (ACT-11, ACT-05): the hours, the tasks, the monthly update and the last day. */}
     <div className="act-top">
     <Metrics>

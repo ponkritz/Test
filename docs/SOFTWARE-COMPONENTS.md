@@ -75,7 +75,7 @@ This document lists every software component of the system: the in-house source 
 | BrandMark | `src/components/BrandMark.tsx` | SVG app mark: planning calendar with a quality shield and check. | UI |
 | BuildStatus | `src/components/BuildStatus.tsx` | Build status display and, in the desktop app, check/download/verify/start the published desktop installer. | UPD, DSK |
 | Clock | `src/components/Clock.tsx` | Header clock in the viewer's time zone and the theme toggle button. | NAV, UI |
-| DataStatus | `src/components/DataStatus.tsx` | Header data-status chip with Refresh, and the data notices shown once under the header. | FET, NAV |
+| DataStatus | `src/components/DataStatus.tsx` | Header data-status chip with ⟳ Time Writing and Refresh (FET-22), and the data notices shown once under the header. | FET, NAV |
 | DesktopDownload | `src/components/DesktopDownload.tsx` | Sidebar entry and dialog to download the desktop app; hidden inside the desktop app. | DSK |
 | CpReportView | `src/components/CpReportView.tsx` | Release Details → CP: Supported / Completed counts, the month's releases with names, evidence, QMS-0025 match and Create Feature, shared activity, data issues and the evidence CSV. | QV |
 | DpBoardColumn | `src/components/DpBoardColumn.tsx` | DP table and Windchill releases cell showing the matching QMS-0025 Feature/User Story, or Create Feature when nothing matches. | QV |
@@ -84,6 +84,7 @@ This document lists every software component of the system: the in-house source 
 | FeatureEditor | `src/components/FeatureEditor.tsx` | The one New Feature form (BKL-26): add a Feature under an Epic or complete a Feature's children (its Epic's stories none ticked, BKL-38), used by Backlogs, My Tasks [Board], Release Details and Time Writing; the Parent Epic starts blank. | ATM, CON, BKL, ACT |
 | MonthTasksDialog | `src/components/MonthTasksDialog.tsx` | ＋ Time Writing Task: the months (header month first, ＋ Add month) and the hours of each (BKL-34); Assigned to and the warning on a month that already has a Task (BKL-35). | BKL |
 | JobsIndicator | `src/components/JobsIndicator.tsx` | Top-bar list of the background jobs: running count, results, Clear finished; asks before leaving the page while one runs. | NAV |
+| ProfileMenu | `src/components/ProfileMenu.tsx` | The profile button at the top right and its menu: My settings, Classic / Tile view, View as…, Search settings, Customize menu (NAV-48). | NAV |
 | MonthlyPackPanel | `src/components/MonthlyPackPanel.tsx` | Pulse Check → Monthly pack: the two slides as boxes with generated lines and the month's text, Save to Git, copy, Download .pptx. | PCK |
 | HistoryPanel | `src/components/HistoryPanel.tsx` | Settings → Historical hours: upload the planning workbook, check names and stream Epics, save to or remove from Git. | HIS |
 | ViewAsDialog | `src/components/ViewAsDialog.tsx` | View as: choose a person or a role to view the app as, read only. | CON |
@@ -173,6 +174,7 @@ This document lists every software component of the system: the in-house source 
 | dpReleases | `src/dpReleases.ts` | DP releases from Pedestal Release items dated by matching DHFI documents (exact version). | QV |
 | featureSetup | `src/featureSetup.ts` | Per-Epic Feature setup (stories, Time Writing story, task defaults), placeholders, shared/personal layers, parse/serialise; Complete children per Epic (BKL-38). | CON, BKL |
 | homeTiles | `src/homeTiles.ts` | The Home tiles and links: types and the search over them (NAV-43, NAV-44); the tile / classic view choice (NAV-46). | NAV |
+| fetchOrder | `src/fetchOrder.ts` | What Refresh fetches and in which order: the Time Writing connection first, then the read-only ones (FET-22). | FET |
 | featureMonths | `src/featureMonths.ts` | The Time Writing months of a new Feature from its Start date and Target date (BKL-31, BKL-32). | BKL |
 | format | `src/format.ts` | Display formatting: hours, percent, dates in viewer time zone, month names, relative time. | UI |
 | packInputs | `src/packInputs.ts` | The Monthly pack's inputs for a month (streams' releases and supported counts, utilisation), shared by the pack tab and the Insights workspace. | PCK, WSP |
@@ -340,6 +342,7 @@ This document lists every software component of the system: the in-house source 
 | removed-connections.test | `tests/removed-connections.test.mjs` | Merging the shared connections, finding removed ones in the Git history, the read-only history calls (TC-CON-61). | CON |
 | format.test | `tests/format.test.mjs` | Formatting helpers and page registry consistency. | UI, NAV |
 | home-tiles.test | `tests/home-tiles.test.mjs` | Home: the tile and link search, the Home page entry (TC-NAV-42). | NAV |
+| app-frame.test | `tests/app-frame.test.mjs` | The app frame: My dashboard always you, the Refresh order (TC-NAV-47, TC-FET-10). | NAV, FET |
 | git-snapshots.test | `tests/git-snapshots.test.mjs` | On-prem view snapshots via Git: no PATs, digests, helpers and validation. | GIT, FET |
 | git-storage.test | `tests/git-storage.test.mjs` | Git config, planning data round trip, read/write/conflict/write-check/delete. | GIT |
 | git-watch.test | `tests/git-watch.test.mjs` | Files changed in Git since they were read here; banner names. | GIT |

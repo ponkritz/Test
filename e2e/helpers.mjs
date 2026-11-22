@@ -70,3 +70,9 @@ export async function reloadWithSample(page) {
   const kept = await page.locator('.notice', { hasText: 'synthetic sample dataset' }).first().waitFor({ timeout: 5000 }).then(() => true, () => false)
   if (!kept) await loadSample(page)
 }
+
+// NAV-48: an item of the profile menu (top right).
+export async function profileItem(page, name) {
+  await page.locator('header.topbar').getByRole('button', { name: /^Profile/ }).click()
+  await page.getByRole('menu', { name: 'Profile' }).getByRole('menuitem', { name }).click()
+}

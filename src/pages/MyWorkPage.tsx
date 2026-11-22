@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { DataTable } from '../components/DataTable'
-import { PersonPicker } from '../components/PersonPicker'
 import { MonthTasksDialog } from '../components/MonthTasksDialog'
 import { EmptyState, Metric, Metrics, Notice, Page, Pill, TablePanel, type Tone } from '../components/ui'
 import { currentIndiaMonth, updateAzureWorkItem } from '../azureDevOps'
@@ -80,9 +79,8 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
   return <Page>
     <section className="me-bar">
       <div><span className="eyebrow">WORK ASSIGNED TO</span><strong>{my.me.name ?? my.me.email ?? 'Not set'}</strong>{my.me.email && <small>{my.me.email}</small>}</div>
-      <label>Show work for<PersonPicker label="Show work for" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={my.me.email ? 'Me (connection email)' : 'Choose a person…'} /></label>
     </section>
-    {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set the Feature creator email on your Time Writing connection, or choose your name above." />
+    {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set the Feature creator email on your Time Writing connection, or choose your name with Person at the top right." />
       : <>
         <Metrics>
           <Metric label="Pending work" value={pending.length} hint="New or active items assigned to you" />
