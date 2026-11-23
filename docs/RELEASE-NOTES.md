@@ -2,6 +2,53 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v8.0.0 — 2026-11-23
+
+**Added**
+- **QMS-0025 Column Options: Save for everyone** — a Tool Owner (the right "Table, chart and page defaults") can save the column choice and order as everyone's default, in the shared views defaults in Git; a person's own Apply still wins, and **Reset to the team default** goes back to it (BKL-47).
+
+TC-BKL-36.
+
+PR #356.
+
+**Changed**
+- **Two people saving the same shared file both keep their change** — saves to the historical hours, the default views, the KPI tracker copy, the connection backups and the Monthly pack template are queued in the order of their time (to the second) and saved as their own commits (`[saved <time>]` in the message). Before each save the file is read again from Git and the change is merged into the latest version by row, page, sheet or connection; where both changed the same entry, the later save wins. "Saved to Git — merged with a change by someone else" and "Waiting to save (N in queue)" show where the save happens; after 3 conflicting tries the change stays in the queue with Retry. The PowerPoint template cannot be merged: the later save wins and an older one is never written. Access, Epic / Feature setup, QE Mapping, the Monthly pack setup and the planning data still refuse a conflict (GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08; design defaults review, decision 8).
+
+KB-73, DF-141, SM-95; TC-GIT-10.
+
+PR #356.
+
+**Changed**
+- **Team overview period** — Year, Quarter and Month are now multi-select drop-downs at the start of the one filter row, before Region, Role, Team member and Stream; the second period row with its chips and Whole year is gone. Several years can be chosen (none ticked = every year offered). Month depends on Quarter: it offers only the months of the chosen quarters and drops months that are no longer offered; the period is, for each year, the chosen months, else the chosen quarters, else the whole year. Reset filters also returns the period to the header month's year and quarter. A period saved earlier still opens with the same months (OV-11, OV-15, MYD-08).
+
+TC-OV-11, TC-OV-15.
+
+PR #356.
+
+**Changed**
+- **Business time is UTC** (owner decision 1 of the design defaults review) — UTC now decides, for everyone wherever
+  they are, which **month** a date belongs to (the header month's default, the month filters and counts of the
+  release pages, Pulse Check, the Dashboard, Capacity, Insights, Windchill exports and closures in a month), the
+  **month of new month Time Writing Tasks**, which **Sprint / PI is current**, and the **moment a month's plan or
+  actuals lock** (the lock day ends at midnight UTC). Before, the app mixed India time, the viewer's own zone and UTC.
+  Dates and times shown to you (fetched at, saved at, history) stay in your own time zone (NAV-51, NAV-11, NAV-12,
+  QV-18, QV-16, QV-24, QV-53, OV-10, MON-06, MON-07, ATM-08, BKL-31, BKL-43, SET-06).
+- **What you will notice outside UTC:** a new month (and a new Sprint day) now starts at your local time of midnight
+  UTC — for example at 19:00 / 20:00 on the last day of the month in New York, and at 05:30 on the 1st in India
+  instead of midnight. **Existing data near a month end can move to a different month:** an item approved, closed or
+  dated in the last or first hours of a month (in your local time) is now counted in its UTC month, so a release,
+  document or closure counted in November before may now be counted in October (or the reverse), and the month
+  locks a few hours earlier or later than before.
+
+**Fixed**
+- The header month, a new month Task's title, the current Sprint and the lock could disagree near a month end (a US
+  user saw November while a new Task was titled December; a plan was locked for one person and open for another)
+  (KB-72).
+
+DF-140; TC-NAV-51.
+
+PR #356.
+
 ## v7.62.0 — 2026-11-23
 
 **Changed**
