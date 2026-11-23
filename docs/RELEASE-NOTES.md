@@ -2,6 +2,21 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.10.0 — 2026-11-23
+
+**Added**
+- **On-Demand row IDs** — every row gets a readable ID such as `CONQ-0001` when it is first saved to Git: the next free number, never changed, unique also when several people save at the same time (OND-19).
+- **Who added a row and when, and its History** — each row records the work email of the person who added it and the time (Added by / Added on); every saved change is logged automatically with who, when and what changed (old → new), shown as History in the row pop-up; Last updated by / on can be added as columns; two saves of the same row keep both log entries (OND-20, OND-21).
+- **Long text and Currency columns** — a paragraph of up to 10,000 characters; an amount with its currency (a default per column, another per row), shown as "1,200.00 EUR". Insights add up a Currency column one currency at a time, never converting (OND-22, OND-23, OND-24).
+- **Column descriptions** — how or what to fill, shown under the field in the row pop-up and behind ⓘ on the column heading (OND-25).
+
+**Changed**
+- The page file keeps schema 1 with optional new fields; an older app version saving a page drops them (LIM-19). Changing the columns now keeps each row's key, ID and History (OND-26).
+
+DF-152, DF-153, DF-154, SM-98, LIM-19; TC-OND-16…20.
+
+PR #368.
+
 ## v9.9.0 — 2026-11-23
 
 **Changed**
