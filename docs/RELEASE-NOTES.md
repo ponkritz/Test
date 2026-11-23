@@ -2,6 +2,46 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.2.0 — 2026-11-23
+
+**Added**
+- **Chart elements** — like Excel's Chart Elements, the owners of an Insights tab (and a dashboard's builders) can set for everyone, in the chart's Display options: chart heading, axes and axis names on or off; data labels on or off for everyone, their position (bars: Center, Inside End, Inside Base, Outside End; lines: Center, Left, Right, Above, Below; pies: Center, Inside End, Outside End, Best Fit with leader lines), their contents (series name, category name, value, percentage) and number format (0–2 decimals, currency code); a data table under the chart; major and minor gridlines; the legend at the top, bottom, left, right or none; a linear trendline per series. Each viewer can still switch data labels on or off for themselves. Labels never overlap or leave the chart. Charts nobody changed look exactly as before (CHT-26…CHT-35).
+- **KPI cards** — KPI (one number) charts on an Insights tab are now shown together as a row of compact cards above the other charts, like the Dashboard's KPI tiles, with ⓘ, "Filtered" and the owners' ⋯ menu. Existing KPI charts (added since v9.14) become cards; Show as: Panel keeps the old panel (CHT-36, CHT-37).
+
+**Changed**
+- Chart and table headers on the Insights tab and On-Demand Dashboards no longer show the chart type above the title; the type is the first line of ⓘ (CHT-39). UI-STANDARDS records the approved v10.1 chart wording (size, resize handle, chart header, ⋯ menus).
+
+**Fixed**
+- The KPI preview in the chart pop-up was about 90 px wide and cut the number; KPI cards are now at least 180 px and never cut the number (KB-84, CHT-37).
+- The chart pop-up's preview overlapped the Display fieldset and clipped the field labels; the form and the preview now sit side by side or one under the other (KB-85, CHT-38).
+- The preview repeated the measure, filters and rows counted under its title; it now shows the chart's own header (KB-86, CHT-38).
+
+DF-207…DF-210, SM-114, LIM-38, KB-84…KB-86; TC-CHT-22…TC-CHT-31.
+
+PR #378.
+
+**Added**
+- **Build On-Demand Dashboards** — a permission of its own in Role rights (On-Demand group; Allow, Deny or Not set; Tool Owner by default) that builds every On-Demand Dashboard: blocks, tabs and filters. "Set up On-Demand pages" no longer builds dashboards (it keeps the table pages); the page's and its group's co-owners still build theirs. The roles file is now permissions 6: an older file gives the new right to a listed Tool Owner only (CON-107, DSH-09).
+- **Copy to…** in a dashboard block's ⋯ menu and in Arrange blocks…: duplicate a block here or copy it to another dashboard you may build — a new block with the same settings and data source, on the tab of the same name or else the first tab (Background jobs says so), saved to that dashboard's file at once (DSH-15, DSH-13).
+- **Time Writing hours as a data source** of the On-Demand Dashboard blocks: planned and booked hours exactly as Team overview counts them, by team member, region, role, stream, Feature and month — Sum or Average, the period by month; "Not available for your role." for anyone who may not see Team overview. Team overview is unchanged (DSH-16, DSH-03, DSH-04).
+
+**Changed**
+- **A summary table's Export** (Excel and CSV) on an On-Demand Dashboard now ends with its **Total** row (DSH-14, DSH-06).
+
+DF-211, DF-212, DF-213, SM-115, LIM-39; TC-DSH-13, TC-DSH-14, TC-DSH-15, TC-DSH-16.
+
+PR #378.
+
+**Changed**
+- **Co-owners from the Azure DevOps team** — the page and group co-owner lists also offer the members of the Time Writing team, read once when the app starts (after the start fetch) and kept for the session, so a colleague without fetched work can be picked without opening People & roles first; a refused read offers the others silently (PGB-21, PGB-18, CAP-30).
+- **"Newer data in Git" names the colleague** — every commit the app writes ends with `[by {name} <{work email}>]` (after the `[saved …]` stamp; never a token), and the notice names that person instead of the GitHub account; a change made outside the app still shows its GitHub author (GIT-22, GIT-18, GIT-17).
+- **Access roles load quietly** — a newer access.json is loaded on every page without a notice and the rights change in place; when your own rights changed, a short line on the page says who changed what ("Your access was changed by …: you can now edit On-Demand data (rows)."). Only Admin → People & roles shows the notice (GIT-23, CON-101).
+- **Convert suggestion for large pages** — a Tool Owner sees a line on a table page still in one file with more than 500 rows (or over 600 KB) suggesting **Convert to row files…**, dismissible per page; new pages stay one file (OND-62, OND-32).
+
+DF-203…DF-206, SM-113, LIM-37; TC-GIT-14, TC-GIT-15, TC-PGB-16, TC-OND-50.
+
+PR #378.
+
 ## v10.1.0 — 2026-11-23
 
 **Added**
