@@ -944,3 +944,20 @@ html{scroll-padding-bottom:calc(var(--app-footer-h) + 8px)}
 .look-margins input{width:100%}
 @media(max-width:560px){.look-margins{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pack-setup select,.pack-capabilities select{width:100%;max-width:22rem;min-width:0;text-overflow:ellipsis}.pack-setup td{min-width:0}
+/* OND-03…06 On-Demand pages: a value that no longer fits its column, the Columns pop-up and the row pop-up. */
+.od-flag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--warning-soft);color:var(--warning-text);font-size:11px;font-weight:600;white-space:nowrap}
+td .od-flag{display:inline-block;margin-top:0}
+.on-demand-page .page-toolbar .danger-button{margin-top:0}
+.od-columns{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.od-column{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface-2);display:grid;gap:8px}
+.od-column-head{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) auto auto;gap:10px;align-items:end}
+.od-column-head .check{margin:0 0 9px}
+.od-column-moves{align-items:center;padding-bottom:2px;flex-wrap:nowrap}
+.od-options{display:grid;gap:6px;padding-left:12px;border-left:2px solid var(--line)}
+.od-options>small{font-size:11px;color:var(--muted);font-weight:700}
+.od-option{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
+.od-effects ul{margin:6px 0 8px;padding-left:20px;font-size:13px;display:grid;gap:4px}
+.od-multi{border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px 16px}
+.od-multi legend{font-size:11px;font-weight:700;color:var(--text-2);padding:0 4px}
+.od-multi .check{margin:0;font-size:12px;color:var(--text)}
+@media(max-width:640px){.od-column-head{grid-template-columns:1fr 1fr}}

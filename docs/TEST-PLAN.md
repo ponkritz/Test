@@ -1662,6 +1662,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-STT-02 Linked stories follow the template** — Req STT-02 — L1 `story-templates.test.mjs` ("STT-02: a linked story takes the template’s current title and description everywhere; a removed one keeps its copy (TC-STT-02)"); browser check: in Setup per Epic with Git storage that can save, Save as template marks the story Template; ＋ Add from templates adds a linked one; Unlink turns it back into an editable copy.
 
 **TC-STT-03 User Story templates as a list** — Req STT-03, STT-01 — E2E `backlog.e2e.mjs` ("TC-STT-01: a User Story template, linked in an Epic’s setup, gives New Feature its current title, ticked; Admin lists it with its tags": one table row with title, description, Epic, Release Classification and "1 place"; no cards); browser check with Git storage and the right to edit: Edit opens the template in a pop-up; a blank title cannot be saved; Save puts the change in the unsaved bar and Save to Git commits it; ＋ New template adds a row; Remove of a linked template asks first; search, sort and Export work.
+### 6.28 On-Demand pages
+
+**TC-OND-01 On-Demand → CoNQ: columns, a row, Save to Git** — Req OND-01, OND-02, OND-03, OND-04, OND-05, OND-09 — **UAT** — L1 `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/conq.json, and a reload shows it from Git"); UAT: with Git storage that can save and a role allowed both On-Demand permissions, open On-Demand → CoNQ (its title says Cost of Non-Quality and that it is not in Git yet); Set up columns… → add **Category** (Dropdown: Scrap, Rework) and **Sites** (Multi-select: Berlin, Leeds, Lyon), Save; ＋ Add row → Category Rework, Sites Berlin and Lyon, Add row; the table shows "Rework" and "Berlin, Lyon" and "1 of 1 row"; Save to Git — Background jobs says "Saved to Git." and the data repository has `on-demand/conq.json` with both columns, their options and the row; on a second computer (or after a reload) CoNQ shows the row; Export gives the row in Excel and CSV.
+
+**TC-OND-02 Page file read back from Git is validated** — Req OND-08, GIT-15 — L1 `on-demand.test.mjs` ("OND-08: an On-Demand page file is validated when read back from Git — unknown types, bad ids and values cleaned, a file that is not a page refused (TC-OND-02)"); browser check: put a hand-edited `on-demand/test.json` with a column of type "formula" and a row with a value of an unknown column in the data repository, Reload from Git — the page shows the column as Text and no unknown value; a file that is not a page is reported as "On-Demand: on-demand/….json: … is not an On-Demand page." and the other pages still show; a change saved from another browser is named "On-Demand page …" in the Newer data in Git banner.
+
+**TC-OND-03 Rows in the row pop-up** — Req OND-03, OND-04 — L1 `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); browser check: with a required Text column, a Number and a Date column, ＋ Add row with the required field empty says it is required; "abc" in the Number field is refused; Edit changes a row; Remove takes it out and Discard brings it back; search, sorting by the Number column (as numbers, right-aligned) and Export work.
+
+**TC-OND-04 Column changes keep the values and ask first** — Req OND-05, OND-06 — L1 `on-demand.test.mjs` ("OND-06: changing a column type or removing an option keeps the values and says so first; a renamed option follows in every row (TC-OND-04)"); browser check: on a page with rows, Set up columns… → rename an option in use, remove another in use, change a Multi-select to Dropdown and remove a column, Save — the pop-up lists each effect with its number of rows and asks; Back returns to the columns; Save columns — the renamed option shows in its rows, the removed option's values show "not in the list", the joined values "a, b"; two columns with the same name or a Dropdown without options cannot be saved and say why.
+
+**TC-OND-05 Two saves merged by row and column** — Req OND-09, GIT-17 — L1 `on-demand.test.mjs` ("OND-09: two saves of a page are merged — rows and columns by id, the later save wins where both changed the same entry, a removed row stays removed unless changed later (TC-OND-05)"); browser check with two browsers on the same page: each adds a row and the first changes a value the second removes; Save to Git in both — both new rows are kept, Background jobs says "Saved to Git — merged with a change by someone else.", and the row changed or removed last wins.
+
+**TC-OND-06 On-Demand rights and older roles files** — Req CON-103, OND-07, CON-94 — L1 `on-demand.test.mjs` ("CON-103: the On-Demand rights — area for every role, setup and data editing for Tool Owner and Admin; an older access.json gets them as the starting matrix does (TC-OND-06)"), `access.test.mjs` ("access file: round trip, unknown entries dropped, broken files refused, editor cannot lock themselves out"); browser check: Admin → People & roles → Role rights shows the area "On-Demand pages (CoNQ …)" and the group On-Demand with its two permissions; with an access.json saved before (permissions 3) every listed role sees On-Demand and only Tool Owner and Admin may set up and edit; saving Role rights writes permissions 4.
+
+**TC-OND-07 Read only without the rights** — Req OND-07, CON-103 — E2E `on-demand.e2e.mjs` ("TC-OND-07: a viewer without the On-Demand rights sees the page read only — rows shown, Add row, Edit, Remove and Set up columns… disabled with the reason"); browser check: as a Team Member the rows are shown, a value no longer in its options is marked "not in the list", ＋ Add row, Edit, Remove, Set up columns…, ＋ Add page…, Rename page… and Remove page… are disabled and a line names the missing permissions; without a roles file the line says "Read only: the access roles are not loaded yet, so nothing can be changed on this page."; with the synthetic sample loaded the page says "Synthetic sample data is loaded. Saving to Git is disabled."
+
+**TC-OND-08 Add, rename and remove a page** — Req OND-10, OND-01, OND-02 — browser check with "Set up On-Demand pages" and Git storage that can save: ＋ Add page… "Supplier escapes" (description optional) — a commit creates `on-demand/supplier-escapes.json`, the page opens and is listed under On-Demand in name order and on the Home tile; Rename page… puts the new name in the unsaved changes and Save to Git commits it; Remove page… names the page, its rows and columns and that its file is deleted, Cancel keeps it, Remove page deletes the file and opens the next page; removing the last page offers CoNQ again.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -1748,7 +1766,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-91 | TC-ACC-04 |
 | CON-92 | TC-ACC-04, TC-ACC-05 |
 | CON-93 | TC-CON-57 |
-| CON-94 | TC-CON-58 |
+| CON-94 | TC-CON-58, TC-OND-06 |
 | CON-95 | TC-CON-59, TC-CON-60 |
 | CON-96 | TC-CON-60 |
 | CON-97 | TC-CON-60 |
@@ -1960,9 +1978,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-02…04, GIT-06, GIT-08, GIT-12 | TC-GIT-02 |
 | GIT-13 | TC-GIT-06 |
 | GIT-14 | TC-GIT-07 |
-| GIT-15 | TC-GIT-08 |
+| GIT-15 | TC-GIT-08, TC-OND-02 |
 | GIT-16 | TC-GIT-09 |
 | GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
+| GIT-17 (On-Demand pages) | TC-OND-05 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2148,6 +2167,17 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | STT-01 | TC-STT-01 |
 | STT-02 | TC-STT-01, TC-STT-02 |
 | STT-03 | TC-STT-03 |
+| OND-01 | TC-OND-01, TC-OND-08 |
+| OND-02 | TC-OND-01, TC-OND-08 |
+| OND-03 | TC-OND-01, TC-OND-03 |
+| OND-04 | TC-OND-01, TC-OND-03 |
+| OND-05 | TC-OND-01, TC-OND-04 |
+| OND-06 | TC-OND-04 |
+| OND-07 | TC-OND-06, TC-OND-07 |
+| OND-08 | TC-OND-02 |
+| OND-09 | TC-OND-01, TC-OND-05 |
+| OND-10 | TC-OND-08 |
+| CON-103 | TC-OND-06, TC-OND-07 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2198,6 +2228,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
+| UC-37 | TC-OND-01…08 |
 
 ## 8. Result record
 

@@ -40,6 +40,7 @@ import { myPatternsVersion, subscribeMyPatterns } from './myNamingPatterns'
 import { useAccess } from './useAccess'
 import { useFeatureSetup } from './useFeatureSetup'
 import { useQeMapping } from './useQeMapping'
+import { useOnDemand } from './useOnDemand'
 import { useMonthlyPack } from './useMonthlyPack'
 import { previousMonth } from './pulseCheck'
 import type { Area } from './access'
@@ -81,6 +82,7 @@ const PiReviewPage = lazy(() => import('./pages/PiReviewPage').then((module) => 
 const BritePage = lazy(() => import('./pages/BritePage').then((module) => ({ default: module.BritePage })))
 const KpiTrackerPage = lazy(() => import('./pages/KpiTrackerPage').then((module) => ({ default: module.KpiTrackerPage })))
 const QeMappingPage = lazy(() => import('./pages/QeMappingPage').then((module) => ({ default: module.QeMappingPage })))
+const OnDemandPage = lazy(() => import('./pages/OnDemandPage').then((module) => ({ default: module.OnDemandPage })))
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((module) => ({ default: module.MyWorkPage })))
 const WindchillPage = lazy(() => import('./components/WindchillViews').then((module) => ({ default: module.WindchillPage })))
 const WindchillExportImport = lazy(() => import('./components/WindchillViews').then((module) => ({ default: module.WindchillExportImport })))
@@ -202,6 +204,10 @@ export default function App() {
   // QV-60: my own naming patterns changing redraws the figures.
   useSyncExternalStore(subscribeMyPatterns, myPatternsVersion)
   const qeMapping = useQeMapping(git)
+  // OND-01…10: the On-Demand pages (CoNQ, and those added), each in the menu by its name.
+  const onDemand = useOnDemand(git)
+  const [onDemandId, setOnDemandId] = useState(() => { try { return localStorage.getItem('demand-planning-on-demand-page-v1') ?? '' } catch { return '' } })
+  const onDemandPage = onDemand.pages.find((entry) => entry.id === onDemandId) ?? onDemand.pages[0]
   // Who creates new work items (the email on the Time Writing connection) and whether they may assign them to others.
   const assign = { me: azure.creatorEmail.trim().toLowerCase(), canChoose: access.can('azure.createForOthers') }
   // NAV-42, NAV-46: the start page — Home (the tiles) in the tile view, My dashboard in the classic view.
@@ -229,6 +235,7 @@ export default function App() {
   const [viewId, setViewId] = useState(loadBacklogTab)
   const view = views.find((entry) => entry.id === viewId) ?? views[0] ?? timeWriting
   const openView = (id: string) => { setViewId(id); saveBacklogTab(id); setPage('board') }
+  const openOnDemand = (id: string) => { setOnDemandId(id); try { localStorage.setItem('demand-planning-on-demand-page-v1', id) } catch { /* this visit only */ } setPage('ondemand') }
   // Access roles: each menu entry belongs to an area; Settings is always there (each person's own connections and tokens).
   // A page the viewer's roles do not include falls back to the first one they do.
   const areaOf = (id: Page): Area | null => id === 'admin' || id === 'home' ? null : id === 'board' ? (view.onPrem ? 'release' : 'board') : id === 'windchill' || id === 'brite' ? 'release' : id === 'overview' || id === 'pulse' || id === 'pireview' || id === 'kpitracker' ? 'insights' : id === 'mydash' ? 'overview' : id === 'activities' ? 'monthly' : id === 'planover' || id === 'capactual' ? 'insights' : id
@@ -259,7 +266,7 @@ export default function App() {
   // UI-16: the side menu folded to icons on wide screens (« / »), kept per computer.
   const [menuMini, setMenuMini] = useState(() => { try { return localStorage.getItem(menuMiniKey) === '1' } catch { return false } })
   const toggleMenuMini = () => setMenuMini((current) => { const next = !current; try { localStorage.setItem(menuMiniKey, next ? '1' : '0') } catch { /* this visit only */ } return next })
-  useEffect(() => { setNavOpen(false) }, [page, viewId, windchillId])
+  useEffect(() => { setNavOpen(false) }, [page, viewId, windchillId, onDemandId])
   useEffect(() => { if (!navOpen) return; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false) }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [navOpen])
   const [collapsed, setCollapsed] = useState<string[]>(() => { try { const saved = JSON.parse(localStorage.getItem('demand-planning-nav-collapsed-v1') ?? '[]'); return Array.isArray(saved) ? saved.filter((key): key is string => typeof key === 'string') : [] } catch { return [] } })
   const saveCollapsed = (next: string[]) => { try { localStorage.setItem('demand-planning-nav-collapsed-v1', JSON.stringify(next)) } catch { /* this visit only */ } return next }
@@ -322,6 +329,7 @@ export default function App() {
     tileOf({ key: 'release', title: 'Release Details', detail: 'The releases of each stream: DP, CP, IOCC, Content, Tool Validations and the Windchill exports.', tone: 'lemon', links: streamLinks }),
     tileOf({ key: 'planning', title: 'Planning & Baselines', detail: 'Release baselines against booked hours, and the pages being tried out.', tone: 'teal', links: [...pageLink('baselines'), ...pageLink('planover'), ...pageLink('capactual')] }),
     tileOf({ key: 'qe', title: 'QE Mapping', detail: 'Which QE covers which platform or product.', tone: 'rose', open: firstAllowed('qemapping'), links: [] }),
+    tileOf({ key: 'ondemand', title: 'On-Demand', detail: 'Tables the team sets up itself: CoNQ (Cost of Non-Quality) and more.', tone: 'peach', links: allowed('ondemand') && !personalViews.menu.hidden.includes('ondemand') ? onDemand.pages.map((entry) => ({ key: `ondemand:${entry.id}`, label: entry.name, icon: pageMeta('ondemand').icon, open: () => openOnDemand(entry.id) })) : [] }),
     tileOf({ key: 'records', title: 'Snapshots & Documents', detail: 'Point-in-time snapshots and the project documents of this build.', tone: 'sand', links: [...pageLink('snapshots'), ...pageLink('docs')] }),
     tileOf({ key: 'admin', title: 'Admin', detail: 'Streams, Epic & Feature setup, people and roles, capacity, reports and sharing.', tone: 'sky', open: () => openSettings('home'), links: settingsLinks }),
     tileOf({ key: 'my', title: mySettingsLabel, detail: 'Your work email, servers and tokens, your views and naming patterns.', tone: 'mint', open: () => openSettings('my'), links: [] }),
@@ -384,7 +392,7 @@ export default function App() {
         ] : group === 'Other views' ? [{ key: group, entries: [
           ...others.azure.filter((entry) => access.sees(entry.onPrem ? 'release' : 'board')).map((entry) => navButton(`view:${entry.id}`, pageMeta('board').icon, entry.name, page === 'board' && view.id === entry.id, () => openView(entry.id))),
           ...(access.sees('release') ? others.windchill.map((entry) => navButton(entry.id, pageMeta('windchill').icon, entry.name, page === 'windchill' && windchillView?.id === entry.id, () => openWindchill(entry.id))) : []),
-        ] }] : group === 'Settings' ? [{ key: group, entries: settingsPagesFor(access.can).map((entry) => navButton(`settings:${entry.key}`, pageMeta('admin').icon, entry.label, page === 'admin' && settingsTab === entry.key, () => openSettings(entry.key))) }] : [{ key: group, entries: pages.filter((item) => !personalViews.menu.hidden.includes(item.id) && item.group === group && !item.hidden).flatMap((item) => item.id === 'board' ? (access.sees('board') ? views.filter((entry) => !entry.readOnly).map((entry) => navButton(`view:${entry.id}`, item.icon, entry.name, page === 'board' && view.id === entry.id, () => openView(entry.id))) : []) : pageButton(item)) }]
+        ] }] : group === 'On-Demand' ? [{ key: group, entries: allowed('ondemand') && !personalViews.menu.hidden.includes('ondemand') ? onDemand.pages.map((entry) => navButton(`ondemand:${entry.id}`, pageMeta('ondemand').icon, entry.name, page === 'ondemand' && onDemandPage?.id === entry.id, () => openOnDemand(entry.id))) : [] }] : group === 'Settings' ? [{ key: group, entries: settingsPagesFor(access.can).map((entry) => navButton(`settings:${entry.key}`, pageMeta('admin').icon, entry.label, page === 'admin' && settingsTab === entry.key, () => openSettings(entry.key))) }] : [{ key: group, entries: pages.filter((item) => !personalViews.menu.hidden.includes(item.id) && item.group === group && !item.hidden).flatMap((item) => item.id === 'board' ? (access.sees('board') ? views.filter((entry) => !entry.readOnly).map((entry) => navButton(`view:${entry.id}`, item.icon, entry.name, page === 'board' && view.id === entry.id, () => openView(entry.id))) : []) : pageButton(item)) }]
         const shown = sections.filter((section) => section.entries.length)
         if (!shown.length) return null
         const open = !collapsed.includes(group)
@@ -402,7 +410,7 @@ export default function App() {
     {searchOpen && <SettingsSearch allowed={(entry) => entry.tab === 'my' || settingsPagesFor(access.can).some((item) => item.key === entry.tab)} onOpen={openSettings} onClose={() => setSearchOpen(false)} />}
     {menuEditor && <MenuCustomizer pages={pages.filter((item) => !item.hidden && item.id !== 'admin' && allowed(item.id)).map(({ id, label, group }) => ({ id, label, group }))} menu={personalViews.menu} onChange={personalViews.setMenu} onClose={() => setMenuEditor(false)} />}
     <main>
-      <header className="topbar" ref={topbarRef}><button type="button" className="menu-button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="primary-navigation" onClick={() => setNavOpen((open) => !open)}>{navOpen ? '✕' : '☰'}</button><h1 title={meta.detail}>{page === 'board' ? view.name : page === 'windchill' && windchillView ? windchillView.name : page === 'admin' ? settingsLabel(settingsTab) : meta.label}</h1><div className="topbar-slot" ref={setHeaderSlot} /><div className="topbar-actions">{openSteps > 0 && <button type="button" className="ghost setup-button" title="What to configure and how" onClick={() => setGuideOpen(true)}>Setup · {steps.filter((step) => step.required && step.state === 'done').length}/{steps.filter((step) => step.required).length}</button>}<JobsIndicator /><DataStatus azure={azure} />{(meta.usesMonth || (page === 'board' && view.readOnly)) && <label className="month-picker"><span className="sr-only">Month</span><input type="month" aria-label="Month" value={month} onChange={(event) => /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value) && setMonth(event.target.value)} /></label>}{personPage && <label className="topbar-person">Person<PersonPicker label="Person" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={azure.creatorEmail.trim() ? 'Me' : 'Choose a person…'} /></label>}<ThemeToggle /><ProfileMenu name={my.self.me.name ?? ''} email={azure.creatorEmail.trim()} actions={profileActions} /></div></header>
+      <header className="topbar" ref={topbarRef}><button type="button" className="menu-button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="primary-navigation" onClick={() => setNavOpen((open) => !open)}>{navOpen ? '✕' : '☰'}</button><h1 title={page === 'ondemand' && onDemandPage ? onDemandPage.description || meta.detail : meta.detail}>{page === 'board' ? view.name : page === 'windchill' && windchillView ? windchillView.name : page === 'admin' ? settingsLabel(settingsTab) : page === 'ondemand' && onDemandPage ? onDemandPage.name : meta.label}</h1><div className="topbar-slot" ref={setHeaderSlot} /><div className="topbar-actions">{openSteps > 0 && <button type="button" className="ghost setup-button" title="What to configure and how" onClick={() => setGuideOpen(true)}>Setup · {steps.filter((step) => step.required && step.state === 'done').length}/{steps.filter((step) => step.required).length}</button>}<JobsIndicator /><DataStatus azure={azure} />{(meta.usesMonth || (page === 'board' && view.readOnly)) && <label className="month-picker"><span className="sr-only">Month</span><input type="month" aria-label="Month" value={month} onChange={(event) => /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value) && setMonth(event.target.value)} /></label>}{personPage && <label className="topbar-person">Person<PersonPicker label="Person" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={azure.creatorEmail.trim() ? 'Me' : 'Choose a person…'} /></label>}<ThemeToggle /><ProfileMenu name={my.self.me.name ?? ''} email={azure.creatorEmail.trim()} actions={profileActions} /></div></header>
       {access.viewingAs && <div className="view-as-banner" role="status"><span>👁 Viewing as <strong>{viewAsLabel(access.viewingAs)}</strong>{access.viewingAs.kind === 'role' ? '' : access.rights.roles.length ? ` (${access.rights.roles.join(', ')})` : ' (default role)'} — read only: nothing is saved to Azure DevOps or Git.</span><button type="button" className="ghost" onClick={() => setViewAsOpen(true)}>Change</button><button type="button" className="primary" onClick={() => setViewAs(null)}>Exit View as</button></div>}
       {viewAsOpen && <ViewAsDialog current={access.viewingAs} people={viewAsPeople(azure.items, access.policy)} onStart={(next) => { setViewAs(next); setViewAsOpen(false); setPage(startPageOf(startView)) }} onClose={() => setViewAsOpen(false)} />}
       <DataNotices azure={azure} onOpenConnection={openConnection} />
@@ -419,6 +427,7 @@ export default function App() {
       {page === 'pireview' && <PiReviewPage />}
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
+      {page === 'ondemand' && onDemandPage && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} onOpen={openOnDemand} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}
       {page === 'bulk' && <SprintCheckPage azure={azure} store={store} my={my} />}

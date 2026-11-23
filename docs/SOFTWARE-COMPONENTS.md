@@ -16,7 +16,7 @@ This document lists every software component of the system: the in-house source 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
 | main | `src/main.tsx` | Entry point: applies the remembered theme before first paint, then renders App inside StrictMode and the ErrorBoundary. | UI |
-| App | `src/App.tsx` | App shell: sidebar (foldable to icons), header, month picker and page routing; loads shared setup from Git at start, removes duplicate connections, fetches cloud connections, saves on-prem fetches to Git. | NAV, CON, FET, GIT |
+| App | `src/App.tsx` | App shell: sidebar (foldable to icons), header, month picker and page routing; loads shared setup from Git at start, removes duplicate connections, fetches cloud connections, saves on-prem fetches to Git. | NAV, CON, FET, GIT, OND |
 | index | `src/index.css` | Global styles and colour tokens for light and dark themes. | UI |
 | App | `src/App.css` | Layout styles for the shell, sidebar, top bar, panels, tables, forms, modals and responsive breakpoints. | UI |
 | fresh | `src/fresh.css` | Final "fresh look" style layer (white sidebar, soft canvas, borderless cards) built on the index.css tokens. | UI |
@@ -26,7 +26,7 @@ This document lists every software component of the system: the in-house source 
 | workEmail | `src/workEmail.ts` | Your work email as its own setting on the computer: read, save, and the one-time take-over from the Time Writing connection (CON-82). | CON, ATM |
 | settingsTabs | `src/settingsTabs.ts` | The Settings pages (menu order, shared ones), the remembered page and the remembered section of each page (SET-14). | SET, CON, NAV |
 | index | `src/docs/index.ts` | Bundles docs/*.md at build time into the list of project documents shown on the Documentation page. | DOC |
-| registry | `src/pages/registry.ts` | Single source of page ids, labels, icons, sidebar groups, header text and month-picker use. | NAV |
+| registry | `src/pages/registry.ts` | Single source of page ids, labels, icons, sidebar groups, header text and month-picker use. | NAV, OND |
 | types | `src/pages/types.ts` | `PageProps` shared by pages: the app store, the selected month and its setter. | — |
 | AdminPage | `src/pages/AdminPage.tsx` | Settings pages (one per menu entry, SET-14), with sections for Azure DevOps connections, Git storage, Access, Feature setup, capacity/absence, periods, resources, master data and audit. | SET, CON, GIT, SNP, CAP |
 | BacklogHealthPage | `src/pages/BacklogHealthPage.tsx` | Backlog Health: open work in ended Sprints, Features without DoD and unassigned work, with person filter, chosen columns, sorting and CSV. | CON |
@@ -48,6 +48,7 @@ This document lists every software component of the system: the in-house source 
 | mySignatures | `src/mySignatures.ts` | The documents a person signed as Author, Reviewer or Approver in the Azure DevOps views and Windchill exports, their dates and the counts per period (MYD-13). | MYD |
 | PersonalLayout | `src/components/PersonalLayout.tsx` | Customize a page's sections (show, hide, order, reset, default for everyone) and the menu (pin, hide). | MYD |
 | QeMappingPage | `src/pages/QeMappingPage.tsx` | QE Mapping: upload Excel/CSV, edit cells/rows/columns, filter and group, then save to Git or export. | QEM |
+| OnDemandPage | `src/pages/OnDemandPage.tsx` | On-Demand page (CoNQ and the pages added): the work table, the row pop-up, the Columns pop-up with types and options, add / rename / remove a page, Save to Git with the unsaved-changes bar. | OND, CON |
 | KpiTrackerPage | `src/pages/KpiTrackerPage.tsx` | KPI tracker page: the Git copy or a live read in the desktop app, sheet choice, table, save to Git for admins. | KPT |
 | DpBulkCreate | `src/components/DpBulkCreate.tsx` | DP Create Features dialog: the plan per selected release, PI / Sprint, creation as a background job. | DPF |
 | FormulaBar | `src/components/FormulaBar.tsx` | The fx bar of a calculation profile: typed formula, insert buttons, check as typed. | CAP |
@@ -198,6 +199,7 @@ This document lists every software component of the system: the in-house source 
 | useHistory | `src/useHistory.ts` | Historical hours state: read from Git, save (conflict retried once) and remove. | HIS, GIT |
 | viewAs | `src/viewAs.ts` | View as: who may use it, the rights of the viewed person or role, the people to choose from, the read-only write guard. | CON |
 | qeMapping | `src/qeMapping.ts` | QE Mapping table model: sheets with stable column/row ids, edits, filter, group, CSV, Git file parse/serialise. | QEM |
+| onDemand | `src/onDemand.ts` | On-Demand page model: columns (Text, Number, Date, Dropdown, Multi-select) and rows with stable ids, value checks and type changes that keep values, the Git file parse / validate / serialise and the merge of two saves. | OND |
 | kpiTracker | `src/kpiTracker.ts` | KPI tracker model: link check, workbook to text sheets within limits, Git file parse/serialise, sheet table. | KPT |
 | dpBulk | `src/dpBulk.ts` | DP releases: release type from x.y.z.a, QE from the QE Mapping, possible QEs, bulk Create Features plan. | DPF |
 | formula | `src/formula.ts` | Typed utilization formula: tokenizer and parser (figures, operators, MAX/MIN/ROUND/IF), check as typed, starting formula from the ticks. | CAP |
@@ -265,11 +267,12 @@ This document lists every software component of the system: the in-house source 
 | useAzureWorkspace | `src/useAzureWorkspace.ts` | Azure connections state: fetch, save, preview, sample data, Git-backed on-prem data and fetch listeners. | CON, FET, SMP |
 | useDpBoardColumn | `src/useDpBoardColumn.tsx` | DP table "QMS-0025 match" column with search/export text and Create Feature. | QV |
 | useFeatureSetup | `src/useFeatureSetup.ts` | Shared and personal Feature setup from Git, cached locally, saved with a writable token. | CON |
-| useGitStorage | `src/useGitStorage.ts` | Git storage state: load/save planning data, views file, access, Feature setup, QE Mapping and Windchill files, including the windchill-analysis locations file; the save queue of the merged shared files (GIT-17). | GIT, CON, QEM |
+| useGitStorage | `src/useGitStorage.ts` | Git storage state: load/save planning data, views file, access, Feature setup, QE Mapping and Windchill files, including the windchill-analysis locations file; the save queue of the merged shared files (GIT-17). | GIT, CON, QEM, OND |
 | useMyWork | `src/useMyWork.ts` | Who "me" is: Time Writing connection email plus a remembered display name. | ATM |
 | useNow | `src/useNow.ts` | Date that re-renders on an interval for clock and freshness labels. | NAV |
 | usePersonScope | `src/usePersonScope.ts` | Team / Individual scope and team filter, remembered per page. | MON, OVR |
 | useQeMapping | `src/useQeMapping.ts` | QE Mapping table from Git, cached locally, saved with a writable token. | QEM |
+| useOnDemand | `src/useOnDemand.ts` | The On-Demand pages from Git (on-demand/ folder), cached locally, CoNQ while none exists, drafts per page, queued merged saves and removal. | OND |
 | useMonthlyPack | `src/useMonthlyPack.ts` | Monthly pack setup (cached locally) and the month's text from Git, saved with a writable token. | PCK |
 | useWindchill | `src/useWindchill.ts` | Windchill views: searches, fetching via desktop/browser/bridge, importing results; each fetch and import a Background jobs entry (QV-63). | CON, QV |
 | useWindchillReading | `src/useWindchillReading.ts` | How a Windchill export's releases are read (Read from, name / Location column) and the releases read, held by the export's page so that its counts follow its Releases table (QV-64). | CON, QV |
@@ -375,6 +378,7 @@ This document lists every software component of the system: the in-house source 
 | nested-groups.test | `tests/nested-groups.test.mjs` | Nested grouping: levels, order, blank last, unique keys. | QV |
 | monthly-pack.test | `tests/monthly-pack.test.mjs` | Monthly pack files, Epic counts, lines, YoY, slide text and the .pptx writer. | PCK |
 | qe-mapping.test | `tests/qe-mapping.test.mjs` | xlsx/CSV read/write and QE Mapping editing and Git file handling. | QEM |
+| on-demand.test | `tests/on-demand.test.mjs` | On-Demand pages: the Git file validated, rows, column type changes and option renames that keep values, the merge of two saves, the On-Demand rights and older access.json files (TC-OND-02…06). | OND, CON |
 | kpi-tracker.test | `tests/kpi-tracker.test.mjs` | SharePoint link and read (one GET, sign-in detection), the Git copy and its limits, sheet tables. | KPT, IF |
 | dp-bulk.test | `tests/dp-bulk.test.mjs` | DP release type and sets, QE match, possible QEs, bulk plan. | DPF |
 | formula.test | `tests/formula.test.mjs` | Typed formula: evaluation, functions, blank on / 0, error messages. | CAP |
@@ -417,6 +421,7 @@ The end-to-end suite (`pnpm test:e2e`, after `pnpm build:web`) drives the built 
 | documents-and-data.e2e | `e2e/documents-and-data.e2e.mjs` | Documentation tabs, links and download; Windchill export releases from names and from Location with the locations CSV; "＋ ECP" import named after the stream with the ECP CSV and the common Release name / Release columns, an ECP setup at the 3rd folder with the type-2 CSV (TC-CON-53, 54, 55); the table default on the Windchill raw data — move, hide, density, Excel export with dates, Settings → Table defaults (TC-UI-04, 05); My Work tree, Backlog Health and Baselines on the default (TC-UI-06); neutralised CSV; JSON backup without credentials (TC-DOC-01, 02, TC-CON-39, 40, 37, TC-STO-04, TC-INS-01); Windchill releases' QMS-0025 match column (TC-QV-23); auto-fit tables and Wrap text (TC-CON-42); the DP Supported Releases list in Pulse Check folded until Show list (TC-QV-17); every Release page (DP, IOCC, Content, S&S IT) with the source bar, counts, Releases | Source data tabs and the common columns in order (TC-QV-43). | DOC, CON, STO, NFR, QV |
 | backlog.e2e | `e2e/backlog.e2e.mjs` | New User Story form from a Feature row of the Backlogs (TC-BKL-10); the Edit form from Feature, User Story and Task rows (TC-BKL-11); New Feature sections, Start date and the Time Writing months with hours per month (TC-BKL-19, TC-BKL-21); DoD and User Stories per Release Classification value (TC-DPF-06); User Story templates (TC-STT-01). | CI, BKL |
 | monthly-pack.e2e | `e2e/monthly-pack.e2e.mjs` | Monthly pack tab with the synthetic sample, the .pptx download and the setup tab (TC-PCK-04). | CI |
+| on-demand.e2e | `e2e/on-demand.e2e.mjs` | On-Demand → CoNQ against a mocked GitHub: columns with options, a row, Save to Git of on-demand/conq.json and reading it back (TC-OND-01); read only without the rights (TC-OND-07). | OND, CON |
 
 ## 2. Third-party components (SOUP)
 

@@ -41,7 +41,8 @@ test('access file: round trip, unknown entries dropped, broken files refused, ed
   assert.equal(parsed.defaultRole, null)
   // An older file (no split permissions): azure.write brings the work-item permissions it covered, and the actions the
   // app did not check before are allowed (CON-94).
-  assert.deepEqual(parsed.roles['Scrum Master'], { areas: ['health'], actions: ['azure.write', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk', 'qemapping.edit', 'data.export', 'setup.feature', 'pack.text'] })
+  // CON-103: the On-Demand area (permissions 4) is shown to every role the older file lists.
+  assert.deepEqual(parsed.roles['Scrum Master'], { areas: ['health', 'ondemand'], actions: ['azure.write', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk', 'qemapping.edit', 'data.export', 'setup.feature', 'pack.text'] })
   assert.deepEqual(parsed.roles.Admin, { areas: [], actions: ['qemapping.edit', 'data.export', 'setup.feature', 'pack.text'] }, 'a role missing from an older file keeps only what the app did not check then')
   assert.deepEqual(parsed.members, { 'a@b.com': ['Scrum Master'] })
   assert.throws(() => parseAccess('{'), /not valid JSON/)
@@ -123,7 +124,7 @@ test('CON-94: every permission is Allow, Deny or Not set per role; a denial wins
   // A file saved by this version is never migrated again, even when its roles list old keys only.
   const saved = defaultPolicy('lead@example.com'); saved.roles['Team Member'].actions = ['azure.write']
   for (const rights of Object.values(saved.roles)) if (rights !== saved.roles['Team Member']) rights.actions = []
-  assert.match(serializeAccess(saved), /"permissions": ?3/)
+  assert.match(serializeAccess(saved), /"permissions": ?4/)
   assert.deepEqual(parseAccess(serializeAccess(saved)).roles['Team Member'].actions, ['azure.write'], 'Not set stays Not set')
 
   // Deny wins over another role's allow, for actions and areas alike; it round-trips through the file.
