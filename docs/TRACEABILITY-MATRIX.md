@@ -562,7 +562,7 @@ Ver. = verification method (T test, D demonstration, I inspection, A analysis); 
 | GIT-13 | SR-12 | UR-09, UR-19 | T | M | TC-GIT-06 | — | `git-storage.test.mjs` | — |
 | GIT-14 | SR-12 | UR-09, UR-19 | T | M | TC-GIT-07 | — | `git-storage.test.mjs` | — |
 | GIT-15 | SR-12 | UR-09, UR-19 | T | M | TC-GIT-08 | — | `git-watch.test.mjs` | — |
-| GIT-16 | SR-12 | UR-09, UR-19 | T | M | TC-GIT-09 | — | `git-storage.test.mjs` | KB-63 |
+| GIT-16 | SR-12 | UR-09, UR-19 | T | M | TC-GIT-09 | — | `git-storage.test.mjs` | KB-63, OI-11 |
 | SNP-01 | SR-13 | UR-09 | D | M | TC-SNP-01 | — | — | — |
 | SNP-02 | SR-13 | UR-09 | T | M | TC-SNP-01 | — | — | — |
 | SNP-03 | SR-13 | UR-09 | T | M | TC-SNP-01 | — | — | — |
