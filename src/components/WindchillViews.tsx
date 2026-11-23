@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { projectLevels, windchillOps, windchillCell, type WindchillFilter, type WindchillLogic, type WindchillView } from '../windchillViews'
-import { defaultStreams, windchillOptionsForView } from '../streams'
+import { defaultStreams } from '../streams'
 import { ResultTabs } from './ResultTabs'
 import { DataTable, type DataColumn } from './DataTable'
 import { windchillDateValue } from '../windchillReleases'
-import { ViewActions } from './ViewActions'
+import { PeriodSelect, ReleaseSourceBar, type ReleaseScope } from './ReleasePage'
 import { formatDateTime } from '../format'
 import type { WindchillWorkspace } from '../useWindchill'
 import type { GitStorage } from '../useGitStorage'
-import { EmptyState, Notice, Panel, Pill } from './ui'
+import { EmptyState, Notice, Page, Panel, Pill, TablePanel } from './ui'
 import { WindchillReleasesPanel, type ReleaseBoard } from './WindchillReleasesPanel'
 
 const blank = (): WindchillView => ({ id: crypto.randomUUID().replaceAll('-', ''), name: '', entitySet: '', filters: [{ field: '', op: 'eq', value: '' }], columns: [], showInMenu: true })
@@ -74,11 +74,13 @@ export function WindchillViewsPanel({ windchill }: { windchill: WindchillWorkspa
   </Panel>
 }
 
-// A Windchill view page: its last results with the chosen columns; search and CSV export; Fetch, or results opened in
-// the browser and imported.
+// A Windchill view page (S&S IT, ECP and every other export or search): its Release page with the parts of
+// UI-STANDARDS §10 (QV-62) — the source bar (name, export file or object type, when imported or fetched, Show: {month}
+// / All months, ↻ and ⋯), no counts (CP, DP and IOCC only), the Releases | Source data tabs and the Releases table.
 export function WindchillPage({ view, windchill, git, gitNote, month, board }: { view: WindchillView; windchill: WindchillWorkspace; git?: GitStorage; gitNote?: { tone: string; text: string }; month?: string; board?: ReleaseBoard }) {
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
+  const [scope, setScope] = useState<ReleaseScope>('month')
   const [fromGit, setFromGit] = useState<{ tone: 'info' | 'success' | 'error'; text: string } | null>(null)
   // Load from Git: the results saved to Git (from this or another computer), like the on-prem views.
   async function loadFromGit() {
@@ -95,23 +97,27 @@ export function WindchillPage({ view, windchill, git, gitNote, month, board }: {
   const rows = (source?.rows ?? []).filter((row) => !search.trim() || columns.some((column) => windchillCell(row, column).toLowerCase().includes(search.trim().toLowerCase())))
   // UI-07…12: the raw rows follow the table default; a date written by Windchill ("27-Oct-2026 09:15") is exported as a date-time.
   const rawColumns: DataColumn<Record<string, unknown>>[] = columns.map((column) => ({ id: column, label: column, value: (row) => windchillDateValue(windchillCell(row, column)), render: (row) => windchillCell(row, column) }))
-  return <Panel className="connection-panel backlog-panel">
-    <div className="view-source-bar"><div><strong>{view.name}</strong><span className="muted"> · {view.exportFile ? `Windchill export ${view.exportFile}` : view.entitySet}{source ? ` · ${source.rows.length} results · ${view.exportFile ? 'imported' : 'fetched'} ${formatDateTime(source.fetchedAt)}${source.fromGit ? ' (desktop app, via Git)' : ''}` : ''}</span></div>
-      {/* QV-48: a small main action (import a newer file, or refresh a search) and the rest in a ⋯ menu. */}
-      <ViewActions label={view.name} primary={view.exportFile ? <ExportFileButton label="⤒" title="Import newer export" className="act-button act-primary" onFile={(text, file) => windchill.importExport(text, file, '', view.id)} onError={setError} />
-        : <button type="button" className="act-button act-primary" aria-label={source ? 'Refresh from Windchill' : 'Fetch from Windchill'} title={source ? 'Refresh from Windchill' : 'Fetch from Windchill'} disabled={status?.state === 'busy'} onClick={() => void windchill.fetchView(view.id)}>↻{status?.state === 'busy' ? <small>Searching…</small> : null}</button>}
-        items={[...(git?.connected ? [{ key: 'git', label: 'Load from Git', disabled: fromGit?.text === 'Loading from Git…', onClick: () => void loadFromGit() }] : []), ...(view.exportFile ? [{ key: 'remove', label: 'Remove this export…', danger: true, onClick: () => { if (window.confirm(`Remove the Windchill export “${view.name}” from this app?`)) windchill.removeView(view.id) } }] : [])]} /></div>
-    {!view.exportFile && <WindchillImport view={view} windchill={windchill} />}
-    {error && <Notice tone="error">{error}</Notice>}
-    {fromGit && <Notice tone={fromGit.tone}>{fromGit.text}</Notice>}
-    {status && <Notice tone={status.state === 'error' ? 'error' : status.state === 'busy' ? 'info' : 'success'}>{status.message}</Notice>}
-    {gitNote && <div className={`notice ${gitNote.tone}`} role="status">{gitNote.text}</div>}
-    {!source ? <EmptyState title={`“${view.name}” has not been fetched yet.`} detail="Fetch it from Windchill, or Open in browser, save the results (Ctrl+S) or copy them, then Import file or Paste results. Results saved to Git from another computer also appear here." />
-      // QV-47: the consolidation (releases / projects) and the raw imported rows are two tabs of the page.
-      : <ResultTabs id={`wc:${view.id}`} mainLabel={windchillOptionsForView(view).project ? 'Projects' : 'Releases'} rawLabel={view.exportFile ? 'Raw data' : 'Query output'} rawCount={source.rows.length} main={<WindchillReleasesPanel view={view} rows={source.rows} columns={columns} git={git} month={month} board={board} onSetup={view.exportFile ? (setup) => windchill.setSetup(view.id, setup) : undefined} />} raw={<DataTable id={`wc:${view.id}`} columns={rawColumns} rows={rows} rowKey={(_, index) => String(index)} exportName={view.name} limit={1000}
-        toolbar={<><input className="search" aria-label={`Search ${view.name}`} placeholder="Search all columns" value={search} onChange={(event) => setSearch(event.target.value)} />{!view.exportFile && <Pill tone="info">{view.filters.length} filter{view.filters.length === 1 ? '' : 's'}</Pill>}</>}
-        status={`${rows.length} of ${source.rows.length}`} />} />}
-  </Panel>
+  // QV-48: a small main action (↻ import a newer file, or refresh a search) and the rest in a ⋯ menu.
+  const primary = view.exportFile ? <ExportFileButton label="↻" title="Import newer export" className="primary" onFile={(text, file) => windchill.importExport(text, file, '', view.id)} onError={setError} />
+    : <button type="button" className="primary" aria-label={source ? 'Refresh from Windchill' : 'Fetch from Windchill'} title={source ? 'Refresh from Windchill' : 'Fetch from Windchill'} disabled={status?.state === 'busy'} onClick={() => void windchill.fetchView(view.id)}>↻{status?.state === 'busy' ? <small>Searching…</small> : null}</button>
+  const menu = [...(git?.connected ? [{ key: 'git', label: 'Load from Git', disabled: fromGit?.text === 'Loading from Git…', onClick: () => void loadFromGit() }] : []), ...(view.exportFile ? [{ key: 'remove', label: 'Remove this export…', danger: true, onClick: () => { if (window.confirm(`Remove the Windchill export “${view.name}” from this app?`)) windchill.removeView(view.id) } }] : [])]
+  const noteTone = (tone: string) => tone === 'error' || tone === 'warning' || tone === 'success' ? tone : 'info'
+  return <Page className="release-page">
+    <ReleaseSourceBar name={view.name} source={view.exportFile ? `Windchill export ${view.exportFile}` : view.entitySet}
+      fetched={source ? `${source.rows.length} results · ${view.exportFile ? 'imported' : 'fetched'} ${formatDateTime(source.fetchedAt)}${source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}
+      period={source && month ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={primary} menu={menu}>
+      {!view.exportFile && <WindchillImport view={view} windchill={windchill} />}
+      {error && <Notice tone="error">{error}</Notice>}
+      {fromGit && <Notice tone={fromGit.tone}>{fromGit.text}</Notice>}
+      {status && <Notice tone={status.state === 'error' ? 'error' : status.state === 'busy' ? 'info' : 'success'}>{status.message}</Notice>}
+      {gitNote && <Notice tone={noteTone(gitNote.tone)}>{gitNote.text}</Notice>}
+    </ReleaseSourceBar>
+    {!source ? <Panel><EmptyState title={`“${view.name}” has not been fetched yet.`} detail="Fetch it from Windchill, or Open in browser, save the results (Ctrl+S) or copy them, then Import file or Paste results. Results saved to Git from another computer also appear here." /></Panel>
+      // QV-47: the consolidation (the releases; ECP's projects) and the source data (the imported rows) are two tabs of the page.
+      : <ResultTabs id={`wc:${view.id}`} rawCount={source.rows.length} main={<WindchillReleasesPanel view={view} rows={source.rows} columns={columns} git={git} month={month} scope={scope} board={board} onSetup={view.exportFile ? (setup) => windchill.setSetup(view.id, setup) : undefined} />} raw={<TablePanel><DataTable id={`wc:${view.id}`} columns={rawColumns} rows={rows} rowKey={(_, index) => String(index)} exportName={view.name} limit={1000}
+        toolbar={<>{!view.exportFile && <Pill tone="info">{view.filters.length} filter{view.filters.length === 1 ? '' : 's'}</Pill>}<input className="search" aria-label={`Search ${view.name}`} placeholder="Search all columns" value={search} onChange={(event) => setSearch(event.target.value)} /></>}
+        status={`${rows.length} of ${source.rows.length}`} /></TablePanel>} />}
+  </Page>
 }
 
 // Chooses an export file and hands its text on; a file that is not an export is reported.

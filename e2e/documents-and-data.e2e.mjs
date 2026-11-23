@@ -1,13 +1,13 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
-import { fixture, navigate, openPage, profileItem, startApp, text } from './helpers.mjs'
+import { fixture, loadSample, navigate, openPage, profileItem, startApp, text } from './helpers.mjs'
 
 // UI-10: every table has one Export that offers Excel or CSV.
 const exportFrom = async (page, scope, format = 'CSV (.csv)') => { await scope.getByRole('button', { name: /^Export/ }).first().click(); const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: format }).click()]); return download }
 
 // Documentation, Windchill export and data-safety scenarios of the UAT (TC-DOC-01, TC-DOC-02, TC-CON-39, TC-CON-37,
-// TC-STO-04, TC-INS-01, TC-QV-23), automated against the built web app.
+// TC-STO-04, TC-INS-01, TC-QV-23, TC-QV-43), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -56,10 +56,11 @@ test('TC-CON-39 / TC-CON-37 / TC-QV-27: a Windchill export lists its unique rele
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   const body = await text(releases)
   assert.match(body, /5 releases · 6 of 7 documents · 1 clubbed/)
-  for (const row of ['Remote Diagnostics 1.6 ▸ 2 documents', 'Service1_rel1_Service2_rel2 1 + 2 ▸ 1 document', 'CareLink 3.2']) assert.ok(body.includes(row), row)
+  // QV-62: Release name ▸ (opens the documents), Release, the latest date, Documents (a count).
+  for (const row of ['▸ Remote Diagnostics 1.6 2026-10-01 2', '▸ Service1_rel1_Service2_rel2 1 + 2 2026-10-06 1', '▸ CareLink 3.2 2026-08-01 1']) assert.ok(body.includes(row), row)
   assert.match(body, /1 document without a release number in the name/)
   const download = await exportFrom(page, releases)
   const csv = readFileSync(await download.path(), 'utf8')
@@ -67,9 +68,9 @@ test('TC-CON-39 / TC-CON-37 / TC-QV-27: a Windchill export lists its unique rele
   // CON-69: a cell that a spreadsheet would read as a formula is prefixed so that it stays text.
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-formula.csv'))
   await page.locator('.notice, .panel', { hasText: /windchill-formula/ }).first().waitFor().catch(() => {})
-  // VIEW-01: the imported rows are on the "Raw data" tab, not below the releases.
+  // VIEW-01, QV-62: the imported rows are on the "Source data" tab, not below the releases.
   assert.equal(await page.getByLabel(/^Search /).count(), 0, 'the raw rows are not shown on the Releases tab')
-  await page.getByRole('tab', { name: /^Raw data/ }).click()
+  await page.getByRole('tab', { name: /^Source data/ }).click()
   await page.getByLabel(/^Search /).waitFor()
   const exported = await exportFrom(page, page.getByRole('tabpanel'))
   const content = readFileSync(await exported.path(), 'utf8')
@@ -108,12 +109,12 @@ test('TC-CON-40: an export with a Location column reads its releases from Locati
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-locations.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   let body = await text(releases)
   assert.match(body, /5 releases · 6 of 7 documents · from Location/)
-  for (const row of ['CareLink R3.2', 'Remote Diagnostics 1.7', 'Remote Diagnostics 1.6 ▸ 2 documents 1', 'Service1 1.0']) assert.ok(body.includes(row), row)
+  for (const row of ['CareLink R3.2', 'Remote Diagnostics 1.7', '▸ Remote Diagnostics 1.6 2026-10-01 2 1', 'Service1 1.0']) assert.ok(body.includes(row), row)
   assert.match(body, /1 document without a release in the Location/)
-  assert.deepEqual(await releases.locator('tbody tr td:first-child strong').allInnerTexts(), ['Service1', 'IntelliSpace Portal', 'Remote Diagnostics', 'Remote Diagnostics', 'CareLink'], 'newest Last Modified first')
+  assert.deepEqual((await releases.locator('tbody tr td:first-child button').allInnerTexts()).map((name) => name.replace(/^▸\s*/, '')), ['Service1', 'IntelliSpace Portal', 'Remote Diagnostics', 'Remote Diagnostics', 'CareLink'], 'newest Last Modified first')
   await releases.locator('summary', { hasText: /unique locations/ }).click()
   body = await text(releases)
   assert.match(body, /6 unique locations/)
@@ -146,9 +147,9 @@ test('TC-CON-41: the export page follows the header month, sorts by any column a
   let body = await text(releases)
   assert.match(body, /1 of 5 releases with a document Last Modified in August 2026 · 1 document/)
   assert.ok(body.includes('CareLink 3.2'))
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   assert.match(await text(releases), /5 releases · 6 of 7 documents/)
-  const names = () => releases.locator('tbody tr td:first-child strong').allInnerTexts()
+  const names = async () => (await releases.locator('tbody tr td:first-child button').allInnerTexts()).map((name) => name.replace(/^▸\s*/, ''))
   await releases.getByRole('button', { name: /^Release name/ }).click()
   assert.deepEqual((await names())[0], 'CareLink', 'A→Z')
   await releases.getByRole('button', { name: /^Release name/ }).click()
@@ -166,7 +167,7 @@ test('TC-QV-23: the export\'s releases have a QMS-0025 match column with Create 
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   assert.equal(await releases.getByRole('button', { name: /^QMS-0025 match/ }).count(), 1, 'the column heading sorts')
   const rows = releases.locator('table').first().locator('tbody > tr')
   assert.equal(await rows.count(), 5)
@@ -183,20 +184,21 @@ test('TC-QV-23: the export\'s releases have a QMS-0025 match column with Create 
   await context.close()
 })
 
-test('TC-CON-53 / TC-CON-54: "＋ ECP" imports the export as the ECP page whatever the file is called, read by project, with Project No / Project Name columns', async () => {
+test('TC-CON-53 / TC-QV-43: "＋ ECP" imports the export as the ECP page whatever the file is called, read by project, with the common Release name / Release columns', async () => {
   const { page, context, errors } = await openPage(app, { roles: true })
   await page.locator('nav button', { hasText: /^＋\s*ECP$/ }).click()
   assert.equal(await page.getByLabel(/^Name/).first().inputValue(), 'ECP', 'the import is named after the stream')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-ecp.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   const body = await text(releases)
   assert.match(body, /123456/)
-  // TC-CON-54: an ECP release is a project, so its columns read Project No and Project Name.
+  // QV-62 (CON-86 retired): an ECP release is a project, shown with the columns every Release page has.
   const headers = (await releases.locator('thead th').allTextContents()).map((header) => header.trim().toLowerCase())
-  assert.ok(headers.some((header) => header.startsWith('project name')) && headers.some((header) => header.startsWith('project no')), `project columns: ${headers.join(', ')}`)
-  assert.ok(!headers.some((header) => header === 'release' || header === 'release name'), `no Release columns on ECP: ${headers.join(' | ')}`)
+  assert.deepEqual(headers.slice(0, 2), ['release name', 'release'], `common columns first: ${headers.join(' | ')}`)
+  assert.ok(!headers.some((header) => header.startsWith('project')), `no Project columns: ${headers.join(' | ')}`)
+  assert.equal(await page.getByRole('tab', { name: 'Releases', exact: true }).getAttribute('aria-selected'), 'true', 'the main tab is Releases, not Projects')
   assert.match(body, /Lab Automation/)
   assert.equal(await page.locator('nav button', { hasText: /^＋\s*ECP$/ }).count(), 0, 'ECP is no longer "not imported"')
   assert.equal(await page.locator('nav button', { hasText: /^\S*\s*ECP$/ }).count(), 1, 'ECP opens the export')
@@ -213,7 +215,7 @@ test('TC-CON-55 / TC-QV-28: an ECP setup named "ECP - Type 2" reads projects fro
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-ecp-type2.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   let body = await text(releases)
   assert.match(body, /Patient Monitor/)
   assert.match(body, /Scanner/)
@@ -239,7 +241,7 @@ test('TC-UI-04 / TC-UI-05: every table follows the table default — move, hide,
   const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
-  await page.getByRole('tab', { name: /^Raw data/ }).click()
+  await page.getByRole('tab', { name: /^Source data/ }).click()
   const table = page.getByRole('tabpanel')
   const headings = () => table.locator('thead th').allTextContents()
   assert.deepEqual((await headings()).map((h) => h.trim()), ['Number', 'Name', 'State', 'Last Modified'])
@@ -264,7 +266,7 @@ test('TC-UI-04 / TC-UI-05: every table follows the table default — move, hide,
   await page.getByRole('checkbox', { name: 'CSV (.csv)' }).uncheck()
   await navigate(page, 'Import Windchill export')
   await page.locator('nav button', { hasText: /windchill-export/ }).first().click().catch(() => {})
-  await page.getByRole('tab', { name: /^Raw data/ }).click()
+  await page.getByRole('tab', { name: /^Source data/ }).click()
   assert.equal(await page.getByRole('tabpanel').getByRole('button', { name: 'Export Excel' }).count(), 1, 'one format: a single Export Excel button')
   assert.deepEqual(errors, [])
   await context.close()
@@ -343,7 +345,7 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await releases.getByLabel('Show').selectOption('all')
+  await page.getByLabel('Show', { exact: true }).selectOption('all')
   const table = releases.locator('table.resizable')
   assert.match(await table.getAttribute('class'), /\bno-wrap\b/, 'one line per cell by default')
   const widths = () => table.locator('thead th').evaluateAll((cells) => cells.map((cell) => Math.round(cell.getBoundingClientRect().width)))
@@ -364,6 +366,72 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   assert.equal(await table.locator('tbody td').first().evaluate((cell) => getComputedStyle(cell).whiteSpace), 'pre-wrap')
   await releases.getByLabel('Wrap text').uncheck()
   assert.equal(await table.locator('tbody td').first().evaluate((cell) => getComputedStyle(cell).whiteSpace), 'nowrap')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs and the common columns in order', async () => {
+  // DP, IOCC and Content read the synthetic sample's release documents (the same query, so each shows them); the
+  // Time Writing connection comes first so that the sample loads. Nothing is fetched: Azure DevOps answers 401.
+  const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
+  const view = (name) => ({ id: name.toLowerCase(), url: `https://azure.example.com/tfs/Collection/${name}`, baseUrl: 'https://azure.example.com/tfs', token: 'e2e-token-0123456789', reason: name, viewName: name, role: 'release-source', query, showInMenu: true })
+  const profiles = [{ id: 'tw', url: 'https://dev.azure.com/ALMP-ORG-MSTP01/Patient%20Safety%20and%20Quality/_backlogs/backlog/InD%20Quality/Epics', token: '', reason: 'QMS-0025', role: 'time-tracking', showInMenu: true }, ...['DP', 'IOCC', 'Content'].map(view)]
+  const { page, context, errors } = await openPage(app, { roles: true, init: (list) => { localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify(list)) }, initArg: profiles })
+  await context.route(/azure\.example\.com|dev\.azure\.com/, (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  const guide = page.getByRole('dialog').filter({ hasText: 'Get started' })
+  if (await guide.waitFor({ timeout: 10000 }).then(() => true, () => false)) await guide.getByRole('button', { name: 'Close', exact: true }).last().click()
+  await loadSample(page)
+  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source', { hasText: name }).waitFor() }
+  const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
+  const headers = async () => (await releases().locator('thead').waitFor(), await releases().locator('thead th').allTextContents()).map((header) => header.replace(/[▴▾▲▼↑↓]/g, '').trim().toLowerCase())
+  const show = page.getByLabel('Show', { exact: true })
+  const parts = async (name, { counts }) => {
+    const bar = page.locator('.release-source')
+    // (1) Source bar: name · source · when fetched, then Show: {month} / All months, ↻ and ⋯.
+    assert.match(await text(bar.locator('.view-source-bar > div').first()), new RegExp(`^${name} · .+ · .*(fetched|imported) `), `${name}: name · source · when fetched`)
+    const monthLabel = await show.locator('option').first().innerText()
+    assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: Show offers the header month`)
+    assert.deepEqual(await show.locator('option').allInnerTexts(), [monthLabel, 'All months'], `${name}: Show: {month} / All months`)
+    assert.equal(await bar.locator('.view-actions .primary', { hasText: '↻' }).count(), 1, `${name}: ↻`)
+    assert.equal(await bar.getByRole('button', { name: `More actions: ${name}` }).count(), 1, `${name}: ⋯`)
+    // (2) Counts: CP, DP and IOCC only.
+    if (counts) {
+      assert.deepEqual((await page.locator('.release-counts .metric-grid article > span').allInnerTexts()).map((label) => label.trim().toLowerCase()), [`releases in ${monthLabel.toLowerCase()}`, 'completed', 'supported'], `${name}: the three counts`)
+      assert.equal(await page.locator('.release-counts').getByRole('button', { name: /What was counted/ }).count(), 1, `${name}: ⓘ What was counted`)
+    } else assert.equal(await page.locator('.release-counts').count(), 0, `${name}: no counts`)
+    // (3) Tabs: Releases | Source data (n), with every month shown.
+    await show.selectOption('all')
+    const tabs = page.getByRole('tablist', { name: 'Result' })
+    await tabs.waitFor()
+    const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
+    assert.equal(labels[0], 'Releases', `${name}: the Releases tab first`)
+    assert.match(labels[1], /^Source data \(\d+\)$/, `${name}: Source data (n)`)
+  }
+  await open('DP')
+  await parts('DP', { counts: true })
+  // (4) DP: its query's rows are the releases — Select first (bulk Create Features), the QMS-0025 match last.
+  let shown = await headers()
+  assert.equal(shown[0], 'select', 'DP: Select first')
+  assert.equal(shown.at(-1), 'qms-0025 match', 'DP: QMS-0025 match last')
+  for (const label of ['Select all shown', 'Clear']) assert.equal(await releases().getByRole('button', { name: label, exact: true }).count(), 1, `DP toolbar: ${label}`)
+  assert.equal(await releases().getByRole('button', { name: /^Create Features \(0\)$/ }).count(), 1)
+
+  await open('IOCC')
+  await parts('IOCC', { counts: true })
+
+  await open('Content')
+  await parts('Content', { counts: false })
+  shown = await headers()
+  assert.deepEqual(shown, ['select', 'release name', 'approved', 'documents', 'time writing feature', 'planned (h)', 'booked (h)', 'qms-0025 match'], 'Content: the common columns in the standard order (no Release number: the Title is the release)')
+  assert.equal(await releases().locator('tbody tr td:nth-child(4)').first().evaluate((cell) => getComputedStyle(cell).textAlign), 'right', 'Documents right-aligned')
+  assert.equal(await releases().getByRole('button', { name: 'Select all shown', exact: true }).count(), 1, 'Content toolbar: Select all shown')
+
+  await navigate(page, 'Import Windchill export')
+  await page.getByLabel(/^Name/).first().fill('S&S IT')
+  await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
+  await page.getByRole('tab', { name: /^Source data/ }).waitFor()
+  await parts('S&S IT', { counts: false })
+  assert.deepEqual(await headers(), ['release name', 'release', 'latest last modified', 'documents', 'qms-0025 match'], 'S&S IT: Release name, Release, the latest date (Approved place), Documents, the QMS-0025 match')
   assert.deepEqual(errors, [])
   await context.close()
 })

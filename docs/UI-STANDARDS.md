@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Document | UIS-DPH-001 |
-| Status | **Draft — for approval by the product owner.** Until approved, it describes the target; the app does not follow it everywhere yet. |
+| Status | **Approved by the product owner on 2026-11-23.** The app does not follow it everywhere yet; each area is brought in line in its own change. |
 | Applies to | Every page and component in `src/pages` and `src/components`, and every new UI change |
 | Checked by | The independent UI/UX reviewer (`review-uiux`, [reviews/README.md](reviews/README.md)) and the change team before each pull request |
 

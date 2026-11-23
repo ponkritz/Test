@@ -11,6 +11,7 @@ import { boardMatchText, dpBoardCandidates, type BoardMatch, windchillBoardMatch
 import { BoardMatchCell } from './DpBoardColumn'
 import { windchillOptionsForView } from '../streams'
 import { projectLevels, type WindchillLogic } from '../windchillViews'
+import type { ReleaseScope } from './ReleasePage'
 
 const ordinal = (level: number) => `${level}${level === 2 ? 'nd' : level === 3 ? 'rd' : 'th'}`
 
@@ -22,25 +23,26 @@ const ordinal = (level: number) => `${level}${level === 2 ? 'nd' : level === 3 ?
 // be limited to the releases with a document dated in the header month (CON-73), sorted by any column (newest
 // first by default), with column widths that can be dragged (kept in this browser). With the QMS-0025 board, each
 // release has a "QMS-0025 match" column as on the DP table (windchillBoardMatch), with Create Feature when nothing
-// matches, titled "{stream} | {release name} | v{release}".
+// matches, titled "{stream} | {release name} | v{release}". QV-62, UI-STANDARDS §10: the period (Show: {month} / All
+// months) is chosen in the page's source bar; the columns follow the standard's order — Release name ▸ (opens the
+// documents), Release, the latest document date (in the Approved place), Documents, the stream's own (Locations,
+// Document names) and the QMS-0025 match last — on S&S IT and ECP alike (an ECP release is a project, CON-83).
 export interface ReleaseBoard { azure: AzureWorkspace; stream: string; threshold: number; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null }
 type SortKey = 'name' | 'release' | 'documents' | 'locations' | 'latest' | 'match'
 const sortValue = (entry: WindchillRelease, key: SortKey, matches: Map<string, BoardMatch>) => key === 'match' ? matches.get(entry.key)?.feature?.score ?? matches.get(entry.key)?.story?.score ?? -1 : key === 'name' ? entry.name : key === 'release' ? entry.release : key === 'documents' ? entry.documents.length : key === 'locations' ? entry.locations.length : entry.latestAt ?? -Infinity
 
 // onSetup: changes how the export is read — Standard or ECP logic and the ECP project folder (CON-87).
-export function WindchillReleasesPanel({ view, rows, columns, git, month, board, onSetup }: { view: { id: string; name: string; logic?: WindchillLogic; projectLevel?: number }; rows: Record<string, unknown>[]; columns: string[]; git?: GitStorage; month?: string; board?: ReleaseBoard; onSetup?: (setup: { logic: WindchillLogic; projectLevel?: number }) => void }) {
+export function WindchillReleasesPanel({ view, rows, columns, git, month, scope = 'month', board, onSetup }: { view: { id: string; name: string; logic?: WindchillLogic; projectLevel?: number }; rows: Record<string, unknown>[]; columns: string[]; git?: GitStorage; month?: string; scope?: ReleaseScope; board?: ReleaseBoard; onSetup?: (setup: { logic: WindchillLogic; projectLevel?: number }) => void }) {
   const [source, setSource] = useState<ReleaseSource | 'auto'>('auto')
   const [nameColumn, setNameColumn] = useState('')
   const [locationColumn, setLocationColumn] = useState('')
   const [open, setOpen] = useState('')
   const [showLocations, setShowLocations] = useState(false)
   const [saved, setSaved] = useState<{ tone: 'info' | 'success' | 'error'; text: string } | null>(null)
-  const [scope, setScope] = useState<'month' | 'all'>('month')
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'latest', desc: true })
   const result = useMemo(() => windchillReleases(rows, columns, { source, nameColumn: nameColumn || undefined, locationColumn: locationColumn || undefined, ...windchillOptionsForView(view) }), [rows, columns, source, nameColumn, locationColumn, view])
-  // ECP (CON-86): a release is a project, so its columns read "Project No" and "Project Name".
+  // ECP (CON-83): a release is a project, read from the Location folder chosen under "Project details at".
   const isProject = Boolean(windchillOptionsForView(view).project)
-  const labels = isProject ? { name: 'Project Name', release: 'Project No' } : { name: 'Release name', release: 'Release' }
   const fileName = view.name.replace(/[^\w-]+/g, '-')
   const boardItems = board?.azure.items, stream = board?.stream ?? '', threshold = board?.threshold
   const epics = useStreamEpics(stream)
@@ -61,13 +63,13 @@ export function WindchillReleasesPanel({ view, rows, columns, git, month, board,
   const fromLocation = result.source === 'location'
   // UI-07…12: the release (or project) table and the locations follow the shared design default; one Export each.
   const releaseColumns: DataColumn<WindchillRelease>[] = [
-    { id: 'name', label: labels.name, value: (entry) => entry.name, render: (entry) => <strong>{entry.name}</strong> },
-    { id: 'release', label: labels.release, value: (entry) => entry.release },
-    { id: 'documents', label: 'Documents', value: (entry) => entry.documents.length, firstSortDesc: true, render: (entry) => <button type="button" className="text-button" aria-expanded={open === entry.key} onClick={() => setOpen(open === entry.key ? '' : entry.key)}>{open === entry.key ? '▾' : '▸'} {entry.documents.length} document{entry.documents.length === 1 ? '' : 's'}</button> },
-    ...(fromLocation ? [{ id: 'locations', label: 'Locations', value: (entry: WindchillRelease) => entry.locations.length, align: 'right' as const, firstSortDesc: true }] : []),
+    { id: 'name', label: 'Release name', value: (entry) => entry.name, render: (entry) => <button type="button" className="text-button" aria-expanded={open === entry.key} onClick={() => setOpen(open === entry.key ? '' : entry.key)}>{open === entry.key ? '▾' : '▸'} {entry.name}</button> },
+    { id: 'release', label: 'Release', value: (entry) => entry.release },
     ...(result.dateColumn ? [{ id: 'latest', label: `Latest ${result.dateColumn}`, value: (entry: WindchillRelease) => entry.latest ? windchillDateValue(entry.latest) : '', firstSortDesc: true, render: (entry: WindchillRelease) => entry.latest || '—' }] : []),
-    ...(board ? [{ id: 'match', label: 'QMS-0025 match', value: (entry: WindchillRelease) => boardMatchText(matches.get(entry.key) ?? {}), render: (entry: WindchillRelease) => <BoardMatchCell match={matches.get(entry.key) ?? {}} azure={board.azure} stream={board.stream} title={windchillFeatureTitle(board.stream, entry)} assign={board.assign} featureSetup={board.featureSetup} /> }] : []),
+    { id: 'documents', label: 'Documents', value: (entry) => entry.documents.length, firstSortDesc: true, align: 'right' },
+    ...(fromLocation ? [{ id: 'locations', label: 'Locations', value: (entry: WindchillRelease) => entry.locations.length, align: 'right' as const, firstSortDesc: true }] : []),
     { id: 'documentNames', label: 'Document names', value: (entry) => entry.documents.map((doc) => doc.name).join('; '), defaultHidden: true, export: 'always' },
+    ...(board ? [{ id: 'match', label: 'QMS-0025 match', value: (entry: WindchillRelease) => boardMatchText(matches.get(entry.key) ?? {}), render: (entry: WindchillRelease) => <BoardMatchCell match={matches.get(entry.key) ?? {}} azure={board.azure} stream={board.stream} title={windchillFeatureTitle(board.stream, entry)} assign={board.assign} featureSetup={board.featureSetup} /> }] : []),
   ]
   const locationColumns: DataColumn<typeof result.locations[number]>[] = [
     { id: 'location', label: 'Location', value: (entry) => entry.location },
@@ -88,7 +90,6 @@ export function WindchillReleasesPanel({ view, rows, columns, git, month, board,
   return <TablePanel title="Releases" info={<><p><strong>Location</strong> (the folder path) is the preferred source: the releases are read from the deepest folder that holds a version — the name and number in one folder ("Remote Diagnostics 1.6"), a clubbed folder ("Ser1 Rel1_Ser2 Rel2": one release, as written, counted once), or a version folder under the name folder ("Remote Diagnostics/1.6", "CareLink/R3.2"); the folders after it (document type) are ignored, and the number is kept exactly as the folder writes it. <strong>Document name</strong> is the fallback: the name holds the release name(s), the release number(s) and then the document name, with any delimiters; a clubbed name ("Ser1 Rel1_Ser2 Rel2") is one release.</p><p>Each release is listed once (name and number; case and trailing zeros ignored, 3.1 = 3.1.0). <strong>Save locations to Git</strong> writes every distinct Location with its document count and the release read from it to the Git data repository (windchill-analysis/{view.id}-locations.json), for analysis of the folder naming; no document contents.</p></>}
     count={inMonth && month ? `${shown.length} of ${result.releases.length} release${result.releases.length === 1 ? '' : 's'} with a document ${result.dateColumn ?? 'date'} in ${monthName(month)} · ${shownDocuments} document${shownDocuments === 1 ? '' : 's'}${result.clubbed ? ` · ${result.clubbed} clubbed` : ''} · from ${fromLocation ? 'Location' : 'Document name'}` : `${result.releases.length} release${result.releases.length === 1 ? '' : 's'} · ${rows.length - result.unmatched.length} of ${rows.length} documents${result.clubbed ? ` · ${result.clubbed} clubbed` : ''} · from ${fromLocation ? 'Location' : 'Document name'}`}
     action={<div className="button-row">
-      {month && <label className="inline-field">Show<select value={scope} onChange={(event) => setScope(event.target.value as 'month' | 'all')}><option value="month">With a document in {monthName(month)} (header month)</option><option value="all">All months</option></select></label>}
       {onSetup && <label className="inline-field">Logic<select aria-label="Logic" value={isProject ? 'ecp' : 'standard'} onChange={(event) => onSetup({ logic: event.target.value as WindchillLogic, ...(view.projectLevel ? { projectLevel: view.projectLevel } : {}) })}><option value="standard">Standard (releases)</option><option value="ecp">ECP (projects)</option></select></label>}
       {onSetup && isProject && <label className="inline-field">Project details at<select aria-label="Project details at" value={view.projectLevel ?? 2} onChange={(event) => onSetup({ logic: 'ecp', projectLevel: Number(event.target.value) })}>{projectLevels.map((level) => <option key={level} value={level}>{ordinal(level)} folder</option>)}</select></label>}
       <label className="inline-field">Read from<select value={source} onChange={(event) => setSource(event.target.value as ReleaseSource | 'auto')}><option value="auto">Automatic ({result.locationColumn ? 'Location' : 'Document name'})</option><option value="location" disabled={!result.locationColumn && !columns.length}>Location</option><option value="name">Document name</option></select></label>
@@ -96,7 +97,7 @@ export function WindchillReleasesPanel({ view, rows, columns, git, month, board,
         : <label className="inline-field">Name column<select value={nameColumn || result.nameColumn} onChange={(event) => setNameColumn(event.target.value)}>{columns.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>}
       {fromLocation && git?.connected && !git.readOnly && <button type="button" className="primary" disabled={!result.locations.length || saved?.tone === 'info'} onClick={() => void saveToGit()}>Save locations to Git</button>}
     </div>}
-    empty={result.releases.length ? (shown.length ? undefined : `No release has its latest ${result.dateColumn ?? 'date'} in ${monthName(month ?? '')}. Choose another month in the header, or show all months.`) : `No release found in the ${columnLabel} column. Choose the column that holds the ${fromLocation ? 'folder paths' : 'document names'}, or read from the ${fromLocation ? 'document names' : 'Location'} instead.`}>
+    empty={result.releases.length ? (shown.length ? undefined : `No release has its latest ${result.dateColumn ?? 'date'} in ${monthName(month ?? '')}. Choose another month in the header, or choose Show: All months.`) : `No release found in the ${columnLabel} column. Choose the column that holds the ${fromLocation ? 'folder paths' : 'document names'}, or read from the ${fromLocation ? 'document names' : 'Location'} instead.`}>
     {saved && <Notice tone={saved.tone === 'error' ? 'warning' : 'info'}><span role="status">{saved.text}</span></Notice>}
     {shown.length > 0 && <DataTable id={`windchill-releases:${view.id}`} columns={releaseColumns} rows={shown} rowKey={(entry) => entry.key} exportName={`${fileName}-${isProject ? 'projects' : 'releases'}`}
       sort={{ id: sort.key, desc: sort.desc }} onSort={(next) => setSort({ key: next.id as SortKey, desc: next.desc })}

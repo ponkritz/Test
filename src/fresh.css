@@ -350,7 +350,7 @@ td small{color:var(--text-3)}
 .qe-cell-editable{display:block;min-height:18px;cursor:text;border-radius:5px;padding:1px 3px;margin:-1px -3px}.qe-cell-editable:hover{background:var(--accent-soft)}.qe-table td input{width:100%;min-width:120px;padding:5px 7px}
 .qe-row-selected td{background:var(--accent-soft)}.qe-group td{background:var(--surface-2);font-weight:600}.qe-group-1 td,.qe-group-2 td,.qe-group-3 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));font-weight:600}
 .qe-table th.qe-select,.qe-table td.qe-select{width:1%!important;min-width:0!important;padding-left:10px;padding-right:6px;text-align:left}.qe-toolbar .inline-select{white-space:nowrap}
-.dp-counts{margin:0 0 14px}.dp-counts .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:10px}.dp-counted{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.dp-counted>summary{cursor:pointer;font-weight:600;font-size:13px}@media(max-width:760px){.dp-counts .metric-grid{grid-template-columns:1fr}}
+.dp-counted{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.dp-counted>summary{cursor:pointer;font-weight:600;font-size:13px}
 ol.column-chooser-list{list-style:none;padding:0;margin:8px 0 0}.column-choice{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;padding:4px 6px;border:1px solid transparent;border-radius:8px;cursor:grab}.column-choice:hover{border-color:var(--line);background:var(--surface-2,transparent)}.column-choice.dragging{opacity:.45}.drag-grip{color:var(--text-3,#999);font-size:12px;letter-spacing:-2px;user-select:none}.column-move{display:inline-flex;gap:2px}.column-move .text-button{padding:2px 6px}
 .query-table th.drop-target{outline:2px dashed var(--accent,#5b5bd6);outline-offset:-3px}.query-table th [draggable=true]{cursor:grab}
 .milestone-chip{display:inline-flex;align-items:baseline;gap:4px;margin:0 6px 2px 0;padding:1px 7px;border-radius:999px;background:var(--surface-2,rgba(91,91,214,.08));border:1px solid var(--line);font-weight:600;font-size:12px;white-space:nowrap}.milestone-chip small{font-weight:400;opacity:.75}
@@ -422,20 +422,26 @@ table.resizable.wrap th,table.resizable.wrap td{white-space:pre-wrap;overflow-wr
 .until-target{display:grid;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0}.until-target legend{font-weight:600;padding:0 4px}
 /* Compact page actions (QV-48): small icon buttons and a "⋯" menu instead of a row of full buttons. */
 .view-actions{position:relative;display:inline-flex;align-items:center;gap:4px}
-.act-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:30px;height:30px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;line-height:1}
-.act-button:hover:not(:disabled){background:var(--accent-soft);color:var(--accent-text)}
-.act-button:disabled{opacity:.6;cursor:progress}
-.act-button.act-primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.act-button.act-primary:hover:not(:disabled){filter:brightness(1.08);background:var(--accent);color:#fff}
-.act-button small{font-size:11.5px;font-weight:600}
+.view-actions .primary,.view-actions .ghost{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:30px;height:30px;padding:0 8px;line-height:1;cursor:pointer}
+.view-actions .primary small,.view-actions .ghost small{font-size:11px;font-weight:600}
+.view-actions .primary:disabled{opacity:.6;cursor:progress}
+.view-actions input[type=file]{display:none}
 .view-actions-menu{position:absolute;z-index:8;top:calc(100% + 4px);right:0;display:grid;min-width:200px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--btn-shadow-hover)}
 .view-actions-menu button,.view-actions-menu label{display:block;border:0;background:transparent;text-align:left;padding:7px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%}
 .view-actions-menu button:hover:not(:disabled),.view-actions-menu label:hover{background:var(--accent-soft)}
 .view-actions-menu button:disabled{color:var(--text-3);cursor:not-allowed}
 .view-actions-menu .danger-text{color:var(--danger-text)}
 .view-actions-menu label input[type=file]{display:none}
-.view-source-bar .check{font-size:12.5px}
-.act-button input[type=file]{display:none}
+/* Release pages (UI-STANDARDS §10, QV-62): source bar, counts, Releases | Source data tabs, Releases table. */
+.release-page{display:flex;flex-direction:column;gap:14px}
+.release-page>.panel,.release-page .metric-grid,.release-page .result-tabs{margin:0}
+.release-source .view-source-bar{margin:0}
+.release-source .notice,.release-source .windchill-import{margin:12px 0 0}
+.release-counts{display:grid;gap:8px}
+.release-counts .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.release-counts-info{margin:0}
+.release-counts .dp-counted{margin:0}
+@media(max-width:760px){.release-counts .metric-grid{grid-template-columns:1fr}}
 /* The table design default (UI-07…12): one toolbar, one density switch, the same look for every table. */
 .data-table{display:grid;gap:8px;min-width:0}
 .data-table-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
