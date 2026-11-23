@@ -51,9 +51,12 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
   const submitting = useRef(false)
   const type = opened.workItemType
   const token = pat || savedPat
+  // BKL-40: the PAT field stays until the item is read (typing in it does not hide it); "Reading…" shows only while a
+  // read is running.
+  const [reading, setReading] = useState(Boolean(savedPat))
 
   async function load(withToken = token) {
-    setError('')
+    setError(''); setReading(true)
     try {
       const fresh = await readWorkItemForEdit(config, withToken, opened.id)
       const item = fresh.item
@@ -66,6 +69,7 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
       setStoryPoints(item.storyPoints == null ? '' : String(item.storyPoints)); setPriority(fresh.priority == null ? '' : String(fresh.priority)); setRisk(fresh.risk); setValueArea(fresh.valueArea)
       setOriginalEstimate(item.originalEstimate == null ? '' : String(item.originalEstimate)); setCompletedWork(item.completedWork == null ? '' : String(item.completedWork))
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not read the work item.') }
+    finally { setReading(false) }
     readAzureIterations(config, withToken).then(setChoices).catch(() => setChoices([]))
     readComments(config, withToken, opened.id).then((list) => { setComments(list); setCommentsError('') }).catch((failure) => setCommentsError(failure instanceof Error ? failure.message : 'Could not read the Discussion.'))
   }
@@ -175,8 +179,8 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
 
   const kind = type === 'User Story' ? 'story' : type.toLowerCase()
   return <Modal title={`${type} #${opened.id}`} eyebrow="EDIT · AZURE DEVOPS WRITE" onClose={onClose}><form onSubmit={save} className="nf-form story-form edit-form">
-    {!token && <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => setPat(event.target.value)} /><button type="button" className="text-button" disabled={!pat.trim()} onClick={() => void load(pat)}>Load</button><small>Saved in this browser only.</small></label>}
-    {!loaded && token && !error && <p className="muted">Reading #{opened.id} from Azure DevOps…</p>}
+    {!savedPat && !loaded && <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => setPat(event.target.value)} /><button type="button" className="text-button" disabled={!pat.trim()} onClick={() => void load(pat)}>Load</button><small>Saved in this browser only.</small></label>}
+    {!loaded && reading && <p className="muted">Reading #{opened.id} from Azure DevOps…</p>}
     {loaded && <>
       <input className="nf-title" aria-label={`${type} title`} required maxLength={255} value={title} onChange={(event) => setTitle(event.target.value)} />
       {month && <p className="muted edit-note">Month Task: the title keeps “{title.split('|')[0].trim() || month}”; it stays at {item?.iterationPath}.</p>}

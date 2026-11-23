@@ -926,3 +926,4 @@ html{scroll-padding-bottom:calc(var(--app-footer-h) + 8px)}
 .close-title{flex:1 1 220px;min-width:0}
 .close-other{background:var(--surface-2)}
 .close-hours{margin:10px 0;align-items:flex-start}
+.modal:focus{outline:none}

@@ -782,6 +782,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-28 The Close pop-up** — Req BKL-39, ACT-18 — L1 `close-list.test.mjs` ("BKL-39: Close Feature lists everything open under it, parents before children; yours ticked, others’ not (TC-BKL-28)", "BKL-39: Close User Story — the story alone, or with the Feature, Time Writing story and Tasks when it is the last open one (TC-BKL-28)", "BKL-39: closing runs children first; a parent stays open when an item below it could not be closed (TC-BKL-28)"); E2E `shell.e2e.mjs` ("TC-BKL-28: Close on a Feature lists what would close with tick boxes and #ID links — yours ticked, others’ not; ticking the Feature ticks all; hours are confirmed first"); browser check with a Time Writing connection: Close Features on Time Writing and Close on a Feature row list the Feature, its User Stories and Tasks with tick boxes and #ID links; another person's Task is unticked and keeps its story and the Feature unticked; ticking the Feature ticks everything; a month Task ticked asks to confirm the hours; closing the last open User Story lists the Feature, Time Writing story and Tasks; closing another lists the story alone.
 
+**TC-BKL-29 Edit form keeps the PAT field while typing** — Req BKL-40 — E2E `backlog.e2e.mjs` ("TC-BKL-29: Edit without a saved PAT keeps the PAT field while it is typed in; nothing is read until Load"); browser check: Edit on a row without a saved PAT, type a token — the field stays, no "Reading #…" until Load.
+
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
 **TC-CON-45 Git view data with another query is not applied** — Req CON-77 — L1 `git-snapshots.test.mjs` ("a snapshot fetched with another query than the connection has here is not applied"); browser check:
@@ -1122,6 +1124,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - `data.txt` is rejected (path).
   - `repo.git` is accepted as `repo`.
 
+**TC-GIT-09 Loading from Git asks before replacing unsaved changes** — Req GIT-16 — L1 `git-storage.test.mjs` ("GIT-16: loading from Git asks first only when there are unsaved changes, and names what is replaced"); browser check with a writable Git connection: change a person's region, then Load latest — the confirmation names what is replaced; Cancel keeps the change; OK loads the copy in Git.
+
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
 - Steps:
@@ -1366,6 +1370,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-UI-09 Side menu folds to icons** — Req UI-16 — E2E `shell.e2e.mjs` ("TC-UI-09: the side menu folds to icons and back, names on hover, kept after a reload"); browser check at 1440 px: « folds the menu to icons, hovering shows the page name, » shows the names again, a reload keeps the choice; below 1000 px the toggle is hidden.
 
 **TC-UI-10 Chart axis names and data labels** — Req UI-17 — L1 `chart-labels.test.mjs` ("UI-17: data labels — off by default, the shared default from Table defaults, each chart's own choice wins (TC-UI-10)"); E2E `shell.e2e.mjs` ("TC-UI-10: charts name their axes and show values when Data labels is ticked, kept per chart"); browser check: every chart shows its X and Y axis names; tick Data labels on a chart — its values appear; Settings → Table defaults → Charts → Data labels on — every chart without its own choice shows values.
+
+**TC-UI-11 Pop-ups work with the keyboard** — Req UI-18 — E2E `shell.e2e.mjs` ("TC-UI-11: a pop-up takes the focus, keeps Tab inside, closes on Escape and gives the focus back to its button"); browser check: open a write pop-up with a person picker, open the picker list, Escape closes only the list, a second Escape closes the pop-up.
+
+**TC-UI-12 A click beside a pop-up keeps what was typed** — Req UI-19 — E2E `shell.e2e.mjs` ("TC-UI-12: a click beside a pop-up with input keeps it open with what was typed; pop-ups without input close"); browser check: New Feature, type a title, click beside the pop-up — it stays open with the title.
 
 - L3 steps:
   1. Click the toggle three times.
@@ -1803,6 +1811,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-37 | TC-BKL-26 |
 | BKL-38 | TC-BKL-27 |
 | BKL-39 | TC-BKL-28 |
+| BKL-40 | TC-BKL-29 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -1897,6 +1906,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-13 | TC-GIT-06 |
 | GIT-14 | TC-GIT-07 |
 | GIT-15 | TC-GIT-08 |
+| GIT-16 | TC-GIT-09 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -1945,6 +1955,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-15 | TC-UI-08 |
 | UI-16 | TC-UI-09 |
 | UI-17 | TC-UI-10 |
+| UI-18 | TC-UI-11 |
+| UI-19 | TC-UI-12 |
 | CI-01…04 | TC-INS-04, TC-CI-01 |
 | CI-05 | TC-UPD-01 |
 | CI-06 | TC-CI-02 |
@@ -2092,10 +2104,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 | Use case | Test cases |
 |---|---|
-| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10 |
+| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
-| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17 |
+| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29 |
 | UC-05 | TC-MON-07 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43 |
 | UC-07 | TC-BKL-01…09, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
@@ -2103,7 +2115,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…14, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |

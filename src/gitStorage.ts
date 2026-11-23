@@ -225,3 +225,12 @@ export async function writePlanningFile(config: GitConfig, token: string, data: 
   if (typeof body.content?.sha !== 'string') throw new Error('GitHub saved the file but returned no version id. Load the latest version before saving again.')
   return { sha: body.content.sha, commitUrl: body.commit?.html_url ?? historyUrl(config) }
 }
+
+// GIT-16: loading the planning data from Git replaces what is in this browser. With unsaved changes the person is asked
+// first, naming what goes; on a save conflict (someone else saved first) the text says so.
+export function replaceUnsavedText(conflict = false) {
+  return `${conflict ? 'Someone else saved the planning data in Git after you started editing. ' : ''}Your changes to the planning data are not saved to Git yet (baselines, release scope, the region / role mapping, the capacity settings with holidays and common activities, table defaults). Loading the latest from Git replaces them with the copy in Git, and they are lost.\n\nLoad from Git anyway?`
+}
+export function confirmReplace(dirty: boolean, conflict = false, ask: (text: string) => boolean = (text) => window.confirm(text)) {
+  return !dirty || ask(replaceUnsavedText(conflict))
+}

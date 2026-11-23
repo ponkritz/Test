@@ -57,7 +57,7 @@ import { formatDateTime, todayIso } from './format'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
-import { defaultGitRepository, normalizeSetupLinks, type SetupLinks } from './gitStorage'
+import { confirmReplace, defaultGitRepository, normalizeSetupLinks, type SetupLinks } from './gitStorage'
 import { guideKey, requiredOpen, setupSteps } from './setupGuide'
 import { azureResources, capacityContext, setAccessRoles, setAzureEmails } from './capacity'
 import { hasServerPat, serverKey } from './azureCredentials'
@@ -175,7 +175,7 @@ export default function App() {
   async function loadEverything() {
     const loaded: string[] = [], failed: string[] = []
     const step = async (label: string, run: () => Promise<string>) => { try { loaded.push(await run()) } catch (failure) { failed.push(`${label}: ${failure instanceof Error ? failure.message : String(failure)}`) } }
-    await step('Planning data', async () => { await git.load(); return 'planning data (baselines, release scope, region / role mapping)' })
+    await step('Planning data', async () => { if (!confirmReplace(git.dirty, git.status === 'conflict')) return 'planning data skipped: your unsaved changes were kept'; await git.load(); return 'planning data (baselines, release scope, region / role mapping)' })
     await step('Connection setup', async () => { const result = await git.syncViews(); azure.reloadConnectionProfiles(); return result ? `connection setup (${result.added.length} added, ${result.updated.length} updated, ${result.removed.length} removed, ${result.kept.length} kept as changed here)` : 'no connection setup in Git' })
     await step('On-prem view data', async () => { const result = await git.pullSnapshots(); return `${result.files} on-prem view data file${result.files === 1 ? '' : 's'} (${result.applied.length} newer than here)` })
     await step('Windchill exports', async () => { const result = await git.pullWindchill(); await windchill.reload(); return `${result.files} Windchill export${result.files === 1 ? '' : 's'} (${result.applied.length} newer)` })

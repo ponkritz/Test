@@ -122,3 +122,18 @@ test('GIT-14: Table defaults and the release-source settings are shared in the p
   assert.equal('tableDefaults' in old, false); assert.equal('releaseSourceSettings' in old, false)
   assert.equal('releaseSourceSettings' in parsePlanning(serializePlanning(planningData({ ...state, releaseSourceSettings: { matchThreshold: 500 } }))), false, 'an invalid threshold is not shared')
 })
+
+test('GIT-16: loading from Git asks first only when there are unsaved changes, and names what is replaced', async () => {
+  const { confirmReplace, replaceUnsavedText } = await import('../src/gitStorage.ts')
+  const asked = []
+  const yes = (text) => { asked.push(text); return true }
+  const no = (text) => { asked.push(text); return false }
+  assert.equal(confirmReplace(false, false, no), true, 'nothing unsaved: loads without asking')
+  assert.equal(asked.length, 0)
+  assert.equal(confirmReplace(true, false, no), false, 'unsaved and declined: nothing is loaded')
+  assert.equal(confirmReplace(true, false, yes), true, 'unsaved and confirmed: loads')
+  assert.match(asked[0], /not saved to Git yet \(baselines, release scope, the region \/ role mapping, the capacity settings/)
+  assert.match(asked[0], /replaces them with the copy in Git, and they are lost/)
+  assert.doesNotMatch(asked[0], /Someone else saved/)
+  assert.match(replaceUnsavedText(true), /^Someone else saved the planning data in Git after you started editing\./, 'a save conflict says why')
+})
