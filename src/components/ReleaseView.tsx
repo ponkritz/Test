@@ -83,10 +83,10 @@ function ReleaseTable({ name, title = 'Releases', detail, register, azure, assig
     ...(azure ? [{ id: 'match', label: 'QMS-0025 match', value: (release: ReleaseEntry) => boardMatchText(matches.get(release.key) ?? {}), sortable: false, render: (release: ReleaseEntry) => <BoardMatchCell match={matches.get(release.key) ?? {}} azure={azure} stream={name} title={featureTitle(release)} items={release.items} assign={assign} featureSetup={featureSetup} /> }] : []),
   ]
   const documents = (release: ReleaseEntry) => open === release.key ? <ul className="release-docs">{release.items.map((item) => <li key={item.key}><a href={item.url} target="_blank" rel="noreferrer">#{item.id} {item.title}</a><small> · {item.state}{item.approvalDate ? ` · approved ${formatDate(item.approvalDate)}` : ''}</small></li>)}</ul> : null
-  // A group row (indented by its level, with its release count) and, when open, its sub-groups or its releases.
+  // A group row (indented by its level with a CSS class, UI-STANDARDS §11, with its release count) and, when open, its sub-groups or its releases.
   const groupLines = (list: NestedGroup<ReleaseEntry>[], row: (release: ReleaseEntry) => ReactNode[], span: number): ReactNode[] => list.flatMap((group) => {
     const shut = collapsed.includes(group.key)
-    return [<tr key={`g:${group.key}`} className={`qe-group qe-group-${Math.min(group.depth, 3)}`}><td colSpan={span}><button type="button" className="text-button" style={{ marginLeft: group.depth * 18 }} aria-expanded={!shut} onClick={() => setCollapsed((current) => shut ? current.filter((key) => key !== group.key) : [...current, group.key])}>{shut ? '▸' : '▾'} {group.label}: {group.value || '(blank)'}</button> <span className="muted">{group.items.length} release{group.items.length === 1 ? '' : 's'}</span></td></tr>,
+    return [<tr key={`g:${group.key}`} className={`qe-group qe-group-${Math.min(group.depth, 3)}`}><td colSpan={span}><button type="button" className={`text-button group-indent-${Math.min(group.depth, 3)}`} aria-expanded={!shut} onClick={() => setCollapsed((current) => shut ? current.filter((key) => key !== group.key) : [...current, group.key])}>{shut ? '▸' : '▾'} {group.label}: {group.value || '(blank)'}</button> <span className="muted">{group.items.length} release{group.items.length === 1 ? '' : 's'}</span></td></tr>,
       ...(shut ? [] : group.children.length ? groupLines(group.children, row, span) : group.items.flatMap(row))]
   })
   const grouping = typed && register.length > 0 ? <>

@@ -107,7 +107,8 @@ This document lists every software component of the system: the in-house source 
 | StoryEditor | `src/components/StoryEditor.tsx` | New User Story form under a Feature (Backlogs, My Tasks [Board]), laid out like New Feature with the Azure DevOps story fields and an optional comment; adds the story with addUserStory (BKL-27), as a background job. | BKL, ATM |
 | ReleaseFeatureEditor | `src/components/ReleaseFeatureEditor.tsx` | Create Feature button from Release Details, pre-filling the default Feature form from the release. | QV |
 | ReleaseQuadrants | `src/components/ReleaseQuadrants.tsx` | Releases summary lines, the Supported summary next to them (DP Supported Releases, S&S IT export releases of the month), and a 2×2 quadrant per stream with documents approved in the month and totals. | OVR, QV |
-| ReleasePage | `src/components/ReleasePage.tsx` | The shared parts of every stream's Release page (UI-STANDARDS §10): the source bar with Show: {month} / All months, ↻ and ⋯, and the counts Releases in the month, Completed, Supported with ⓘ What was counted (QV-62). | QV |
+| ReleasePage | `src/components/ReleasePage.tsx` | The shared parts of every stream's Release page (UI-STANDARDS §10): the source bar with Show: {month} / All months, ↻ and ⋯, and the counts Releases in the month, Completed, Supported (each optional, QV-64) with ⓘ What was counted (QV-62). | QV |
+| matchedFeatureColumns | `src/components/matchedFeatureColumns.tsx` | The Time Writing Feature, Planned (h) and Booked (h) columns of a release matched on QMS-0025 (DP, CP, S&S IT, ECP; QV-65): the matched Feature with its match % and the hours of its Time Writing Tasks. | QV |
 | ReleaseView | `src/components/ReleaseView.tsx` | Release source view: releases derived from document paths or Titles (per stream rule), with the Time Writing Feature match and hours and the QMS-0025 match column with Create Feature (QV-46). | QV |
 | ResultTabs | `src/components/ResultTabs.tsx` | The two tabs of a Release page, Releases | Source data (n): the Releases table and the raw query or imported rows, the choice kept per page in the browser tab (QV-47). | QV |
 | ViewActions | `src/components/ViewActions.tsx` | The compact actions of a Release page's source bar: the main action as a small ↻ icon button with its name as tooltip, the others in a ⋯ menu (QV-48). | QV |
@@ -243,10 +244,10 @@ This document lists every software component of the system: the in-house source 
 | pptxTemplate | `src/pptxTemplate.ts` | Fills the team's PowerPoint template (kept in Storage) with the Monthly pack: Performance Pulse and 2x2 boxes found by label and position, status colours, KPI rows, shrink to fit; checks an uploaded template. | PCK |
 | workItemEdit | `src/workItemEdit.ts` | The fields an edit may change, their checks, the revision-tested JSON patch, rich text as editable text, the Feature DoD split and the edit locks. | BKL |
 | planningLock | `src/planningLock.ts` | The planning / actuals lock rule of a month (deadline, extension, explicit lock) shared by the Monthly page and the Task creation paths, and whether a new month Task is ad-hoc. | MON |
-| backgroundJobs | `src/backgroundJobs.ts` | Background jobs of a page load: runs long Azure DevOps writes off the form, one per key, with progress and the result; nothing stored. | NAV, BKL, ATM, MON |
+| backgroundJobs | `src/backgroundJobs.ts` | Background jobs of a page load: runs long Azure DevOps writes off the form, one per key, with progress and the result, and records an instant result as a finished entry (QV-63); nothing stored. | NAV, BKL, ATM, MON, QV |
 | azureCredentials | `src/azureCredentials.ts` | Browser-local PATs per server and connection profiles (role, view name, show in menu, shared from Git); never in app data. | CON |
 | connectionPresets | `src/connectionPresets.ts` | Pre-filled team connection presets and dismissed-preset storage. | CON |
-| releaseSource | `src/releaseSource.ts` | Read-only release source: paged flat WIQL queries and tree / direct-links (WorkItemLinks) queries, approval month, completed releases, fuzzy Feature name matching. | QV |
+| releaseSource | `src/releaseSource.ts` | Read-only release source: paged flat WIQL queries and tree / direct-links (WorkItemLinks) queries, approval month, completed releases and the month's release count, fuzzy Feature name matching, Features' Time Writing hours. | QV |
 | windchill | `src/windchill.ts` | Windchill host/service path settings, normalisation and browser storage. | CON |
 | windchillBridge | `src/windchillBridge.ts` | Bookmarklet bridge to run Windchill searches in a signed-in Windchill tab and return verified results. | CON |
 | windchillBrowser | `src/windchillBrowser.ts` | Windchill test and query from the browser with its own sign-in (CORS, read-only GETs). | CON |
@@ -270,7 +271,8 @@ This document lists every software component of the system: the in-house source 
 | usePersonScope | `src/usePersonScope.ts` | Team / Individual scope and team filter, remembered per page. | MON, OVR |
 | useQeMapping | `src/useQeMapping.ts` | QE Mapping table from Git, cached locally, saved with a writable token. | QEM |
 | useMonthlyPack | `src/useMonthlyPack.ts` | Monthly pack setup (cached locally) and the month's text from Git, saved with a writable token. | PCK |
-| useWindchill | `src/useWindchill.ts` | Windchill views: searches, fetching via desktop/browser/bridge, importing results. | CON |
+| useWindchill | `src/useWindchill.ts` | Windchill views: searches, fetching via desktop/browser/bridge, importing results; each fetch and import a Background jobs entry (QV-63). | CON, QV |
+| useWindchillReading | `src/useWindchillReading.ts` | How a Windchill export's releases are read (Read from, name / Location column) and the releases read, held by the export's page so that its counts follow its Releases table (QV-64). | CON, QV |
 
 ### 1.7 Desktop shell (Electron)
 
@@ -315,7 +317,7 @@ This document lists every software component of the system: the in-house source 
 | pptx-template.test | `tests/pptx-template.test.mjs` | Filling a synthetic template (labels, KPI rows, status, footer kept, file properties), template checks, shrink to fit, the pack's fill. | PCK |
 | work-item-edit.test | `tests/work-item-edit.test.mjs` | Edit checks and patch, locks, revision conflict, Monthly lock rules on Task hours, Discussion, both transports. | BKL |
 | planning-lock.test | `tests/planning-lock.test.mjs` | Planning / actuals lock rule and the ad-hoc check for a new month Task. | MON |
-| background-jobs.test | `tests/background-jobs.test.mjs` | Background jobs: progress, result, failure, one job per key, Clear finished. | NAV |
+| background-jobs.test | `tests/background-jobs.test.mjs` | Background jobs: progress, result, failure, one job per key, Clear finished, recorded results. | NAV, QV |
 | azure-insights.test | `tests/azure-insights.test.mjs` | Month Task plan/actual mapping, Time Writing stories, NPRA reporting and utilization. | MON, TWN, CAP |
 | backlog-health.test | `tests/backlog-health.test.mjs` | Backlog Health lists, columns, plain-text descriptions and CSV. | CON |
 | baseline.test | `tests/baseline.test.mjs` | Baseline formula, caps, normalisation, release rows and sample scopes. | BAS, SMP |
@@ -389,7 +391,7 @@ This document lists every software component of the system: the in-house source 
 | chart-labels.test | `tests/chart-labels.test.mjs` | Chart data labels: shared default, per-chart choice, stored values checked (TC-UI-10). | UI |
 | query-view.test | `tests/query-view.test.mjs` | Query layout, field resolution, sorting, summary, CSV and column order. | QV |
 | release-overview.test | `tests/release-overview.test.mjs` | Releases per stream approved in the month for Overview and Pulse Check. | OVR |
-| release-source.test | `tests/release-source.test.mjs` | Release-source WIQL paging, tree / links queries, path parsing, register and approval dates. | QV, CON |
+| release-source.test | `tests/release-source.test.mjs` | Release-source WIQL paging, tree / links queries, path parsing, register and approval dates, Feature hours and month release counts. | QV, CON |
 | sample-data.test | `tests/sample-data.test.mjs` | Synthetic sample is deterministic and exercises every model. | SMP |
 | setup-guide.test | `tests/setup-guide.test.mjs` | Get started step statuses for new, partly and fully set-up users. | NAV |
 | streams.test | `tests/streams.test.mjs` | Stream definitions, DP/IOCC/Tool Validations rules, fuzzy Feature match and Pulse Check streams. | QV, OVR |
@@ -400,7 +402,7 @@ This document lists every software component of the system: the in-house source 
 | windchill-bridge.test | `tests/windchill-bridge.test.mjs` | Windchill bookmarklet and result verification. | CON |
 | windchill-browser.test | `tests/windchill-browser.test.mjs` | Windchill test and search from the web app with browser sign-in. | CON |
 | windchill-export.test | `tests/windchill-export.test.mjs` | Windchill CSV export parsing. | CON |
-| windchill-releases.test | `tests/windchill-releases.test.mjs` | Release extraction from document names, unique and clubbed releases. | CON |
+| windchill-releases.test | `tests/windchill-releases.test.mjs` | Release extraction from document names, unique and clubbed releases, the month counts. | CON, QV |
 | windchill-views.test | `tests/windchill-views.test.mjs` | Windchill OData queries, desktop query paging, Git results and browser route. | CON |
 | windchill.test | `tests/windchill.test.mjs` | Windchill host normalisation and desktop connection test. | CON, DSK |
 

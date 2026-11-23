@@ -26,15 +26,16 @@ export function ReleaseSourceBar({ name, source, fetched, info, period, primary,
 }
 
 // (2) The counts of the header month: Releases in the month (as the Releases table lists them), Completed and
-// Supported (as the stream counts them, QV-58), with ⓘ "What was counted".
+// Supported (as the stream counts them, QV-58, QV-64), with ⓘ "What was counted". A stream without a sound rule for
+// a count leaves its tile out (Content: no Completed or Supported; Tool Validations, S&S IT, ECP: no Completed).
 export interface CountValue { value: number | string; hint?: ReactNode }
-export function ReleaseCounts({ month, releases, completed, supported, counted, children }: { month: string; releases: CountValue; completed: CountValue; supported: CountValue; counted: ReactNode; children?: ReactNode }) {
+export function ReleaseCounts({ month, releases, completed, supported, counted, children }: { month: string; releases: CountValue; completed?: CountValue; supported?: CountValue; counted: ReactNode; children?: ReactNode }) {
   const label = monthName(month)
   return <div className="release-counts">
     <Metrics>
       <Metric label={`Releases in ${label}`} value={releases.value} hint={releases.hint} />
-      <Metric label="Completed" value={completed.value} hint={completed.hint} />
-      <Metric label="Supported" value={supported.value} hint={supported.hint} />
+      {completed && <Metric label="Completed" value={completed.value} hint={completed.hint} />}
+      {supported && <Metric label="Supported" value={supported.value} hint={supported.hint} />}
     </Metrics>
     <p className="release-counts-info"><Info label="What was counted">{counted}</Info></p>
     {children}

@@ -1,5 +1,6 @@
 import { useCan, useWriteBlock } from '../useCan'
-import { countStreams, releaseRegister } from '../releaseSource'
+import { countStreams, monthReleaseCount, releaseRegister, timeWritingHours } from '../releaseSource'
+import { runInBackground } from '../backgroundJobs'
 import { useBulkEpic, useStreamEpics } from '../useStreamEpics'
 import type { FeatureSetups } from '../featureSetup'
 import { useMemo, useState, type ReactNode } from 'react'
@@ -14,6 +15,7 @@ import { QueryView } from '../components/QueryView'
 import { ResultTabs } from '../components/ResultTabs'
 import { ReleaseView } from '../components/ReleaseView'
 import { SupportedReleasesTable } from '../components/DpMonthCounts'
+import { matchedFeatureColumns } from '../components/matchedFeatureColumns'
 import { PeriodSelect, ReleaseCounts, ReleaseSourceBar, type CountValue, type ReleaseScope } from '../components/ReleasePage'
 import { useDpBoardColumn } from '../useDpBoardColumn'
 import { CpReportView } from '../components/CpReportView'
@@ -70,9 +72,16 @@ const countRules: Record<string, { completed: string; supported: string }> = {
   IOCC: { completed: 'Release Notes or Verification Report signed in the month', supported: 'Release Plan, Release Notes or Verification Report signed in the month, each release once' },
 }
 
+// DP: each row's QMS-0025 match once per data set (the Select box, the Time Writing Feature and its hours read it).
+function useDpMatches(rows: AzureWorkItem[] | undefined, candidates: ReturnType<typeof dpBoardCandidates> | null, threshold: number) {
+  return useMemo(() => candidates && rows ? new Map(rows.map((row) => [row.id, dpBoardMatch(row, candidates, threshold)])) : null, [rows, candidates, threshold])
+}
+
 // A read-only Azure DevOps view. A stream's view (DP, CP, IOCC, Content, Tool Validations) is its Release page, with
-// the parts of UI-STANDARDS §10 (QV-62): source bar, counts (CP, DP, IOCC), Releases | Source data tabs and the
-// Releases table. A view of its own query keeps the source bar and its single table.
+// the parts of UI-STANDARDS §10 (QV-62): source bar, counts (CP, DP, IOCC; QV-64: Content, Tool Validations),
+// Releases | Source data tabs and the Releases table. A view of its own query keeps the source bar and its single
+// table. QV-63: ↻ and Load from Git run as Background jobs named after the view; their result is listed there, and
+// the page keeps only the warnings about its data (a failed refresh: the data shown is older).
 const noItems: AzureWorkItem[] = []
 function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConnection, assign, featureSetup, qeMapping }: { featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
   // QV-16: the header month, or every month (Show: {month} / All months).
@@ -122,7 +131,10 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const dpSetup = useMemo(() => chooseSetup(featureSetup, dpBulkEpic, true).setup, [featureSetup, dpBulkEpic])
   const dpEpics = useStreamEpics('DP')
   const dpCandidates = useMemo(() => isDp ? dpBoardCandidates(azure.items, dpEpics) : null, [isDp, azure.items, dpEpics])
-  const featureMatch = useMemo(() => (row: AzureWorkItem) => dpCandidates ? dpBoardMatch(row, dpCandidates, threshold).feature : undefined, [dpCandidates, threshold])
+  const dpMatches = useDpMatches(isDp ? source?.items : undefined, dpCandidates, threshold)
+  const featureMatch = useMemo(() => (row: AzureWorkItem) => dpCandidates ? (dpMatches?.get(row.id) ?? dpBoardMatch(row, dpCandidates, threshold)).feature : undefined, [dpCandidates, dpMatches, threshold])
+  // QV-65: the hours of the matched Feature's Time Writing Tasks (as IOCC, Content and Tool Validations show them).
+  const hoursOf = useMemo(() => timeWritingHours(azure.items), [azure.items])
   const allDp = source?.items ?? noItems
   const dpColumns: DataColumn<AzureWorkItem>[] = isDp ? [
     { id: '@dp-pick', label: 'Select', fixed: true, sortable: false, export: false, value: (item) => picked.includes(item.id) ? 'yes' : '', render: (item) => { const full = fullMatch(featureMatch(item)); return <input type="checkbox" aria-label={`Select ${item.title}`} disabled={full} title={full ? `Feature #${featureMatch(item)!.item.id} on QMS-0025 matches this release 100%: nothing to create` : undefined} checked={!full && picked.includes(item.id)} onChange={() => setPicked((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /> } },
@@ -130,14 +142,21 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     { id: '@dp-backup', label: 'Possible QEs', sortable: false, value: (item) => possibleQes(item, allDp, qeFor(item, qeMapping, dpSetup?.qeColumns)?.qe ?? '').join(', '), title: () => 'Assigned to the earlier releases of the same product (newest first), not the QE and not the release’s own Assigned To' },
     { id: '@dp-month', label: 'Month & Year', value: (item) => dpMonthText(item), title: (item) => ddtMonthOf(item) ? 'The month of the DDT Date: the month this release is listed in' : dpPlannedMilestones(item).length ? 'No DDT Date: listed in the months of its Planned / ToBePlanned milestones, not counted as Supported or Completed' : 'No DDT Date and no planned milestone: listed only with Show: All months, never counted', sortable: false },
     { id: '@dp-milestones', label: 'Milestones', value: (item) => dpMilestoneText(item), title: () => '✓ = Done with a date: counts as Supported in that month (DDT ✓ also as Completed)', sortable: false },
+    ...matchedFeatureColumns<AzureWorkItem>(featureMatch, hoursOf).map((column) => ({ ...column, id: `@dp-${column.id}` })),
   ] : []
   // Items without an approval date fall back to their Changed Date for the month filter; say how many.
   const undated = source ? source.items.filter((item) => isDp ? !ddtMonthOf(item) && !dpPlannedMilestones(item).length : !(item.approvalDate ?? approvalDateFrom(item.fields ?? {}))).length : 0
   // On-prem views with Git storage: Load from Git too; a fetch that cannot run falls back to it.
   // QV-48: a small ↻ button (its full name as tooltip; the progress shown beside it while busy) and a ⋯ menu.
   const refreshLabel = source ? 'Refresh from Azure' : 'Fetch from Azure'
-  const refresh = <button type="button" className="primary" aria-label={refreshLabel} title={refreshLabel} disabled={busy} onClick={() => void azure.fetchConnection(id)}>↻{busy ? <small>{status?.message || 'Fetching…'}</small> : !source ? <small>Fetch</small> : null}</button>
-  const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => void azure.loadFromGit(id) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
+  // QV-63: each as a Background job named after the view; the connection's last status is its result.
+  const inBackground = (label: string, work: () => Promise<boolean>) => runInBackground(`azure:${id}`, `${label} · ${name}`, async (progress) => {
+    progress(label === 'Load from Git' ? 'Loading from Git…' : 'Fetching…')
+    const ok = await work(), last = azure.connectionResult(id)
+    return { text: last?.message || (ok ? 'Done.' : 'Not done.'), failed: !ok }
+  })
+  const refresh = <button type="button" className="primary" aria-label={refreshLabel} title={refreshLabel} disabled={busy} onClick={() => inBackground(refreshLabel, () => azure.fetchConnection(id))}>↻{busy ? <small>{status?.message || 'Fetching…'}</small> : !source ? <small>Fetch</small> : null}</button>
+  const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => inBackground('Load from Git', () => azure.loadFromGit(id)) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
   // Information about the view sits behind the ⓘ next to its name, not as banners; only errors and warnings stay on the page.
   const notes = [
     source && isDp ? `Month filter: by DDT Date in UTC; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with Show: All months.` : ''}` : '',
@@ -145,7 +164,6 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     source && !isDp && !isCp && undated > 0 ? `Month filter: by Author Approval Date in UTC. ${undated} of ${source.items.length} items have no approval date${role === 'release-source' ? '' : ' in the query’s columns'}, so their Changed Date is used.` : '',
     source ? `${source.items.length} items fetched${isCp ? '' : `; ${monthItems.length} in ${monthName(month)}`}.` : '',
     isDp ? dpMilestones.map(([milestone]) => `${dpMilestoneNames[milestone].short} = ${dpMilestoneNames[milestone].long} (${milestone})`).join(' · ') : '',
-    status?.state === 'ok' && status.message.includes('Git') ? status.message : '',
     !azure.isSample && gitNote && gitNote.tone !== 'error' ? gitNote.text : '',
   ].filter(Boolean)
 
@@ -157,7 +175,19 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const isIocc = stream?.rule === 'iocc'
   const ioccItems = isIocc ? monthItems : noItems
   const ioccMonth = useMemo(() => ioccItems.length ? releaseRegister(ioccItems, [], { rule: 'iocc', patterns: namingPatterns }).length : 0, [ioccItems, namingPatterns])
+  // QV-64: Content and Tool Validations count the releases (Tool Validations: the tools) the Releases table lists for
+  // the month, as Pulse Check does; Tool Validations' Supported is the same list (Pulse Check's Supported line).
+  const listRule = stream?.rule === 'title' || stream?.rule === 'tool' ? stream.rule : undefined
+  const listSource = listRule ? source : undefined
+  const listMonth = useMemo(() => listSource ? monthReleaseCount(listSource.items, month, listRule, namingPatterns) : 0, [listSource, month, listRule, namingPatterns])
   let counts: ReactNode = null
+  if (listRule && source) {
+    const tool = listRule === 'tool', noun = tool ? 'tool' : 'release'
+    counts = <ReleaseCounts month={month}
+      releases={{ value: listMonth, hint: `${streamName} ${noun}s the Releases table lists for the month` }}
+      supported={tool ? { value: listMonth, hint: 'Each tool with a document in the month, as Pulse Check counts it' } : undefined}
+      counted={<ul><li><strong>Releases in {monthName(month)}</strong>: the {noun}s the Releases table lists for the month — each {noun} with a document approved in the month (Author Approval Date in UTC), else changed in it; the same count as Pulse Check.</li>{tool ? <li><strong>Supported</strong>: the same tools — Pulse Check's Supported line counts every tool with a document in the month (validated or supported), once each.</li> : <li><strong>Supported</strong> is not counted: Content has no rule for a supported release apart from the releases listed.</li>}<li><strong>Completed</strong> is not counted: the documents carry no completion event (no Release Notes signature or milestone), only their approval date.</li></ul>} />
+  }
   if (countStream && counted) {
     const rules = countRules[countStream]
     const value = (count: number | undefined, hint: ReactNode): CountValue => counted.noData && !counted.entered ? { value: '—', hint: `No data (${counted.noData}) — placeholder` } : counted.noData ? { value: count ?? '—', hint: `Entered by an Admin · no data (${counted.noData})` } : { value: count ?? '—', hint }
@@ -191,7 +221,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
       fetched={source ? `fetched ${formatDateTime(source.fetchedAt)}${'fromGit' in source && source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}
       info={notes.length > 0 ? notes.map((note) => <p key={note}>{note}</p>) : undefined}
       period={source && !isCp ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu}>
-      {status?.state === 'error' && <Notice tone="error">{status.message}</Notice>}
+      {source && status?.state === 'error' && <Notice tone="warning">Not refreshed: {status.message} The data shown is from {formatDateTime(source.fetchedAt)}.</Notice>}
       {!azure.isSample && gitNote?.tone === 'error' && <Notice tone="error">{gitNote.text}</Notice>}
       {stale && !busy && <Notice tone="warning">The saved data was fetched with different columns than the connection's query now has. Refresh from Azure to load every column's values.</Notice>}
     </ReleaseSourceBar>
