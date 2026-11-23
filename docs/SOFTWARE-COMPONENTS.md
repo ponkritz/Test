@@ -16,7 +16,7 @@ This document lists every software component of the system: the in-house source 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
 | main | `src/main.tsx` | Entry point: applies the remembered theme before first paint, then renders App inside StrictMode and the ErrorBoundary. | UI |
-| App | `src/App.tsx` | App shell: sidebar (foldable to icons), header, month picker and page routing; loads shared setup from Git at start, removes duplicate connections, fetches cloud connections, saves on-prem fetches to Git. | NAV, CON, FET, GIT, OND |
+| App | `src/App.tsx` | App shell: sidebar (foldable to icons), header, month picker and page routing; loads shared setup from Git at start, removes duplicate connections, fetches cloud connections, saves on-prem fetches to Git. | NAV, CON, FET, GIT, OND, PGB |
 | index | `src/index.css` | Global styles and colour tokens for light and dark themes. | UI |
 | App | `src/App.css` | Layout styles for the shell, sidebar, top bar, panels, tables, forms, modals and responsive breakpoints. | UI |
 | fresh | `src/fresh.css` | Final "fresh look" style layer (white sidebar, soft canvas, borderless cards) built on the index.css tokens. | UI |
@@ -48,8 +48,9 @@ This document lists every software component of the system: the in-house source 
 | mySignatures | `src/mySignatures.ts` | The documents a person signed as Author, Reviewer or Approver in the Azure DevOps views and Windchill exports, their dates and the counts per period (MYD-13). | MYD |
 | PersonalLayout | `src/components/PersonalLayout.tsx` | Customize a page's sections (show, hide, order, reset, default for everyone) and the menu (pin, hide). | MYD |
 | QeMappingPage | `src/pages/QeMappingPage.tsx` | QE Mapping: upload Excel/CSV, edit cells/rows/columns, filter and group, then save to Git or export. | QEM |
-| OnDemandPage | `src/pages/OnDemandPage.tsx` | On-Demand page (CoNQ and the pages added): the work table, the row pop-up (with the row's ID, who added it, History, Long text and Currency fields, the column descriptions), the Columns pop-up with types, options, default currency and descriptions, add / rename / remove a page, Save to Git with the unsaved-changes bar. | OND, CON |
+| OnDemandPage | `src/pages/OnDemandPage.tsx` | On-Demand page (CoNQ and the pages added): the work table, the row pop-up (with the row's ID, who added it, History, Long text and Currency fields, the column descriptions), the Columns pop-up with types, options, default currency and descriptions, add / rename / remove a page, Save to Git with the unsaved-changes bar. | OND, CON, PGB |
 | OnDemandInsights | `src/pages/OnDemandInsights.tsx` | The Insights tab of an On-Demand page: the list of charts and tables, ＋ Add chart / table and Edit pop-up with a live preview, reorder and remove, read only without the setup right. | OND, CON |
+| PagesMenuPage | `src/pages/PagesMenuPage.tsx` | Admin → Pages & menu (page builder): your rights here, the menu groups and the added pages as lists in the shared table with their row actions (add a page to a group, edit, reorder, remove), the group and page pop-ups and the remove confirmations; every button the viewer may not use disabled with the reason. | PGB, CON |
 | KpiTrackerPage | `src/pages/KpiTrackerPage.tsx` | KPI tracker page: the Git copy or a live read in the desktop app, sheet choice, table, save to Git for admins. | KPT |
 | DpBulkCreate | `src/components/DpBulkCreate.tsx` | DP Create Features dialog: the plan per selected release, PI / Sprint, creation as a background job. | DPF |
 | FormulaBar | `src/components/FormulaBar.tsx` | The fx bar of a calculation profile: typed formula, insert buttons, check as typed. | CAP |
@@ -68,6 +69,7 @@ This document lists every software component of the system: the in-house source 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
 | AccessPanel | `src/components/AccessPanel.tsx` | Settings → Access: shows roles and per-role rights; editable and saved to Git (access.json) only by a role that may manage access. | CON |
+| PageDialogs | `src/components/PageDialogs.tsx` | The page builder's pop-ups: ＋ Add page (type, name, description, icon, menu group or a new group, page co-owners), Edit the page (name, type, icon, group, co-owners) and Add / Edit a group (name, accepts added pages, co-owners). | PGB |
 | AssigneeConfirm | `src/components/AssigneeConfirm.tsx` | Confirmation before creating work items: what is created and to whom it is assigned; never blank. | CON, ATM |
 | AzureConnections | `src/components/AzureConnections.tsx` | Settings → Azure DevOps connection setup: servers, presets, add/clone/edit connections, PATs, stream mapping of the built-in and custom streams (admins: saved to Git on every change, Save stream mapping to Git) and duplicate clean-up. | CON, STR |
 | CustomStreamsPanel | `src/components/CustomStreamsPanel.tsx` | Settings → Streams → Custom streams: ＋ Add stream… (name, source, release rule, fuzzy matching, earlier names, Epics), Edit / rename and Remove (asks first) saved to custom-streams.json in Git; disabled with the reason without “Change the stream mapping”. | STR |
@@ -158,6 +160,7 @@ This document lists every software component of the system: the in-house source 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
 | access | `src/access.ts` | Role-based access policy (access.json): roles, areas, actions, parsing/serialising and rights per person email. | CON |
+| menuLayout | `src/menuLayout.ts` | Page builder model: page types (Table, Table + Insights), the built-in and custom menu groups, the menu layout file menu-layout.json (parse, validate, serialise, merge by group and page with co-owners as sets), placing, moving, reordering and removing pages and groups, and the rights of the Tool Owner, group and page co-owners (fail closed, with the reasons). | PGB, CON, GIT |
 | azureHierarchy | `src/azureHierarchy.ts` | Builds the filtered Epic→Task work-item tree with ancestor context, missing-parent and cycle handling. | CON |
 | azureInsights | `src/azureInsights.ts` | Time Writing month-task detection, month story plans, working days, Azure insights and Time Writing gaps. | MON, TWN, CAP |
 | backlogHealth | `src/backlogHealth.ts` | Backlog Health lists (older-Sprint work, Features without DoD, unassigned), columns and CSV. | CON |
@@ -279,6 +282,7 @@ This document lists every software component of the system: the in-house source 
 | useQeMapping | `src/useQeMapping.ts` | QE Mapping table from Git, cached locally, saved with a writable token. | QEM |
 | useCustomStreams | `src/useCustomStreams.ts` | Custom streams from Git (custom-streams.json), the last good file cached locally and made the app's streams; saved with a writable token, a concurrent change refused. | STR |
 | useOnDemand | `src/useOnDemand.ts` | The On-Demand pages from Git (on-demand/ folder), cached locally, CoNQ while none exists, drafts per page, queued merged saves and removal. | OND |
+| useMenuLayout | `src/useMenuLayout.ts` | The menu layout from Git (menu-layout.json), cached locally, saved with the queued, merged saves; creating a page (its file, then its place in the menu and a new group). | PGB, GIT |
 | useMonthlyPack | `src/useMonthlyPack.ts` | Monthly pack setup (cached locally) and the month's text from Git, saved with a writable token. | PCK |
 | useWindchill | `src/useWindchill.ts` | Windchill views: searches, fetching via desktop/browser/bridge, importing results; each fetch and import a Background jobs entry (QV-63). | CON, QV |
 | useWindchillReading | `src/useWindchillReading.ts` | How a Windchill export's releases are read (Read from, name / Location column) and the releases read, held by the export's page so that its counts follow its Releases table (QV-64). | CON, QV |
@@ -387,6 +391,7 @@ This document lists every software component of the system: the in-house source 
 | on-demand.test | `tests/on-demand.test.mjs` | On-Demand pages: the Git file validated, rows, column type changes and option renames that keep values, the merge of two saves, the On-Demand rights and older access.json files (TC-OND-02…06). | OND, CON |
 | on-demand-rows.test | `tests/on-demand-rows.test.mjs` | On-Demand row details: sequential IDs (order, never changing, unique after a merge clash, older rows numbered), who added a row and when, the update log and its merge, Long text and Currency values, Currency in the insights (one currency at a time), column descriptions (TC-OND-16…20). | OND |
 | on-demand-insights.test | `tests/on-demand-insights.test.mjs` | On-Demand insights: count, sum, average, stacking and pivot totals, months, Multi-select per value, filters, "(none)" and "Other", broken references, the insights in the page file and their merge (TC-OND-09…12, TC-OND-14). | OND |
+| page-builder.test | `tests/page-builder.test.mjs` | Page builder: the menu layout file validated, written and merged (co-owners as sets), the groups and the order of pages, group rules, the rights of the Tool Owner, a group co-owner, a page co-owner and nobody, “Manage pages and menu groups” for older access.json files, CoNQ migrated in place (TC-PGB-02…08). | PGB, CON |
 | kpi-tracker.test | `tests/kpi-tracker.test.mjs` | SharePoint link and read (one GET, sign-in detection), the Git copy and its limits, sheet tables. | KPT, IF |
 | dp-bulk.test | `tests/dp-bulk.test.mjs` | DP release type and sets, QE match, possible QEs, bulk plan. | DPF |
 | formula.test | `tests/formula.test.mjs` | Typed formula: evaluation, functions, blank on / 0, error messages. | CAP |
@@ -432,6 +437,7 @@ The end-to-end suite (`pnpm test:e2e`, after `pnpm build:web`) drives the built 
 | monthly-pack.e2e | `e2e/monthly-pack.e2e.mjs` | Monthly pack tab with the synthetic sample, the .pptx download and the setup tab (TC-PCK-04). | CI |
 | on-demand.e2e | `e2e/on-demand.e2e.mjs` | On-Demand → CoNQ against a mocked GitHub: columns with options, a row, Save to Git of on-demand/conq.json and reading it back (TC-OND-01); read only without the rights (TC-OND-07); Insights — a bar chart and a summary table saved in the page file and read back (TC-OND-09); Insights read only and a broken chart (TC-OND-13); row details — Long text and Currency columns with descriptions, the row ID on Save to Git, who added it and when, an edit in History and in the file (TC-OND-16). | OND, CON |
 | custom-streams.e2e | `e2e/custom-streams.e2e.mjs` | Custom streams against a mocked GitHub and Azure DevOps: the Tool Owner adds “Labeling” (Like Content), maps its connection and opens its Release page with the §10 parts (TC-STR-06); a viewer without the right sees ＋ Add stream… disabled with the reason (TC-STR-07). | STR |
+| page-builder.e2e | `e2e/page-builder.e2e.mjs` | Page builder against a mocked GitHub: a Tool Owner adds the group Quality with a Table page, names a group co-owner, sets the page up and adds a row (TC-PGB-01); the group co-owner adds a page but cannot change the group (TC-PGB-09); no ownership — everything disabled with the reason (TC-PGB-10). | PGB |
 
 ## 2. Third-party components (SOUP)
 

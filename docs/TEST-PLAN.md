@@ -1724,6 +1724,30 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-STR-07 Read only without the right** — Req STR-07 — E2E `custom-streams.e2e.mjs` ("TC-STR-07: a viewer without “Change the stream mapping” sees the custom streams read only — ＋ Add stream…, Edit and Remove disabled with the reason; the stream is still in the menu"); browser check: as Team Member ＋ Add stream…, Edit and Remove are disabled with the reason; without Git storage the line says to connect it; with the synthetic sample loaded nothing is saved
 
+### 6.30 Page builder
+
+**TC-PGB-01 A Tool Owner adds a group and a Table page, names a co-owner, sets the page up** — Req PGB-01, PGB-02, PGB-03, PGB-04, PGB-05, PGB-06, PGB-08, PGB-12 — **UAT** — L1 `page-builder.test.mjs` ("PGB-02, PGB-04: the menu groups — built-in ones in menu order (Settings not configurable, On-Demand accepting pages by default), then custom ones by their order; pages of a group by order then name (TC-PGB-03)"); E2E `page-builder.e2e.mjs` ("TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supplier issues”, names a group co-owner, sets the page up and adds a row — the page is under Quality in the menu, saved in Git"); UAT: with your work email set, Git storage that can save and the Tool Owner role, open Admin → Pages & menu — CoNQ is listed as a Table + Insights page in On-Demand; ＋ Add page… → Page type **Table**, name **Supplier issues**, icon ⚑, Menu group **＋ New group…** "Quality", Add page — the page opens without an Insights tab and the menu has a heading **QUALITY** with "⚑ Supplier issues", Home has a Quality tile; Background jobs names `on-demand/supplier-issues.json` and `menu-layout.json`; in Admin → Pages & menu Edit the group Quality → Group co-owners: a colleague's work email, Save to Git — the row shows the email; on the page Set up columns… (Supplier, Severity with Minor / Major), ＋ Add row, Save to Git — the row gets SUPPLIER-0001; the colleague (second browser, Team Member) sees ⋯ next to QUALITY and can add a page there but not change the group; a third person sees everything disabled with the reason; CoNQ is unchanged; on a phone and in dark mode the pop-up and the lists are readable.
+
+**TC-PGB-02 The menu layout file is validated** — Req PGB-03, PGB-14 — L1 `page-builder.test.mjs` ("PGB-03: the menu layout file is validated when read — bad groups, ids, emails and icons dropped, a file that is not a layout refused — and written in a stable order (TC-PGB-02)"); browser check: a hand-edited `menu-layout.json` that is not JSON is reported in Admin → Pages & menu ("Pages & menu: menu-layout.json is not valid JSON. The menu last read is kept.") while the menu keeps its groups.
+
+**TC-PGB-03 Menu groups and the order of pages** — Req PGB-02, PGB-04 — L1 `page-builder.test.mjs` ("PGB-02, PGB-04: the menu groups — built-in ones in menu order (Settings not configurable, On-Demand accepting pages by default), then custom ones by their order; pages of a group by order then name (TC-PGB-03)").
+
+**TC-PGB-04 Groups: name, rename, configure, remove only when empty** — Req PGB-06, PGB-02 — L1 `page-builder.test.mjs` ("PGB-06: groups — a name is required and unique (built-in names too), a built-in group is only configured, a custom group is removed only when empty (TC-PGB-04)").
+
+**TC-PGB-05 Rights of the Tool Owner, a group co-owner, a page co-owner and nobody** — Req PGB-08, PGB-09, PGB-10, PGB-11 — L1 `page-builder.test.mjs` ("PGB-08…PGB-11: rights — Tool Owner, group co-owner, page co-owner and nobody for each action; the role-wide On-Demand rights still apply; fail closed (TC-PGB-05)").
+
+**TC-PGB-06 “Manage pages and menu groups” and older roles files** — Req CON-106, PGB-08, CON-94 — L1 `page-builder.test.mjs` ("CON-106: “Manage pages and menu groups” — Tool Owner only in the starting matrix and for an access.json written before permissions 5; while no Tool Owner exists, those who manage access (TC-PGB-06)"); browser check: Admin → People & roles → Role rights lists "Manage pages and menu groups (Tool Owner)" in the On-Demand group, allowed for Tool Owner only.
+
+**TC-PGB-07 CoNQ migrates in place** — Req PGB-13, PGB-01 — L1 `page-builder.test.mjs` ("PGB-13: CoNQ migrates in place — without a placement it is a Table + Insights page in On-Demand, its file untouched; a group removed elsewhere sends its pages back to On-Demand (TC-PGB-07)").
+
+**TC-PGB-08 Two saves of the menu layout merged** — Req PGB-03, GIT-17 — L1 `page-builder.test.mjs` ("PGB-03, GIT-17: two saves of the menu layout are merged by group and page — fields three ways, the later save where both changed, co-owners as sets with removals kept (TC-PGB-08)").
+
+**TC-PGB-09 A group co-owner adds a page but cannot change the group** — Req PGB-09, PGB-05, PGB-11, PGB-12 — E2E `page-builder.e2e.mjs` ("TC-PGB-09: a group co-owner adds a Table + Insights page to Quality and sets it up, but cannot create or change groups"); browser check: as a co-owner of Quality (Team Member role), ＋ New group…, Edit and Remove of every group are disabled with "Only a Tool Owner (“Manage pages and menu groups”) …"; ＋ Add page… offers Quality only; the new page sets up its columns although the role does not allow it.
+
+**TC-PGB-10 No ownership: everything disabled with the reason** — Req PGB-11, PGB-12, OND-07 — E2E `page-builder.e2e.mjs` ("TC-PGB-10: a person with no ownership and no rights sees Pages & menu and the added pages with every change disabled and the reason"); browser check: no ⋯ on the menu groups; Admin → Pages & menu and the page show the rows with every button disabled and the reason as a line and as the tooltip; nothing is written.
+
+**TC-PGB-11 Edit, move, reorder and remove pages; pin and hide them** — Req PGB-07, PGB-04, PGB-06, PGB-14 — browser check as a Tool Owner: Edit a page → change its icon and type to Table + Insights, move it to On-Demand — the menu follows and the Insights tab appears; with unsaved changes on the page a rename is refused with "Save or discard the unsaved changes …"; ↑ ↓ reorder pages in a group and groups of your own; Remove a page names its rows and columns and deletes its file; Remove an empty group asks first; a group holding pages cannot be removed ("Move or remove its N pages first …"); a group set to not accept added pages hides its ⋯ and its co-owners' buttons; Customize menu pins an added page under PINNED and hides another; a page placed in Testing is shown to the Admin role only; the co-owners' emails are shown only in Admin → Pages & menu and the page's ⓘ and are removed with Edit.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2025,7 +2049,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-15 | TC-GIT-08, TC-OND-02 |
 | GIT-16 | TC-GIT-09 |
 | GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
-| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17 |
+| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-PGB-08 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2247,6 +2271,21 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | STR-05 | TC-STR-02 |
 | STR-06 | TC-STR-03 |
 | STR-07 | TC-STR-07 |
+| CON-106 | TC-PGB-06 |
+| PGB-01 | TC-PGB-01, TC-PGB-07 |
+| PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
+| PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
+| PGB-04 | TC-PGB-01, TC-PGB-03, TC-PGB-11 |
+| PGB-05 | TC-PGB-01, TC-PGB-09 |
+| PGB-06 | TC-PGB-01, TC-PGB-04, TC-PGB-11 |
+| PGB-07 | TC-PGB-11 |
+| PGB-08 | TC-PGB-01, TC-PGB-05, TC-PGB-06 |
+| PGB-09 | TC-PGB-05, TC-PGB-09 |
+| PGB-10 | TC-PGB-05 |
+| PGB-11 | TC-PGB-05, TC-PGB-09, TC-PGB-10 |
+| PGB-12 | TC-PGB-01, TC-PGB-09, TC-PGB-10 |
+| PGB-13 | TC-PGB-07 |
+| PGB-14 | TC-PGB-02, TC-PGB-11 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2282,7 +2321,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
@@ -2298,6 +2337,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
 | UC-37 | TC-OND-01…20 |
+| UC-38 | TC-PGB-01…11 |
 
 ## 8. Result record
 

@@ -124,7 +124,7 @@ test('CON-94: every permission is Allow, Deny or Not set per role; a denial wins
   // A file saved by this version is never migrated again, even when its roles list old keys only.
   const saved = defaultPolicy('lead@example.com'); saved.roles['Team Member'].actions = ['azure.write']
   for (const rights of Object.values(saved.roles)) if (rights !== saved.roles['Team Member']) rights.actions = []
-  assert.match(serializeAccess(saved), /"permissions": ?4/)
+  assert.match(serializeAccess(saved), /"permissions": ?5/)
   assert.deepEqual(parseAccess(serializeAccess(saved)).roles['Team Member'].actions, ['azure.write'], 'Not set stays Not set')
 
   // Deny wins over another role's allow, for actions and areas alike; it round-trips through the file.
@@ -153,7 +153,7 @@ test('CON-94: every permission is Allow, Deny or Not set per role; a denial wins
   // Settings pages and View as follow their own permissions.
   const pages = (rights) => settingsPagesFor((key) => rights.actions.has(key)).map((page) => page.key)
   const smOnly = defaultPolicy('lead@example.com'); smOnly.members['sm@example.com'] = ['Scrum Master']
-  assert.deepEqual(pages(rightsFor(smOnly, 'sm@example.com')), ['home', 'connections', 'options', 'epics', 'resources', 'storage'])
+  assert.deepEqual(pages(rightsFor(smOnly, 'sm@example.com')), ['home', 'connections', 'options', 'epics', 'resources', 'storage', 'pages'])
   setCell(smOnly.roles['Scrum Master'], 'capacity.periods', 'allow')
   assert.ok(pages(rightsFor(smOnly, 'sm@example.com')).includes('capacity'), 'one capacity permission opens the page')
   assert.ok(canViewAs(rightsFor(smOnly, 'lead@example.com')) && !canViewAs(rightsFor(smOnly, 'sm@example.com')))
@@ -210,7 +210,7 @@ test('CON-101: until a roles file is loaded the app is read-only (every menu are
   const none = rightsFor(null, 'lead@example.com')
   assert.equal(none.areas.size, areas.length, 'every menu area stays visible')
   for (const { key } of actions) assert.equal(none.actions.has(key), false, `${key} is denied without a policy`)
-  assert.deepEqual(settingsPagesFor((key) => none.actions.has(key)).map((page) => page.key), ['home', 'connections', 'options', 'epics', 'resources', 'storage'], 'Data & sharing (to connect Git storage) and People & roles stay open')
+  assert.deepEqual(settingsPagesFor((key) => none.actions.has(key)).map((page) => page.key), ['home', 'connections', 'options', 'epics', 'resources', 'storage', 'pages'], 'Data & sharing (to connect Git storage), People & roles and Pages & menu (PGB-12: read only, with the reasons) stay open')
   assert.equal(canViewAs(none), false)
   // Bootstrap: Git storage read that no access.json exists — Manage access only, nothing else.
   const first = rightsFor(null, 'lead@example.com', true)

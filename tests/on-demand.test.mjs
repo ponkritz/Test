@@ -140,7 +140,7 @@ test('CON-103: the On-Demand rights — area for every role, setup and data edit
   const admin = rightsFor(policy, 'lead@example.com'), member = rightsFor(policy, 'x@example.com')
   assert.ok(admin.actions.has('ondemand.setup') && admin.actions.has('ondemand.edit'))
   assert.ok(!member.actions.has('ondemand.setup') && !member.actions.has('ondemand.edit') && member.areas.has('ondemand'))
-  assert.match(serializeAccess(policy), /"permissions": 4/)
+  assert.match(serializeAccess(policy), /"permissions": 5/)
   // A file saved before (permissions 3): every role it lists sees the area; Tool Owner and Admin get both rights.
   const v3 = JSON.parse(serializeAccess(policy))
   v3.permissions = 3
@@ -151,7 +151,7 @@ test('CON-103: the On-Demand rights — area for every role, setup and data edit
   assert.deepEqual(read.roles['Product Owner'], { areas: [], actions: [] }, 'a role missing from the file still has no rights')
   assert.ok(read.roles.Admin.actions.includes('ondemand.setup') && read.roles.Admin.actions.includes('ondemand.edit') && read.roles['Tool Owner'].actions.includes('ondemand.edit'))
   assert.ok(!read.roles['Team Member'].actions.some((key) => key.startsWith('ondemand.')))
-  // Saved again (permissions 4), a right set to Not set stays so.
+  // Saved again (permissions 5), a right set to Not set stays so.
   read.roles.Admin.actions = read.roles.Admin.actions.filter((key) => key !== 'ondemand.edit')
   read.roles['Team Member'].areas = read.roles['Team Member'].areas.filter((key) => key !== 'ondemand')
   const again = parseAccess(serializeAccess(read))

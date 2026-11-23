@@ -5,10 +5,12 @@ import { ResultTabs } from '../components/ResultTabs'
 import { EmptyState, Info, Modal, Notice, Page, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText } from '../gitSaveQueue'
 import { formatDateTime } from '../format'
-import { applyColumns, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, emptyPage, filterRows, hasOptions, lastUpdate, maxDescription, maxLog, maxLongValue, moneyOf, newId, onDemandPath, onDemandTypes, pageIdFor, removeRow, renamePage, rowError, rowId, upsertRow, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
+import { applyColumns, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, filterRows, hasOptions, lastUpdate, maxDescription, maxLog, maxLongValue, moneyOf, newId, onDemandPath, onDemandTypes, removeRow, renamePage, rowError, rowId, upsertRow, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
+import { findGroup, pageMenuReason, pageRights, placementOf, removePlacement, type PageKind, type Viewer } from '../menuLayout'
+import type { MenuLayoutStore } from '../useMenuLayout'
 import { InsightsTab } from './OnDemandInsights'
 
 // OND-03…OND-07 One On-Demand page (CoNQ, or one added under On-Demand): a work table in the shared DataTable — one
@@ -20,24 +22,35 @@ import { InsightsTab } from './OnDemandInsights'
 // OND-19…25: each row's readable ID (given on Save to Git), who added it and when, its update log (History in the row
 // pop-up, Last updated by / on as columns hidden at first); Long text and Currency columns; a description per column.
 // me: who is editing — the viewer's work email, else their name (OND-20).
-export function OnDemandPage({ git, store, pageId, me, onOpen }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void }) {
+// PGB-01: kind — a Table page has the Data table only; a Table + Insights page (CoNQ and every page from before the
+// page builder) has both tabs. PGB-09…PGB-11: the rights follow the role rights (CON-103) or a co-ownership of the page
+// or its group (menu-layout.json); Add page… opens the shared Add page pop-up (PGB-05).
+export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-insights', menu, viewer, addPageReason = '', onAddPage }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void }) {
   const page = store.pages.find((entry) => entry.id === pageId) ?? store.pages[0]
   const draft = page ? store.drafts[page.id] : undefined
   const [search, setSearch] = useState('')
   const [rowDialog, setRowDialog] = useState<{ row: OnDemandRow; isNew: boolean } | null>(null)
   const [columnsOpen, setColumnsOpen] = useState(false)
-  const [pageDialog, setPageDialog] = useState<'add' | 'rename' | 'remove' | null>(null)
+  const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | null>(null)
   const [commit, setCommit] = useState('')
   const [busy, setBusy] = useState(false)
   const [saveError, setSaveError] = useState('')
   const block = useWriteBlock()
   // OND-07: what may be changed — the rights of the viewer's roles, a Git token that can save, no synthetic sample.
   const gitReason = !git.connected ? 'Connect Git storage (Admin → Data & sharing) to change the On-Demand pages; they are shared through Git.' : git.readOnly ? 'View only: your Git token can read but not save.' : git.isSample ? 'Synthetic sample data is loaded. Saving to Git is disabled.' : ''
-  const rowsReason = gitReason || block.noteFor('on this page', 'ondemand.edit')
-  const setupReason = gitReason || block.noteFor('on this page', 'ondemand.setup')
+  const rights = page ? pageRights(viewer, menu.layout, page.id) : { setup: false, rows: false, owner: false }
+  const rowsReason = gitReason || (rights.rows ? '' : block.noteFor('on this page', 'ondemand.edit'))
+  const setupReason = gitReason || (rights.setup ? '' : block.noteFor('on this page', 'ondemand.setup'))
   const canRows = !rowsReason, canSetup = !setupReason
+  // PGB-07: renaming and removing the page is a change of the menu: a Tool Owner, a co-owner of its group, or in
+  // On-Demand a role allowed "Set up On-Demand pages".
+  const menuReason = gitReason || (page ? pageMenuReason(viewer, menu.layout, page.id) : '')
+  const blocked = [...(rights.rows ? [] : ['ondemand.edit' as const]), ...(rights.setup ? [] : ['ondemand.setup' as const])]
   const rows = useMemo(() => page ? filterRows(page, search) : [], [page, search])
   if (!page) return <Page><EmptyState title="No On-Demand page yet." /></Page>
+  const placement = placementOf(menu.layout, page.id)
+  const groupName = findGroup(menu.layout, placement.group)?.name ?? 'On-Demand'
+  const owners = [...placement.owners, ...(findGroup(menu.layout, placement.group)?.acceptsPages ? findGroup(menu.layout, placement.group)!.owners : [])]
   const change = (next: PageFile) => { store.setDraft(page.id, next); setSaveError('') }
   const queue = store.queue(page.id)
 
@@ -95,20 +108,18 @@ export function OnDemandPage({ git, store, pageId, me, onOpen }: { git: GitStora
 
   return <Page className="on-demand-page" intro="A table the team sets up itself, shared with everyone through Git."
     actions={<>
-      <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} onClick={() => setPageDialog('add')}>＋ Add page…</button>
-      <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} onClick={() => setPageDialog('rename')}>Rename page…</button>
-      <button type="button" className="danger-button od-remove-page" disabled={!canSetup} title={setupReason || undefined} onClick={() => setPageDialog('remove')}>Remove page…</button>
+      <button type="button" className="ghost" disabled={Boolean(gitReason || addPageReason)} title={gitReason || addPageReason || undefined} onClick={onAddPage}>＋ Add page…</button>
+      <button type="button" className="ghost" disabled={Boolean(menuReason)} title={menuReason || undefined} onClick={() => setPageDialog('rename')}>Rename page…</button>
+      <button type="button" className="danger-button od-remove-page" disabled={Boolean(menuReason)} title={menuReason || undefined} onClick={() => setPageDialog('remove')}>Remove page…</button>
       {git.connected && <button type="button" className="ghost" onClick={() => { if (draft && !window.confirm(`Discard the unsaved changes to ${page.name}?`)) return; discard(); void store.reload() }}>↻ Reload from Git</button>}
     </>}>
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected && store.inGit(page.id) ? ' The page last loaded in this browser is shown.' : ''}</Notice>}
     {store.errors.map((error) => <Notice key={error} tone="error">On-Demand: {error}</Notice>)}
     {store.loaded && !store.inGit(page.id) && !draft && <Notice tone="info">{page.name} is not in Git yet: it is created with its first Save to Git.</Notice>}
-    <ResultTabs id={`on-demand:${page.id}`} mainLabel="Data" rawLabel="Insights" rawCount={page.insights.length}
-      raw={<InsightsTab page={page} canSetup={canSetup} setupReason={setupReason} blockNote={gitReason ? '' : block.noteFor('on this tab', 'ondemand.setup')} saveBar={saveBar} onChange={change} />}
-      main={<TablePanel className="od-panel" eyebrow="ON-DEMAND" title={page.name} detail={page.description || undefined}
-      info={<>Each column has a type — Text, Long text (a paragraph), Number, Currency (an amount and its currency), Date, Dropdown (one value) or Multi-select with the options of its list — and may have a description (ⓘ on its heading) saying how or what to fill. A value that no longer fits its column (an option removed, the type changed) is kept and marked, e.g. “not in the list”, until it is changed. Every row gets a readable ID such as {page.keyPrefix}-0001 when it is first saved to Git, and records who added it and when; every saved change is logged in the row’s History (who, when, what changed — the last {maxLog}): open it with Edit. Last updated by / on can be shown with Columns. The export holds the IDs, values, Added by / on and Last updated by / on (in UTC), not the History. Saved in Git as {onDemandPath(page.id)}; two saves at the same time are merged row by row and column by column, the later one winning where both changed the same.{store.history(page.id) && <> <a href={store.history(page.id)} target="_blank" rel="noreferrer">History in GitHub</a></>}</>}
+    {(() => { const table = <TablePanel className="od-panel" eyebrow={groupName.toUpperCase()} title={page.name} detail={page.description || undefined}
+      info={<>Each column has a type — Text, Long text (a paragraph), Number, Currency (an amount and its currency), Date, Dropdown (one value) or Multi-select with the options of its list — and may have a description (ⓘ on its heading) saying how or what to fill. A value that no longer fits its column (an option removed, the type changed) is kept and marked, e.g. “not in the list”, until it is changed. Every row gets a readable ID such as {page.keyPrefix}-0001 when it is first saved to Git, and records who added it and when; every saved change is logged in the row’s History (who, when, what changed — the last {maxLog}): open it with Edit. Last updated by / on can be shown with Columns. The export holds the IDs, values, Added by / on and Last updated by / on (in UTC), not the History. Saved in Git as {onDemandPath(page.id)}; two saves at the same time are merged row by row and column by column, the later one winning where both changed the same.{store.history(page.id) && <> <a href={store.history(page.id)} target="_blank" rel="noreferrer">History in GitHub</a></>}{owners.length > 0 && <> Co-owners (set up the page and edit its rows): {[...new Set(owners)].join(', ')}.</>}</>}
       action={<button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} onClick={() => setColumnsOpen(true)}>Set up columns…</button>}>
-      {!gitReason && <WriteBlocked reason={block.noteFor('on this page', 'ondemand.edit', 'ondemand.setup')} />}
+      {!gitReason && <WriteBlocked reason={block.noteFor('on this page', ...blocked)} />}
       {page.columns.length ? <DataTable id={`on-demand:${page.id}`} columns={columns} rows={rows} rowKey={(row) => row.id} exportName={page.name}
         toolbar={<><input className="search" type="search" aria-label={`Search ${page.name}`} placeholder="Search all columns" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className="ghost" disabled={!canRows} title={rowsReason || undefined} onClick={() => setRowDialog({ row: { id: newId('r'), cells: {} }, isNew: true })}>＋ Add row</button></>}
@@ -116,18 +127,19 @@ export function OnDemandPage({ git, store, pageId, me, onOpen }: { git: GitStora
         empty={<EmptyState title={page.rows.length ? 'No row matches the search.' : 'No rows yet.'} detail={page.rows.length ? undefined : canRows ? 'Add the first one with ＋ Add row.' : undefined} />} />
         : <EmptyState title="No columns yet." detail={canSetup ? 'Add them with Set up columns…: a name and a type for each, and the options of a Dropdown or Multi-select.' : 'Someone allowed to set up On-Demand pages adds the columns.'} />}
       {saveBar}
-    </TablePanel>} />
+    </TablePanel>
+      // PGB-01: a Table page is the Data table alone; Table + Insights adds the Insights tab (OND-11).
+      return kind === 'table' ? table : <ResultTabs id={`on-demand:${page.id}`} mainLabel="Data" rawLabel="Insights" rawCount={page.insights.length}
+        raw={<InsightsTab page={page} canSetup={canSetup} setupReason={setupReason} blockNote={gitReason || rights.setup ? '' : block.noteFor('on this tab', 'ondemand.setup')} saveBar={saveBar} onChange={change} />}
+        main={table} />
+    })()}
     {rowDialog && <RowDialog page={page} row={rowDialog.row} isNew={rowDialog.isNew} pending={Boolean(draft)} onCancel={() => setRowDialog(null)} onSave={(row) => { change(upsertRow(page, row, { by: me })); setRowDialog(null) }} />}
     {columnsOpen && <ColumnsDialog page={page} onCancel={() => setColumnsOpen(false)} onSave={(next) => { change(next); setColumnsOpen(false) }} />}
-    {pageDialog === 'add' && <PageNameDialog title="Add a page" action="Add page" onCancel={() => setPageDialog(null)} onSave={async (name, description) => {
-      const created = emptyPage(pageIdFor(name, store.pages.map((entry) => entry.id)), name, description)
-      const saved = await store.save(created, `On-Demand: add the page ${created.name}`)
-      recordJob(`ondemand:${created.id}`, `Add page · ${created.name}`, { text: `${outcomeText(saved)} ${onDemandPath(created.id)}` })
-      setPageDialog(null); onOpen(created.id)
-    }} />}
     {pageDialog === 'rename' && <PageNameDialog title="Rename the page" action="Save" name={page.name} description={page.description} note="Saved for everyone with Save to Git." onCancel={() => setPageDialog(null)} onSave={(name, description) => { change(renamePage(page, name, description)); setPageDialog(null) }} />}
     {pageDialog === 'remove' && <RemovePageDialog page={page} inGit={store.inGit(page.id)} onCancel={() => setPageDialog(null)} onRemove={async () => {
       await store.remove(page.id, `On-Demand: remove the page ${page.name} (${page.rows.length} rows)`)
+      // PGB-07: its place in the menu goes with it.
+      if (menu.layout.pages[page.id]) await menu.save(removePlacement(menu.layout, page.id), `Pages & menu: remove the page ${page.name}`)
       recordJob(`ondemand:${page.id}`, `Remove page · ${page.name}`, { text: `Removed ${onDemandPath(page.id)} with its ${page.rows.length} row${page.rows.length === 1 ? '' : 's'}; its history stays in GitHub.` })
       setPageDialog(null); const next = store.pages.find((entry) => entry.id !== page.id); if (next) onOpen(next.id)
     }} />}
@@ -318,7 +330,7 @@ function PageNameDialog({ title, action, name = '', description = '', note, onCa
 }
 
 // OND-10: removing a page asks first, naming how many rows go with it.
-function RemovePageDialog({ page, inGit, onCancel, onRemove }: { page: PageFile; inGit: boolean; onCancel: () => void; onRemove: () => Promise<void> }) {
+export function RemovePageDialog({ page, inGit, onCancel, onRemove }: { page: PageFile; inGit: boolean; onCancel: () => void; onRemove: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const remove = async () => { setBusy(true); setError(''); try { await onRemove() } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) } }

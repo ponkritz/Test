@@ -991,3 +991,11 @@ th .info-button{margin-left:4px;padding:0 6px;font-size:10px}
 .od-history ol>li{border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;background:var(--surface-2)}
 .od-history-head{margin:0 0 2px;color:var(--text-2)}.od-history ul{margin:0;padding-left:18px;display:grid;gap:2px;overflow-wrap:anywhere}
 .od-history del{color:var(--danger-text,var(--text-3))}.od-history ins{text-decoration:none;font-weight:600}.od-history-field{font-weight:600}.od-history-comment{margin:2px 0 0;font-style:italic}
+/* PGB-04, PGB-05: a menu group's heading with ⋯ (add a page to it); the Add / Edit page pop-ups. */
+.sidebar nav .nav-group-row{display:flex;align-items:center;gap:2px}.sidebar nav .nav-group-row>button.nav-group{flex:1;min-width:0}
+.sidebar nav button.nav-group-more{flex:none;width:auto;min-width:0;background:none;border:0;box-shadow:none;color:var(--sidebar-muted);font-weight:800;padding:0 8px;margin:0 2px 4px 0;line-height:1.4;cursor:pointer}
+.sidebar nav button.nav-group-more:hover,.sidebar nav button.nav-group-more:focus-visible{color:#fff;background:none}
+.nav-mini .sidebar nav button.nav-group-more{display:none}
+@media(max-width:1000px){.sidebar nav button.nav-group-more{display:none}}
+.pgb-form{display:grid;gap:10px}.pgb-kinds{display:grid;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px 12px}.pgb-kinds legend{font-weight:600;padding:0 4px}
+.pgb-kind{display:grid;gap:0}.pgb-kind small{color:var(--text-2);padding-left:24px}

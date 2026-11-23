@@ -22,6 +22,11 @@ section ends with **Today** — the main differences found in the inventory of 2
 - Then **KPI tiles** (§9) when the page has them, then **panels** (§2) top to bottom by importance.
 - No free-standing `h2` / `h3` between panels: a heading always belongs to a panel.
 
+- **Pages added with the page builder** (PGB-01) — the page types **Table** and **Table + Insights** — follow the
+  Board-and-work-page layout of this section: `Page` with the intro and the page actions (＋ Add page…, Rename page…,
+  Remove page…), then one `TablePanel` holding the work table (§5); Table + Insights puts the table and the Insights
+  under the shared `ResultTabs` (§7). Their eyebrow is the page's menu group in capitals.
+
 **Today:** about nine pages build their own intro (`act-header` with an `h2` repeating the title, `me-bar`, `p.muted`,
 a Notice as intro); the Windchill pages (S&S IT, ECP) have no `Page` wrapper.
 

@@ -70,6 +70,10 @@ export const actions = [
   // does (Tool Owner and Admin) to the roles it lists; nobody had them before (no older permission covered them).
   { key: 'ondemand.setup', group: 'On-Demand', label: 'Set up On-Demand pages (pages, columns, options)', legacy: 'ondemand.setup', since: 4 },
   { key: 'ondemand.edit', group: 'On-Demand', label: 'Edit On-Demand data (rows)', legacy: 'ondemand.edit', since: 4 },
+  // CON-106 (permissions 5): the page builder (PGB-08) — create, rename, reorder, configure and remove menu groups, add,
+  // move and remove any added page and name co-owners. A file older than permissions 5 gives it as the starting matrix
+  // does: to a listed Tool Owner only (a file without the Tool Owner role gives that role every right, CON-93).
+  { key: 'pages.manage', group: 'On-Demand', label: 'Manage pages and menu groups (Tool Owner)', legacy: 'pages.manage', since: 5 },
 ] as const
 export type Action = typeof actions[number]['key']
 
@@ -96,7 +100,7 @@ export function defaultPolicy(adminEmail = ''): AccessPolicy {
     defaultRole: 'Team Member',
     roles: {
       'Tool Owner': { areas: [...allAreas], actions: [...allActions] },
-      'Admin': { areas: [...allAreas], actions: allActions.filter((action) => action !== 'streams.manage') },
+      'Admin': { areas: [...allAreas], actions: allActions.filter((action) => action !== 'streams.manage' && action !== 'pages.manage') },
       // CON-94: the starting matrix; each cell can be set to Allow, Deny or Not set in Role rights.
       'Product Owner': { areas: ['overview', 'board', 'health', 'release', 'baselines', 'qemapping', 'docs', 'ondemand'], actions: [...workActions, 'work.bulk', 'azure.createForOthers', 'baselines.edit', 'qemapping.edit', 'data.export', 'pack.text'] },
       'People Manager': { areas: ['overview', 'insights', ...myWork, 'board', 'release', 'baselines', 'qemapping', 'snapshots', 'docs', 'ondemand'], actions: [...workActions, 'work.bulk', 'azure.createForOthers', 'baselines.edit', 'qemapping.edit', 'data.export', 'pack.text'] },
@@ -116,7 +120,7 @@ function inOrder(policy: AccessPolicy): AccessPolicy {
 
 const pick = <T extends string>(value: unknown, allowed: readonly T[]) => Array.isArray(value) ? allowed.filter((entry) => value.includes(entry)) : []
 // The permissions that did not exist before CON-94 (their presence marks a file written with the split permissions).
-const newKeys = new Set<Action>(['setup.epic', 'setup.values', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk', 'release.counts', 'qemapping.edit', 'data.export', 'streams.options', 'setup.feature', 'capacity.settings', 'capacity.rules', 'capacity.time', 'capacity.periods', 'capacity.history', 'people.edit', 'people.capacityRoles', 'access.viewAs', 'pack.text', 'pack.setup', 'layout.defaults', 'storage.shared', 'ondemand.setup', 'ondemand.edit'])
+const newKeys = new Set<Action>(['setup.epic', 'setup.values', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk', 'release.counts', 'qemapping.edit', 'data.export', 'streams.options', 'setup.feature', 'capacity.settings', 'capacity.rules', 'capacity.time', 'capacity.periods', 'capacity.history', 'people.edit', 'people.capacityRoles', 'access.viewAs', 'pack.text', 'pack.setup', 'layout.defaults', 'storage.shared', 'ondemand.setup', 'ondemand.edit', 'pages.manage'])
 
 // Reads access.json: unknown roles, areas, actions and invalid emails are dropped; a role missing from the file has no
 // rights. Throws on anything that is not an access policy, so a broken file is reported rather than ignored.
@@ -163,7 +167,7 @@ export function parseAccess(text: string): AccessPolicy {
 
 export function serializeAccess(policy: AccessPolicy) {
   const members = Object.fromEntries(Object.entries(policy.members).filter(([email, assigned]) => isEmail(email) && assigned.length).sort(([a], [b]) => a.localeCompare(b)).map(([email, assigned]) => [normalEmail(email), roles.filter((role) => assigned.includes(role))]))
-  return `${JSON.stringify({ schema: 1, permissions: 4, defaultRole: policy.defaultRole, roles: Object.fromEntries(roles.map((role) => [role, { areas: allAreas.filter((area) => policy.roles[role].areas.includes(area)), actions: allActions.filter((action) => policy.roles[role].actions.includes(action)), ...(policy.roles[role].deny?.length ? { deny: ([...allAreas, ...allActions] as Permission[]).filter((key) => policy.roles[role].deny!.includes(key)) } : {}) }])), members }, null, 2)}\n`
+  return `${JSON.stringify({ schema: 1, permissions: 5, defaultRole: policy.defaultRole, roles: Object.fromEntries(roles.map((role) => [role, { areas: allAreas.filter((area) => policy.roles[role].areas.includes(area)), actions: allActions.filter((action) => policy.roles[role].actions.includes(action)), ...(policy.roles[role].deny?.length ? { deny: ([...allAreas, ...allActions] as Permission[]).filter((key) => policy.roles[role].deny!.includes(key)) } : {}) }])), members }, null, 2)}\n`
 }
 
 // A person's rights: the union of their roles, or the default role when their email is not listed (or not known yet).
@@ -239,6 +243,12 @@ export function toolOwnerExists(policy: AccessPolicy | null) {
   if (!policy) return false
   const holds = (role: Role) => policy.roles[role]?.actions.includes('streams.manage')
   return Object.values(policy.members).some((assigned) => assigned.some(holds)) || Boolean(policy.defaultRole && holds(policy.defaultRole))
+}
+// CON-106: pages and menu groups (PGB-08): the holders of "Manage pages and menu groups" — or, while no Tool Owner
+// exists (CON-93), the people who manage access, so nobody is locked out. Without a policy nobody (CON-101).
+export function canManagePages(policy: AccessPolicy | null, rights: Pick<Rights, 'actions'>) {
+  if (!policy) return false
+  return rights.actions.has('pages.manage') || (!toolOwnerExists(policy) && rights.actions.has('access.manage'))
 }
 // CON-101: without a policy nobody changes the stream mapping (fail closed).
 export function canManageStreams(policy: AccessPolicy | null, rights: Pick<Rights, 'actions'>) {
