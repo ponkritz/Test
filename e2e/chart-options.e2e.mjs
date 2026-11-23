@@ -191,7 +191,8 @@ test('TC-CHT-02: a viewer without the setup right sees the charts and a Dashboar
   await insightsTab(page).click()
   const pareto = panel(page, 'Cost Pareto')
   await pareto.locator('svg[role="img"]').waitFor()
-  assert.equal(await page.getByRole('button', { name: 'Edit Cost Pareto', exact: true }).isDisabled(), true)
+  // OND-61: no chart ⋯ menu (Edit…, Size…, Remove…) for a viewer.
+  assert.equal(await page.getByRole('button', { name: 'More actions: Cost Pareto', exact: true }).count(), 0)
   // The stacked bar as vertical columns, read only: a click lists the rows.
   const bar = panel(page, 'Cost by category and site')
   await bar.locator('svg[role="img"]').waitFor()

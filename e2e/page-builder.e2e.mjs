@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { navigate, openPage, startApp, text } from './helpers.mjs'
+import { menuOf, navigate, openPage, startApp, text } from './helpers.mjs'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 
 // Page builder (PGB-01…PGB-14, CON-106) against a mocked GitHub: a Tool Owner adds the group Quality with a Table page
@@ -225,9 +225,13 @@ test('TC-PGB-10: a person with no ownership and no rights sees Pages & menu and 
   await pagesTable.getByRole('button', { name: 'Open Supplier issues' }).click()
   await page.locator('.od-panel table tbody tr').first().waitFor()
   assert.match(await text(page.locator('.od-panel table tbody tr').first()), /Late delivery/)
-  for (const name of ['＋ Add row', 'Set up columns…', '＋ Add page…', 'Rename page…', 'Hide page', 'Delete page…']) assert.equal(await page.getByRole('button', { name }).isDisabled(), true, `${name} is disabled`)
+  for (const name of ['＋ Add row', 'Set up columns…']) assert.equal(await page.getByRole('button', { name }).isDisabled(), true, `${name} is disabled`)
   assert.equal(await text(page.locator('.od-panel .write-blocked')), 'Your role does not allow “Edit On-Demand data (rows)”, “Set up On-Demand pages (pages, columns, options)”. An Admin can change this in Admin → People & roles → Role rights.')
-  assert.equal(await page.getByRole('button', { name: 'Rename page…' }).getAttribute('title'), 'Only a Tool Owner or a co-owner of the group “Quality” can change this page in the menu.')
+  // OND-61: the page's actions in its ⋯ menu, each disabled with its reason as its tooltip.
+  const pageMenu = await menuOf(page, 'page Supplier issues')
+  for (const name of ['＋ Add page…', 'Rename page…', 'Hide page', 'Delete page…']) assert.equal(await pageMenu.getByRole('menuitem', { name }).isDisabled(), true, `${name} is disabled`)
+  assert.equal(await pageMenu.getByRole('menuitem', { name: 'Rename page…' }).getAttribute('title'), 'Only a Tool Owner or a co-owner of the group “Quality” can change this page in the menu.')
+  await page.keyboard.press('Escape')
   assert.equal(writes.length, 0, 'nothing is written')
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
@@ -267,7 +271,7 @@ test('TC-PGB-12: a page name already in the menu — another case, extra spaces,
   // Rename page… on the page itself.
   await page.locator('.pgb-pages').getByRole('button', { name: 'Open Supplier issues' }).click()
   await page.locator('.od-panel table tbody tr').first().waitFor()
-  await page.getByRole('button', { name: 'Rename page…' }).click()
+  await (await menuOf(page, 'page Supplier issues')).getByRole('menuitem', { name: 'Rename page…' }).click()
   const rename = page.getByRole('dialog', { name: 'Rename the page' })
   await rename.getByLabel('Page name', { exact: true }).fill('CONQ')
   assert.equal(await text(rename.locator('.field-error')), 'There is already a page named “CoNQ” (in On-Demand). Choose another name.')

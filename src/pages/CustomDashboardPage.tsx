@@ -4,13 +4,17 @@ import { recordJob } from '../backgroundJobs'
 import { DataTable, type DataColumn } from '../components/DataTable'
 import { BlockDialog, BlockPanel, KpiTile } from '../components/DashboardBlocks'
 import { MultiSelect } from '../components/MultiSelect'
+import { SizeDialog, SizeFields } from '../components/ChartSize'
+import { ViewActions } from '../components/ViewActions'
+import { blockChartId, needsGrid, pairFactory, sizeFromOptions, sizeText, withSizeOptions, type ChartSize } from '../chartSize'
+import { useChartSizes } from '../useChartSize'
 import { EmptyState, Metrics, Modal, Notice, Page, Panel, SaveQueueStatus, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, type Period } from '../dashboard'
 import { utcToday } from '../businessTime'
 import { noData, blankBlock, blockTypeLabel, dashId, dataSources, filterColumns, maxBlocks, maxTabs, maxViewerFilters, missingDataset, moveBlock, narrowRows, pageOfSource, removeBlock, setTabsAndFilters, sourceName, tabsError, upsertBlock, viewerKey, type DashboardBlock, type DashboardTab, type Dataset, type ViewerFilter } from '../dashboardPages'
 import { outcomeText } from '../gitSaveQueue'
 import { deleteReason, findGroup, gitReasonOf, hideReason, isDashboard, isHidden, pageMenuReason, pageRights, placementOf, removePlacement, setHidden, type Viewer } from '../menuLayout'
-import { hasOptions, onDemandPath, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
+import { cleanOptions, hasOptions, onDemandPath, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
 import { noneKey, noneLabel } from '../onDemandInsights'
 import { useWriteBlock } from '../useCan'
 import { useDashboardPage } from '../useDashboardPage'
@@ -53,6 +57,10 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   const update = (next: Partial<Viewed>) => setViewed((current) => { const value = { ...current, ...next }; try { localStorage.setItem(localKey(pageId), JSON.stringify(value)) } catch { /* convenience only */ } views?.setFilter(viewerKey(pageId), value); return value })
   const [editing, setEditing] = useState<{ block: DashboardBlock; isNew: boolean } | null>(null)
   const [arranging, setArranging] = useState(false)
+  const [arrangingSizes, setArrangingSizes] = useState(false)
+  const [sizing, setSizing] = useState<DashboardBlock | null>(null)
+  const [removing, setRemoving] = useState<DashboardBlock | null>(null)
+  const sizes = useChartSizes()
   const [setup, setSetup] = useState(false)
   const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | null>(null)
   const [error, setError] = useState('')
@@ -118,19 +126,29 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
 
   if (!page) return <Page><EmptyState title="This page is no longer there." detail="It was removed, or Git has not been read yet." /></Page>
   const firstSource = datasets.find((entry) => !entry.problem)
+  const addBlock = () => setEditing({ block: blankBlock(firstSource!, dashId('b'), 'kpi', activeTab && activeTab.id !== tabs[0]?.id ? activeTab.id : ''), isNew: true })
+  // CHT-15…CHT-18: each block's size — the viewer's own, else the owners' (the dashboard file), else half width.
+  const arrange = arrangingSizes && !buildReason
+  const sizeOf = (entry: DashboardBlock) => { const resolved = sizes.resolve(blockChartId(pageId, entry.id), pairFactory, sizeFromOptions(entry.options)); return arrange ? { ...resolved, size: resolved.base, source: 'owner' as const } : resolved }
+  const saveSize = (entry: DashboardBlock, size: ChartSize) => saveDashboard(upsertBlock(dashboard, withBlockSize(entry, size)), 'Size block', `Dashboard ${page.name}: size of the ${blockTypeLabel(entry.type)} ${entry.title} (${sizeText(size)})`)
   const addReason = buildReason || (dashboard.blocks.length >= maxBlocks ? `A dashboard holds at most ${maxBlocks} blocks: remove one first.` : '') || (firstSource ? '' : 'There is no data source yet: add a table page with rows first.')
 
   return <Page className="dashboard-page" intro={page.description || 'An On-Demand Dashboard of KPI tiles, charts and summary tables — read only, the same for everyone.'}
-    actions={<>
-      <button type="button" className="ghost" disabled={Boolean(addReason)} title={addReason || undefined} onClick={() => setEditing({ block: blankBlock(firstSource!, dashId('b'), 'kpi', activeTab && activeTab.id !== tabs[0]?.id ? activeTab.id : ''), isNew: true })}>＋ Add block…</button>
-      <button type="button" className="ghost" disabled={Boolean(buildReason)} title={buildReason || undefined} onClick={() => setArranging(true)}>Arrange blocks…</button>
-      <button type="button" className="ghost" disabled={Boolean(buildReason)} title={buildReason || undefined} onClick={() => setSetup(true)}>Tabs and filters…</button>
-      <button type="button" className="ghost" disabled={Boolean(gitReason || addPageReason)} title={gitReason || addPageReason || undefined} onClick={onAddPage}>＋ Add page…</button>
-      <button type="button" className="ghost" disabled={Boolean(menuReason)} title={menuReason || undefined} onClick={() => setPageDialog('rename')}>Rename page…</button>
-      <button type="button" className="ghost" disabled={Boolean(hidingReason)} title={hidingReason || undefined} onClick={toggleHidden}>{hidden ? 'Show page' : 'Hide page'}</button>
-      <button type="button" className="danger-button" disabled={Boolean(removeReason)} title={removeReason || undefined} onClick={() => setPageDialog('remove')}>Delete page…</button>
-      {git.connected && <button type="button" className="ghost" onClick={() => { void dash.reload(); void store.reload() }}>↻ Reload from Git</button>}
-    </>}>
+    // DSH-13: one main action — ＋ Add block… for the dashboard's builders, else ＋ Add page… for those who may add
+    // pages — and the rest in the page's ⋯ menu, each disabled item with its reason as its tooltip.
+    actions={<ViewActions label={`page ${page.name}`} primary={!buildReason
+      ? <button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={addBlock}>＋ Add block…</button>
+      : !(gitReason || addPageReason) ? <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button> : undefined} items={[
+      ...(buildReason ? [{ key: 'add-block', label: '＋ Add block…', disabled: true, title: addReason }] : []),
+      { key: 'arrange', label: 'Arrange blocks…', disabled: Boolean(buildReason), title: buildReason || undefined, onClick: () => setArranging(true) },
+      { key: 'sizes', label: arrangingSizes ? 'Done arranging sizes' : 'Arrange sizes on the page', disabled: Boolean(buildReason), title: buildReason || 'Drag a chart’s corner to set its size for everyone', onClick: () => setArrangingSizes(!arrangingSizes) },
+      { key: 'setup', label: 'Tabs and filters…', disabled: Boolean(buildReason), title: buildReason || undefined, onClick: () => setSetup(true) },
+      ...(!buildReason || gitReason || addPageReason ? [{ key: 'add-page', label: '＋ Add page…', disabled: Boolean(gitReason || addPageReason), title: gitReason || addPageReason || undefined, onClick: onAddPage }] : []),
+      { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
+      { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
+      { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
+      ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { void dash.reload(); void store.reload() } }] : []),
+    ]} />}>
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected ? ' The dashboard last loaded in this browser is shown.' : ''}</Notice>}
     {!gitReason && <WriteBlocked reason={rights.setup ? '' : block.noteFor('on this dashboard', 'ondemand.setup')} />}
     {dash.error && <Notice tone="error">Dashboard: {dash.error} The dashboard last read is kept.</Notice>}
@@ -139,7 +157,8 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     {error && <Notice tone="error">{error}</Notice>}
     <SaveQueueStatus state={dash.queue} onRetry={() => void dash.retry()} />
 
-    <div className="dash-filters" role="group" aria-label="Dashboard filters">
+    {/* DSH-13: the filter row on one line, its status at the end. */}
+    <div className="ins-bar"><div className="dash-filters compact-filters" role="group" aria-label="Dashboard filters">
       <MultiSelect label="Year" emptyLabel={String(currentYear)} options={years.map((year) => [String(year), String(year)])} value={viewed.period.years.map(String)} onChange={(value) => setPeriod({ ...viewed.period, years: value.map(Number) })} />
       <MultiSelect label="Quarter" options={offeredQuarters(countingYears).map((quarter) => [quarter, several ? `Q${quarter.slice(6)} ${quarter.slice(0, 4)}` : `Q${quarter.slice(6)}`])} value={viewed.period.quarters} onChange={(value) => setPeriod({ ...viewed.period, quarters: value })} />
       <MultiSelect label="Month" options={offeredMonths(periodQuarters(viewed.period, currentYear)).map((entry) => [entry, several ? `${monthNames[Number(entry.slice(5)) - 1]} ${entry.slice(0, 4)}` : monthNames[Number(entry.slice(5)) - 1]])} value={viewed.period.months} onChange={(value) => setPeriod({ ...viewed.period, months: value })} />
@@ -151,17 +170,27 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
           disabled={!column || Boolean(dataset.problem)} title={dataset.problem || (column ? undefined : 'The column is no longer in the data source.')}
           onChange={(value) => update({ choices: { ...viewed.choices, [filter.id]: value } })} />
       })}
-      <button type="button" className="ghost" disabled={!filtered} onClick={() => update({ period: defaultPeriod(), choices: {} })}>Reset filters</button>
+      <button type="button" className="text-button" disabled={!filtered} onClick={() => update({ period: defaultPeriod(), choices: {} })}>Reset filters</button>
     </div>
-    <p className="muted dsh-scope" role="status">Period: {months.length === countingYears.length * 12 ? `${countingYears.join(', ')} (whole ${several ? 'years' : 'year'})` : months.map((month) => `${monthNames[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`).join(', ')}{Object.values(viewed.choices).some((value) => value.length) ? ' · filtered' : ''}.</p>
+    <p className="muted dsh-scope" role="status">Period: {months.length === countingYears.length * 12 ? `${countingYears.join(', ')} (whole ${several ? 'years' : 'year'})` : months.map((month) => `${monthNames[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`).join(', ')}{Object.values(viewed.choices).some((value) => value.length) ? ' · filtered' : ''}.</p></div>
 
     {!dashboard.blocks.length ? <Panel eyebrow={(group?.name ?? 'On-Demand').toUpperCase()} title={page.name} info={<DashboardInfo path={dash.path} history={dash.history} owners={owners} />}>
       <EmptyState title="No blocks yet." detail={buildReason ? 'The dashboard’s owners add KPI tiles, charts and summary tables.' : 'Add the first one with ＋ Add block…: a KPI tile, a bar, line or pie chart, or a summary table over a table page.'} />
     </Panel> : <>
       {tiles.length > 0 && <Metrics>{tiles.map((entry) => { const dataset = datasetOf(entry.source); const target = tabs.length ? tabs.find((tab) => tab.id === entry.tab) ?? tabs[0] : undefined; return <KpiTile key={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} tabName={target?.name} onOpenTab={target ? () => update({ tab: target.id }) : undefined} /> })}</Metrics>}
       {tabs.length > 0 && <div className="overview-tabs dsh-tabs" role="tablist" aria-label="Dashboard tabs">{tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={tab.id === activeTab?.id} className={`backlog-tab ${tab.id === activeTab?.id ? 'backlog-tab-active' : ''}`} onClick={() => update({ tab: tab.id })}>{tab.name}</button>)}</div>}
-      <div className="od-insights dsh-panels" role={tabs.length ? 'tabpanel' : undefined}>
-        {panels.map((entry) => { const dataset = datasetOf(entry.source); return <BlockPanel key={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} colors={dashboard.colors} /> })}
+      {arrange && <p className="muted chart-arrange-note" role="status">Arranging sizes for everyone: drag a chart’s bottom-right corner (or focus it and use the arrow keys, Enter to keep) — each size is saved to Git at once. <button type="button" className="text-button" onClick={() => setArrangingSizes(false)}>Done arranging</button></p>}
+      <div className={`od-insights dsh-panels${needsGrid(panels.map((entry) => sizeOf(entry).size.width)) ? ' chart-grid' : ''}`} role={tabs.length ? 'tabpanel' : undefined}>
+        {panels.map((entry) => { const dataset = datasetOf(entry.source); const { size, source, base } = sizeOf(entry); const id = blockChartId(pageId, entry.id); const at = dashboard.blocks.indexOf(entry)
+          return <BlockPanel key={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} colors={dashboard.colors} size={size} source={source} arranging={arrange}
+            onResize={(next) => arrange ? run(() => saveSize(entry, next)) : sizes.setOwn(id, next, base)} onReset={arrange ? undefined : () => sizes.setOwn(id, undefined)}
+            action={buildReason ? undefined : <ViewActions label={entry.title} items={[
+              { key: 'up', label: 'Move up', disabled: at === 0, onClick: () => run(() => saveDashboard(moveBlock(dashboard, entry.id, -1), 'Move block', `Dashboard ${page.name}: move ${entry.title} up`)) },
+              { key: 'down', label: 'Move down', disabled: at === dashboard.blocks.length - 1, onClick: () => run(() => saveDashboard(moveBlock(dashboard, entry.id, 1), 'Move block', `Dashboard ${page.name}: move ${entry.title} down`)) },
+              { key: 'edit', label: 'Edit…', onClick: () => setEditing({ block: entry, isNew: false }) },
+              { key: 'size', label: 'Size…', onClick: () => setSizing(entry) },
+              { key: 'remove', label: 'Remove…', danger: true, onClick: () => setRemoving(entry) },
+            ]} />} /> })}
       </div>
       {!panels.length && <EmptyState title={tabs.length ? `No charts or tables on ${activeTab?.name}.` : 'No charts or tables yet.'} detail={tiles.length ? undefined : noData.detail} />}
       <Panel className="dsh-about" eyebrow={(group?.name ?? 'On-Demand').toUpperCase()} title="About this dashboard" detail={`${dashboard.blocks.length} block${dashboard.blocks.length === 1 ? '' : 's'}${tabs.length ? ` on ${tabs.length} tab${tabs.length === 1 ? '' : 's'}` : ''}, read only, the same for everyone.`} info={<DashboardInfo path={dash.path} history={dash.history} owners={owners} />}><span /></Panel>
@@ -169,7 +198,9 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
 
     {editing && <BlockDialog datasets={datasets} dashboard={dashboard} block={editing.block} isNew={editing.isNew} preview={narrow} onCancel={() => setEditing(null)}
       onSave={async (entry, colors) => { const next = upsertBlock(dashboard, entry); if (colors) next.colors = colors; else delete next.colors; await saveDashboard(next, editing.isNew ? 'Add block' : 'Edit block', `Dashboard ${page.name}: ${editing.isNew ? 'add' : 'change'} the ${blockTypeLabel(entry.type)} ${entry.title}`); setEditing(null) }} />}
-    {arranging && <ArrangeDialog blocks={dashboard.blocks} tabs={tabs} sourceOf={(source) => sourceName(datasets, source)} onClose={() => setArranging(false)} onEdit={(entry) => { setArranging(false); setEditing({ block: entry, isNew: false }) }}
+    {sizing && <SizeDialog eyebrow="DASHBOARD · BLOCK" title={sizing.title} size={sizeOf(sizing).base} heightReason={sizing.type === 'table' ? 'A summary table takes the height of its content.' : ''} onCancel={() => setSizing(null)} onSave={async (size) => { await saveSize(sizing, size); setSizing(null) }} />}
+    {removing && <RemoveBlockDialog block={removing} onCancel={() => setRemoving(null)} onRemove={async () => { await saveDashboard(removeBlock(dashboard, removing.id), 'Remove block', `Dashboard ${page.name}: remove the ${blockTypeLabel(removing.type)} ${removing.title}`); setRemoving(null) }} />}
+    {arranging && <ArrangeDialog blocks={dashboard.blocks} sizeOf={(entry) => sizeOf(entry).base} onSize={(entry, size) => run(() => saveSize(entry, size))} tabs={tabs} sourceOf={(source) => sourceName(datasets, source)} onClose={() => setArranging(false)} onEdit={(entry) => { setArranging(false); setEditing({ block: entry, isNew: false }) }}
       onMove={(entry, by) => run(() => saveDashboard(moveBlock(dashboard, entry.id, by), 'Move block', `Dashboard ${page.name}: move ${entry.title} ${by < 0 ? 'up' : 'down'}`))}
       onRemove={(entry) => saveDashboard(removeBlock(dashboard, entry.id), 'Remove block', `Dashboard ${page.name}: remove the ${blockTypeLabel(entry.type)} ${entry.title}`)} />}
     {setup && <SetupDialog tabs={tabs} filters={dashboard.filters} datasets={datasets} onCancel={() => setSetup(false)}
@@ -190,12 +221,21 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   </Page>
 }
 
+// CHT-17: a block with the owners' size written into its options (a factory value left out; a KPI tile takes none).
+function withBlockSize(block: DashboardBlock, size: ChartSize): DashboardBlock {
+  const options = block.type === 'kpi' ? undefined : cleanOptions(block.type, block.measure, withSizeOptions(block.options, size))
+  const out: DashboardBlock = { ...block }
+  if (options) out.options = options
+  else delete out.options
+  return out
+}
+
 function DashboardInfo({ path, history, owners }: { path: string; history: string; owners: string[] }) {
   return <>Read only: KPI tiles, charts and summary tables over the rows of table pages (as saved in Git). The period and the filters above apply to every block; your choice is remembered for you. The dashboard’s owners — a Tool Owner, the page’s and its group’s co-owners and roles allowed “Set up On-Demand pages” — add, edit, reorder and remove its blocks, tabs and filters; each change is saved to Git at once as {path}, two saves at the same time merged block by block, the later one winning where both changed the same.{history && <> <a href={history} target="_blank" rel="noreferrer">History in GitHub</a></>}{owners.length > 0 && <> Co-owners: {owners.join(', ')}.</>}</>
 }
 
 // DSH-06: the blocks in order — Edit, ↑ ↓, Remove (after a pop-up that names the block); each change saved at once.
-function ArrangeDialog({ blocks, tabs, sourceOf, onClose, onEdit, onMove, onRemove }: { blocks: DashboardBlock[]; tabs: DashboardTab[]; sourceOf: (source: string) => string; onClose: () => void; onEdit: (block: DashboardBlock) => void; onMove: (block: DashboardBlock, by: -1 | 1) => void; onRemove: (block: DashboardBlock) => Promise<void> }) {
+function ArrangeDialog({ blocks, sizeOf, onSize, tabs, sourceOf, onClose, onEdit, onMove, onRemove }: { blocks: DashboardBlock[]; sizeOf: (block: DashboardBlock) => ChartSize; onSize: (block: DashboardBlock, size: ChartSize) => void; tabs: DashboardTab[]; sourceOf: (source: string) => string; onClose: () => void; onEdit: (block: DashboardBlock) => void; onMove: (block: DashboardBlock, by: -1 | 1) => void; onRemove: (block: DashboardBlock) => Promise<void> }) {
   const [removing, setRemoving] = useState<DashboardBlock | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -205,6 +245,8 @@ function ArrangeDialog({ blocks, tabs, sourceOf, onClose, onEdit, onMove, onRemo
     { id: 'dsh-type', label: 'Type', sortable: false, value: (entry) => blockTypeLabel(entry.type) },
     { id: 'dsh-source', label: 'Data source', sortable: false, value: (entry) => sourceOf(entry.source) },
     ...(tabs.length ? [{ id: 'dsh-tab', label: 'Tab', sortable: false, value: (entry: DashboardBlock) => (tabs.find((tab) => tab.id === entry.tab) ?? tabs[0]).name }] : []),
+    // CHT-17: each chart's or table's size for everyone (a KPI tile sits in the tile row).
+    { id: 'dsh-size', label: 'Size', sortable: false, value: (entry) => entry.type === 'kpi' ? '' : sizeText(sizeOf(entry)), render: (entry) => entry.type === 'kpi' ? <span className="muted">Tile row</span> : <SizeFields size={sizeOf(entry)} label={entry.title} heightReason={entry.type === 'table' ? 'A summary table takes the height of its content.' : ''} onChange={(size) => onSize(entry, size)} /> },
     { id: '@actions', label: 'Actions', sortable: false, export: false, render: (entry) => { const at = blocks.indexOf(entry); return <span className="button-row nowrap">
       <button type="button" className="ghost" aria-label={`Edit ${entry.title}`} onClick={() => onEdit(entry)}>Edit</button>
       <button type="button" className="ghost" disabled={at === 0} aria-label={`Move ${entry.title} up`} onClick={() => onMove(entry, -1)}>↑</button>
@@ -214,7 +256,7 @@ function ArrangeDialog({ blocks, tabs, sourceOf, onClose, onEdit, onMove, onRemo
   ]
   return <>
     <Modal eyebrow="DASHBOARD · BLOCKS" title="Arrange the blocks" wide form={false} onClose={onClose}>
-      <p className="muted">KPI tiles are shown in this order above the tabs, charts and tables in this order on their tab. Each change is saved to Git at once.</p>
+      <p className="muted">KPI tiles are shown in this order above the tabs, charts and tables in this order on their tab, each at its width and height (everyone’s; a viewer may still resize a chart for themselves). Each change is saved to Git at once.</p>
       <DataTable id="dashboard-blocks" columns={columns} rows={blocks} rowKey={(entry) => entry.id} status={`${blocks.length} of ${maxBlocks} blocks`} empty={<EmptyState title="No blocks yet." detail="Add one with ＋ Add block…" />} />
       <div className="modal-actions"><button type="button" className="ghost" onClick={onClose}>Close</button></div>
     </Modal>
@@ -276,6 +318,19 @@ function SetupDialog({ tabs, filters, datasets, onCancel, onSave }: { tabs: Dash
       </fieldset>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Saving to Git…' : 'Save to Git'}</button></div>
+    </form>
+  </Modal>
+}
+
+// DSH-13: Remove… from a block's ⋯ menu asks first, naming the block.
+function RemoveBlockDialog({ block, onCancel, onRemove }: { block: DashboardBlock; onCancel: () => void; onRemove: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  return <Modal eyebrow="DASHBOARD · BLOCKS" title="Remove the block" onClose={() => { if (!busy) onCancel() }}>
+    <form onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(''); void onRemove().catch((failure: unknown) => { setBusy(false); setError(failure instanceof Error ? failure.message : String(failure)) }) }}>
+      <p>Remove <strong>{block.title}</strong> ({blockTypeLabel(block.type)}) from the dashboard, for everyone? Its data source is not changed. It is saved to Git at once; the history stays in GitHub.</p>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="danger-button" disabled={busy}>{busy ? 'Removing…' : 'Remove block'}</button></div>
     </form>
   </Modal>
 }

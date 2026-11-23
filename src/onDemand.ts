@@ -56,7 +56,10 @@ export interface ChartOptions {
   cumulative?: true // a running total along the categories (bar, line)
   percent?: true // values as a share of the total (bar, line, summary table)
   target?: { value: number; label: string } // a fixed reference line (bar, line, Pareto)
-  size?: 'half' | 'full' // the panel's width in the grid (half when absent)
+  size?: 'third' | 'half' | 'twothirds' | 'full' // the panel's width of a 6-column grid (half when absent; CHT-11, CHT-15)
+  height?: 'small' | 'large' // the chart's height (medium, today's, when absent; CHT-16) — not for a KPI or a summary table
+  xTitle?: string // the owner's title of the X axis (the automatic one when absent; CHT-24) — bar, line, Pareto
+  yTitle?: string // the owner's title of the Y axis (the automatic one when absent; CHT-24) — bar, line, Pareto
 }
 export interface Insight { id: string; title: string; type: InsightType; category: string; second: string; measure: InsightMeasure; value: string; filters: InsightFilter[]; sort: 'value' | 'label'; options?: ChartOptions }
 export const insightTypeKeys: InsightType[] = ['bar', 'line', 'pie', 'table', 'pareto', 'kpi']
@@ -64,7 +67,7 @@ export const measureKeys: InsightMeasure[] = ['count', 'sum', 'average', 'min', 
 // Count and Sum add up; the others cannot be stacked, shown as shares, summed into a running total or a Pareto.
 export const additive = (measure: InsightMeasure) => measure === 'count' || measure === 'sum'
 export const dateGroups: DateGroup[] = ['day', 'week', 'month', 'quarter', 'year']
-export const maxTop = 50, maxTargetLabel = 40, maxColorPins = 200
+export const maxTop = 50, maxTargetLabel = 40, maxColorPins = 200, maxAxisTitle = 60
 // CHT-09: the colours of the chart palette a value can be pinned to (--viz-series-1…5).
 export const paletteSize = 5
 // Which options each type takes; the others are dropped when read and when the type changes.
@@ -83,7 +86,11 @@ export function cleanOptions(type: InsightType, measure: InsightMeasure, raw: un
   if ((type === 'bar' || type === 'line' || type === 'pareto') && target && typeof target === 'object' && typeof target.value === 'number' && Number.isFinite(target.value) && Math.abs(target.value) <= 1e12) {
     out.target = { value: target.value, label: typeof target.label === 'string' ? target.label.trim().replace(/\s+/g, ' ').slice(0, maxTargetLabel) : '' }
   }
-  if (item.size === 'half' || item.size === 'full') out.size = item.size
+  // CHT-15, CHT-16: a width of ⅓, ½, ⅔ or Full (v10 knew half and full and drops the others: LIM-36) and a height.
+  if (item.size === 'third' || item.size === 'half' || item.size === 'twothirds' || item.size === 'full') out.size = item.size
+  if (type !== 'kpi' && type !== 'table' && (item.height === 'small' || item.height === 'large')) out.height = item.height
+  // CHT-24: the axis titles of a chart with axes, plain text of up to 60 characters; empty means automatic.
+  if (type === 'bar' || type === 'line' || type === 'pareto') for (const key of ['xTitle', 'yTitle'] as const) { const text = typeof item[key] === 'string' ? (item[key] as string).trim().replace(/\s+/g, ' ').slice(0, maxAxisTitle) : ''; if (text) out[key] = text }
   return Object.keys(out).length ? out : undefined
 }
 // CHT-09: a page's (or a dashboard's) colour pins — a value's text → a palette colour 1…5; anything else is dropped.

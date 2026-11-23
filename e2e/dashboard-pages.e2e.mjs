@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
+import { menuOf, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // Dashboard pages (DSH-01…DSH-14) against a mocked GitHub: a Tool Owner adds a Dashboard page, builds it from a KPI
 // tile, a bar chart and a summary table over a table page's rows and filters it by period (TC-DSH-01, UAT); a person
@@ -175,12 +175,16 @@ test('TC-DSH-09: a viewer without the right sees the dashboard read only, every 
   assert.match(await text(tile(page, 'Issues').locator('strong')), /^4$/)
   await panel(page, 'Issues by category').locator('.viz-root').waitFor()
   const reason = 'Your role does not allow “Set up On-Demand pages (pages, columns, options)”. An Admin can change this in Admin → People & roles → Role rights.'
-  for (const name of ['＋ Add block…', 'Arrange blocks…', 'Tabs and filters…']) {
-    const button = page.getByRole('button', { name })
-    assert.equal(await button.isDisabled(), true, `${name} is disabled`)
-    assert.equal(await button.getAttribute('title'), reason)
+  // DSH-13: the page's actions in its ⋯ menu, each disabled with its reason as its tooltip; no block ⋯ menus.
+  const pageMenu = await menuOf(page, 'page Quality dashboard')
+  for (const name of ['＋ Add block…', 'Arrange blocks…', 'Arrange sizes on the page', 'Tabs and filters…']) {
+    const item = pageMenu.getByRole('menuitem', { name })
+    assert.equal(await item.isDisabled(), true, `${name} is disabled`)
+    assert.equal(await item.getAttribute('title'), reason)
   }
-  for (const name of ['Rename page…', 'Hide page', 'Delete page…']) assert.equal(await page.getByRole('button', { name }).isDisabled(), true, `${name} is disabled`)
+  for (const name of ['Rename page…', 'Hide page', 'Delete page…']) assert.equal(await pageMenu.getByRole('menuitem', { name }).isDisabled(), true, `${name} is disabled`)
+  await page.keyboard.press('Escape')
+  assert.equal(await page.getByRole('button', { name: 'More actions: Issues by category' }).count(), 0)
   assert.equal(await text(page.locator('.dashboard-page .write-blocked').first()), reason)
   // The viewer still filters for themselves.
   await pick(page, 'Year', [String(last)])

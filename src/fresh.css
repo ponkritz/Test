@@ -1049,3 +1049,32 @@ body:has(.drawer-backdrop){overflow:hidden}
 .od-timeout{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.od-timeout strong{font-variant-numeric:tabular-nums}
 /* OND-39: a hidden row listed with Show hidden rows — greyed, with its Hidden mark. */
 .od-row-hidden td{color:var(--text-3)}.od-row-hidden td code{opacity:.75}.od-show-hidden{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+/* CHT-15…CHT-22 chart sizes: the 6-column chart grid (only once a chart takes ⅓ or ⅔, or a built-in chart is narrower
+   than the full width), the corner handle with the outline of the size it snaps to, and the size note. Below 720 px
+   every chart is full width and the handle is not shown. */
+.chart-panel{position:relative}
+.chart-grid,.od-insights.chart-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px;align-items:start}
+div.chart-grid:not(.od-insights){margin-bottom:18px}
+.chart-grid>.panel{margin:0;grid-column:span 3;min-width:0}
+.chart-grid>.chart-w-third{grid-column:span 2}.chart-grid>.chart-w-twothirds{grid-column:span 4}.chart-grid>.chart-w-full{grid-column:1/-1}
+.chart-resize-handle{position:absolute;right:3px;bottom:3px;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:transparent;cursor:nwse-resize;touch-action:none;opacity:.55}
+.chart-resize-handle::before{content:"";position:absolute;inset:4px;background:linear-gradient(135deg,transparent 46%,var(--text-3) 46%,var(--text-3) 56%,transparent 56%,transparent 68%,var(--text-3) 68%,var(--text-3) 78%,transparent 78%)}
+.chart-panel:hover>.chart-resize-handle,.chart-arranging>.chart-resize-handle,.chart-resize-handle:focus-visible{opacity:1}
+.chart-resize-handle:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.chart-arranging{border-style:dashed;border-color:var(--accent-line)}
+.chart-resize-outline{position:absolute;top:0;z-index:6;border:2px dashed var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 7%,transparent);pointer-events:none;display:flex;align-items:flex-end;justify-content:flex-end;padding:6px 28px 6px 6px;box-sizing:border-box}
+.chart-resize-outline span{font-size:11px;font-weight:700;color:var(--accent-text);background:var(--surface);border:1px solid var(--accent-line);padding:2px 6px;border-radius:6px}
+.chart-size-note{font-size:11px;margin:6px 0 0;padding-right:24px}.chart-size-note .text-button{padding:0;font-size:11px}
+.chart-arrange-note{font-size:12px;margin:8px 0 0}.chart-arrange-note .text-button{padding:0}
+@media(max-width:719px){.chart-grid,.od-insights.chart-grid{grid-template-columns:minmax(0,1fr)}.chart-grid>.panel,.chart-grid>.chart-w-third,.chart-grid>.chart-w-twothirds{grid-column:1/-1}.chart-resize-handle,.chart-resize-outline{display:none}}
+/* OND-61, DSH-13, CHT-25: compact Insights and Dashboard pages — the heading panel on one line, a chart header of type,
+   title, ⓘ and a "Filtered" pill, the filter row on one line with its status at the end, ⋯ menus instead of rows of buttons. */
+.od-insights-head{padding:10px 16px;margin-bottom:10px}.od-insights-head .panel-heading{align-items:center;margin-bottom:8px}.od-insights-head .panel-heading:last-child{margin-bottom:0}.od-insights-head .panel-heading h2{margin:2px 0 0}
+.od-insight.panel{padding:14px 16px}.od-insight .panel-heading{margin-bottom:8px}.chart-panel .panel-heading>div:first-child{min-width:0;flex:1}.chart-panel .panel-heading>div:first-child>.muted{margin:2px 0 0}
+.chart-filtered .pill{padding:3px 8px;font-size:11px}.od-insight-warning{font-size:12px;color:var(--warning-text);margin:0 0 6px}
+.ins-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:10px}.ins-bar>.dash-filters{margin:0}.ins-bar>.dsh-scope{margin:0 0 0 auto;font-size:12px}
+.compact-filters{gap:8px;align-items:center}.compact-filters .multi-select{display:flex;align-items:center;gap:6px}.compact-filters .multi-button{min-width:110px;padding:6px 8px}.compact-filters .dash-select{display:flex;align-items:center;gap:6px}.compact-filters .dash-select input,.compact-filters .dash-select select{padding:6px 8px}.compact-filters>.text-button{padding:6px 4px}.compact-filters .ins-range{align-items:center}
+.on-demand-page .page-toolbar,.dashboard-page .page-toolbar{margin-bottom:10px}
+@media(max-width:760px){.ins-bar>.dsh-scope{margin-left:0}.compact-filters .multi-select,.compact-filters .dash-select{display:grid}}
+/* CHT-23 (KB-83): long legend entries wrap inside the chart instead of running out of it. */
+.viz-legend{min-width:0;max-width:100%}.viz-legend li{min-width:0;max-width:100%;overflow-wrap:anywhere}.viz-donut-legend span{min-width:0;overflow-wrap:anywhere}

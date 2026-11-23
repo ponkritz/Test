@@ -3,6 +3,7 @@ import { formatHours, formatPercent } from '../format'
 import type { MonthlyHours, StreamSummary } from '../capacity'
 import { AxisTitles, DataLabelsToggle } from './chartLabels'
 import { useDataLabels } from '../useDataLabels'
+import { useHeightFactor } from '../useChartSize'
 import { arcPath, barPath, columnPath, compactNumber, longMonth, monthTick, niceTicks, paretoSeries, useElementWidth, wrapLabel, type EpicColors } from '../chartUtils'
 
 // Combination charts share ONE unit per plot (never a second y-axis): utilization bars + planned-utilization line
@@ -44,7 +45,7 @@ export function UtilizationChart({ series, selected, onSelect, overloadedAt, ava
   const [hover, setHover] = useState<number | null>(null)
   const [table, setTable] = useState(false)
   const id = useId()
-  const height = 280, pad = { top: 22, right: 122, bottom: 34, left: 46 }
+  const height = Math.round(280 * useHeightFactor()), pad = { top: 22, right: 122, bottom: 34, left: 46 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const values = series.flatMap((point) => [point.utilization, point.plannedUtilization]).filter((value): value is number => value != null)
   const ticks = niceTicks(Math.max(overloadedAt * 1.1, ...values))
@@ -86,7 +87,7 @@ export function EpicMixChart({ series, selected, onSelect, colors }: { series: M
   const [table, setTable] = useState(false)
   const id = useId()
   const labels = useDataLabels('epic-mix')
-  const height = 316, pad = { top: 18, right: 104, bottom: 50, left: 66 }
+  const height = Math.round(316 * useHeightFactor()), pad = { top: 18, right: 104, bottom: 50, left: 66 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const groups = [...colors.top.map((entry) => ({ key: entry.key, title: entry.title, color: entry.color })), { key: '__other', title: 'Other Epics', color: colors.other }]
   const stacks = series.map((point) => {
@@ -147,7 +148,7 @@ export function EpicBulletChart({ streams, colors }: { streams: StreamSummary[];
   const [table, setTable] = useState(false)
   const id = useId()
   const labels = useDataLabels('epic-bullet')
-  const rowHeight = 34, barHeight = 16
+  const rowHeight = Math.round(34 * useHeightFactor()), barHeight = 16
   const pad = { top: 6, right: 104, bottom: 46, left: 140 }
   const height = pad.top + streams.length * rowHeight + pad.bottom
   const plotWidth = Math.max(10, width - pad.left - pad.right)
@@ -193,6 +194,7 @@ export function ParetoChart({ items, colors, noun, measure, threshold = 80, shor
   const [hover, setHover] = useState<number | null>(null)
   const [table, setTable] = useState(false)
   const labels = useDataLabels(`pareto-${measure}`)
+  const factor = useHeightFactor()
   const id = useId()
   const data = paretoSeries(items, threshold)
   const plural = (count: number) => `${count} ${noun}${count === 1 ? '' : 's'}`
@@ -202,7 +204,7 @@ export function ParetoChart({ items, colors, noun, measure, threshold = 80, shor
     {data.map((item) => <div key={item.key} className="viz-few-row"><i style={{ background: colorOf(item) }} aria-hidden="true" /><span title={item.title}>{item.title}{item.group && item.group !== item.title && <small>{item.group}</small>}</span><b>{formatHours(item.work)}h</b><small>{formatPercent(item.share, 0)}</small></div>)}
   </div>
   const vitalCount = data.filter((item) => item.vital).length
-  const height = 338, pad = { top: 26, right: 46, bottom: 74, left: 60 }
+  const height = Math.round(338 * factor), pad = { top: 26, right: 46, bottom: 74, left: 60 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const band = plotWidth / data.length
   const x = (index: number) => pad.left + band * (index + 0.5)
@@ -267,7 +269,7 @@ export function DonutChart({ label, segments, centerValue, centerLabel }: { labe
   const id = useId()
   const shown = segments.filter((segment) => segment.value > 0)
   const total = shown.reduce((sum, segment) => sum + segment.value, 0)
-  const size = 196, center = size / 2, outer = 92, inner = 60
+  const scale = useHeightFactor(), size = Math.round(196 * scale), center = size / 2, outer = Math.round(92 * scale), inner = Math.round(60 * scale)
   const arcs = shown.map((segment, index) => {
     const before = shown.slice(0, index).reduce((sum, item) => sum + item.value, 0)
     const start = -Math.PI / 2 + before / total * Math.PI * 2

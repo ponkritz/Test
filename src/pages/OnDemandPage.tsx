@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ViewActions } from '../components/ViewActions'
 import { useUnsavedEdit } from '../pageEdits'
 import { PageNameField } from '../components/PageDialogs'
 import { usePageNameClash } from '../usePageNames'
@@ -179,14 +180,16 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const step = (by: number) => { if (!drawer) return; const at = drawer.order.indexOf(drawer.id) + by; const id = drawer.order[at]; if (id && page.rows.some((entry) => entry.id === id)) setDrawer({ ...drawer, id, draft: undefined, edit: false }) }
 
   return <Page className="on-demand-page" intro="A table the team sets up itself, shared with everyone through Git."
-    actions={<>
-      <button type="button" className="ghost" disabled={Boolean(gitReason || addPageReason)} title={gitReason || addPageReason || undefined} onClick={onAddPage}>＋ Add page…</button>
-      <button type="button" className="ghost" disabled={Boolean(menuReason)} title={menuReason || undefined} onClick={() => setPageDialog('rename')}>Rename page…</button>
-      <button type="button" className="ghost od-hide-page" disabled={Boolean(hidingReason)} title={hidingReason || undefined} onClick={toggleHidden}>{hidden ? 'Show page' : 'Hide page'}</button>
-      <button type="button" className="danger-button od-remove-page" disabled={Boolean(removeReason)} title={removeReason || undefined} onClick={() => setPageDialog('remove')}>Delete page…</button>
-      {showConvert && <button type="button" className="ghost od-convert" disabled={Boolean(convertReason)} title={convertReason || undefined} onClick={() => setConverting(true)}>Convert to row files…</button>}
-      {git.connected && <button type="button" className="ghost" onClick={() => { if (pending.length && !window.confirm(`Discard the changes to ${page.name} that are not saved to Git?`)) return; store.discard(page.id); void store.reload() }}>↻ Reload from Git</button>}
-    </>}>
+    // OND-61: one main action (＋ Add page… for those who may add pages), the others in the page's ⋯ menu — each
+    // disabled item with its reason as its tooltip, Delete page… in the danger colour.
+    actions={<ViewActions label={`page ${page.name}`} primary={gitReason || addPageReason ? undefined : <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button>} items={[
+      ...(gitReason || addPageReason ? [{ key: 'add', label: '＋ Add page…', disabled: true, title: gitReason || addPageReason }] : []),
+      { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
+      { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
+      { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
+      ...(showConvert ? [{ key: 'convert', label: 'Convert to row files…', disabled: Boolean(convertReason), title: convertReason || undefined, onClick: () => setConverting(true) }] : []),
+      ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { if (pending.length && !window.confirm(`Discard the changes to ${page.name} that are not saved to Git?`)) return; store.discard(page.id); void store.reload() } }] : []),
+    ]} />}>
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected && store.inGit(page.id) ? ' The page last loaded in this browser is shown.' : ''}</Notice>}
     {store.errors.map((error) => <Notice key={error} tone="error">On-Demand: {error}</Notice>)}
     {hidden && <Notice tone="info" className="od-hidden-note">{page.name} is hidden: it is not in the menu, on Home or in search for anyone. Its rows stay in Git and dashboards keep reading them; it opens from Admin → Pages & menu.{!hidingReason && <>{' '}<button type="button" className="ghost" onClick={toggleHidden}>Show page</button></>}</Notice>}

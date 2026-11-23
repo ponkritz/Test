@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
-import { navigate, startApp, text } from './helpers.mjs'
+import { menuOf, navigate, startApp, text } from './helpers.mjs'
 import { fakeGitHub } from './fakeGitHub.mjs'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 import { serializeLock } from '../src/rowLocks.ts'
@@ -93,7 +93,7 @@ test('TC-OND-33: two people on a page of row files — convert as Tool Owner, a 
   await timeoutDialog.waitFor({ state: 'detached' })
   assert.equal(JSON.parse(gh.read('row-locks.json')).timeoutMinutes, 1)
   await openConq(owner.page)
-  await owner.page.getByRole('button', { name: 'Convert to row files…' }).click()
+  await (await menuOf(owner.page, 'page CoNQ')).getByRole('menuitem', { name: 'Convert to row files…' }).click()
   const convert = owner.page.getByRole('dialog', { name: 'Convert to row files' })
   assert.match(await text(convert), /Convert CoNQ with its 2 rows from the single file on-demand\/conq\.json to one file per row in on-demand\/conq\//)
   await shoot(owner.page, 'convert-popup', convert)
@@ -102,7 +102,9 @@ test('TC-OND-33: two people on a page of row files — convert as Tool Owner, a 
   assert.ok(gh.read('on-demand/conq/page.json'))
   assert.deepEqual(JSON.parse(gh.read('on-demand/conq/rows/CONQ-261120-K7Q2.json')).cells, { c1: 'Scrap', c2: '300 EUR' })
   assert.equal(JSON.parse(gh.read('on-demand/conq.json')).kind, 'on-demand-moved')
-  assert.equal(await owner.page.getByRole('button', { name: 'Convert to row files…' }).count(), 0)
+  const after = await menuOf(owner.page, 'page CoNQ')
+  assert.equal(await after.getByRole('menuitem', { name: 'Convert to row files…' }).count(), 0)
+  await owner.page.keyboard.press('Escape')
   // The Insights still read the rows.
   await owner.page.getByRole('tab', { name: /Insights/ }).click()
   await owner.page.locator('.panel', { hasText: 'Cost by category' }).first().waitFor()
@@ -209,9 +211,10 @@ test('TC-PGB-15: a group co-owner hides and shows a page but cannot delete it; t
   const l = await person(gh, lead)
   await navigate(l.page, 'Supplier issues')
   await l.page.locator('.od-panel table tbody tr', { hasText: 'Late delivery' }).waitFor()
-  assert.equal(await l.page.getByRole('button', { name: 'Delete page…' }).isDisabled(), true)
-  assert.match(await l.page.getByRole('button', { name: 'Delete page…' }).getAttribute('title'), /Only a Tool Owner .* can delete a page\. Hide it instead/)
-  await l.page.getByRole('button', { name: 'Hide page' }).click()
+  const leadMenu = await menuOf(l.page, 'page Supplier issues')
+  assert.equal(await leadMenu.getByRole('menuitem', { name: 'Delete page…' }).isDisabled(), true)
+  assert.match(await leadMenu.getByRole('menuitem', { name: 'Delete page…' }).getAttribute('title'), /Only a Tool Owner .* can delete a page\. Hide it instead/)
+  await leadMenu.getByRole('menuitem', { name: 'Hide page' }).click()
   await l.page.locator('.od-hidden-note').waitFor()
   assert.equal(JSON.parse(gh.read('menu-layout.json')).pages['supplier-issues'].hidden, true)
   assert.equal(await l.page.locator('.sidebar nav button', { hasText: 'Supplier issues' }).count(), 0, 'gone from the menu')
@@ -222,7 +225,7 @@ test('TC-PGB-15: a group co-owner hides and shows a page but cannot delete it; t
   // The Tool Owner deletes it (the pop-up names its rows and columns).
   const owner = await person(gh, tool)
   await navigate(owner.page, 'Supplier issues')
-  await owner.page.getByRole('button', { name: 'Delete page…' }).click()
+  await (await menuOf(owner.page, 'page Supplier issues')).getByRole('menuitem', { name: 'Delete page…' }).click()
   const dialog = owner.page.getByRole('dialog', { name: 'Delete the page' })
   assert.match(await text(dialog), /Delete Supplier issues with its 1 row and 1 column, for everyone\?/)
   await dialog.getByRole('button', { name: 'Delete page and 1 row' }).click()

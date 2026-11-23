@@ -371,11 +371,32 @@ export function measureText(page: OnDemandPage, insight: Insight, currency = '')
   return insight.measure === 'count' ? 'Count of rows' : `${measureName[insight.measure]} of ${value}${currency ? ` (${currency})` : ''}`
 }
 // CHT-05, CHT-06: the value axis's name — the measure, with "running total" and "% of total" when chosen.
+// CHT-24: the automatic titles of a chart's axes (what an empty X / Y axis title shows): horizontal bars have the
+// measure along X and the categories along Y; columns and the Pareto the other way round; a line its periods along X.
+export function autoAxisTitles(page: OnDemandPage, insight: Insight, currency = ''): { x: string; y: string } {
+  const category = page.columns.find((column) => column.id === insight.category)?.name ?? ''
+  const measure = valueText(page, insight, currency)
+  if (insight.type === 'line') return { x: `${dateGroupLabels[grainOf(insight)].label.replace(/ \(.*$/, '')} of ${category}`, y: measure }
+  if (insight.type === 'bar' && insight.options?.orientation !== 'vertical') return { x: measure, y: category }
+  return { x: category, y: measure }
+}
 export function valueText(page: OnDemandPage, insight: Insight, currency = '') {
   const options = insight.options ?? {}
   const shown = additive(insight.measure) && (insight.type === 'bar' || insight.type === 'line')
   const parts = [shown && options.cumulative ? 'running total' : '', shown || insight.type === 'table' ? options.percent && additive(insight.measure) ? '% of total' : '' : ''].filter(Boolean)
   return `${measureText(page, insight, currency)}${parts.length ? ` — ${parts.join(', ')}` : ''}`
+}
+// CHT-25: what a chart counted — "n of m rows counted", rows left out and the currency — for its ⓘ (the chart panel no
+// longer shows it under the title).
+export function countLines(data: ChartData): string[] {
+  const all = data.rows.all
+  return [
+    `${data.rows.used} of ${all} row${all === 1 ? '' : 's'} counted${data.rows.matched < all ? ` (${data.rows.matched} match the filters)` : ''}.`,
+    data.rows.noNumber ? `${data.rows.noNumber} row${data.rows.noNumber === 1 ? '' : 's'} without a number left out.` : '',
+    data.rows.noDate ? `${data.rows.noDate} row${data.rows.noDate === 1 ? '' : 's'} without a valid date left out.` : '',
+    data.rows.otherCurrency ? `${data.rows.otherCurrency} row${data.rows.otherCurrency === 1 ? '' : 's'} in other currencies left out.` : '',
+    currencyText(data),
+  ].filter(Boolean)
 }
 // OND-24: the line under a Currency chart — which currencies were found and which one is shown.
 export function currencyText(data: Pick<InsightData, 'currencies' | 'currency'>) {
@@ -413,7 +434,7 @@ export function insightRules(page: OnDemandPage, insight: Insight): string[] {
     : insight.measure === 'average' ? `The average of the ${valueName} values of the rows; rows without a number are left out.`
       : insight.measure === 'distinct' ? `The number of different ${valueName} values among the rows (each value of a Multi-select on its own); rows without a value add none.`
         : `The ${insight.measure === 'min' ? 'smallest' : 'largest'} ${valueName} value of the rows; rows without a number are left out.`)
-  if (insight.measure !== 'count' && insight.measure !== 'distinct' && columnOf(page, insight.value)?.type === 'currency') lines.push('A Currency column: amounts are never converted or added up across currencies. The chart shows one currency at a time (the one with most rows first; choose another above the chart); rows in the other currencies are left out and the line above the chart says how many.')
+  if (insight.measure !== 'count' && insight.measure !== 'distinct' && columnOf(page, insight.value)?.type === 'currency') lines.push('A Currency column: amounts are never converted or added up across currencies. The chart shows one currency at a time (the one with most rows first; choose another above the chart); rows in the other currencies are left out and ⓘ says how many.')
   if (insight.type === 'kpi') return lines
   for (const column of used.filter((entry) => entry.type === 'multi')) lines.push(`“${column.name}” is a Multi-select: a row with several values counts once in each of them, so the parts can add up to more than the total (the total takes each row once).`)
   for (const column of used.filter((entry) => entry.type === 'date')) lines.push(`“${column.name}” is grouped by ${grain === 'week' ? 'ISO week (Monday to Sunday; week 1 holds the year’s first Thursday)' : dateGroupLabels[grain].unit}.`)

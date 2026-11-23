@@ -1,9 +1,10 @@
 import { useId, useState, type KeyboardEvent } from 'react'
-import { arcPath, barPath, columnPath, epicSlots, niceTicks, otherColor, useElementWidth, wrapLabel } from '../chartUtils'
+import { arcPath, barPath, columnPath, epicSlots, niceTicks, otherColor, useElementWidth } from '../chartUtils'
 import { useDataLabels } from '../useDataLabels'
+import { useHeightFactor } from '../useChartSize'
 import { displayText, rowId, type Insight, type OnDemandPage, type OnDemandRow } from '../onDemand'
-import { chartData, currencyText, dateGroupLabels, drillRows, formatShown, formatValue, grainOf, insightProblems, measureText, noneKey, otherKey, valueText, type Bucket, type ChartData, type InsightData } from '../onDemandInsights'
-import { AxisTitles } from './chartLabels'
+import { chartData, countLines, currencyText, dateGroupLabels, drillRows, formatShown, formatValue, grainOf, insightProblems, measureText, noneKey, otherKey, valueText, type Bucket, type ChartData, type InsightData } from '../onDemandInsights'
+import { AxisTitles, WrappedLabel } from './chartLabels'
 import { DataTable, type DataColumn } from './DataTable'
 import { Metric, Modal, Notice } from './ui'
 import { ChartFrame, LegendBar, LegendLine, Tooltip, TooltipRow } from './WorkloadCharts'
@@ -47,7 +48,9 @@ const drillHint = 'Click a bar, slice or point — or press Enter on the highlig
 // narrowed (OND-54): the page's rows are those the Insights tab's filter row keeps, so an empty chart says so.
 // currency (OND-60): the currency the filter row chose for this chart's column, shown first; the viewer's own pick
 // above the chart wins until the filter row's currency changes.
-export function InsightView({ page, insight, colors: pins, drill = true, narrowed = false, currency: preferred = '' }: { page: OnDemandPage; insight: Insight; colors?: Record<string, number>; drill?: boolean; narrowed?: boolean; currency?: string }) {
+// quiet (CHT-25, the chart panels): the "rows counted" line goes to the panel's ⓘ (ChartCountInfo); only a warning that
+// matters for the numbers — several currencies, one shown — stays visible.
+export function InsightView({ page, insight, colors: pins, drill = true, narrowed = false, currency: preferred = '', quiet = false }: { page: OnDemandPage; insight: Insight; colors?: Record<string, number>; drill?: boolean; narrowed?: boolean; currency?: string; quiet?: boolean }) {
   const [pick, setPick] = useState({ base: preferred, code: '' })
   const currency = (pick.base === preferred ? pick.code : '') || preferred
   const setCurrency = (code: string) => setPick({ base: preferred, code })
@@ -63,7 +66,8 @@ export function InsightView({ page, insight, colors: pins, drill = true, narrowe
   ].filter(Boolean).join(' ')
   const status = <>
     {data.currencies.length > 1 && <label className="od-currency-pick">Currency<select aria-label={`Currency of ${insight.title || 'the chart'}`} value={data.currency} onChange={(event) => setCurrency(event.target.value)}>{data.currencies.map((entry) => <option key={entry.code} value={entry.code}>{entry.code} ({entry.rows} row{entry.rows === 1 ? '' : 's'})</option>)}</select></label>}
-    <p className="muted od-insight-count" role="status">{data.rows.used} of {data.rows.all} row{data.rows.all === 1 ? '' : 's'} counted{data.rows.matched < data.rows.all ? ` (${data.rows.matched} match the filters)` : ''}.{notes ? ` ${notes}` : ''}</p>
+    {quiet ? data.currencies.length > 1 && <p className="od-insight-warning" role="status">Several currencies: {data.currency} shown — amounts in different currencies are not added up.</p>
+      : <p className="muted od-insight-count" role="status">{data.rows.used} of {data.rows.all} row{data.rows.all === 1 ? '' : 's'} counted{data.rows.matched < data.rows.all ? ` (${data.rows.matched} match the filters)` : ''}.{notes ? ` ${notes}` : ''}</p>}
   </>
   // CHT-02: a KPI — one number in the shared tile.
   if (insight.type === 'kpi') return <>{status}<div className="metric-grid compact od-kpi"><Metric label={insight.title || 'Untitled'} value={data.total == null ? '—' : `${formatValue(data.total)}${data.currency ? ` ${data.currency}` : ''}`} hint={measureText(page, insight, data.currency)} /></div></>
@@ -124,7 +128,9 @@ function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const stacks = data.values.map((row) => { let pos = 0, neg = 0; return row.map((value) => { const v = value ?? 0; const start = v >= 0 ? pos : neg; if (v >= 0) pos += v; else neg += v; return { start, end: start + v, value: v } }) })
   const ends = stacks.map((row) => row.reduce((all, part) => all + part.value, 0))
   const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end))), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)))
-  const rowHeight = 30, barHeight = 18
+  // CHT-16: the panel's height (Small / Medium / Large) scales the rows; Medium is today's 30 px.
+  const factor = useHeightFactor()
+  const rowHeight = Math.round(30 * factor), barHeight = Math.round(18 * Math.min(factor, 1.3))
   const narrow = width < 520
   const pad = { top: target ? 20 : 6, right: 64, bottom: 44, left: Math.min(narrow ? 110 : 180, Math.round(width * 0.34)) }
   const plotWidth = Math.max(10, width - pad.left - pad.right)
@@ -148,7 +154,7 @@ function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
         {ticks.map((value) => <g key={value}><line className="viz-grid" x1={x(value)} x2={x(value)} y1={pad.top} y2={height - pad.bottom} /><text className="viz-tick" x={x(value)} y={height - pad.bottom + 16} textAnchor="middle">{ticked(value)}</text></g>)}
         {data.categories.map((cat, index) => <g key={cat.key} onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(index, null) : undefined}>
           <rect className={index === hover ? 'viz-row-active' : 'viz-row-hit'} x={0} y={pad.top + index * rowHeight} width={width} height={rowHeight} rx={4} />
-          <text className="viz-row-label" x={pad.left - 8} y={rowY(index) + barHeight / 2} textAnchor="end" dominantBaseline="middle"><title>{cat.label}</title>{wrapLabel(cat.label, chars)[0]}{wrapLabel(cat.label, chars).length > 1 ? '…' : ''}</text>
+          <WrappedLabel className="viz-row-label" text={cat.label} x={pad.left - 8} y={rowY(index) + barHeight / 2} anchor="end" middle chars={chars} lines={rowHeight >= 28 ? 2 : 1} lineHeight={12} />
           {stacks[index].map((part, at) => {
             const left = x(Math.min(part.start, part.end)), w = Math.abs(x(part.end) - x(part.start))
             const last = at === stacks[index].length - 1 || stacks[index].slice(at + 1).every((next) => next.value === 0)
@@ -161,7 +167,7 @@ function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
         </g>)}
         {low < 0 && <line className="viz-reference" x1={x(0)} x2={x(0)} y1={pad.top} y2={height - pad.bottom} />}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={x(target.value)} x2={x(target.value)} y1={pad.top - 4} y2={height - pad.bottom} /><text className="viz-reference-label" x={x(target.value)} y={pad.top - 8} textAnchor={x(target.value) > width - 90 ? 'end' : 'middle'}>{target.label || 'Target'} {show(target.value)}</text></g>}
-        <AxisTitles x={valueText(page, insight, data.currency)} y={name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} />
+        <AxisTitles x={insight.options?.xTitle || valueText(page, insight, data.currency)} y={insight.options?.yTitle || name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} />
       </svg>
       {hover != null && <Tooltip left={x(Math.max(0, ends[hover]))} top={rowY(hover) + rowHeight} width={width}><strong>{data.categories[hover].label}</strong>
         {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={show(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={show(data.values[hover][0])} label={valueText(page, insight, data.currency)} />}
@@ -187,7 +193,7 @@ function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const stacks = data.values.map((row) => { let pos = 0, neg = 0; return row.map((value) => { const v = value ?? 0; const start = v >= 0 ? pos : neg; if (v >= 0) pos += v; else neg += v; return { start, end: start + v, value: v } }) })
   const ends = stacks.map((row) => row.reduce((all, part) => all + part.value, 0))
   const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end))), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)))
-  const height = 320, pad = { top: 24, right: pareto ? 52 : 20, bottom: 72, left: 62 }
+  const height = Math.round(320 * useHeightFactor()), pad = { top: 24, right: pareto ? 52 : 20, bottom: 72, left: 62 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const ticks = scale(min, max, 4)
   const low = ticks[0], high = ticks[ticks.length - 1]
@@ -230,7 +236,7 @@ function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
             </g>
           })}
           {labels[0] && band >= 26 && <text className="viz-data-label" x={cx(index)} y={y(Math.max(0, ...stacks[index].map((part) => part.end))) - 6} textAnchor="middle">{ticked(stacked ? ends[index] : data.values[index][0] ?? 0)}</text>}
-          {index % step === 0 && <text className="viz-tick" x={cx(index)} y={height - pad.bottom + 16} textAnchor="middle"><title>{cat.label}</title>{wrapLabel(cat.label, chars)[0]}{wrapLabel(cat.label, chars).length > 1 ? '…' : ''}</text>}
+          {index % step === 0 && <WrappedLabel text={cat.label} x={cx(index)} y={height - pad.bottom + 16} chars={chars} />}
         </g>)}
         {low < 0 && <line className="viz-reference" x1={pad.left} x2={pad.left + plotWidth} y1={y(0)} y2={y(0)} />}
         {pareto && <g className="viz-pareto">
@@ -239,7 +245,7 @@ function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
           {pareto.map((share, index) => <circle key={index} className="viz-marker" cx={cx(index)} cy={yShare(share)} r={index === hover ? 5 : 3.5} fill="var(--viz-series-2)" />)}
         </g>}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={pad.left} x2={pad.left + plotWidth} y1={y(target.value)} y2={y(target.value)} /><text className="viz-reference-label" x={pad.left + plotWidth - 4} y={y(target.value) - 5} textAnchor="end">{target.label || 'Target'} {show(target.value)}</text></g>}
-        <AxisTitles x={name(page, insight.category)} y={valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
+        <AxisTitles x={insight.options?.xTitle || name(page, insight.category)} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
       </svg>
       {hover != null && <Tooltip left={cx(hover)} width={width}><strong>{data.categories[hover].label}</strong>
         {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={show(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={show(data.values[hover][0])} label={valueText(page, insight, data.currency)} />}
@@ -263,7 +269,7 @@ function LineChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const target = insight.options?.target
   const all = data.values.flat().filter((value): value is number => value != null)
   const min = Math.min(0, target ? target.value : 0, ...all), max = Math.max(0, target ? target.value : 0, ...all)
-  const height = 300, pad = { top: 24, right: 20, bottom: 54, left: 62 }
+  const height = Math.round(300 * useHeightFactor()), pad = { top: 24, right: 20, bottom: 54, left: 62 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const ticks = scale(min, max, 4)
   const low = ticks[0], high = ticks[ticks.length - 1]
@@ -293,7 +299,7 @@ function LineChart({ page, insight, data, pins, onDrill }: ChartProps) {
         </g>)}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={pad.left} x2={pad.left + plotWidth} y1={y(target.value)} y2={y(target.value)} /><text className="viz-reference-label" x={pad.left + plotWidth - 4} y={y(target.value) - 5} textAnchor="end">{target.label || 'Target'} {show(target.value)}</text></g>}
         {data.categories.map((cat, index) => index % step === 0 && <text key={cat.key} className="viz-tick" x={x(index)} y={height - pad.bottom + 16} textAnchor="middle">{cat.label.replace(/ (\d{2})(\d{2})$/, ' ’$2')}</text>)}
-        <AxisTitles x={`${unit} of ${name(page, insight.category)}`} y={valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
+        <AxisTitles x={insight.options?.xTitle || `${unit} of ${name(page, insight.category)}`} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
       </svg>
       {hover != null && <Tooltip left={x(hover)} width={width}><strong>{data.categories[hover].label}</strong>
         {data.series.map((ser, col) => <TooltipRow key={ser.key} color={palette[col]} value={show(data.values[hover][col])} label={split ? ser.label : valueText(page, insight, data.currency)} />)}</Tooltip>}
@@ -310,7 +316,7 @@ function PieChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const palette = colors(data.categories, pins)
   const slices = data.categories.map((cat, index) => ({ ...cat, index, value: Math.max(0, data.values[index][0] ?? 0), color: palette[index] })).filter((slice) => slice.value > 0)
   const total = slices.reduce((all, slice) => all + slice.value, 0)
-  const size = 196, center = size / 2, outer = 92, inner = 60
+  const scale = useHeightFactor(), size = Math.round(196 * scale), center = size / 2, outer = Math.round(92 * scale), inner = Math.round(60 * scale)
   const arcs = slices.map((slice, index) => { const before = slices.slice(0, index).reduce((all, entry) => all + entry.value, 0); const start = -Math.PI / 2 + before / total * Math.PI * 2; return { ...slice, start, end: start + slice.value / total * Math.PI * 2, share: slice.value / total * 100 } })
   const active = hover == null ? undefined : arcs[hover]
   const negative = data.values.some((row) => (row[0] ?? 0) < 0)
@@ -346,4 +352,10 @@ function DrillDialog({ page, insight, data, category, series, onClose }: { page:
     <DataTable id={`drill:${page.id}`} columns={columns} rows={rows} rowKey={(row) => row.id} exportName={`${insight.title || 'Rows'} – ${where}`} status={`${rows.length} row${rows.length === 1 ? '' : 's'}`} />
     <div className="modal-actions"><button type="button" className="primary" onClick={onClose}>Close</button></div>
   </Modal>
+}
+
+// CHT-25: the "rows counted" lines of a chart as items of its ⓘ list — computed only when the ⓘ opens.
+export function ChartCountInfo({ page, insight, currency = '' }: { page: OnDemandPage; insight: Insight; currency?: string }) {
+  if (insightProblems(page, insight).length) return null
+  return <>{countLines(chartData(page, insight, currency)).map((line) => <li key={line}>{line}</li>)}</>
 }

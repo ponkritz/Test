@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { pairFactory, type ChartSize, type SizeSource } from '../chartSize'
+import { ChartPanel } from './ChartSize'
 import { readChartLabels, saveChartLabel } from '../chartLabels'
 import { DataTable, type DataColumn } from './DataTable'
 import { ChartOptionsFields } from './ChartOptionsFields'
-import { InsightView } from './InsightCharts'
-import { EmptyState, Info, Metric, Modal, Notice, Panel } from './ui'
+import { ChartCountInfo, InsightView } from './InsightCharts'
+import { EmptyState, Info, Metric, Modal, Notice, Pill } from './ui'
 import { hasOptions, type InsightFilter, type InsightMeasure } from '../onDemand'
 import { currencyText, formatShown, insightRules, measureColumns, measuresFor, noneKey, noneLabel, secondLabel, valueText } from '../onDemandInsights'
 import { asInsight, noData, blockData, blockError, blockProblems, blockSubject, blockTypeLabel, blockTypes, categoryColumns, filterColumns, kpiText, kpiValue, periodColumns, periodNote, secondColumns, summaryRows, tableLimit, withBlockType, withSource, type Dashboard, type DashboardBlock, type Dataset, type Narrowed, type SummaryRow } from '../dashboardPages'
@@ -31,15 +33,20 @@ export function KpiTile({ dataset, block, narrowed, tabName, onOpenTab }: { data
   </>} />
 }
 
-// A chart or a summary table in its panel.
-export function BlockPanel({ dataset, block, narrowed, colors }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; colors?: Record<string, number> }) {
+// A chart or a summary table in its panel. CHT-15…CHT-18: its size (the viewer's own, else the owners', else half
+// width and medium height), the corner handle and — for the dashboard's builders — its ⋯ menu (DSH-13).
+export function BlockPanel({ dataset, block, narrowed, colors, size = pairFactory, source = 'factory', arranging = false, action, onResize, onReset }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; colors?: Record<string, number>; size?: ChartSize; source?: SizeSource; arranging?: boolean; action?: ReactNode; onResize?: (size: ChartSize) => void; onReset?: () => void }) {
   const filters = filtersText(dataset, block.filters)
   const problems = narrowed ? blockProblems(dataset, block) : [dataset.problem ?? '']
-  return <Panel className={`od-insight dsh-block dsh-block-${block.type}${block.options?.size === 'full' ? ' od-insight-full' : ''}`} eyebrow={`${blockTypeLabel(block.type).toUpperCase()} · ${dataset.name.toUpperCase()}`} title={block.title}
-    detail={<><span>{blockSubject(dataset, block)}</span><br /><span className="od-insight-filters">{periodNote(dataset, block)}{filters ? ` · Filters: ${filters}` : ''}{narrowed ? ` · ${counted(narrowed)}` : ''}</span></>}
-    info={problems.length || !narrowed ? undefined : <ul className="od-rules">{insightRules(narrowed.page, asInsight(block)).map((line) => <li key={line}>{line}</li>)}<li>The period (Year / Quarter / Month above) keeps the rows whose {dataset.page.columns.find((column) => column.id === block.period)?.name ?? 'date'} falls in it; rows without that date are left out.</li></ul>}>
+  // CHT-25: the header shows the title and ⓘ only; what the block measures, its period, filters and rows counted are in ⓘ,
+  // and a neutral "Filtered" says when its own filters or the filter row's choices narrow it.
+  const filteredBy = [block.filters.length ? `its own filters: ${filters}` : '', narrowed?.filtered ? 'the filter row above' : ''].filter(Boolean).join('; ').replace(/^./, (first) => `Filtered by ${first}`)
+  const pill = filteredBy ? <span className="chart-filtered" title={filteredBy} aria-label={filteredBy}><Pill>Filtered</Pill></span> : null
+  return <ChartPanel className={`od-insight dsh-block dsh-block-${block.type}`} legacyFull size={size} source={source} arranging={arranging} eyebrow={`${blockTypeLabel(block.type).toUpperCase()} · ${dataset.name.toUpperCase()}`} title={block.title}
+    info={problems.length || !narrowed ? undefined : <ul className="od-rules"><li>{blockSubject(dataset, block)}.</li><li>{periodNote(dataset, block)}.</li><li>Its own filters: {filters || 'none'}.</li><li>Rows: {counted(narrowed)}.</li>{block.type !== 'table' && <ChartCountInfo page={narrowed.page} insight={asInsight(block)} />}{insightRules(narrowed.page, asInsight(block)).map((entry) => <li key={entry}>{entry}</li>)}<li>The period (Year / Quarter / Month above) keeps the rows whose {dataset.page.columns.find((column) => column.id === block.period)?.name ?? 'date'} falls in it; rows without that date are left out.</li></ul>}
+    action={pill || action ? <span className="button-row nowrap">{pill}{action}</span> : undefined} onResize={onResize} onReset={onReset}>
     <BlockBody dataset={dataset} block={block} narrowed={narrowed} problems={problems} colors={colors} />
-  </Panel>
+  </ChartPanel>
 }
 function BlockBody({ dataset, block, narrowed, problems, colors, drill = true }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; problems: string[]; colors?: Record<string, number>; drill?: boolean }) {
   // DSH-06: a dashboard chart starts with its data labels on (UI-17 keeps the viewer's own choice per chart): the choice is
@@ -48,7 +55,7 @@ function BlockBody({ dataset, block, narrowed, problems, colors, drill = true }:
   if (problems.length || !narrowed) return <Notice tone="warning"><strong>This block cannot be shown:</strong> {problems.join(' ')} {dataset.problem ? '' : 'Its owners edit it to choose the columns again, or remove it.'}</Notice>
   const probe = blockData(narrowed.page, block)
   if (!narrowed.page.rows.length || !probe.categories.length) return <EmptyState {...noData} />
-  return block.type === 'table' ? <SummaryTable block={block} narrowed={narrowed} /> : <InsightView page={narrowed.page} insight={asInsight(block)} colors={colors} drill={drill} />
+  return block.type === 'table' ? <SummaryTable block={block} narrowed={narrowed} /> : <InsightView quiet={drill} page={narrowed.page} insight={asInsight(block)} colors={colors} drill={drill} />
 }
 
 // DSH-06: the summary table — largest first, the first 10 rows with Show all, the shared table's Export (every row).
