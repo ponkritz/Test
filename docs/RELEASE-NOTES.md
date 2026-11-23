@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.2.1 — 2026-11-23
+
+**Fixed**
+- **QMS-0025 board: no extra page scrolling on Windows** — the board table no longer stops at 240 px (now 120 px, about three rows), and any page overflow the measurement misses is taken off the table, so the page does not scroll by a few pixels (BKL-45, KB-74).
+
+TC-BKL-34.
+
+PR #360.
+
 ## v9.2.0 — 2026-11-23
 
 **Changed**

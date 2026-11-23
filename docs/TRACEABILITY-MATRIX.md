@@ -430,7 +430,7 @@ Ver. = verification method (T test, D demonstration, I inspection, A analysis); 
 | BKL-42 | SR-07 | UR-05 | T | M | TC-BKL-31 | — | `close-list.test.mjs` | — |
 | BKL-43 | SR-07 | UR-05 | T | M | TC-BKL-32, TC-NAV-51 | — | `close-list.test.mjs`, `business-time.test.mjs` | — |
 | BKL-44 | SR-07 | UR-05 | T | M | TC-BKL-33 | — | `work-item-edit.test.mjs` | KB-66 |
-| BKL-45 | SR-07 | UR-05 | T | M | TC-BKL-34 | — | — | — |
+| BKL-45 | SR-07 | UR-05 | T | M | TC-BKL-34 | — | — | KB-74 |
 | BKL-46 | SR-07 | UR-05 | T | M | TC-BKL-35 | — | `my-work.test.mjs` | — |
 | BKL-47 | SR-07 | UR-05 | T | S | TC-BKL-36 | — | `personal-views.test.mjs` | — |
 | QV-01 | SR-08 | UR-06 | D | M | TC-QV-01 | — | — | — |
