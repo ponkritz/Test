@@ -29,40 +29,59 @@ export function monthStatus(month: string, today: string): MonthStatus {
   return month < current ? 'elapsed' : month === current ? 'partial' : 'future'
 }
 
-// Period (OV-15): Year, Quarter and Month, each multi-select (nothing ticked = all). The months depend on the quarters:
-// a year counts the chosen months that lie in the chosen quarters, else the months of the chosen quarters, else all
-// twelve; no year ticked = every year offered (`allYears`). Months outside the chosen quarters are ignored.
-export interface Period { years: number[]; quarters: number[]; months: number[] }
-const inRange = (values: unknown, min: number, max: number) => Array.isArray(values) ? [...new Set(values.filter((entry): entry is number => Number.isInteger(entry) && entry >= min && entry <= max))].sort((a, b) => a - b) : []
-// The months the Month filter offers: those of the chosen quarters, all twelve when none is chosen.
-export function quarterMonths(quarters: number[]) {
-  const valid = inRange(quarters, 1, 4)
-  return Array.from({ length: 12 }, (_, index) => index + 1).filter((month) => !valid.length || valid.includes(Math.ceil(month / 3)))
-}
-// The chosen months of a year, after the quarters narrowed them.
-export function periodMonthNumbers(period: Pick<Period, 'quarters' | 'months'>) {
-  const offered = quarterMonths(period.quarters)
-  const chosen = inRange(period.months, 1, 12).filter((month) => offered.includes(month))
+// Period (OV-15, OV-16): Year → Quarter → Month, a hierarchy of multi-selects. Quarters belong to a year ("2026-Q1")
+// and months to a year ("2026-01"): the Quarter list offers the quarters of the chosen years, the Month list the months
+// of the chosen quarters. Nothing ticked: Year = the current year; Quarter = every quarter of the chosen years; Month =
+// every month of the chosen quarters. A choice outside the level above it is ignored (and dropped when that changes).
+export interface Period { years: number[]; quarters: string[]; months: string[] }
+const pad = (value: number) => String(value).padStart(2, '0')
+const yearsIn = (values: unknown) => Array.isArray(values) ? [...new Set(values.filter((entry): entry is number => Number.isInteger(entry) && entry > 2000 && entry < 2100))].sort((a, b) => a - b) : []
+const keysIn = (values: unknown, pattern: RegExp) => Array.isArray(values) ? [...new Set(values.filter((entry): entry is string => typeof entry === 'string' && pattern.test(entry)))].sort() : []
+const quarterKey = /^\d{4}-Q[1-4]$/, monthKey = /^\d{4}-(0[1-9]|1[0-2])$/
+export const quarterOfMonthKey = (month: string) => `${month.slice(0, 4)}-Q${Math.ceil(Number(month.slice(5, 7)) / 3)}`
+// The years that count: those chosen, else the current year.
+export const periodYears = (period: Pick<Period, 'years'>, currentYear: number) => period.years.length ? yearsIn(period.years) : [currentYear]
+// The quarters the Quarter list offers, and those that count (chosen within the years, else all of them).
+export const offeredQuarters = (years: number[]) => years.flatMap((year) => [1, 2, 3, 4].map((quarter) => `${year}-Q${quarter}`))
+export function periodQuarters(period: Pick<Period, 'years' | 'quarters'>, currentYear: number) {
+  const offered = offeredQuarters(periodYears(period, currentYear))
+  const chosen = period.quarters.filter((quarter) => offered.includes(quarter))
   return chosen.length ? chosen : offered
 }
-export function periodMonths(period: Period, allYears: number[] = []) {
-  const years = inRange(period.years.length ? period.years : allYears, 2001, 2099)
-  const months = periodMonthNumbers(period)
-  return years.flatMap((year) => months.map((month) => `${year}-${String(month).padStart(2, '0')}`))
+// The months the Month list offers (those of the counting quarters), and the months of the period.
+export const offeredMonths = (quarters: string[]) => quarters.flatMap((quarter) => { const year = quarter.slice(0, 4), first = (Number(quarter.slice(6)) - 1) * 3 + 1; return [0, 1, 2].map((step) => `${year}-${pad(first + step)}`) }).sort()
+export function periodMonths(period: Period, currentYear: number) {
+  const offered = offeredMonths(periodQuarters(period, currentYear))
+  const chosen = period.months.filter((month) => offered.includes(month))
+  return chosen.length ? [...chosen].sort() : offered
 }
-// A saved period, in this format or the earlier one ({ year, quarters, months } where quarters and months added up):
-// the earlier one keeps exactly its months — chosen months become the Month choice (with no quarter), else its quarters.
+// A choice made consistent after a level above changed: quarters outside the years and months outside the quarters go.
+export function narrowPeriod(period: Period, currentYear: number): Period {
+  const years = yearsIn(period.years)
+  const quartersOffered = offeredQuarters(years.length ? years : [currentYear])
+  const quarters = period.quarters.filter((quarter) => quartersOffered.includes(quarter))
+  const monthsOffered = offeredMonths(quarters.length ? quarters : quartersOffered)
+  return { years, quarters, months: period.months.filter((month) => monthsOffered.includes(month)) }
+}
+// A saved period in this format or an earlier one — { year, quarters: [1…4], months: [1…12] } (quarters and months
+// added up), or { years, quarters: [1…4], months: [1…12] } — keeps its months.
 export function periodOf(value: unknown, fallback: Period): Period {
   if (!value || typeof value !== 'object') return fallback
   const saved = value as { years?: unknown; year?: unknown; quarters?: unknown; months?: unknown }
-  const quarters = inRange(saved.quarters, 1, 4), months = inRange(saved.months, 1, 12)
-  if (Array.isArray(saved.years)) return { years: inRange(saved.years, 2001, 2099), quarters, months: months.filter((month) => quarterMonths(quarters).includes(month)) }
-  const year = Number(saved.year)
-  if (!Number.isInteger(year) || year <= 2000 || year >= 2100) return fallback
-  if (!months.length) return { years: [year], quarters, months: [] }
-  const union = new Set(months)
-  for (const quarter of quarters) for (let index = 1; index <= 3; index += 1) union.add((quarter - 1) * 3 + index)
-  return { years: [year], quarters: [], months: [...union].sort((a, b) => a - b) }
+  const numbers = (values: unknown, max: number) => Array.isArray(values) ? [...new Set(values.filter((entry): entry is number => Number.isInteger(entry) && entry >= 1 && entry <= max))].sort((a, b) => a - b) : []
+  if (Array.isArray(saved.years) && (keysIn(saved.quarters, quarterKey).length || keysIn(saved.months, monthKey).length || (!numbers(saved.quarters, 4).length && !numbers(saved.months, 12).length))) {
+    return { years: yearsIn(saved.years), quarters: keysIn(saved.quarters, quarterKey), months: keysIn(saved.months, monthKey) }
+  }
+  const years = Array.isArray(saved.years) ? yearsIn(saved.years) : yearsIn([Number(saved.year)])
+  if (!years.length) return fallback
+  const quarters = numbers(saved.quarters, 4), months = numbers(saved.months, 12)
+  const old = !Array.isArray(saved.years) && months.length
+  const chosen = old ? [...new Set([...months, ...quarters.flatMap((quarter) => [1, 2, 3].map((step) => (quarter - 1) * 3 + step))])].sort((a, b) => a - b) : months
+  return {
+    years,
+    quarters: old ? [] : years.flatMap((year) => quarters.map((quarter) => `${year}-Q${quarter}`)),
+    months: years.flatMap((year) => chosen.map((month) => `${year}-${pad(month)}`)),
+  }
 }
 export const quarterOf = (month: string) => Math.ceil(Number(month.slice(5)) / 3)
 

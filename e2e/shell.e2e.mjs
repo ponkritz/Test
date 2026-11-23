@@ -792,7 +792,7 @@ test('TC-MYD-05: Team overview shows six headline tiles; each opens its analysis
   await context.close()
 })
 
-test('TC-OV-15: Team overview — Year, Quarter and Month are the first drop-downs of the filter row; Month follows Quarter; Reset filters restores the period', async () => {
+test('TC-OV-15: Team overview — Year, Quarter and Month are the first drop-downs of the filter row; Month follows Quarter; no year = the current year; Reset filters restores the period', async () => {
   const { page, context, errors } = await openPage(app)
   await loadSample(page)
   await navigate(page, 'Team overview')
@@ -835,6 +835,16 @@ test('TC-OV-15: Team overview — Year, Quarter and Month are the first drop-dow
   await monthButton.click()
   await monthList.getByRole('checkbox', { name: 'Jun' }).waitFor()
   assert.deepEqual((await monthList.locator('.multi-option').allInnerTexts()).map((label) => label.trim()), ['Apr', 'May', 'Jun'])
+  await page.keyboard.press('Escape')
+  // OV-16: no year ticked = the current year (UTC); Quarter still offers that year's four quarters.
+  await year.click()
+  await page.getByRole('listbox', { name: 'Year' }).getByRole('button', { name: 'All', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await filters.getByRole('button', { name: 'Year: All' }).waitFor()
+  const thisYear = new Date().toISOString().slice(0, 4)
+  await page.locator('.dash-scope', { hasText: new RegExp(`^Q2 ${thisYear} ·`) }).waitFor()
+  await quarter.click()
+  assert.deepEqual((await quarters.locator('.multi-option').allInnerTexts()).map((label) => label.trim()), ['Q1', 'Q2', 'Q3', 'Q4'])
   await page.keyboard.press('Escape')
   // Reset filters goes back to the header month's year and quarter.
   await reset.click()

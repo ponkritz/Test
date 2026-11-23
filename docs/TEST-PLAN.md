@@ -295,7 +295,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-OV-14 One utilization model from Settings** — Req OV-14 — L1 `dashboard.test.mjs` ("bandOf and plannedOverload follow the Settings thresholds"), `insights.test.mjs` ("the Settings bands decide what counts as over capacity and balanced"); browser check: with Settings → Capacity at 90 / 70, 92% shows ↑ red, 80% green and 65% ↓ blue on every tab, and differences in hours (+ / −) carry no colour.
 
-**TC-OV-15 Team overview period: Year, Quarter and Month drop-downs** — Req OV-15 — L1 `dashboard.test.mjs` ("periods: Year, Quarter and Month, each multi-select; months narrow the quarters; month status against today (OV-15, TC-OV-15)"; "a saved period loads in this format and the earlier { year } one, keeping its months (OV-15, MYD-08, TC-OV-15)"); E2E `shell.e2e.mjs` ("TC-OV-15: Team overview — Year, Quarter and Month are the first drop-downs of the filter row; Month follows Quarter; Reset filters restores the period"); browser check at 1440 px and 390 px: Year, Quarter and Month are the first three drop-downs of the one filter row and the row wraps without horizontal page scroll; Q1 limits Month to Jan–Mar; choosing Mar and then Q2 instead of Q1 drops Mar; Reset filters returns to the header month's year and quarter and is disabled again; two years ticked show both years in the charts and the scope line ("2025, 2026 · Q1"); a period saved before this change still opens with the same months. **UAT**
+**TC-OV-15 Team overview period: Year, Quarter and Month drop-downs** — Req OV-15, OV-16 — L1 `dashboard.test.mjs` ("periods: Year → Quarter → Month, a hierarchy of multi-selects; nothing ticked in Year = the current year (OV-15, OV-16, TC-OV-15)"; "a saved period loads in this format and the earlier ones, keeping its months (OV-15, OV-16, MYD-08, TC-OV-15)"); E2E `shell.e2e.mjs` ("TC-OV-15: Team overview — Year, Quarter and Month are the first drop-downs of the filter row; Month follows Quarter; no year = the current year; Reset filters restores the period"); browser check at 1440 px and 390 px: Year, Quarter and Month are the first three drop-downs of the one filter row and the row wraps without horizontal page scroll; Q1 limits Month to Jan–Mar; choosing Mar and then Q2 instead of Q1 drops Mar; Reset filters returns to the header month's year and quarter and is disabled again; Year with nothing ticked counts the current year; two years ticked offer "Q1 2025" … "Q4 2026" and "Jan 2025" … months, and choosing Q4 2025 + Q1 2026 counts exactly those six months; a period saved before this change still opens with the same months. **UAT**
 
 **TC-NAV-21 Pulse Check ongoing activities** — Req NAV-20 — L1 `pulse-check.test.mjs` (in-progress Features and User Stories per stream, booked hours this month, overdue; absence and finished items left out); browser check: tabs Releases (last month), Last month, Ongoing activities, Current month releases. **UAT**
 
@@ -1899,6 +1899,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OV-13 | TC-OV-13 |
 | OV-14 | TC-OV-14 |
 | OV-15 | TC-OV-15 |
+| OV-16 | TC-OV-15 |
 | OVR-09, CAP-01…09 | TC-CAP-01 |
 | CAP-04, CAP-05, CAP-10…12 | TC-CAP-02 |
 | CAP-13 | TC-CAP-03 |
