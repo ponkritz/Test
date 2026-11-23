@@ -852,6 +852,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-65 Several roles per person** — Req CON-104, CON-94 — L1 `access.test.mjs` ("CON-104: a person can hold several roles — the People section sets them all, in the matrix order; none removes the person; their rights are the union (TC-CON-65)"); browser check with Git storage and Manage access: in People & roles → People tick Scrum Master and Product Owner for a person — both are saved in access.json and the person sees both roles' menu areas; unticking one keeps the other; Role rights → Check access names both roles.
 
+**TC-CON-66 Hours and moving disabled inside the forms** — Req CON-105, CON-102 — browser check with a role that may create and edit work items but not enter hours or move (Role rights: Allow azure.write and work.edit, Not set work.hours and work.move): Edit on a Task shows Original Estimate and Completed Work disabled with the line "Your role does not allow “Enter planned and actual hours”…"; changing a Feature's PI shows "Also move its open User Stories" disabled with the reason; ＋ Time Writing Task shows the hours fields disabled and the line "… The month Tasks are created without hours.", and Add still creates the Tasks; with the rights all are enabled.
+
 
 **TC-CON-44 DP and DHFI defaults** — Req CON-76 — L1 `connections.test.mjs` ("pre-filled connections from the shared setup …": DP reads the Release work items of DHP with DDTDate, SourceProgram, PsName and Release; DHFI [Approved] reads the DHP.Vault documents, hidden from the menu); browser check in a fresh browser with only the on-prem PAT: Settings → Azure DevOps → Stream mapping → Set up DP, Pedestal and DHFI from their defaults; Release Details → DP lists Release items for the DDT month; Get started shows the release streams step done.
 
@@ -2221,6 +2223,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-26 | TC-OND-18, TC-OND-20 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
+| CON-105 | TC-CON-66 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2256,7 +2259,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
