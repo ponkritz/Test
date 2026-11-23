@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { conqPage, mergeOnDemandText, parseInsightFilterSetup, parseOnDemandPage, serializeOnDemandPage } from '../src/onDemand.ts'
 import { aggregate, blankInsight, chartData, drillRows } from '../src/onDemandInsights.ts'
-import { cleanSetup, emptyChoice, fieldText, filterRowColumns, insightsViewerKey, isFiltered, narrowInsightRows, offeredYears, passesField, readChoice, resolveFilterSetup, scopeText } from '../src/insightFilters.ts'
+import { amountProblem, anyCurrency, chartCurrency, cleanSetup, currenciesOf, currencyFilterDefault, emptyChoice, fieldText, filterCurrency, filterKind, filterRowColumns, insightsViewerKey, isFiltered, narrowInsightRows, offeredYears, passesField, readChoice, resolveFilterSetup, scopeText } from '../src/insightFilters.ts'
 
 // OND-50…OND-56: the filter row of the Insights tab (tests/insight-filters.test.mjs).
 const columns = [
@@ -143,4 +143,104 @@ test('OND-55: the viewer’s choice read back — per page key, unknown shapes d
   assert.equal(isFiltered(read), true)
   assert.equal(isFiltered(emptyChoice()), false)
   assert.equal(isFiltered(choose({}, { c1: { text: '  ' } })), false)
+})
+
+// OND-57…OND-60: a Currency column in the filter row — one chosen currency, an amount from / to in it.
+const moneyColumns = [...columns, { id: 'c8', name: 'Cost', type: 'currency', options: [], required: false, currency: 'EUR' }]
+const moneyCells = { r1: '100 EUR', r2: '250', r3: '700 EUR', r4: '300 USD', r5: '120 USD', r6: 'n/a' }
+const moneyPage = (fields = ['c8']) => page({ columns: structuredClone(moneyColumns), rows: structuredClone(rows).map((row) => ({ ...row, cells: { ...row.cells, c8: moneyCells[row.id] } })), insightFilters: { fields } })
+
+test('OND-57, OND-58: a Currency filter — one chosen currency (the one of most rows by default), the amount from / to in it, rows in other currencies or without an amount left out while a range applies (TC-OND-46)', () => {
+  const p = moneyPage()
+  const setup = resolveFilterSetup(p)
+  const money = p.columns.find((column) => column.id === 'c8')
+  // OND-57: offered in the pop-up, as a filter of its own kind; the setup resolves it without a note.
+  assert.deepEqual(filterRowColumns(p).map((column) => column.id), ['c1', 'c2', 'c3', 'c4', 'c5', 'c7', 'c8'])
+  assert.equal(filterKind(money), 'money')
+  assert.deepEqual(setup.fields.map((column) => column.id), ['c8'])
+  assert.deepEqual(setup.dropped, [])
+  // The currencies of the column's rows, most first (an amount without a code is in the column's default, EUR).
+  assert.deepEqual(currenciesOf(p, money), [{ code: 'EUR', rows: 3 }, { code: 'USD', rows: 2 }])
+  assert.equal(currencyFilterDefault(p, money), 'EUR')
+  assert.equal(filterCurrency(p, money, { currency: 'USD' }), 'USD')
+  assert.equal(currencyFilterDefault({ ...p, rows: [] }, money), 'EUR', 'no amounts: the column’s default currency')
+  assert.equal(currencyFilterDefault({ ...p, rows: [] }, { ...money, currency: 'CHF' }), 'CHF')
+  // Nothing chosen: every row, the default currency named for the charts; no words in the line.
+  let narrowed = narrowInsightRows(p, setup, emptyChoice(), 2026)
+  assert.equal(narrowed.page.rows.length, 6)
+  assert.deepEqual(narrowed.currencies, { c8: 'EUR' })
+  assert.equal(scopeText(setup, emptyChoice(), narrowed, 2026), 'No filter · 6 of 6 rows counted.')
+  // A currency picked without an amount filters nothing (it names the currency for the charts); Reset is offered.
+  narrowed = narrowInsightRows(p, setup, choose({}, { c8: { currency: 'USD' } }), 2026)
+  assert.equal(narrowed.page.rows.length, 6)
+  assert.equal(isFiltered(choose({}, { c8: { currency: 'USD' } })), true)
+  // EUR 100–500: only rows in EUR within it (r1 100, r2 250 in the default EUR); USD 300 is not compared, r6 has no amount.
+  const eur = choose({}, { c8: { min: 100, max: 500 } })
+  narrowed = narrowInsightRows(p, setup, eur, 2026)
+  assert.deepEqual(ids(narrowed.page.rows), ['r1', 'r2'])
+  assert.equal(scopeText(setup, eur, narrowed, 2026), 'Cost: EUR 100–500 · 2 of 6 rows counted.')
+  // The same amounts in USD keep the USD rows only.
+  const usd = choose({}, { c8: { currency: 'USD', min: 100, max: 500 } })
+  narrowed = narrowInsightRows(p, setup, usd, 2026)
+  assert.deepEqual(ids(narrowed.page.rows), ['r4', 'r5'])
+  assert.equal(scopeText(setup, usd, narrowed, 2026), 'Cost: USD 100–500 · 2 of 6 rows counted.')
+  // Open ends.
+  assert.deepEqual(ids(narrowInsightRows(p, setup, choose({}, { c8: { min: 250 } }), 2026).page.rows), ['r2', 'r3'])
+  assert.equal(fieldText(money, { min: 250 }, 'EUR'), 'Cost: at least EUR 250')
+  assert.equal(fieldText(money, { max: 150 }, 'USD'), 'Cost: at most USD 150')
+  assert.deepEqual(ids(narrowInsightRows(p, setup, choose({}, { c8: { currency: 'USD', max: 150 } }), 2026).page.rows), ['r5'])
+  // Any currency: amounts are never compared across currencies, so nothing is filtered and nothing named.
+  const any = choose({}, { c8: { currency: anyCurrency, min: 100 } })
+  narrowed = narrowInsightRows(p, setup, any, 2026)
+  assert.equal(narrowed.page.rows.length, 6)
+  assert.equal(scopeText(setup, any, narrowed, 2026), 'No filter · 6 of 6 rows counted.')
+  assert.equal(passesField(money, { currency: anyCurrency, min: 100 }, p.rows[0], anyCurrency), true)
+  // A currency picked that no row has (rows changed since): kept, and an amount range in it keeps no row.
+  assert.deepEqual(ids(narrowInsightRows(p, setup, choose({}, { c8: { currency: 'GBP', min: 0 } }), 2026).page.rows), [])
+  // Together with another filter.
+  const both = moneyPage(['c4', 'c8'])
+  assert.deepEqual(ids(narrowInsightRows(both, resolveFilterSetup(both), choose({}, { c4: { values: ['Rework'] }, c8: { min: 100 } }), 2026).page.rows), ['r1', 'r3'])
+})
+
+test('OND-59: Currency filter amounts — finite numbers only, From above To shown as an error and not applied; read back per viewer (TC-OND-47)', () => {
+  const p = moneyPage()
+  const setup = resolveFilterSetup(p)
+  const swapped = choose({}, { c8: { min: 500, max: 100 } })
+  assert.match(amountProblem(swapped.fields.c8), /^From is above To/)
+  assert.equal(amountProblem({ min: 100, max: 100 }), '')
+  assert.equal(amountProblem({ min: 100 }), '')
+  const narrowed = narrowInsightRows(p, setup, swapped, 2026)
+  assert.equal(narrowed.page.rows.length, 6, 'not applied until put right')
+  assert.equal(scopeText(setup, swapped, narrowed, 2026), 'Cost: EUR 500–100 not applied (From is above To) · 6 of 6 rows counted.')
+  // Read back: finite amounts only, a currency only as a 3-letter code or Any currency.
+  const read = readChoice({ period: {}, fields: { c8: { currency: 'usd', min: Infinity, max: 1e16 }, c9: { currency: 'CHF', min: -5, max: '7' }, c7: { currency: anyCurrency } } })
+  assert.deepEqual(read.fields, { c9: { currency: 'CHF', min: -5 }, c7: { currency: anyCurrency } })
+  assert.deepEqual(readChoice({ fields: { c8: { currency: 'EUR', min: 100, max: 500 } } }).fields, { c8: { currency: 'EUR', min: 100, max: 500 } })
+})
+
+test('OND-60: the filter row’s currency is shown by the charts that measure that column; other charts and Count keep their own (TC-OND-48)', () => {
+  const p = moneyPage()
+  const setup = resolveFilterSetup(p)
+  const sum = { ...blankInsight(p, 'i1'), title: 'Cost', category: 'c4', measure: 'sum', value: 'c8' }
+  const usd = narrowInsightRows(p, setup, choose({}, { c8: { currency: 'USD' } }), 2026)
+  assert.equal(chartCurrency(sum, usd), 'USD')
+  assert.equal(chartCurrency({ ...sum, measure: 'average' }, usd), 'USD')
+  assert.equal(chartCurrency({ ...sum, measure: 'count' }, usd), '')
+  assert.equal(chartCurrency({ ...sum, measure: 'distinct' }, usd), '')
+  assert.equal(chartCurrency({ ...sum, value: 'c2' }, usd), '', 'a chart of another column keeps its own currency')
+  assert.equal(chartCurrency(sum, narrowInsightRows(p, setup, choose({}, { c8: { currency: anyCurrency } }), 2026)), '')
+  assert.equal(chartCurrency(sum, narrowInsightRows(p, setup, emptyChoice(), 2026)), 'EUR')
+  // The chart then counts USD only (r4 300 and r5 120), never added to the EUR amounts.
+  const data = chartData(usd.page, sum, chartCurrency(sum, usd))
+  assert.equal(data.currency, 'USD')
+  assert.equal(data.values.flat().reduce((a, b) => a + b, 0), 420)
+  assert.equal(data.rows.otherCurrency, 3)
+  // With an EUR range the chart, its total and its drill-down are the EUR rows in the range only.
+  const eur = narrowInsightRows(p, setup, choose({}, { c8: { min: 100, max: 500 } }), 2026)
+  const eurData = chartData(eur.page, sum, chartCurrency(sum, eur))
+  assert.equal(eurData.currency, 'EUR')
+  assert.deepEqual(eurData.categories.map((bucket) => bucket.label), ['Scrap', 'Rework'])
+  assert.deepEqual(eurData.values.map((row) => row[0]), [250, 100])
+  assert.deepEqual(ids(drillRows(eur.page, sum, eurData, 0)), ['r2'])
+  assert.equal(eurData.rows.otherCurrency, 0)
 })

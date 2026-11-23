@@ -5,7 +5,8 @@ import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 // The Insights tab's filter row (OND-50…OND-56) against a mocked GitHub: the owner sets up a period on Found on and a
 // Category filter with Filters… (saved to Git with the page); the viewer narrows to a quarter and a value — every chart
 // and a drill-down follow — the choice is kept after a reload and Reset filters clears it (TC-OND-40, UAT); a viewer
-// without the setup right sees Filters… disabled with the reason, and still uses the row (TC-OND-45).
+// without the setup right sees Filters… disabled with the reason, and still uses the row (TC-OND-45); a Currency filter
+// in one chosen currency narrows the charts, which show that currency (TC-OND-46, OND-57…OND-60).
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -164,6 +165,83 @@ test('TC-OND-45: a viewer without the setup right sees Filters… disabled with 
   await scope(page).filter({ hasText: 'Category: Rework · 2 of 8 rows counted' }).waitFor()
   assert.equal(await kpi(page), '2')
   assert.equal(writes.length, 0, 'nothing is written')
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await context.close()
+})
+
+// OND-57…OND-60: a Currency column in the row — one chosen currency, an amount range in it; a chart summing the
+// column shows that currency, its drill-down the same rows. EUR: Scrap 150, Scrap 600, Rework 200, Complaint 450 (no
+// code: the column's EUR), Label 80; USD: Rework 300, Scrap 120. EUR 100–500: Complaint 450, Rework 200, Scrap 150.
+const moneyColumns = [columns[0], { id: 'c5', name: 'Cost', type: 'currency', currency: 'EUR' }]
+const moneyRows = [['Scrap', '150 EUR'], ['Scrap', '600 EUR'], ['Rework', '200 EUR'], ['Complaint', '450'], ['Label', '80 EUR'], ['Rework', '300 USD'], ['Scrap', '120 USD']]
+  .map(([category, cost], index) => ({ id: `r${index + 1}`, seq: index + 1, cells: { c1: category, c5: cost } }))
+const moneyInsights = [
+  { id: 'i1', title: 'Cost by category', type: 'bar', category: 'c1', measure: 'sum', value: 'c5', sort: 'value' },
+  { id: 'i2', title: 'Rows', type: 'kpi', category: '', measure: 'count', sort: 'value' },
+]
+
+test('TC-OND-46: the owner adds a Currency filter; the viewer picks EUR 100–500 — a chart summing the column and its drill-down show the EUR rows in the range, the choice kept after a reload', async () => {
+  const files = { 'on-demand/conq.json': JSON.stringify(conq({ columns: moneyColumns, rows: moneyRows, insights: moneyInsights })) }
+  const { page, context, errors, writes } = await open(files)
+  await openInsights(page)
+  assert.equal(await kpi(page), '7')
+
+  // OND-57: Filters… offers the Currency column; Save to Git saves it with the page.
+  await page.getByRole('button', { name: 'Filters…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Filters of the Insights tab' })
+  await dialog.getByRole('button', { name: '＋ Add filter' }).click()
+  await dialog.getByLabel('Filter 1 column').selectOption({ label: 'Cost (one currency, from / to amount)' })
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const saved = () => writes.filter((write) => write.path === 'on-demand/conq.json').at(-1)
+  await row(page).waitFor()
+  for (const until = Date.now() + 30000; !saved()?.data.insightFilters && Date.now() < until;) await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.deepEqual(saved().data.insightFilters, { fields: ['c5'] })
+
+  // OND-58: the currencies of the column's rows, most first, then Any currency; EUR to start with, nothing filtered.
+  const currency = row(page).getByLabel('Cost currency')
+  assert.deepEqual(await currency.locator('option').allInnerTexts(), ['EUR (5 rows)', 'USD (2 rows)', 'Any currency'])
+  assert.equal(await currency.inputValue(), 'EUR')
+  await scope(page).filter({ hasText: 'No filter · 7 of 7 rows counted.' }).waitFor()
+
+  // EUR 100–500: the KPI, the bar chart (in EUR), its Table view and the drill-down follow.
+  await row(page).getByLabel('Cost at least').fill('100')
+  await row(page).getByLabel('Cost at most').fill('500')
+  await scope(page).filter({ hasText: 'Cost: EUR 100–500 · 3 of 7 rows counted.' }).waitFor()
+  assert.equal(await kpi(page), '3')
+  const bar = panel(page, 'Cost by category')
+  await bar.locator('.od-insight-count', { hasText: 'Currency: EUR (3 rows).' }).waitFor()
+  await bar.getByRole('button', { name: 'Table', exact: true }).click()
+  assert.deepEqual(await bar.locator('tbody tr').evaluateAll((list) => list.map((entry) => entry.innerText.replace(/\s+/g, ' ').trim())), ['Complaint 450', 'Rework 200', 'Scrap 150', 'Total 800'])
+  await bar.getByRole('button', { name: 'Chart', exact: true }).click()
+  await bar.locator('text.viz-row-label', { hasText: 'Rework' }).click()
+  const drill = page.getByRole('dialog', { name: 'Rows behind Rework' })
+  await drill.locator('tbody tr').first().waitFor()
+  assert.deepEqual(await drill.locator('tbody tr').evaluateAll((list) => list.map((entry) => entry.innerText.trim().split(/\s/)[0])), ['CONQ-0003'])
+  await drill.locator('.modal-actions').getByRole('button', { name: 'Close', exact: true }).click()
+  await drill.waitFor({ state: 'detached' })
+
+  // OND-59: From above To is shown as an error and not applied.
+  await row(page).getByLabel('Cost at least').fill('900')
+  await row(page).getByRole('alert').filter({ hasText: 'Cost: From is above To: the amount range is not applied until it is put right.' }).waitFor()
+  await scope(page).filter({ hasText: 'Cost: EUR 900–500 not applied (From is above To) · 7 of 7 rows counted.' }).waitFor()
+  await row(page).getByLabel('Cost at least').fill('100')
+  await scope(page).filter({ hasText: 'Cost: EUR 100–500 · 3 of 7 rows counted.' }).waitFor()
+
+  // OND-55: kept after a reload; OND-60: USD picked in the row — the chart shows USD to match.
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await openInsights(page)
+  await scope(page).filter({ hasText: 'Cost: EUR 100–500 · 3 of 7 rows counted.' }).waitFor()
+  assert.equal(await row(page).getByLabel('Cost at least').inputValue(), '100')
+  await row(page).getByLabel('Cost currency').selectOption('USD')
+  await scope(page).filter({ hasText: 'Cost: USD 100–500 · 2 of 7 rows counted.' }).waitFor()
+  await panel(page, 'Cost by category').locator('.od-insight-count', { hasText: 'Currency: USD (2 rows).' }).waitFor()
+  // Any currency: the amounts are cleared and disabled, nothing is filtered, the chart keeps its own currency.
+  await row(page).getByLabel('Cost currency').selectOption({ label: 'Any currency' })
+  await scope(page).filter({ hasText: 'No filter · 7 of 7 rows counted.' }).waitFor()
+  assert.equal(await row(page).getByLabel('Cost at least').isDisabled(), true)
+  await panel(page, 'Cost by category').locator('.od-insight-count', { hasText: 'shown: EUR' }).waitFor()
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
 })

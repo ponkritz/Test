@@ -45,8 +45,12 @@ const drillHint = 'Click a bar, slice or point — or press Enter on the highlig
 // draw amounts of different currencies as one total; one currency at a time keeps every bar, slice and total in one unit.
 // colors: the page's (or dashboard's) colour pins (CHT-09); drill: false in an editor's preview (CHT-10).
 // narrowed (OND-54): the page's rows are those the Insights tab's filter row keeps, so an empty chart says so.
-export function InsightView({ page, insight, colors: pins, drill = true, narrowed = false }: { page: OnDemandPage; insight: Insight; colors?: Record<string, number>; drill?: boolean; narrowed?: boolean }) {
-  const [currency, setCurrency] = useState('')
+// currency (OND-60): the currency the filter row chose for this chart's column, shown first; the viewer's own pick
+// above the chart wins until the filter row's currency changes.
+export function InsightView({ page, insight, colors: pins, drill = true, narrowed = false, currency: preferred = '' }: { page: OnDemandPage; insight: Insight; colors?: Record<string, number>; drill?: boolean; narrowed?: boolean; currency?: string }) {
+  const [pick, setPick] = useState({ base: preferred, code: '' })
+  const currency = (pick.base === preferred ? pick.code : '') || preferred
+  const setCurrency = (code: string) => setPick({ base: preferred, code })
   const [drilled, setDrilled] = useState<{ category: number; series: number | null } | null>(null)
   const problems = insightProblems(page, insight)
   if (problems.length) return <Notice tone="warning"><strong>This {insight.type === 'table' ? 'table' : 'chart'} cannot be shown:</strong> {problems.join(' ')} {' '}Edit it to choose the columns again, or remove it.</Notice>

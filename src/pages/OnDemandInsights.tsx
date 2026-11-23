@@ -5,7 +5,7 @@ import { InsightView } from '../components/InsightCharts'
 import { MultiSelect } from '../components/MultiSelect'
 import { EmptyState, Info, Modal, Notice, Panel, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodQuarters, periodYears, type Period } from '../dashboard'
-import { cleanSetup, filterKind, filterRowColumns, insightsLocalKey, insightsViewerKey, isFiltered, maxInsightFilters, narrowInsightRows, offeredYears, periodColumns, readChoice, resolveFilterSetup, scopeText, emptyChoice, type FieldChoice, type ResolvedSetup, type ViewerChoice } from '../insightFilters'
+import { amountProblem, anyCurrency, chartCurrency, cleanSetup, currenciesOf, filterCurrency, filterKind, filterRowColumns, insightsLocalKey, insightsViewerKey, isFiltered, maxInsightFilters, narrowInsightRows, offeredYears, periodColumns, readChoice, resolveFilterSetup, scopeText, emptyChoice, type FieldChoice, type ResolvedSetup, type ViewerChoice } from '../insightFilters'
 import { hasOptions, newId, type Insight, type InsightFilter, type InsightFilterSetup, type InsightMeasure, type OnDemandColumn, type OnDemandPage } from '../onDemand'
 import type { PersonalViewsStore } from '../usePersonalViews'
 import { blankInsight, categoryColumns, filterColumns, filterText, insightError, insightRules, insightSubject, insightTypeLabel, insightTypes, measureColumns, measuresFor, noneKey, noneLabel, secondColumns, secondLabel, withType } from '../onDemandInsights'
@@ -17,13 +17,14 @@ import { blankInsight, categoryColumns, filterColumns, filterText, insightError,
 // OND-50…OND-56: the filter row above the charts, when the page's owners set one up with Filters… (the period's Date
 // column and up to 6 filter columns): each viewer's choice narrows the rows of every chart and table of the tab (their
 // drill-down and Table view too), on top of each chart's own filters, and is remembered for that viewer.
+// OND-57…OND-60: a Currency filter picks one currency; a chart summing that column shows that currency to match.
 export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, views, onChange }: { page: OnDemandPage; canSetup: boolean; setupReason: string; blockNote: string; saveBar: ReactNode; views?: PersonalViewsStore; onChange: (page: OnDemandPage, message?: string) => void }) {
   const [editing, setEditing] = useState<{ insight: Insight; isNew: boolean } | null>(null)
   const [removing, setRemoving] = useState<Insight | null>(null)
   const [settingUp, setSettingUp] = useState(false)
   const noColumns = !page.columns.length
   const addReason = setupReason || (noColumns ? 'Set up the page’s columns first (Data tab → Set up columns…).' : '')
-  const filtersReason = addReason || (filterRowColumns(page).length ? '' : 'The filter row needs a Date, Dropdown, Multi-select, Text or Number column.')
+  const filtersReason = addReason || (filterRowColumns(page).length ? '' : 'The filter row needs a Date, Dropdown, Multi-select, Text, Number or Currency column.')
   const set = (insights: Insight[]) => onChange({ ...page, insights })
   const move = (index: number, by: number) => { const to = index + by; if (to < 0 || to >= page.insights.length) return; const next = [...page.insights];[next[index], next[to]] = [next[to], next[index]]; set(next) }
   const eyebrow = `ON-DEMAND · ${page.name.toUpperCase()}`
@@ -36,7 +37,7 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
   const shown = narrowed.page
   return <>
     <Panel className="od-insights-head" eyebrow={eyebrow} title="Insights" detail={`${page.insights.length} chart${page.insights.length === 1 ? '' : 's'} and tables from the ${page.rows.length} row${page.rows.length === 1 ? '' : 's'} of ${page.name}, the same for everyone.`}
-      info={<>Charts and summary tables built from the rows on the Data tab: a bar / column chart, a line over time, a pie / donut, a Pareto, a KPI or a summary table, each with Count of rows, Sum, Average, Minimum or Maximum of a Number or Currency column (one currency at a time, never converted) or a Distinct count, filters of its own and display options (orientation, date grouping, Top N, running total, percent of total, a target line, colours, width). Click a bar, slice or point to list the rows behind it. Each change is saved to Git at once, with the page, and shown to everyone who sees the page; people allowed to set up On-Demand pages add, edit, reorder and remove them.</>}
+      info={<>Charts and summary tables built from the rows on the Data tab: a bar / column chart, a line over time, a pie / donut, a Pareto, a KPI or a summary table, each with Count of rows, Sum, Average, Minimum or Maximum of a Number or Currency column (one currency at a time, never converted) or a Distinct count, filters of its own and display options (orientation, date grouping, Top N, running total, percent of total, a target line, colours, width). Click a bar, slice or point to list the rows behind it. When the filter row has a Currency filter, the currency chosen there is also shown by each chart that sums, averages or takes the minimum or maximum of that column (another can still be chosen above the chart); charts of other columns keep their own currency. Each change is saved to Git at once, with the page, and shown to everyone who sees the page; people allowed to set up On-Demand pages add, edit, reorder and remove them.</>}
       action={<span className="button-row nowrap">
         <button type="button" className="ghost" disabled={Boolean(filtersReason)} title={filtersReason || undefined} onClick={() => setSettingUp(true)}>Filters…</button>
         <button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={() => setEditing({ insight: blankInsight(page, newId('i')), isNew: true })}>＋ Add chart / table</button>
@@ -52,17 +53,17 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
       <p className="muted dsh-scope ins-scope" role="status">{scopeText(setup, choice, narrowed, currentYear)}</p>
     </>}
     <div className="od-insights">
-      {page.insights.map((insight, index) => <Panel key={insight.id} className={`od-insight${insight.options?.size === 'full' ? ' od-insight-full' : ''}`} eyebrow={insightTypeLabel(insight.type).toUpperCase()} title={insight.title}
+      {page.insights.map((insight, index) => { const currency = narrowed.active ? chartCurrency(insight, narrowed) : ''; return <Panel key={insight.id} className={`od-insight${insight.options?.size === 'full' ? ' od-insight-full' : ''}`} eyebrow={insightTypeLabel(insight.type).toUpperCase()} title={insight.title}
         detail={<><span>{insightSubject(page, insight)}</span><br /><span className="od-insight-filters">Filters: {filterText(page, insight)}</span></>}
-        info={<ul className="od-rules">{insightRules(page, insight).map((line) => <li key={line}>{line}</li>)}</ul>}
+        info={<ul className="od-rules">{insightRules(page, insight).map((line) => <li key={line}>{line}</li>)}{currency && <li>The filter row’s currency for {page.columns.find((column) => column.id === insight.value)?.name}, {currency}, is shown to match; choose another currency above the chart to see its rows.</li>}</ul>}
         action={<span className="button-row nowrap">
           <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} aria-label={`Move ${insight.title} up`} onClick={() => move(index, -1)}>↑</button>
           <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} aria-label={`Move ${insight.title} down`} onClick={() => move(index, 1)}>↓</button>
           <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} aria-label={`Edit ${insight.title}`} onClick={() => setEditing({ insight, isNew: false })}>Edit</button>
           <button type="button" className="text-button danger-text" disabled={!canSetup} title={setupReason || undefined} aria-label={`Remove ${insight.title}`} onClick={() => setRemoving(insight)}>Remove</button>
         </span>}>
-        <InsightView page={shown} insight={insight} colors={page.colors} narrowed={narrowed.active && narrowed.shown < narrowed.all} />
-      </Panel>)}
+        <InsightView page={shown} insight={insight} colors={page.colors} narrowed={narrowed.active && narrowed.shown < narrowed.all} currency={currency} />
+      </Panel> })}
     </div>
     {editing && <InsightDialog page={page} insight={editing.insight} isNew={editing.isNew} onCancel={() => setEditing(null)} onSave={(insight, colors) => {
       // CHT-09: the colour pins are the page's, saved with it.
@@ -228,15 +229,34 @@ function FilterRow({ page, setup, choice, currentYear, onChange }: { page: OnDem
         <label className="dash-select">{column.name} from<input type="number" inputMode="decimal" aria-label={`${column.name} at least`} value={value.min ?? ''} onChange={(event) => setField(column, { min: numberOrNone(event.target.value) })} /></label>
         <label className="dash-select">to<input type="number" inputMode="decimal" aria-label={`${column.name} at most`} value={value.max ?? ''} onChange={(event) => setField(column, { max: numberOrNone(event.target.value) })} /></label>
       </span>
+      if (kind === 'money') {
+        // OND-57…OND-59: the currency (those of the column's rows, most first; Any currency only when there are
+        // several), then the amount from / to in it; From above To is an error and is not applied.
+        const found = currenciesOf(page, column)
+        const code = filterCurrency(page, column, value)
+        const list = code === anyCurrency || found.some((entry) => entry.code === code) ? found : [...found, { code, rows: 0 }]
+        const any = code === anyCurrency
+        const problem = amountProblem(value)
+        const anyReason = any ? 'Choose a currency to filter by amount: amounts in different currencies are not compared.' : undefined
+        return <span key={column.id} className="ins-range ins-money">
+          <label className="dash-select">{column.name}<select aria-label={`${column.name} currency`} value={code} onChange={(event) => setField(column, event.target.value === anyCurrency ? { currency: anyCurrency, min: undefined, max: undefined } : { currency: event.target.value })}>
+            {list.map((entry) => <option key={entry.code} value={entry.code}>{entry.code} ({entry.rows} row{entry.rows === 1 ? '' : 's'})</option>)}
+            {(found.length > 1 || any) && <option value={anyCurrency}>Any currency</option>}
+          </select></label>
+          <label className="dash-select">from{any ? '' : ` ${code}`}<input type="number" inputMode="decimal" aria-label={`${column.name} at least`} aria-invalid={problem ? true : undefined} disabled={any} title={anyReason} value={value.min ?? ''} onChange={(event) => setField(column, { min: numberOrNone(event.target.value) })} /></label>
+          <label className="dash-select">to{any ? '' : ` ${code}`}<input type="number" inputMode="decimal" aria-label={`${column.name} at most`} aria-invalid={problem ? true : undefined} disabled={any} title={anyReason} value={value.max ?? ''} onChange={(event) => setField(column, { max: numberOrNone(event.target.value) })} /></label>
+        </span>
+      }
       return <label key={column.id} className="dash-select">{column.name} contains<input type="search" maxLength={120} aria-label={`${column.name} contains`} placeholder="Text" value={value.text ?? ''} onChange={(event) => setField(column, { text: event.target.value || undefined })} /></label>
     })}
     <button type="button" className="ghost" disabled={!isFiltered(choice)} onClick={() => onChange(emptyChoice())}>Reset filters</button>
+    {setup.fields.filter((column) => filterKind(column) === 'money' && amountProblem(choice.fields[column.id])).map((column) => <small key={`error-${column.id}`} className="field-error ins-error" role="alert">{column.name}: {amountProblem(choice.fields[column.id])}</small>)}
   </div>
 }
 
 // OND-51, OND-52: the owners' setup of the filter row — the period's Date column (or none) and up to 6 filter columns
-// (Dropdown, Multi-select, Date, Text, Number) in order; Save to Git saves it with the page at once (OND-30).
-const kindText = (column: OnDemandColumn) => ({ values: 'values', months: 'from / to month', range: 'from / to number', contains: 'contains' })[filterKind(column)]
+// (Dropdown, Multi-select, Date, Text, Number, Currency — OND-57) in order; Save to Git saves it with the page at once (OND-30).
+const kindText = (column: OnDemandColumn) => ({ values: 'values', months: 'from / to month', range: 'from / to number', money: 'one currency, from / to amount', contains: 'contains' })[filterKind(column)]
 function FilterSetupDialog({ page, onCancel, onSave }: { page: OnDemandPage; onCancel: () => void; onSave: (setup: InsightFilterSetup | undefined) => void }) {
   const [initial] = useState(() => resolveFilterSetup(page))
   const [period, setPeriod] = useState(initial.period?.id ?? '')
@@ -258,7 +278,7 @@ function FilterSetupDialog({ page, onCancel, onSave }: { page: OnDemandPage; onC
         <small>{dates.length ? 'Year → Quarter → Month over this Date column; nothing ticked = the current year. Rows without a date in it are left out while it applies.' : 'The period needs a Date column on the page.'}</small>
       </label>
       <fieldset className="od-filters"><legend>Filters of the filter row (optional)</legend>
-        <small>Up to {maxInsightFilters}, in this order: a Dropdown or Multi-select (tick values, “{noneLabel}” too), a Date (from / to month), a Text (contains) or a Number (from / to).</small>
+        <small>Up to {maxInsightFilters}, in this order: a Dropdown or Multi-select (tick values, “{noneLabel}” too), a Date (from / to month), a Text (contains), a Number (from / to) or a Currency (one currency, then from / to amount in it: amounts are never converted or compared across currencies).</small>
         {fields.map((id, index) => <div key={id} className="od-filter-head">
           <select aria-label={`Filter ${index + 1} column`} value={id} onChange={(event) => setFields(fields.map((entry, at) => at === index ? event.target.value : entry))}>
             {free(id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name} ({kindText(entry)})</option>)}
