@@ -51,8 +51,11 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   useEffect(() => queue.current.subscribe(() => setQueueStates(Object.fromEntries([...queued.current].map((path) => [path, queue.current.state(path)])))), [])
   function queueText(target: GitConfig, key: string, text: string, commitMessage: string, merge: Merge, at = saveStamp()) {
     queued.current.add(target.path)
+    // KB-80: the base is the version the change was made from — the one read or written here when it is queued — so
+    // a save queued behind another save of this browser, or retried after later saves, is merged, never written over them.
+    const base = seenText.current[target.path] ?? null
     return queue.current.enqueue(target.path, at, async () => {
-      const result = await writeQueuedText(target, key, { text, base: seenText.current[target.path] ?? null, at, message: commitMessage, merge })
+      const result = await writeQueuedText(target, key, { text, base, at, message: commitMessage, merge })
       remember(target.path, result.sha); seenText.current[target.path] = result.text
       return { sha: result.sha ?? '', commitUrl: result.commitUrl || historyUrl(target), merged: result.merged, unchanged: result.unchanged, keptNewer: false, text: result.text }
     })
