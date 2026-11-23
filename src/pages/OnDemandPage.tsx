@@ -15,6 +15,7 @@ import type { OnDemandStore } from '../useOnDemand'
 import { findGroup, pageMenuReason, pageRights, placementOf, removePlacement, type PageKind, type Viewer } from '../menuLayout'
 import type { MenuLayoutStore } from '../useMenuLayout'
 import { InsightsTab } from './OnDemandInsights'
+import type { PersonalViewsStore } from '../usePersonalViews'
 
 // OND-03…OND-07 One On-Demand page (CoNQ, or one added under On-Demand): a work table in the shared DataTable — one
 // column per configured column, search, sort, the row count and Export. OND-27: a click on a row (or Enter / Space on it)
@@ -30,7 +31,7 @@ import { InsightsTab } from './OnDemandInsights'
 // PGB-01: kind — a Table page has the Data table only; a Table + Insights page (CoNQ and every page from before the
 // page builder) has both tabs. PGB-09…PGB-11: the rights follow the role rights (CON-103) or a co-ownership of the page
 // or its group (menu-layout.json); Add page… opens the shared Add page pop-up (PGB-05).
-export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-insights', menu, viewer, addPageReason = '', onAddPage }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void }) {
+export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-insights', menu, viewer, addPageReason = '', onAddPage, views }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void; views?: PersonalViewsStore }) {
   const page = store.pages.find((entry) => entry.id === pageId) ?? store.pages[0]
   const [search, setSearch] = useState('')
   // OND-27: the row open in the drawer (by id; a new row until it is saved), the rows in the order shown when it was
@@ -153,8 +154,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
     </TablePanel>
       // PGB-01: a Table page is the Data table alone; Table + Insights adds the Insights tab (OND-11).
       return kind === 'table' ? table : <ResultTabs id={`on-demand:${page.id}`} mainLabel="Data" rawLabel="Insights" rawCount={page.insights.length}
-        raw={<InsightsTab page={page} canSetup={canSetup} setupReason={setupReason} blockNote={gitReason || rights.setup ? '' : block.noteFor('on this tab', 'ondemand.setup')} saveBar={saveBar}
-          onChange={(next) => { void saveChange('insights', (base) => { const out = { ...base, insights: next.insights }; if (next.colors) out.colors = next.colors; else delete out.colors; return out }, `${page.name}: change the charts and tables`, 'charts and tables').catch(() => undefined) }} />}
+        raw={<InsightsTab page={page} canSetup={canSetup} setupReason={setupReason} blockNote={gitReason || rights.setup ? '' : block.noteFor('on this tab', 'ondemand.setup')} saveBar={saveBar} views={views}
+          onChange={(next, message) => { void saveChange('insights', (base) => { const out = { ...base, insights: next.insights }; if (next.colors) out.colors = next.colors; else delete out.colors; if (next.insightFilters !== page.insightFilters) { if (next.insightFilters) out.insightFilters = next.insightFilters; else delete out.insightFilters } return out }, message ?? `${page.name}: change the charts and tables`, 'charts and tables').catch(() => undefined) }} />}
         main={table} />
     })()}
     {drawer && current && <RowDrawer key={drawer.draft ? drawer.draft.id : 'row'} page={page} row={current} isNew={!page.rows.some((entry) => entry.id === current.id)} startEditing={drawer.edit}

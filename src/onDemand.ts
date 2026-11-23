@@ -29,7 +29,7 @@ export interface LogEntry { id: string; at: string; by: string; added?: true; co
 // OND-19…21: seq — the readable sequential number (given on Save to Git); addedBy / addedAt — who added the row and
 // when (UTC ISO), set once; log — the update log.
 export interface OnDemandRow { id: string; key?: string; seq?: number; addedBy?: string; addedAt?: string; log?: LogEntry[]; cells: Record<string, OnDemandValue> }
-export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; keyPrefix: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[]; colors?: Record<string, number> }
+export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; keyPrefix: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[]; colors?: Record<string, number>; insightFilters?: InsightFilterSetup }
 
 // OND-11…OND-17 Insights: charts and summary tables built from the page's rows, kept in the same file (an `insights`
 // list, written only when the page has one) so they travel with the page and are merged with it. Columns are referred
@@ -430,7 +430,7 @@ export function parseOnDemandPage(raw: string, expectedId?: string): OnDemandPag
   const name = cleanName(text(file.name, 80)) || id
   const keyPrefix = typeof file.keyPrefix === 'string' && keyPrefixPattern.test(file.keyPrefix) ? file.keyPrefix : prefixFor(name)
   const colors = parseColors(file.colors)
-  return { schema: 1, kind: 'on-demand-page', id, name, description: text(file.description, 300).trim(), keyPrefix, columns, rows, insights: parseInsights(file.insights), ...(colors ? { colors } : {}) }
+  return { schema: 1, kind: 'on-demand-page', id, name, description: text(file.description, 300).trim(), keyPrefix, columns, rows, insights: parseInsights(file.insights), ...(colors ? { colors } : {}), ...insightFiltersPart(parseInsightFilterSetup(file.insightFilters)) }
 }
 // OND-20, OND-21: a time in the file — kept as a UTC ISO time when it is one, else dropped.
 const isoTime = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : ''
@@ -488,7 +488,7 @@ const logOut = ({ id, at, by, added, comment, changes }: LogEntry) => ({ id, at,
 export function serializeOnDemandPage(input: OnDemandPage, { fill = true }: { fill?: boolean } = {}) {
   // OND-18, OND-19: a saved file has a key and a sequential number on every row.
   const page = fill ? withRowNumbers(withRowKeys(input)) : input
-  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, keyPrefix: page.keyPrefix, columns: page.columns.map(({ id, name, type, options, required, description, currency }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}), ...(description ? { description } : {}), ...(type === 'currency' ? { currency: currency ?? defaultCurrency } : {}) })), rows: page.rows.map(({ id, key, seq, addedBy, addedAt, log, cells }) => ({ id, ...(key ? { key } : {}), ...(seq ? { seq } : {}), ...(addedBy ? { addedBy } : {}), ...(addedAt ? { addedAt } : {}), ...(log?.length ? { log: log.map(logOut) } : {}), cells })), ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}), ...(page.colors && Object.keys(page.colors).length ? { colors: page.colors } : {}) }, null, 1)}\n`
+  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, keyPrefix: page.keyPrefix, columns: page.columns.map(({ id, name, type, options, required, description, currency }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}), ...(description ? { description } : {}), ...(type === 'currency' ? { currency: currency ?? defaultCurrency } : {}) })), rows: page.rows.map(({ id, key, seq, addedBy, addedAt, log, cells }) => ({ id, ...(key ? { key } : {}), ...(seq ? { seq } : {}), ...(addedBy ? { addedBy } : {}), ...(addedAt ? { addedAt } : {}), ...(log?.length ? { log: log.map(logOut) } : {}), cells })), ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}), ...(page.colors && Object.keys(page.colors).length ? { colors: page.colors } : {}), ...insightFiltersPart(page.insightFilters) }, null, 1)}\n`
   if (new TextEncoder().encode(out).length > onDemandMaxBytes) throw new Error(`The page is too large to save to Git (over ${Math.round(onDemandMaxBytes / 1000)} KB). Remove rows, or split it into two pages.`)
   return out
 }
@@ -547,6 +547,26 @@ export const mergeOnDemandText: Merge = (baseText, mineText, theirsText, mineLat
   const orderedInsights = [...insightOrder.flatMap((id) => insights.filter((entry) => entry.id === id)), ...insights.filter((entry) => !insightOrder.includes(entry.id))]
   // CHT-09: the colour pins are one entry, the later save's where both changed them.
   const colors = later(base?.colors, mine.colors, theirs.colors, mineLater)
+  // OND-52: the Insights filter row's setup is one entry, the later save's where both changed it.
+  const insightFilters = later(base?.insightFilters, mine.insightFilters, theirs.insightFilters, mineLater)
   // Read back through the parser: values of columns that are gone are dropped, every rule of the file applies.
-  return serializeOnDemandPage(parseOnDemandPage(JSON.stringify({ schema: 1, kind: 'on-demand-page', id: mine.id, ...head, columns: ordered, rows, insights: orderedInsights.map(insightOut), ...(colors ? { colors } : {}) }), mine.id))
+  return serializeOnDemandPage(parseOnDemandPage(JSON.stringify({ schema: 1, kind: 'on-demand-page', id: mine.id, ...head, columns: ordered, rows, insights: orderedInsights.map(insightOut), ...(colors ? { colors } : {}), ...insightFiltersPart(insightFilters) }), mine.id))
 }
+
+// ---- the Insights filter row (OND-50…OND-56) ----
+// OND-52: the page owner's setup of the Insights tab's filter row — the Date column of the period (optional) and up to 6
+// filter columns, in order — as one optional field `insightFilters` of the page file, written only when set (a page
+// without it is written byte for byte as before; an older app version ignores it, and drops it when it saves, LIM-35).
+// Read back, only the shape is checked here (ids, no repeats, the period column not again as a field, at most 6); a
+// column that is not on the page or no longer of a type that can filter is left out of the row when it is drawn, with a
+// note (insightFilters.ts, resolveFilterSetup) — so a merge with a save that added the column loses nothing.
+export interface InsightFilterSetup { period?: string; fields: string[] }
+export const maxInsightFilters = 6
+export function parseInsightFilterSetup(raw: unknown): InsightFilterSetup | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const item = raw as { period?: unknown; fields?: unknown }
+  const period = ref(item.period)
+  const fields = [...new Set((Array.isArray(item.fields) ? item.fields : []).map(ref).filter((id) => id && id !== period))].slice(0, maxInsightFilters)
+  return period || fields.length ? { ...(period ? { period } : {}), fields } : undefined
+}
+const insightFiltersPart = (setup: InsightFilterSetup | undefined) => setup && (setup.period || setup.fields.length) ? { insightFilters: { ...(setup.period ? { period: setup.period } : {}), fields: setup.fields } } : {}

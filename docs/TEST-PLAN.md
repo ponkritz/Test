@@ -1722,6 +1722,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-25 The drawer: keyboard, focus, phone, themes and reduced motion** — Req OND-27 — E2E `row-drawer.e2e.mjs` ("TC-OND-21: a CoNQ row opens in a drawer from the right with its values and History; Edit → Save to Git writes the change and its log entry to Git at once; Esc closes; ＋ Add row gets its ID in its save"); browser check: with the keyboard only, Tab to a row, Enter opens the drawer and the focus is in it; Tab and Shift+Tab stay inside; Escape closes it and the focus is back on the row; a click on the dimmed page beside it closes it (asking first with unsaved edits); a screen reader announces a dialog named by the row's ID; at 390 px wide the drawer is the full width with the buttons at the bottom; in light and dark mode the text and the buttons are readable; with "reduce motion" on in the system the drawer appears without sliding; a click on Edit or Remove in the table opens the drawer for editing or the remove pop-up, not the plain view.
 
+**TC-OND-40 Insights filter row: set up, narrow every chart, remembered, reset** — Req OND-50, OND-51, OND-52, OND-53, OND-54, OND-55, OND-56 — **UAT** — E2E `insights-filters.e2e.mjs` ("TC-OND-40: the owner sets up a period and a Category filter; the viewer narrows every chart and a drill-down to Q1 and Scrap, the choice kept after a reload, Reset clears it"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): on CoNQ with a bar chart and a KPI and no filter row (none shown, the KPI counts every row), Filters… → Period on Found on, ＋ Add filter Category (the period's column not offered again) → Save to Git writes `insightFilters: { period, fields }` into `on-demand/conq.json` with the charts kept; the row shows Year / Quarter / Month / Category / Reset filters and "Period on Found on: {year} (whole year) · 6 of 8 rows counted (1 without a date in Found on left out)."; Quarter Q1 and Category Scrap narrow the KPI, the bar, its Table view and "Rows behind Scrap" to the same two rows; a reload keeps the choice without writing the page; Reset filters goes back to the whole year; UAT: as a page owner set up a period and a Dropdown filter on a Table + Insights page with at least two charts, then as a colleague choose a quarter and a value — every chart and a click on a bar show only those rows, the line under the row names the choice and the rows counted, the choice is still there the next day (and on another computer with personal views), Reset filters clears it; light and dark mode, and on a phone, the row is readable.
+
+**TC-OND-41 insightFilters in the page file: written only when set, validated, merged** — Req OND-52, OND-56, GIT-17 — L1 `insight-filters.test.mjs` ("OND-52, OND-56: insightFilters in the page file — optional, written only when set, validated on read (shape, repeats, max 6), merged as one entry; a page without it is unchanged (TC-OND-41)"); browser check: put `"insightFilters": { "period": "c1", "fields": ["gone", "c4"] }` by hand into a page file whose c1 is a Text column — the Insights tab shows the row with the c4 filter only and a note naming the Text column and the removed one; the file keeps the field until an owner saves Filters… again.
+
+**TC-OND-42 The filter row narrows the rows: period and field filters; no setup changes nothing** — Req OND-53, OND-54, OND-56 — L1 `insight-filters.test.mjs` ("OND-54, OND-56: the filter row narrows the rows — period (current year by default, rows without a date left out) and field filters together; no setup changes nothing (TC-OND-42)"); browser check: on a page with a Text, a Number and a second Date filter in the row, "contains" (any case), from / to of the Number (a row without a number left out) and from / to month of the Date each narrow every chart; the line names them ("Cost: 50 – 150", "Topic contains “label”").
+
+**TC-OND-43 The filter row on top of each chart's own filters; drill-down and Table view** — Req OND-50, OND-54 — L1 `insight-filters.test.mjs` ("OND-54: the row works on top of each chart’s own filters; the drill-down and the Table view count the same rows (TC-OND-43)"); E2E `insights-filters.e2e.mjs` ("TC-OND-40: the owner sets up a period and a Category filter; the viewer narrows every chart and a drill-down to Q1 and Scrap, the choice kept after a reload, Reset clears it"); browser check: a chart with its own filter "Category: Rework, Complaint" keeps stating it under its title and counts only the rows that pass both.
+
+**TC-OND-44 The viewer's choice remembered and read back** — Req OND-55 — L1 `insight-filters.test.mjs` ("OND-55: the viewer’s choice read back — per page key, unknown shapes dropped, an older period kept; Reset clears it (TC-OND-44)"); browser check: with a work email (personal views in Git), the choice made on one computer is there on another after ↻ Reload from Git of the views; two colleagues on the same page each keep their own choice.
+
+**TC-OND-45 Filters… read only without the setup right** — Req OND-51, CON-102, OND-52 — E2E `insights-filters.e2e.mjs` ("TC-OND-45: a viewer without the setup right sees Filters… disabled with the reason and still narrows the charts with the row"); browser check: as a Team Member Filters… is disabled with "Your role does not allow “Set up On-Demand pages …" as its tooltip, the row works and nothing is written to Git.
+
 ### 6.29 Custom streams
 
 **TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details → Azure DevOps Server, on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
@@ -2121,7 +2133,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
 | GIT-18, GIT-20 | TC-GIT-11 |
 | GIT-19 | TC-GIT-12 |
-| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04 |
+| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2337,6 +2349,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-28 | TC-OND-21, TC-OND-22 |
 | OND-29 | TC-OND-21, TC-OND-03 |
 | OND-30 | TC-OND-24, TC-OND-01, TC-OND-08 |
+| OND-50 | TC-OND-40, TC-OND-43 |
+| OND-51 | TC-OND-40, TC-OND-45 |
+| OND-52 | TC-OND-40, TC-OND-41, TC-OND-45 |
+| OND-53 | TC-OND-40, TC-OND-42 |
+| OND-54 | TC-OND-40, TC-OND-42, TC-OND-43 |
+| OND-55 | TC-OND-40, TC-OND-44 |
+| OND-56 | TC-OND-40, TC-OND-41, TC-OND-42 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -2440,7 +2459,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…25, TC-CHT-01…12 |
+| UC-37 | TC-OND-01…25, TC-OND-40…45, TC-CHT-01…12 |
 | UC-38 | TC-PGB-01…14, TC-DSH-01…11, TC-CHT-02, TC-CHT-11 |
 
 ## 8. Result record
