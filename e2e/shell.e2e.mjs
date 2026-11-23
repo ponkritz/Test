@@ -1545,3 +1545,18 @@ test('TC-UI-12: a click beside a pop-up with input keeps it open with what was t
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('TC-ACT-17: the top-bar Person list opens over the sticky Time Writing cards, nothing of it hidden', async () => {
+  const { page, context, errors } = await openPage(app, { init: (name) => { localStorage.setItem('demand-planning-my-name-v1', name) }, initArg: 'Ana Costa' })
+  await loadSample(page)
+  await navigate(page, 'Time Writing')
+  await page.locator('.act-sticky').waitFor()
+  await page.locator('.topbar input[role="combobox"]').click()
+  const list = page.locator('.topbar .person-options')
+  await list.waitFor()
+  const hidden = await list.evaluate((ul) => { const box = ul.getBoundingClientRect(); const x = box.left + box.width / 2; const out = []; for (let y = box.top + 4; y < box.bottom - 2; y += 12) { const hit = document.elementFromPoint(x, y); if (!ul.contains(hit)) out.push(`${Math.round(y)}: ${hit?.className}`) } return out })
+  assert.deepEqual(hidden, [], 'no part of the list is covered by the page (KB-67)')
+  await page.keyboard.press('Escape')
+  assert.deepEqual(errors, [])
+  await context.close()
+})

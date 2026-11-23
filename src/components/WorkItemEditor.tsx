@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AzureWorkItem } from '../domain'
 import { syncTitlesAfterSave } from '../monthTaskAction'
 import { addComment, editWorkItem, readAzureIterations, readComments, readWorkItemForEdit, currentIterationPairs, futureIterationPairs, updateAzureWorkItem, validStoryPoints, storyPriorities, storyRisks, storyValueAreas, type AzureConfig, type AzureIteration, type WorkItemComment } from '../azureDevOps'
-import { editLocks, isAdhocTask, joinDoD, splitDoD, statesFor, type WorkItemEdit } from '../workItemEdit'
+import { editAssignee, editLocks, isAdhocTask, joinDoD, splitDoD, statesFor, type WorkItemEdit } from '../workItemEdit'
 import { actualsLockedNow, planningLockedNow } from '../planningLock'
 import { isTimeWritingStory } from '../azureInsights'
 import { Modal } from './ui'
@@ -34,6 +34,7 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
   // The form's values; set from the fresh read.
   const [title, setTitle] = useState('')
   const [assigneeName, setAssigneeName] = useState('')
+  const [assignToMe, setAssignToMe] = useState(false)
   const [state, setState] = useState('')
   const [iterationPath, setIterationPath] = useState('')
   const [dod, setDod] = useState('')
@@ -87,9 +88,11 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
   const iterationOptions = type === 'Feature' ? pis.map((pi) => ({ path: pi.path, label: pi.name })) : pairs.map((pair) => ({ path: pair.sprint.path, label: `${pair.pi.name} → ${pair.sprint.name}` }))
   const withCurrent = item && !iterationOptions.some((option) => option.path === item.iterationPath) ? [{ path: item.iterationPath, label: `${item.iterationPath.split('\\').slice(-2).join(' → ')} (current)` }, ...iterationOptions] : iterationOptions
   const states = [...new Set([...(item ? [item.state] : []), ...statesFor(type)])]
-  // Blank keeps the current assignee (else me); the list offers everyone else with an email, me included.
+  // BKL-44: Assigned to starts blank and blank keeps it as it is — an unassigned item stays unassigned unless the person
+  // picks someone (or, without the right to assign others, ticks "Assign to me"). Nothing is assigned by default.
   const current = item?.assignedToEmail ?? ''
-  const assignee = canChoose && assigneeName ? people.find((person) => person.name === assigneeName)?.email ?? '' : current || me
+  const currentName = item?.assignedTo || current
+  const assignee = editAssignee({ canChoose, chosen: assigneeName ? people.find((person) => person.name === assigneeName)?.email ?? '' : '', assigned: Boolean(currentName), assignToMe, me })
   // Open User Stories under a Feature (not its Time Writing story), offered to follow the Feature to its new PI.
   const openStories = type === 'Feature' ? items.filter((entry) => entry.parentId === opened.id && entry.workItemType === 'User Story' && !isTimeWritingStory(entry) && !closedStates.includes(entry.state.trim().toLowerCase())) : []
   const piChanged = Boolean(item && type === 'Feature' && iterationPath !== item.iterationPath)
@@ -190,7 +193,9 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
       <input className="nf-title" aria-label={`${type} title`} required maxLength={255} value={title} onChange={(event) => setTitle(event.target.value)} />
       {month && <p className="muted edit-note">Month Task: the title keeps “{title.split('|')[0].trim() || month}”; it stays at {item?.iterationPath}.</p>}
       <div className="story-row">
-        <label>Assigned to{canChoose ? <PersonPicker label="Assigned to" value={assigneeName} people={people.filter((person) => person.email !== (current || me)).map((person) => person.name)} onChange={setAssigneeName} meLabel={current ? `${item?.assignedTo || current}${current === me ? ' (me)' : ''}` : me ? `Me (${me})` : 'Choose a person…'} /> : <span className="nf-value" title={item?.assignedToEmail}>{item?.assignedTo || item?.assignedToEmail || '—'}</span>}</label>
+        <label>Assigned to{canChoose ? <PersonPicker label="Assigned to" value={assigneeName} people={people.filter((person) => person.email !== current).map((person) => person.name)} onChange={setAssigneeName} meLabel={currentName ? `${currentName}${current && current === me ? ' (me)' : ''}` : 'Unassigned — choose a person (optional)'} />
+          : currentName ? <span className="nf-value" title={item?.assignedToEmail}>{currentName}</span>
+          : <span className="nf-value">Unassigned{me && <label className="checkbox-label edit-assign-me"><input type="checkbox" checked={assignToMe} onChange={(event) => setAssignToMe(event.target.checked)} />Assign to me</label>}</span>}</label>
         <label>State<select value={state} onChange={(event) => setState(event.target.value)}>{states.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label>{type === 'Feature' ? 'PI' : 'Sprint'}{locks.iterationLocked ? <span className="nf-value" title={item?.iterationPath}>{item?.iterationPath} (locked)</span> : <select aria-label="Iteration" value={iterationPath} onChange={(event) => setIterationPath(event.target.value)}>{withCurrent.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}</select>}</label>
         {type === 'User Story' && <><label>Story Points<input type="number" min="0" max="1000" step="any" value={storyPoints} onChange={(event) => setStoryPoints(event.target.value)} placeholder="—" /></label>
