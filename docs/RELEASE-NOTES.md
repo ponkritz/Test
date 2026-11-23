@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v7.54.4 — 2026-11-23
+
+**Fixed** (independent UI/UX review findings 1, 3, 4 and 7)
+- **Pop-ups work with the keyboard** — the first field takes the focus, Tab and Shift+Tab stay inside, Escape closes the topmost pop-up (an open list inside it closes first) and the focus returns to the button that opened it (UI-18).
+- **A click beside a pop-up no longer loses what was typed** — every Azure DevOps write pop-up and settings editor stays open; pop-ups without input still close on such a click (UI-19).
+- **Loading from Git asks before replacing unsaved changes** — Load latest, Update & load, Load latest from Git and Load everything name what would be replaced, also after a save conflict (GIT-16).
+- **Edit without a saved PAT** — the PAT field no longer disappears after the first character (BKL-40).
+
+KB-62…65; DF-134, DF-135; TC-UI-11, TC-UI-12, TC-GIT-09, TC-BKL-29.
+
+PR #343.
+
 ## v7.54.3 — 2026-11-23
 
 **Documentation**
