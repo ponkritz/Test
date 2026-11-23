@@ -103,9 +103,17 @@ test('TC-CHT-13: the owner sets a chart to ⅔ × Large with its own axis names 
   const files = { 'on-demand/conq.json': JSON.stringify(conq()) }
   const { page, context, errors, writes } = await open(files)
   await openInsights(page)
-  // Existing look: nothing resized, the grid of v10 (no 6-column grid, no size note).
-  assert.equal(await page.locator('.od-insights.chart-grid').count(), 0)
+  // Existing look: nothing resized — on the 12-column grid (CHT-44) two half-width charts side by side and the third
+  // under the first, as before; no size note.
+  assert.equal(await page.locator('.od-insights.chart-grid').getAttribute('data-cols'), '12')
   assert.equal(await page.locator('.chart-size-note').count(), 0)
+  {
+    const all = await box(page.locator('.od-insights'))
+    const [first, second, third] = [await box(panel(page, 'Cost by category')), await box(panel(page, 'Cost per month')), await box(panel(page, 'Cost Pareto'))]
+    assert.ok(Math.abs(first.top - second.top) < 2 && first.right < second.left, 'two side by side')
+    assert.ok(Math.abs(first.width - (all.width - 18) / 2) < 3 && Math.abs(second.width - first.width) < 2, `half width: ${first.width} of ${all.width}`)
+    assert.ok(third.top > first.bottom && Math.abs(third.left - first.left) < 2, 'the third under the first')
+  }
 
   // OND-61: the page's ⋯ menu with the keyboard — the first item focused, ↓ moves, Escape closes and returns to ⋯.
   const more = page.getByRole('button', { name: 'More actions: page CoNQ' })
@@ -139,21 +147,24 @@ test('TC-CHT-13: the owner sets a chart to ⅔ × Large with its own axis names 
   await page.locator('.od-insights.chart-grid').waitFor()
   assert.match(await bars.getAttribute('class'), /chart-w-twothirds chart-h-large/)
   assert.match(await bars.locator('.viz-axis-titles').textContent(), /Cost of non-quality \(EUR\)/)
-  // ⅔ of the grid, the height drawn larger (rows of 45 px instead of 30).
+  // ⅔ of the grid (8 of 12 columns — the same width as ⅔ of the 6-column grid before), the height drawn larger (rows of 45 px instead of 30).
   const grid = await box(page.locator('.od-insights'))
   const wide = await box(bars)
   assert.ok(Math.abs(wide.width - (grid.width - 5 * 18) / 6 * 4 - 3 * 18) < 3, `⅔ wide: ${wide.width} of ${grid.width}`)
   assert.equal(await bars.locator('rect.viz-row-hit').first().getAttribute('height'), '45')
 
-  // Arrange sizes: the handle of Cost Pareto with the keyboard — ← one width narrower (⅓), Enter keeps; saved for everyone.
-  await page.getByRole('button', { name: 'Arrange sizes' }).click()
+  // Arrange charts: the handle of Cost Pareto with the keyboard — ← ← two columns narrower (4 of 12, ⅓), Enter keeps;
+  // saved for everyone with every chart's place on the grid (CHT-47) and the nearest presets for older apps (CHT-50).
+  await page.getByRole('button', { name: 'Arrange charts' }).click()
   await page.locator('.chart-arrange-note').waitFor()
   await handle(page, 'Cost Pareto').focus()
   await page.keyboard.press('ArrowLeft')
-  await panel(page, 'Cost Pareto').locator('.chart-resize-outline', { hasText: 'width ⅓, height Medium' }).waitFor()
+  await page.keyboard.press('ArrowLeft')
+  await panel(page, 'Cost Pareto').locator('.chart-resize-outline', { hasText: '4 × 8 (width ⅓, height Medium)' }).waitFor()
   await page.keyboard.press('Enter')
   await until(() => pageFile(writes)?.insights?.[2]?.options?.size === 'third', 'the arranged size saved to Git')
-  assert.match(writes[writes.length - 1].message, /size of the chart Cost Pareto \(width ⅓, height Medium\)/)
+  assert.match(writes[writes.length - 1].message, /size of the chart Cost Pareto \(4 × 8 \(width ⅓, height Medium\)\)/)
+  assert.deepEqual(pageFile(writes).insights.map((entry) => entry.options?.grid), [{ x: 0, y: 0, w: 8, h: 12 }, { x: 0, y: 12, w: 6, h: 8 }, { x: 6, y: 12, w: 4, h: 8 }])
   await page.getByRole('button', { name: 'Done arranging' }).click()
   await shoot(page, 'insights-mixed-sizes')
   assert.match(await panel(page, 'Cost Pareto').getAttribute('class'), /chart-w-third/)
@@ -199,21 +210,23 @@ test('TC-CHT-16: a viewer drags a chart to Full — it snaps, is remembered afte
   await until(async () => /chart-w-half/.test(await panel(page, 'Cost per month').getAttribute('class')), 'back to half width')
   assert.equal(await panel(page, 'Cost per month').locator('.chart-size-note').count(), 0)
 
-  // The keyboard on Cost by category (the owners' ⅔ × Large): ← shows ½, Escape cancels; ← and ↑ then Enter keep ½ × Medium.
+  // The keyboard on Cost by category (the owners' ⅔ × Large = 8 × 12): ← ← shows 6 × 12 (½, Large), Escape cancels;
+  // ← ← and ↑ × 4 then Enter keep 6 × 8 (½ × Medium) — one column or row per key (CHT-49).
   const bars = panel(page, 'Cost by category')
   await handle(page, 'Cost by category').focus()
+  await page.keyboard.press('ArrowLeft')
+  await bars.locator('.chart-resize-outline', { hasText: '7 × 12 (7 of 12 columns, 12 rows)' }).waitFor()
   await page.keyboard.press('ArrowLeft')
   await bars.locator('.chart-resize-outline', { hasText: 'width ½, height Large' }).waitFor()
   await page.keyboard.press('Escape')
   await bars.locator('.chart-resize-outline').waitFor({ state: 'detached' })
   assert.match(await bars.getAttribute('class'), /chart-w-twothirds/)
-  await page.keyboard.press('ArrowLeft')
-  await page.keyboard.press('ArrowUp')
-  assert.equal(await handle(page, 'Cost by category').getAttribute('aria-label'), 'Resize Cost by category: width ½, height Medium')
+  for (const key of ['ArrowLeft', 'ArrowLeft', 'ArrowUp', 'ArrowUp', 'ArrowUp', 'ArrowUp']) await page.keyboard.press(key)
+  assert.equal(await handle(page, 'Cost by category').getAttribute('aria-label'), 'Resize Cost by category: 6 × 8 (width ½, height Medium)')
   await page.keyboard.press('Enter')
   await bars.locator('.chart-size-note', { hasText: 'Size: yours' }).waitFor()
   assert.match(await bars.getAttribute('class'), /chart-w-half chart-h-medium/)
-  assert.match(await text(bars.locator('[aria-live="polite"]')), /Cost by category: width ½, height Medium/)
+  assert.match(await text(page.locator('.od-insights + [aria-live="polite"]')), /Cost by category: 6 × 8 \(width ½, height Medium\)/)
 
   // CHT-23 (KB-83): the long category label stays inside the chart, wrapped, with the full text as its tooltip.
   const chart = await box(bars.locator('svg[role="img"]'))
@@ -267,10 +280,9 @@ test('TC-CHT-19: on Team overview someone resizes a built-in chart for themselve
   await page.locator('div.chart-grid').waitFor()
   assert.match(await overrun.getAttribute('class'), /chart-w-half/)
   assert.equal(await overrun.locator('.chart-size-note').count(), 0)
-  // Epic mix (full width, as before): the viewer makes it half for themselves with the keyboard.
+  // Epic mix (full width, as before): the viewer makes it half (6 of 12 columns) for themselves with the keyboard.
   await handle(page, 'Epic mix by month').focus()
-  await page.keyboard.press('ArrowLeft')
-  await page.keyboard.press('ArrowLeft')
+  for (let step = 0; step < 6; step++) await page.keyboard.press('ArrowLeft')
   await page.keyboard.press('Enter')
   await mix.locator('.chart-size-note', { hasText: 'Size: yours' }).waitFor()
   assert.match(await mix.getAttribute('class'), /chart-w-half/)

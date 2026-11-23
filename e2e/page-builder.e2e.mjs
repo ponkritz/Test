@@ -328,11 +328,13 @@ test('TC-PGB-16: the co-owner list offers the Azure DevOps team members read at 
     if (/\/_apis\/wit\/wiql/.test(url)) return json({ workItems: [] })
     return json({ value: [] })
   })
+  // The start fetch finds no work and may open the setup guide at any moment after the reload (later on a slow
+  // runner): close it whenever it appears, instead of checking once.
+  const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
+  await page.addLocatorHandler(guide, async () => { await guide.getByRole('button', { name: 'Close', exact: true }).last().click() })
   await page.reload()
   await page.locator('.sidebar nav').waitFor()
   await read
-  const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
-  if (await guide.count()) await guide.getByRole('button', { name: 'Close', exact: true }).last().click()
   await navigate(page, 'Pages & menu')
   const pick = async () => {
     await page.locator('.pgb-pages').getByRole('button', { name: 'Edit page Supplier issues', exact: true }).click()

@@ -21,6 +21,11 @@ import { countdown, draftRestore, editPhase, heldBy, shouldRenew, type RowDraft,
 import { pageFolder } from '../rowFiles'
 import { useRowLocks } from '../useRowLocks'
 import { useNow } from '../useNow'
+import type { DataModeStore } from '../useDataMode'
+import { isSamplePage, sampleNotice, sampleReason, sampleRowCount } from '../sampleRows'
+import { ExportNoteContext, sampleExportNote } from '../exportNote'
+import { PublishDialog } from '../components/PublishDialog'
+import { useSchedules } from '../publishRun'
 
 // OND-03…OND-07 One On-Demand page (CoNQ, or one added under On-Demand): a work table in the shared DataTable — one
 // column per configured column, search, sort, the row count and Export. OND-27: a click on a row (or Enter / Space on it)
@@ -36,7 +41,10 @@ import { useNow } from '../useNow'
 // PGB-01: kind — a Table page has the Data table only; a Table + Insights page (CoNQ and every page from before the
 // page builder) has both tabs. PGB-09…PGB-11: the rights follow the role rights (CON-103) or a co-ownership of the page
 // or its group (menu-layout.json); Add page… opens the shared Add page pop-up (PGB-05).
-export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-insights', menu, viewer, addPageReason = '', onAddPage, views }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void; views?: PersonalViewsStore }) {
+// OND-63…OND-67: dataMode — the viewer's Live | Sample toggle of the page (src/useDataMode.ts); in Sample the store gives
+// the page with its sample rows, every change is disabled with the reason and exports are marked.
+// OND-73…OND-79: publisherName — the name a standalone HTML file says it was published by.
+export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-insights', menu, viewer, addPageReason = '', onAddPage, views, dataMode, publisherName = '' }: { git: GitStorage; store: OnDemandStore; pageId: string; me: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void; views?: PersonalViewsStore; dataMode?: DataModeStore; publisherName?: string }) {
   // OND-39: the page with its hidden rows (listed only with Show hidden rows); the Insights get it without them.
   const listed = store.pages.find((entry) => entry.id === pageId) ?? store.pages[0]
   const page = (listed && store.full(listed.id)) || listed
@@ -49,20 +57,29 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const [removing, setRemoving] = useState<OnDemandRow | null>(null)
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | null>(null)
+  // OND-73: the Publish standalone HTML pop-up, and the page's schedule on this computer (its last failure shown, OND-79).
+  const [publishing, setPublishing] = useState(false)
+  const schedule = useSchedules()[pageId]
   const block = useWriteBlock()
   // OND-07: what may be changed — the rights of the viewer's roles, a Git token that can save, no synthetic sample.
   const gitReason = !git.connected ? 'Connect Git storage (Admin → Data & sharing) to change the On-Demand pages; they are shared through Git.' : git.readOnly ? 'View only: your Git token can read but not save.' : git.isSample ? 'Synthetic sample data is loaded. Saving to Git is disabled.' : ''
+  // OND-66: in Sample nothing of the page is saved — rows, columns, charts, its name, converting or deleting it.
+  const sample = isSamplePage(page)
+  const sampleBlock = sample && page ? sampleReason(page.name) : ''
   const rights = page ? pageRights(viewer, menu.layout, page.id) : { setup: false, rows: false, owner: false }
-  const rowsReason = gitReason || (rights.rows ? '' : block.noteFor('on this page', 'ondemand.edit'))
-  const setupReason = gitReason || (rights.setup ? '' : block.noteFor('on this page', 'ondemand.setup'))
+  const rowsReason = gitReason || sampleBlock || (rights.rows ? '' : block.noteFor('on this page', 'ondemand.edit'))
+  const setupReason = gitReason || sampleBlock || (rights.setup ? '' : block.noteFor('on this page', 'ondemand.setup'))
   const canRows = !rowsReason, canSetup = !setupReason
   // PGB-07: renaming and removing the page is a change of the menu: a Tool Owner, a co-owner of its group, or in
   // On-Demand a role allowed "Set up On-Demand pages".
-  const menuReason = gitReason || (page ? pageMenuReason(viewer, menu.layout, page.id) : '')
+  const menuReason = gitReason || sampleBlock || (page ? pageMenuReason(viewer, menu.layout, page.id) : '')
   // PGB-19, PGB-20: hide / show the page (Tool Owner, its or its group's co-owners, in On-Demand "Set up On-Demand
   // pages"); delete it with its files — the Tool Owner only.
   const hidingReason = gitReason || (page ? hideReason(viewer, menu.layout, page.id) : '')
-  const removeReason = gitReason || deleteReason(viewer)
+  const removeReason = gitReason || sampleBlock || deleteReason(viewer)
+  // OND-73, OND-75: publishing the page as a standalone HTML file — the Tool Owner and the page's (or its group's)
+  // co-owners; never from Sample.
+  const publishReason = !page ? '' : sample ? `Switch ${page.name} to Live to publish: sample rows are never published.` : viewer.manager || rights.owner ? '' : `Only the Tool Owner and the co-owners of ${page.name} publish it as a standalone HTML file.`
   const hidden = page ? isHidden(menu.layout, page.id) : false
   const toggleHidden = () => { if (!page) return; const next = !hidden; void inBackground(`${next ? 'Hide' : 'Show'} page · ${page.name}`, async () => { const saved = await menu.save(setHidden(menu.layout, page.id, next, store.pages.map((entry) => entry.id)), `Pages & menu: ${next ? 'hide' : 'show'} the page ${page.name}`); return { value: saved, text: `${next ? 'Hidden from the menu, Home and search for everyone; its data stays in Git.' : 'Shown in the menu again.'} ${menu.path}` } }).catch(() => undefined) }
   const blocked = [...(rights.rows ? [] : ['ondemand.edit' as const]), ...(rights.setup ? [] : ['ondemand.setup' as const])]
@@ -103,7 +120,7 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const editRowsReason = rowsReason || meReason
   const canRelease = !gitReason && !viewer.readOnly && (viewer.manager || rights.owner)
   // OND-32: Convert to row files — a Tool Owner, on a table page in Git that is still one file.
-  const convertReason = gitReason || (!store.inGit(page.id) ? `${page.name} is not in Git yet.` : viewer.manager ? '' : 'Only a Tool Owner (“Manage pages and menu groups”) converts a page to row files.')
+  const convertReason = gitReason || sampleBlock || (!store.inGit(page.id) ? `${page.name} is not in Git yet.` : viewer.manager ? '' : 'Only a Tool Owner (“Manage pages and menu groups”) converts a page to row files.')
   const showConvert = !rowFiles && hasTable(kind) && (viewer.manager || rights.setup)
   // OND-62: only the Tool Owner, who can convert, sees the suggestion; everyone else nothing.
   const suggestConvert = showConvert && viewer.manager && !convertReason && !hintDismissed && suggestRowFiles(page.rows.length, fileBytes)
@@ -145,7 +162,7 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
       return { value: saved, text: resultText(saved, `${hide ? 'hidden' : 'shown'} ${rowId(page, row) || row.key || ''}`) }
     })
   }
-  const canDelete = !gitReason && viewer.manager && !viewer.readOnly
+  const canDelete = !gitReason && !sample && viewer.manager && !viewer.readOnly
   const hiddenCount = page.rows.filter(isRowHidden).length
   const visibleCount = page.rows.length - hiddenCount
   const retry = () => inBackground(`Retry · ${page.name}`, async () => { await store.retry(page.id); return { value: null, text: `Saved to Git. ${path}` } }).catch(() => undefined)
@@ -187,18 +204,29 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const current = drawer ? page.rows.find((entry) => entry.id === drawer.id) ?? drawer.draft : undefined
   const step = (by: number) => { if (!drawer) return; const at = drawer.order.indexOf(drawer.id) + by; const id = drawer.order[at]; if (id && page.rows.some((entry) => entry.id === id)) setDrawer({ ...drawer, id, draft: undefined, edit: false }) }
 
-  return <Page className="on-demand-page" intro="A table the team sets up itself, shared with everyone through Git."
+  // OND-63: the Live | Sample toggle (UI-STANDARDS §7, a segmented control), first in the page actions.
+  const mode = dataMode?.modeOf(page.id) ?? 'live'
+  const modeToggle = dataMode && <div className="view-switch od-data-mode" role="group" aria-label={`Data shown on ${page.name}`} title="Live: the page’s rows from Git. Sample: 50 made-up rows from its columns, for you only — nothing is saved.">
+    <span>Data</span>
+    <div className="segmented">{(['live', 'sample'] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value} onClick={() => { if (value !== mode) { setDrawer(null); dataMode.setMode(page.id, value) } }}>{value === 'live' ? 'Live' : 'Sample'}</button>)}</div>
+  </div>
+
+  return <ExportNoteContext.Provider value={sample ? sampleExportNote : null}><Page className="on-demand-page" intro="A table the team sets up itself, shared with everyone through Git."
     // OND-61: one main action (＋ Add page… for those who may add pages), the others in the page's ⋯ menu — each
     // disabled item with its reason as its tooltip, Delete page… in the danger colour.
-    actions={<ViewActions label={`page ${page.name}`} primary={gitReason || addPageReason ? undefined : <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button>} items={[
+    actions={<>{modeToggle}<ViewActions label={`page ${page.name}`} primary={gitReason || addPageReason ? undefined : <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button>} items={[
       ...(gitReason || addPageReason ? [{ key: 'add', label: '＋ Add page…', disabled: true, title: gitReason || addPageReason }] : []),
       { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
       { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
       { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
+      { key: 'publish', label: 'Publish standalone HTML…', disabled: Boolean(publishReason), title: publishReason || undefined, onClick: () => setPublishing(true) },
       ...(showConvert ? [{ key: 'convert', label: 'Convert to row files…', disabled: Boolean(convertReason), title: convertReason || undefined, onClick: () => setConverting(true) }] : []),
       ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { if (pending.length && !window.confirm(`Discard the changes to ${page.name} that are not saved to Git?`)) return; store.discard(page.id); void store.reload() } }] : []),
-    ]} />}>
-    {suggestConvert && <Notice tone="info" className="od-convert-hint">This page has {page.rows.length.toLocaleString('en-US')} rows; converting it to row files keeps it fast and lets several people edit at once.{' '}<button type="button" className="ghost" onClick={() => setConverting(true)}>Convert to row files…</button>{' '}<button type="button" className="text-button" onClick={dismissHint}>Dismiss</button></Notice>}
+    ]} /></>}>
+    {/* OND-65: the banner of a page in Sample — on both tabs, above everything else. */}
+    {sample && <Notice tone="warning" className="od-sample-banner"><strong>{sampleNotice}.</strong> You see {sampleRowCount} made-up rows generated from the columns of {page.name} — only you, here, in the Insights and in the On-Demand Dashboards that read {page.name}. Changes, charts and the page setup cannot be saved, and exports are marked “Sample”. Choose <strong>Live</strong> to see and change the real rows.</Notice>}
+    {schedule && schedule.mode !== 'off' && schedule.lastOk === false && <Notice tone="warning" className="od-publish-failed">The scheduled publish of {page.name}{schedule.lastRun ? ` at ${formatDateTime(schedule.lastRun)}` : ''} failed: {schedule.lastText} {!publishReason && <button type="button" className="ghost" onClick={() => setPublishing(true)}>Publish standalone HTML…</button>}</Notice>}
+    {suggestConvert && !sample && <Notice tone="info" className="od-convert-hint">This page has {page.rows.length.toLocaleString('en-US')} rows; converting it to row files keeps it fast and lets several people edit at once.{' '}<button type="button" className="ghost" onClick={() => setConverting(true)}>Convert to row files…</button>{' '}<button type="button" className="text-button" onClick={dismissHint}>Dismiss</button></Notice>}
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected && store.inGit(page.id) ? ' The page last loaded in this browser is shown.' : ''}</Notice>}
     {store.errors.map((error) => <Notice key={error} tone="error">On-Demand: {error}</Notice>)}
     {hidden && <Notice tone="info" className="od-hidden-note">{page.name} is hidden: it is not in the menu, on Home or in search for anyone. Its rows stay in Git and dashboards keep reading them; it opens from Admin → Pages & menu.{!hidingReason && <>{' '}<button type="button" className="ghost" onClick={toggleHidden}>Show page</button></>}</Notice>}
@@ -238,6 +266,7 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
       position={drawer.draft ? null : { at: drawer.order.indexOf(current.id), of: drawer.order.length }} onStep={step}
       onSave={(row, isNew) => saveRow(row, isNew)} onRetryQueue={() => store.retry(page.id)} onHide={(hide) => hideRowNow(current, hide)} onRemove={canDelete && current.hidden ? () => setRemoving(current) : undefined}
       onClose={() => setDrawer(null)} />}
+    {publishing && <PublishDialog page={page} kind={kind} publishedBy={publisherName || me} views={views} onClose={() => setPublishing(false)} />}
     {converting && <ConvertDialog page={page} onCancel={() => setConverting(false)} onConvert={async () => {
       await inBackground(`Convert to row files · ${page.name}`, async () => { const done = await store.convert(page.id); return { value: done, text: `Converted ${onDemandPath(page.id)} to ${pageFolder(page.id)}/ — ${done.page.rows.length} row file${done.page.rows.length === 1 ? '' : 's'}, page.json and counter.json in one commit. — ${done.commitUrl}` } })
       setConverting(false)
@@ -252,7 +281,7 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
       recordRemoved(page)
       setPageDialog(null); const next = store.pages.find((entry) => entry.id !== page.id); if (next) onOpen(next.id)
     }} />}
-  </Page>
+  </Page></ExportNoteContext.Provider>
 }
 
 // OND-28 (UI-STANDARDS §8): a save as a Background job — "Saving to Git…" while it runs, then its result (or the error);

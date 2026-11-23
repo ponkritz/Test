@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { useCan } from '../useCan'
+import { ExportNoteContext } from '../exportNote'
+import { csvCell } from '../csv'
 import { useTableDefaults } from './tableDesign'
 import { compareCells, moveId, moveIdTo, orderedIds, readLayout, saveLayout, tableCsv, tableSheet, totalsRow, type CellValue, type ExportFormat, type TableDensity, type TableLayout } from '../tableDefaults'
 import { useColumnWidths } from './columnWidths'
@@ -138,12 +140,14 @@ export function DataTable<T>({ id, columns, rows, rowKey, exportName, toolbar, s
   }
   const exported = [...fixed, ...ordered].filter((column) => column.value && (column.export === 'always' || (column.export !== false && shownColumns.includes(column))))
   const exportRows = () => [...sorted.map((row) => exported.map((column) => column.exportValue ? column.exportValue(row) : valueOf(column, row))), ...(totals?.exportValues ? [totalsRow(exported.map((column) => column.id), totals.exportValues, totals.label ?? 'Total')] : [])]
+  const note = useContext(ExportNoteContext)
   const runExport = (format: ExportFormat) => {
     setExporting(false)
     if (!exportName) return
-    const file = exportName.replace(/[^\w.-]+/g, '-')
-    if (format === 'csv') downloadCsv(tableCsv(exported.map((column) => column.label), exportRows()), `${file}.csv`)
-    else downloadXlsx(writeXlsx([{ name: exportName.slice(0, 31), rows: tableSheet(exported.map((column) => column.label), exportRows()) }], defaults.excelDateFormat), `${file}.xlsx`)
+    // OND-67: inside a page shown with sample rows the file is marked (a name prefix and a first line).
+    const file = `${note?.prefix ?? ''}${exportName}`.replace(/[^\w.-]+/g, '-')
+    if (format === 'csv') downloadCsv(`${note ? `${csvCell(note.line)}\r\n` : ''}${tableCsv(exported.map((column) => column.label), exportRows())}`, `${file}.csv`)
+    else downloadXlsx(writeXlsx([{ name: exportName.slice(0, 31), rows: [...(note ? [[note.line]] : []), ...tableSheet(exported.map((column) => column.label), exportRows())] }], defaults.excelDateFormat), `${file}.xlsx`)
   }
   // CON-94: export needs "Export tables".
   const can = useCan()

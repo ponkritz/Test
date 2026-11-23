@@ -1,3 +1,4 @@
+import { kindOf, parseGridBox, type GridBox } from './chartSize.ts'
 import { csvCell } from './csv.ts'
 import type { Merge } from './gitSaveQueue.ts'
 import { cleanElements, type ChartElements } from './chartElements.ts'
@@ -35,7 +36,8 @@ export interface LogEntry { id: string; at: string; by: string; added?: true; ac
 export interface OnDemandRow { id: string; key?: string; seq?: number; addedBy?: string; addedAt?: string; log?: LogEntry[]; hidden?: { by: string; at: string }; cells: Record<string, OnDemandValue> }
 // OND-31: storage 'rows' — the page is kept as one file per row (on-demand/<id>/page.json, rows/<key>.json, counter.json,
 // src/rowFiles.ts); absent — the single page file on-demand/<id>.json (OND-08).
-export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; keyPrefix: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[]; colors?: Record<string, number>; storage?: 'rows'; lastSeq?: number; insightFilters?: InsightFilterSetup }
+// OND-63, OND-66: sample — the page as shown in Sample (src/sampleRows.ts): its rows are made up; it is never written.
+export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; keyPrefix: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[]; colors?: ColorPins; storage?: 'rows'; lastSeq?: number; insightFilters?: InsightFilterSetup; sample?: true }
 
 // OND-11…OND-17 Insights: charts and summary tables built from the page's rows, kept in the same file (an `insights`
 // list, written only when the page has one) so they travel with the page and are merged with it. Columns are referred
@@ -52,6 +54,7 @@ export interface InsightFilter { column: string; values?: string[]; from?: strin
 export type DateGroup = 'day' | 'week' | 'month' | 'quarter' | 'year'
 export interface ChartOptions {
   orientation?: 'vertical' // a bar chart as vertical columns (horizontal bars when absent)
+  grouping?: 'grouped' // CHT-40: a bar chart's series side by side (Excel's clustered bars) instead of stacked (stacked when absent)
   dateGroup?: DateGroup // a Date column grouped by day, ISO week, quarter or year (month when absent)
   top?: number | 'all' // the N largest categories and "Other" (1…50) or all of them; absent: the type's usual limit
   cumulative?: true // a running total along the categories (bar, line)
@@ -63,8 +66,14 @@ export interface ChartOptions {
   yTitle?: string // the owner's title of the Y axis (the automatic one when absent; CHT-24) — bar, line, Pareto
   elements?: ChartElements // Excel-style chart elements set by the owners (as before when absent; CHT-26…CHT-35)
   view?: 'panel' // a KPI shown as a chart panel instead of a card in the Insights tab's card row (CHT-36)
+  grid?: GridBox // CHT-47: the owners' place and size on the 12-column chart grid (x, y, w, h); `size` / `height` then hold the nearest presets for older apps
 }
 export interface Insight { id: string; title: string; type: InsightType; category: string; second: string; measure: InsightMeasure; value: string; filters: InsightFilter[]; sort: 'value' | 'label'; options?: ChartOptions }
+// CHT-09, CHT-41: a colour pin — a palette colour 1…5 (the --viz-series-* tokens, light and dark) or any colour as
+// "#rrggbb" (the same in both themes).
+export type ColorPin = number | string
+export type ColorPins = Record<string, ColorPin>
+export const isHexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/.test(value)
 export const insightTypeKeys: InsightType[] = ['bar', 'line', 'pie', 'table', 'pareto', 'kpi']
 export const measureKeys: InsightMeasure[] = ['count', 'sum', 'average', 'min', 'max', 'distinct']
 // Count and Sum add up; the others cannot be stacked, shown as shares, summed into a running total or a Pareto.
@@ -78,6 +87,8 @@ export function cleanOptions(type: InsightType, measure: InsightMeasure, raw: un
   const item = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
   const out: ChartOptions = {}
   if (type === 'bar' && item.orientation === 'vertical') out.orientation = 'vertical'
+  // CHT-40: grouped bars (only a bar chart; drawn only with a second field — stacked when absent).
+  if (type === 'bar' && item.grouping === 'grouped') out.grouping = 'grouped'
   if (type !== 'kpi' && typeof item.dateGroup === 'string' && item.dateGroup !== 'month' && dateGroups.includes(item.dateGroup as DateGroup)) out.dateGroup = item.dateGroup as DateGroup
   if (type === 'bar' || type === 'pie' || type === 'pareto' || type === 'table') {
     if (item.top === 'all') out.top = 'all'
@@ -99,15 +110,21 @@ export function cleanOptions(type: InsightType, measure: InsightMeasure, raw: un
   if (elements) out.elements = elements
   // CHT-36: a KPI shown as a panel (a card when absent).
   if (type === 'kpi' && item.view === 'panel') out.view = 'panel'
+  // CHT-47: the place on the chart grid — whole numbers clamped to the grid and the type's minimum size.
+  const grid = type !== 'kpi' || out.view === 'panel' ? parseGridBox(item.grid, kindOf(type)) : undefined
+  if (grid) out.grid = grid
   return Object.keys(out).length ? out : undefined
 }
-// CHT-09: a page's (or a dashboard's) colour pins — a value's text → a palette colour 1…5; anything else is dropped.
-export function parseColors(raw: unknown): Record<string, number> | undefined {
+// CHT-09, CHT-41: a page's (or a dashboard's) colour pins — a value's text → a palette colour 1…5 or a colour
+// "#rrggbb" (any case when read, written in lower case); anything else is dropped.
+export function parseColors(raw: unknown): ColorPins | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const out: Record<string, number> = {}
+  const out: ColorPins = {}
   for (const [key, slot] of Object.entries(raw as Record<string, unknown>).slice(0, maxColorPins)) {
     const value = key.trim().replace(/\s+/g, ' ').slice(0, 120)
-    if (value && typeof slot === 'number' && Number.isInteger(slot) && slot >= 1 && slot <= paletteSize) out[value] = slot
+    if (!value) continue
+    if (typeof slot === 'number' && Number.isInteger(slot) && slot >= 1 && slot <= paletteSize) out[value] = slot
+    else if (typeof slot === 'string' && isHexColor(slot.toLowerCase())) out[value] = slot.toLowerCase()
   }
   return Object.keys(out).length ? out : undefined
 }
@@ -531,6 +548,8 @@ const insightOut = ({ id, title, type, category, second, measure, value, filters
 const logOut = ({ id, at, by, added, action, comment, changes }: LogEntry) => ({ id, at, by, ...(added ? { added } : {}), ...(action ? { action } : {}), ...(comment ? { comment } : {}), changes })
 // fill: false (the copy kept in this browser) writes the page as it is, without giving keys and numbers.
 export function serializeOnDemandPage(input: OnDemandPage, { fill = true }: { fill?: boolean } = {}) {
+  // OND-66: a page shown with sample rows is never written to Git (nor kept as the page last read).
+  if (input.sample) throw new Error(`Sample data is shown for ${input.name}: nothing is saved to Git. Switch to Live to change it.`)
   // OND-18, OND-19: a saved file has a key and a sequential number on every row.
   const page = fill ? withRowNumbers(withRowKeys(input)) : input
   const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, keyPrefix: page.keyPrefix, columns: page.columns.map(({ id, name, type, options, required, description, currency }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}), ...(description ? { description } : {}), ...(type === 'currency' ? { currency: currency ?? defaultCurrency } : {}) })), rows: page.rows.map(({ id, key, seq, addedBy, addedAt, log, hidden, cells }) => ({ id, ...(key ? { key } : {}), ...(seq ? { seq } : {}), ...(addedBy ? { addedBy } : {}), ...(addedAt ? { addedAt } : {}), ...(log?.length ? { log: log.map(logOut) } : {}), ...(hidden ? { hidden } : {}), cells })), ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}), ...(page.colors && Object.keys(page.colors).length ? { colors: page.colors } : {}), ...(page.storage === 'rows' ? { storage: 'rows' } : {}), ...(page.lastSeq ? { lastSeq: page.lastSeq } : {}), ...insightFiltersPart(page.insightFilters) }, null, 1)}\n`

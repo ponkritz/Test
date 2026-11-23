@@ -184,7 +184,7 @@ test('TC-DSH-09: a viewer without the right sees the dashboard read only, every 
   const reason = buildReason
   // DSH-13: the page's actions in its ⋯ menu, each disabled with its reason as its tooltip; no block ⋯ menus.
   const pageMenu = await menuOf(page, 'page Quality dashboard')
-  for (const name of ['＋ Add block…', 'Arrange blocks…', 'Arrange sizes on the page', 'Tabs and filters…']) {
+  for (const name of ['＋ Add block…', 'Arrange blocks…', 'Arrange on the page', 'Tabs and filters…']) {
     const item = pageMenu.getByRole('menuitem', { name })
     assert.equal(await item.isDisabled(), true, `${name} is disabled`)
     assert.equal(await item.getAttribute('title'), reason)

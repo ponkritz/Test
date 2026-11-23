@@ -8,6 +8,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, l
 import { recordVisit } from './usageCounts'
 import './App.css'
 import './fresh.css'
+import './exports.css'
 import { useAppStore } from './store'
 import { Notice } from './components/ui'
 import { MenuCustomizer } from './components/PersonalLayout'
@@ -48,8 +49,10 @@ import { useAccess } from './useAccess'
 import { useFeatureSetup } from './useFeatureSetup'
 import { useQeMapping } from './useQeMapping'
 import { useOnDemand } from './useOnDemand'
+import { useDataMode } from './useDataMode'
 import { createPage, useMenuLayout } from './useMenuLayout'
-import { addPageReason, builtInGroupOf, findGroup, gitReasonOf, isHidden, kindOf, menuGroups, pagesOfGroup, placementOf, type Viewer } from './menuLayout'
+import { addPageReason, builtInGroupOf, findGroup, gitReasonOf, isHidden, kindOf, menuGroups, pageRights, pagesOfGroup, placementOf, type Viewer } from './menuLayout'
+import { usePublishScheduler } from './publishRun'
 import { AddPageDialog } from './components/PageDialogs'
 import { OwnerPeopleContext, PageNamesContext } from './usePageNames'
 import { knownPeople, teamPeopleOnce, type KnownPerson } from './ownerPeople'
@@ -243,7 +246,9 @@ export default function App() {
   const customStreams = useCustomStreams(git)
   useStreamsVersion()
   // OND-01…10: the On-Demand pages (CoNQ, and those added), each in the menu by its name.
-  const onDemand = useOnDemand(git)
+  // OND-63: Live | Sample per table page and person; the store gives the pages in Sample with their sample rows.
+  const dataMode = useDataMode(personalViews)
+  const onDemand = useOnDemand(git, dataMode.isSample)
   const [onDemandId, setOnDemandId] = useState(() => { try { return localStorage.getItem('demand-planning-on-demand-page-v1') ?? '' } catch { return '' } })
   const onDemandPage = onDemand.pages.find((entry) => entry.id === onDemandId) ?? onDemand.pages[0]
   // PGB-02…PGB-11: the menu layout (menu-layout.json): custom groups, group settings, each added page's place, type and
@@ -252,6 +257,10 @@ export default function App() {
   const viewedEmail = access.viewingAs?.kind === 'person' ? (access.viewingAs.email ?? '').trim().toLowerCase() : access.viewingAs ? '' : access.email
   const viewer: Viewer = { email: viewedEmail, can: access.can, readOnly: access.readOnly, manager: canManagePages(access.policy, access.rights) }
   const [addPageFor, setAddPageFor] = useState<string | null>(null)
+  // OND-73, OND-78: who a standalone HTML file is published by; the publish schedules of this computer run while the app
+  // is open, each only while the person may still publish the page (the Tool Owner or its co-owners).
+  const publisherName = my.self.me.name?.trim() || azure.creatorEmail.trim()
+  usePublishScheduler({ store: onDemand, views: personalViews, publishedBy: publisherName, kindOf: (id) => kindOf(menu.layout, id), allowed: (id) => viewer.manager || pageRights(viewer, menu.layout, id).owner ? '' : 'You are no longer the Tool Owner or a co-owner of the page: the scheduled publish did not run.' })
   // Who creates new work items (the email on the Time Writing connection) and whether they may assign them to others.
   const assign = { me: azure.creatorEmail.trim().toLowerCase(), canChoose: access.can('azure.createForOthers') }
   // NAV-42, NAV-46: the start page — Home (the tiles) in the tile view, My dashboard in the classic view.
@@ -587,7 +596,7 @@ export default function App() {
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
       {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} />}
-      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} />}
+      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} dataMode={dataMode} publisherName={publisherName} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}
       {page === 'bulk' && <SprintCheckPage azure={azure} store={store} my={my} />}

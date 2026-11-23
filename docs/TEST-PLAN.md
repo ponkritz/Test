@@ -1768,6 +1768,36 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-50 Convert suggested for a large page** — Req OND-62, OND-32 — L1 `row-files.test.mjs` ("OND-62: a single-file table page is suggested for row files above 500 rows or 600 KB (two thirds of the 900 KB limit) (TC-OND-50)"); E2E `row-locks.e2e.mjs` ("TC-OND-50: a large page in one file — the Tool Owner is offered Convert to row files on the page and can dismiss it for that page; others see nothing"); browser check: as Tool Owner a page in one file with 501 rows shows the info line with Convert to row files… (the pop-up of OND-32) and Dismiss; after Dismiss and a reload it stays hidden for that page; a page with 500 rows, a page of row files and another person (also an Admin) show nothing; a new page is still one file.
 
+**TC-OND-51 The sample rows of a page** — Req OND-64 — L1 `sample-rows.test.mjs` ("OND-64: 50 sample rows from the page’s own columns — types, options, currency, dates of the last 12 months, IDs SAMPLE-0001… (TC-OND-51)", "OND-64: the sample is deterministic for the column setup and new when a column or option changes (TC-OND-51)"); browser check: on a page with a Dropdown, a Multi-select, a Currency column in USD and a Date, Sample shows 50 rows SAMPLE-0001…0050 with values from the options, 1–3 sites, amounts in USD and dates of the last 12 months, none marked "not in the list"; reopening the page shows the same rows; after adding an option the rows change.
+
+**TC-OND-52 Nothing of a page in Sample is written** — Req OND-66, CON-102 — L1 `sample-rows.test.mjs` ("OND-66: a page in Sample is never written — the file writer refuses it; the page’s charts and colours are kept (TC-OND-52)"); E2E `sample-data.e2e.mjs` ("TC-OND-54: Sample on CoNQ — the banner, 50 made-up rows in the table and the charts, changes disabled with the reason, nothing written to Git, the choice kept after a reload"); browser check: in Sample every change on the page and in its ⋯ menu (Rename page…, Delete page…, Convert to row files…) is disabled with "Sample data is shown: nothing is saved. Switch CoNQ to Live to change it." as its tooltip; the GitHub history of `on-demand/conq.json` shows no commit.
+
+**TC-OND-53 The toggle remembered per person; exports marked** — Req OND-63, OND-67 — L1 `sample-rows.test.mjs` ("OND-63, OND-67: the choice per page is read back strictly; exports of sample rows are marked (TC-OND-53)"); browser check: with a work email the choice is in the personal views file as `"data-mode:conq": "sample"` and follows to another computer; a colleague still sees Live; Export (CSV) in Sample downloads `Sample-CoNQ.csv` whose first line is "Sample data — made-up rows, not the page’s data"; a drill-down export and a dashboard table export over the page are named and marked the same.
+
+**TC-OND-54 Live / Sample on CoNQ** — Req OND-63, OND-65, OND-66 — **UAT** — E2E `sample-data.e2e.mjs` ("TC-OND-54: Sample on CoNQ — the banner, 50 made-up rows in the table and the charts, changes disabled with the reason, nothing written to Git, the choice kept after a reload"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): on CoNQ choose Data: Sample — the banner "Sample data — nothing is saved." shows on both tabs, the table says "50 of 50 rows" starting SAMPLE-0001, Edit and ＋ Add row are disabled with the reason, the Insights charts and KPI cards count the sample rows (the filter row and a drill-down too); an On-Demand Dashboard with a block over CoNQ shows the sample figures and the banner naming CoNQ, while a colleague sees the real figures; after a reload Sample is still chosen; Live shows the real rows again.
+
+**TC-OND-55 The PDF footer: date and time of the export in the person's own zone** — Req OND-71, OND-67 — L1 `pdf-export.test.mjs` ("OND-71: the footer’s date and time of the export in the person’s own time zone, with the zone’s name (TC-OND-55)"); browser check: with the computer in Central European Time, a PDF exported at 14:32 on 24 Nov 2026 has "CoNQ · Exported 24 Nov 2026, 14:32 CET" on every page; unticking Time of export leaves "24 Nov 2026"; in Sample "· Sample data" follows.
+
+**TC-OND-56 The print view: paper, margins, page numbers, file name** — Req OND-69, OND-70, OND-72 — L1 `pdf-export.test.mjs` ("OND-69, OND-72: the print view’s page rule, paper widths and file name (TC-OND-56)"); browser check: in Chrome or Edge the saved PDF shows "Page 1 of 4" … "Page 4 of 4" in the bottom right of each page and no chart is cut by a page break; in Firefox the pop-up says the browser cannot number the pages and the PDF shows the footer line without numbers.
+
+**TC-OND-57 Desktop: the PDF saved where the person chooses** — Req OND-72 — L1 `pdf-export.test.mjs` ("OND-69: the desktop handler checks the request, prints with the footer template and saves where the person chose (TC-OND-57)"); browser check (desktop app on Windows): Export PDF… asks where to save "CoNQ-2026-11-24.pdf" in Documents; the file opens in a PDF reader with selectable text, the charts sharp at any zoom, the footer with "Page n of m"; Cancel in the save dialog writes nothing and Background jobs says "Not saved: the save dialog was cancelled."
+
+**TC-OND-58 Export PDF of the Insights** — Req OND-68, OND-69, OND-70, OND-71, OND-72 — **UAT** — E2E `pdf-export.e2e.mjs` ("TC-OND-58: Export PDF of the Insights in a browser — the pop-up, a print view with the chosen charts and the footer, the print dialog opened"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): on CoNQ's Insights ⋯ → Export PDF…, choose a selection of a bar chart and a KPI card, Letter, Portrait — the print view shows only those two (the card first), the footer "CoNQ · Exported {today, now, zone}", and the print dialog opens; with the dark theme the PDF is still on white; with a filter row choice "Q1 · Scrap" the PDF's charts show the same numbers as the screen and "Filter row: …" under the title; unticking Include the active filters gives the numbers of every row.
+
+**TC-OND-59 Export PDF of an On-Demand Dashboard** — Req OND-68, OND-69, OND-70 — browser check: on a dashboard with two KPI tiles and blocks on two tabs, the page ⋯ → Export PDF… lists the tiles (KPI card) and each block with its tab; All exports every tile and block, whatever tab is open, with "Period: 2026 (whole year) · Category: Scrap." when filtered; a block over a page in Sample carries "Sample data" in the footer.
+
+**TC-OND-60 The standalone HTML file: escaped, offline, hidden rows left out** — Req OND-74, OND-77 — L1 `standalone-html.test.mjs` ("OND-74, OND-77: the file — every value escaped, no external URL, hidden rows left out, the sort and search script with its CSP hash (TC-OND-60)", "OND-77: a chart’s SVG is kept only when it is plain drawing (TC-OND-60)"); browser check: a row with `<img src=x onerror=alert(1)>` in a Text column shows that text in the file and nothing runs; the browser's developer tools show no request when the file is opened from a folder; a chart the check refuses says "This chart could not be included."
+
+**TC-OND-61 The schedule's due times** — Req OND-78, OND-79 — L1 `standalone-html.test.mjs` ("OND-78, OND-79: the schedule — due times with a fake clock, a missed run once at the next start, read back strictly (TC-OND-61)"); browser check: a schedule Daily at a time two minutes ahead runs once at that time (Background jobs "Scheduled publish · CoNQ"), not again in the same day; with the app closed over that time it runs once at the next start.
+
+**TC-OND-62 Desktop: one file per page, chosen and overwritten** — Req OND-76 — L1 `standalone-html.test.mjs` ("OND-76: the desktop file — chosen in the save dialog, remembered per page, overwritten, never another path (TC-OND-62)"); browser check (desktop app on Windows): the first Publish now asks where to save "CoNQ.html" (Documents), the next ones overwrite it without asking; after the folder is renamed the publish fails with "The folder … is missing" and the page shows the warning for a scheduled run; `publish-targets.json` in the app's user data folder holds the path, and no Git file changes.
+
+**TC-OND-63 Publish CoNQ as a standalone HTML file** — Req OND-73, OND-74, OND-76, OND-77, OND-80 — **UAT** — E2E `standalone-html.e2e.mjs` ("TC-OND-63: the Tool Owner publishes CoNQ as a standalone HTML file — the confirmation, the file picked, the rows and charts written without external addresses, sort and search working offline"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): as the Tool Owner in Chrome or Edge, CoNQ ⋯ → Publish standalone HTML… warns "This file contains every row of CoNQ. Anyone who receives it can read them.", Publish now asks for the file (CoNQ.html) and Background jobs says "Published {n} rows of CoNQ to CoNQ.html"; the file opened from a shared folder shows "Published by {you} on {date, time, zone}", the charts and the table, sorts by Cost and finds a row by a word; in Firefox the file is downloaded and Background jobs says so.
+
+**TC-OND-64 Publish disabled in Sample and for others** — Req OND-73, OND-75, CON-102 — E2E `standalone-html.e2e.mjs` ("TC-OND-64: Publish standalone HTML… is disabled with the reason in Sample and for a person who is not an owner of the page"); browser check: a page co-owner (not Tool Owner) may publish; an Admin who is not a co-owner sees the item disabled with the reason.
+
+**TC-OND-65 A failed scheduled publish warns on the page** — Req OND-79, OND-78 — E2E `standalone-html.e2e.mjs` ("TC-OND-65: a scheduled publish that is due at the start but cannot write its file warns on the page, with Publish standalone HTML… to fix it"); browser check: in Chrome, after the site's file permission is revoked, the next scheduled run fails with "The browser no longer lets the app write CoNQ.html …", Background jobs shows the failure and the page the warning; Publish now asks for the permission once and the warning goes with the next successful scheduled run.
+
 ### 6.29 Custom streams
 
 **TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details → Azure DevOps Server, on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
@@ -1884,7 +1914,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-CHT-15 Precedence, grid placement and a Dashboard block sized in Arrange blocks…** — Req CHT-17, CHT-18, CHT-19, CHT-20, DSH-13 — L1 `chart-resize.test.mjs` ("CHT-18, CHT-19: precedence — the viewer’s own size, then the owner’s (or shared) default, then the factory size; stored sizes validated (TC-CHT-15)"); L1 `chart-resize.test.mjs` ("CHT-20: grid placement — the 6-column grid only once a chart takes a width the old layout did not have (TC-CHT-15)"); E2E `chart-resize.e2e.mjs` ("TC-CHT-15: a Dashboard block is resized in Arrange blocks… — saved to the dashboard file"); browser check: a dashboard nobody resized looks as before (two half-width blocks per row); after one block is set to ⅓ the blocks follow the 6-column grid.
 
-**TC-CHT-16 A viewer resizes a chart for themselves with the handle — drag and keyboard** — Req CHT-18, CHT-21, CHT-15, CHT-16 — L1 `chart-resize.test.mjs` ("CHT-21: the handle — arrow keys step the presets (clamped), a drag snaps to the nearest preset (TC-CHT-16)"); E2E `chart-resize.e2e.mjs` ("TC-CHT-16: a viewer drags a chart to Full — it snaps, is remembered after a reload, is not written to the page; Reset to default restores it; the keyboard resizes another"); browser check: with a screen reader the handle is announced "Resize {chart}: width ½, height Medium" and each arrow key announces the new size; while dragging the dashed outline names the size it snaps to; View as: a size chosen there is gone after leaving the page and nothing is written to Git.
+**TC-CHT-16 A viewer resizes a chart for themselves with the handle — drag and keyboard** — Req CHT-18, CHT-21, CHT-15, CHT-16 — L1 `chart-resize.test.mjs` ("CHT-21: the handle — arrow keys step the presets (clamped), a drag snaps to the nearest preset (TC-CHT-16)"); E2E `chart-resize.e2e.mjs` ("TC-CHT-16: a viewer drags a chart to Full — it snaps, is remembered after a reload, is not written to the page; Reset to default restores it; the keyboard resizes another"); browser check: with a screen reader the handle is announced "Resize {chart}: 6 × 8 (width ½, height Medium)" and each arrow key announces the new size (one column or row); while dragging the grid lines show and the outline names the size it snaps to; View as: a size chosen there is gone after leaving the page and nothing is written to Git.
 
 **TC-CHT-17 Long labels stay inside the chart (KB-83)** — Req CHT-23 — L1 `chart-resize.test.mjs` ("CHT-23 (KB-83): a label is wrapped by words into its space, cut with "…" only when it does not fit (TC-CHT-17)"); E2E `chart-resize.e2e.mjs` ("TC-CHT-16: a viewer drags a chart to Full — it snaps, is remembered after a reload, is not written to the page; Reset to default restores it; the keyboard resizes another"); browser check at 1440 px and 390 px: a Dropdown value of 70 characters is drawn on up to two lines with "…" and its full text as tooltip in a bar chart and a Pareto, at ⅓, ½ and Full; a long axis name ends in "…" with its full text as tooltip; Team overview's charts with short labels look as before.
 
@@ -1915,6 +1945,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-CHT-30 A viewer sees the chart elements and keeps their own Data labels switch** — Req CHT-28, CHT-34, CHT-35 — E2E `chart-elements.e2e.mjs` ("TC-CHT-30: a viewer sees the owner’s chart elements and switches the data labels for themselves; charts without elements are drawn as before"); browser check on an On-Demand Dashboard: a block whose builders set data labels Off starts without labels for a new viewer, one without the setting starts with them on (DSH-06).
 
 **TC-CHT-31 The chart pop-up: preview beside the form, the KPI card, no type eyebrow** — Req CHT-37, CHT-38, CHT-39, CHT-26 — E2E `chart-elements.e2e.mjs` ("TC-CHT-31: KPI charts are a row of cards — the value never cut, the pop-up’s preview beside the form, no chart type above a chart"); browser check at 1440, 1280, 1024 and 390 px, light and dark: in Edit the chart or table and Edit the block, the form and the Preview never overlap (one under the other in a narrow pop-up), the field labels are not clipped, the preview shows the title, ⓘ and "Filtered" only; no chart, block or card shows its type above the title, and ⓘ starts with "Type: …"; with Chart heading off the panel shows ⓘ without the title and a screen reader still reads the title.
+
+**TC-CHT-32 Grouped bars: every measure side by side, Excel's clustered label positions, a trendline per series** — Req CHT-40, CHT-28, CHT-33 — L1 `chart-colors.test.mjs` ("CHT-40: grouped bars — the option validated, every measure allowed side by side, stacked still Count or Sum (TC-CHT-32)"); L1 `chart-colors.test.mjs` ("CHT-40: the layout of a group — bars side by side in the band, centred, never wider than the band (TC-CHT-32)"); E2E `chart-grid.e2e.mjs` ("TC-CHT-37: the owner arranges the charts on the grid — drags one to the top (the others shift, saved to Git), resizes one with the grid lines shown, moves one with the keyboard; grouped bars and an own colour are drawn"); browser check at 1440 px and 390 px, light and dark: a bar chart of the Average of Cost by Category with Stacked by Site says it cannot be stacked and offers Grouped; with Series "Grouped (side by side)" it draws one bar per site in each category, horizontal and as columns; Data labels at Center, Inside End, Inside Base and Outside End sit on each bar; Trendline Linear draws one dotted line per site; a click on one bar lists the rows of that category and site; Series "Stacked" draws the chart as before.
+
+**TC-CHT-33 Own colours per value, the contrast warning and readable labels** — Req CHT-41, CHT-42, CHT-09, CHT-13 — L1 `chart-colors.test.mjs` ("CHT-41: colour pins — a palette colour 1…5 or #rrggbb, validated when read, merged as one entry; old pins as before (TC-CHT-33)"); L1 `chart-colors.test.mjs` ("CHT-41: the WCAG non-text contrast check (3:1 against the chart background, light and dark) and the readable label colour (TC-CHT-33)"); E2E `chart-grid.e2e.mjs` ("TC-CHT-33: the owner picks an own colour with the hex field — the contrast warning for a pale colour, a wrong value refused"); browser check at 1440 px and 390 px, light and dark: in a chart's Display pick "Own colour…" for a value, choose a colour with the picker and type `#1f77b4` — the preview and, after Save, every chart of the page use it in both themes; type `#ffff66` — the warning names the light theme and the colour is kept; type `blue` — "Type a colour as #rrggbb" and the pin is unchanged; a page with pins 1…5 shows them as before; the same in the Dashboard block pop-up.
+
+**TC-CHT-34 The presets on the 12-column grid: sizes kept, minimums** — Req CHT-44, CHT-45, CHT-46 — L1 `chart-grid.test.mjs` ("CHT-44, CHT-45: the presets map onto the grid and draw as before — ⅓ ½ ⅔ Full = 4 6 8 12 columns, Small Medium Large = today’s heights in rows (TC-CHT-34)"); L1 `chart-resize.test.mjs` ("CHT-20: grid placement — a page nobody arranged is laid out as before: half-width charts two per row, a full-width one on its own row (TC-CHT-15)"); E2E `chart-resize.e2e.mjs` ("TC-CHT-13: the owner sets a chart to ⅔ × Large with its own axis names in the Edit pop-up and another to ⅓ with the keyboard in Arrange sizes — saved to Git; the page and chart ⋯ menus work with the keyboard"); browser check: before / after screenshots of CoNQ's Insights, an On-Demand Dashboard and Team overview → Streams at 1440 px — the same panels at the same places and sizes; a chart sized ⅔ × Large before the update is 8 × 12.
+
+**TC-CHT-35 Packing, moving and resizing on the grid** — Req CHT-43, CHT-46, CHT-47, CHT-49 — L1 `chart-grid.test.mjs` ("CHT-43, CHT-47: packing — places kept, overlaps resolved by compaction, gaps closed upward, charts without a place after the others (TC-CHT-35)"); L1 `chart-grid.test.mjs` ("CHT-46: the medium-wide grid (6 columns) and the phone (one column, in reading order) (TC-CHT-35)"); L1 `chart-grid.test.mjs` ("CHT-47: moving — dropped on a place, the others shift out of the way and gaps close; the keyboard moves one column or past a neighbour (TC-CHT-35)"); L1 `chart-grid.test.mjs` ("CHT-43, CHT-49: resizing — wider or taller, the others beside or below shift out of the way (TC-CHT-35)"); L1 `chart-resize.test.mjs` ("CHT-21, CHT-49: the handle — arrow keys step one column or row (clamped to the minimum and the grid), a drag snaps to whole columns and rows (TC-CHT-16)"); browser check at 1024 px: the grid has 6 columns, a ⅓ chart takes 2 of them, resizing steps two twelfths, there is no grip.
+
+**TC-CHT-36 The layout in the page and dashboard files, merged per chart, read by an older app** — Req CHT-50, CHT-47, CHT-48 — L1 `chart-grid.test.mjs` ("CHT-47, CHT-48, CHT-50: options.grid and a viewer’s size in grid units — written only when set, with the nearest presets for older apps; merged per chart (TC-CHT-36)"); browser check: a hand-edited page file with two charts at `{"x": 0, "y": 0, "w": 6, "h": 8}` and one at `{"x": 11, "w": 40}` shows them one under the other and the third clamped to full width; the same file in v10.1.0 shows the nearest presets (LIM-41).
+
+**TC-CHT-37 Arrange the charts on the grid: drag to move, resize, keyboard; a viewer resizes but cannot move** — Req CHT-43, CHT-47, CHT-48, CHT-49, CHT-46, CHT-40, CHT-41 — **UAT** — L1 `chart-grid.test.mjs` ("CHT-47: moving — dropped on a place, the others shift out of the way and gaps close; the keyboard moves one column or past a neighbour (TC-CHT-35)"); E2E `chart-grid.e2e.mjs` ("TC-CHT-37: the owner arranges the charts on the grid — drags one to the top (the others shift, saved to Git), resizes one with the grid lines shown, moves one with the keyboard; grouped bars and an own colour are drawn"); E2E `chart-grid.e2e.mjs` ("TC-CHT-37: a viewer resizes a chart on the grid for themselves but cannot move one; at 390 px every chart is full width without handle or grip"); UAT: as the owner of CoNQ (four charts) click **Arrange charts** — the grid's lines and each chart's size ("6 × 8") show; drag the third chart by ⠿ to the top left — the others move down while you drag; release — saved to Git, a colleague sees the new order after reloading; drag another chart's corner two columns narrower ("4 × 8") — saved; focus a chart's ⠿, → and Enter — it moves one column, announced; as a colleague resize a chart with its corner (it stays after a reload, Reset to default brings back the owner's size) and find no ⠿ and no Arrange charts; on a phone every chart is full width without handles; also on an On-Demand Dashboard (⋯ → Arrange on the page).
 
 ## 7. Requirements coverage matrix
 
@@ -2461,6 +2503,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-60 | TC-OND-48, TC-OND-46 |
 | OND-61 | TC-OND-49, TC-CHT-13, TC-CHT-21 |
 | OND-62 | TC-OND-50 |
+| OND-63 | TC-OND-53, TC-OND-54 |
+| OND-64 | TC-OND-51 |
+| OND-65 | TC-OND-54 |
+| OND-66 | TC-OND-52, TC-OND-54 |
+| OND-67 | TC-OND-53, TC-OND-55 |
+| OND-68 | TC-OND-58, TC-OND-59 |
+| OND-69 | TC-OND-56, TC-OND-58, TC-OND-59 |
+| OND-70 | TC-OND-56, TC-OND-58, TC-OND-59 |
+| OND-71 | TC-OND-55, TC-OND-58 |
+| OND-72 | TC-OND-56, TC-OND-57, TC-OND-58 |
+| OND-73 | TC-OND-63, TC-OND-64 |
+| OND-74 | TC-OND-60, TC-OND-63 |
+| OND-75 | TC-OND-64 |
+| OND-76 | TC-OND-62, TC-OND-63 |
+| OND-77 | TC-OND-60, TC-OND-63 |
+| OND-78 | TC-OND-61, TC-OND-65 |
+| OND-79 | TC-OND-61, TC-OND-65 |
+| OND-80 | TC-OND-63 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -2547,6 +2607,17 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CHT-37 | TC-CHT-28, TC-CHT-31 |
 | CHT-38 | TC-CHT-31 |
 | CHT-39 | TC-CHT-31 |
+| CHT-40 | TC-CHT-32, TC-CHT-37 |
+| CHT-41 | TC-CHT-33, TC-CHT-37 |
+| CHT-42 | TC-CHT-33 |
+| CHT-43 | TC-CHT-35, TC-CHT-37 |
+| CHT-44 | TC-CHT-34 |
+| CHT-45 | TC-CHT-34 |
+| CHT-46 | TC-CHT-34, TC-CHT-35, TC-CHT-37 |
+| CHT-47 | TC-CHT-35, TC-CHT-36, TC-CHT-37 |
+| CHT-48 | TC-CHT-36, TC-CHT-37 |
+| CHT-49 | TC-CHT-35, TC-CHT-37 |
+| CHT-50 | TC-CHT-36 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2597,8 +2668,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…50, TC-CHT-01…31 |
-| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…31 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-CHT-01…37 |
+| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37 |
 
 ## 8. Result record
 

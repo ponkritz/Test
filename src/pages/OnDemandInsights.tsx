@@ -2,17 +2,19 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { utcToday } from '../businessTime'
 import { ChartOptionsFields } from '../components/ChartOptionsFields'
 import { PreviewHeading } from '../components/ChartElements'
-import { ChartPanel, SizeDialog } from '../components/ChartSize'
+import { ChartGrid, ChartPanel, SizeDialog } from '../components/ChartSize'
 import { ViewActions } from '../components/ViewActions'
-import { insightChartId, needsGrid, pairFactory, sizeFromOptions, sizeText, withSizeOptions, type ChartSize } from '../chartSize'
+import { factoryOf, insightChartId, kindOf, parseGridBox, sizeFromOptions, sizeText, withGridBox, withSizeOptions, type ChartSize, type GridBox } from '../chartSize'
+import type { Layout } from '../chartGrid'
 import { useChartSizes } from '../useChartSize'
 import { ChartCountInfo, InsightView, KpiCard } from '../components/InsightCharts'
 import { MultiSelect } from '../components/MultiSelect'
 import { EmptyState, Info, Modal, Notice, Panel, Pill, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodQuarters, periodYears, type Period } from '../dashboard'
 import { amountProblem, anyCurrency, chartCurrency, cleanSetup, currenciesOf, filterCurrency, filterKind, filterRowColumns, insightsLocalKey, insightsViewerKey, isFiltered, maxInsightFilters, narrowInsightRows, offeredYears, periodColumns, readChoice, resolveFilterSetup, scopeText, emptyChoice, type FieldChoice, type ResolvedSetup, type ViewerChoice } from '../insightFilters'
-import { cleanOptions, hasOptions, newId, type Insight, type InsightFilter, type InsightFilterSetup, type InsightMeasure, type OnDemandColumn, type OnDemandPage } from '../onDemand'
+import { cleanOptions, hasOptions, newId, type ColorPins, type Insight, type InsightFilter, type InsightFilterSetup, type InsightMeasure, type OnDemandColumn, type OnDemandPage } from '../onDemand'
 import type { PersonalViewsStore } from '../usePersonalViews'
+import { PdfExport, type PrintItem } from '../components/PrintView'
 import { blankInsight, categoryColumns, filterColumns, filterText, insightError, insightRules, insightSubject, insightTypeLabel, insightTypes, measureColumns, measuresFor, noneKey, noneLabel, secondColumns, secondLabel, withType } from '../onDemandInsights'
 
 // CHT-36: a KPI (one number) is a card in the row above the charts unless its owners show it as a panel.
@@ -31,6 +33,8 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
   const [removing, setRemoving] = useState<Insight | null>(null)
   const [settingUp, setSettingUp] = useState(false)
   const [sizing, setSizing] = useState<Insight | null>(null)
+  // OND-68: Export PDF… (the Insights ⋯).
+  const [exporting, setExporting] = useState(false)
   const noColumns = !page.columns.length
   const addReason = setupReason || (noColumns ? 'Set up the page’s columns first (Data tab → Set up columns…).' : '')
   const filtersReason = addReason || (filterRowColumns(page).length ? '' : 'The filter row needs a Date, Dropdown, Multi-select, Text, Number or Currency column.')
@@ -49,12 +53,19 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
   const sizes = useChartSizes()
   const [arranging, setArranging] = useState(false)
   const arrange = arranging && canSetup
-  const sizeOf = (insight: Insight) => { const resolved = sizes.resolve(insightChartId(page.id, insight.id), pairFactory, sizeFromOptions(insight.options)); return arrange ? { ...resolved, size: resolved.base, source: 'owner' as const } : resolved }
-  const ownerSize = (insight: Insight, size: ChartSize) => onChange({ ...page, insights: page.insights.map((entry) => entry.id === insight.id ? withInsightSize(entry, size) : entry) }, `${page.name}: size of the chart ${insight.title} (${sizeText(size)})`)
+  const sizeOf = (insight: Insight) => { const kind = kindOf(insight.type); const resolved = sizes.resolve(insightChartId(page.id, insight.id), factoryOf(kind), sizeFromOptions(insight.options, kind), kind); return arrange ? { ...resolved, size: resolved.base, source: 'owner' as const } : resolved }
+  const ownerSize = (insight: Insight, size: ChartSize) => onChange({ ...page, insights: page.insights.map((entry) => entry.id === insight.id ? withInsightSize(entry, size) : entry) }, `${page.name}: size of the chart ${insight.title} (${sizeText(size, kindOf(insight.type))})`)
+  // CHT-47: the owners' layout (Arrange mode) — every chart's place and size on the grid, saved for everyone at once.
+  const ownerLayout = (layout: Layout, _changed: string[], id: string, mode: 'resize' | 'move') => {
+    const moved = page.insights.find((entry) => entry.id === id)
+    const box = layout[id]
+    onChange({ ...page, insights: page.insights.map((entry) => layout[entry.id] ? withInsightBox(entry, layout[entry.id]) : entry) },
+      mode === 'move' ? `${page.name}: move the chart ${moved?.title ?? id} (column ${box.x + 1}, row ${box.y + 1})` : `${page.name}: size of the chart ${moved?.title ?? id} (${sizeText(box, kindOf(moved?.type ?? 'bar'))})`)
+  }
   // CHT-36: KPI charts are cards (unless shown as a panel); the rest are chart panels. Move up / down moves a card among
   // the cards and a panel among the panels.
   const cards = page.insights.filter(isCard), panels = page.insights.filter((insight) => !isCard(insight))
-  const sized = needsGrid(panels.map((insight) => sizeOf(insight).size.width))
+  const entries = panels.map((insight) => ({ id: insight.id, kind: kindOf(insight.type), size: sizeOf(insight).size, box: parseGridBox(insight.options?.grid, kindOf(insight.type)) }))
   const moveAmong = (list: Insight[], insight: Insight, by: number) => { const other = list[list.indexOf(insight) + by]; if (other) move(page.insights.indexOf(insight), page.insights.indexOf(other) - page.insights.indexOf(insight)) }
   // CHT-25, CHT-39: what a chart's or card's header holds — its title, no type eyebrow (the type is the first line of ⓘ) — ⓘ (what it measures, its filters, the filter row, the rows counted,
   // the currency) and "Filtered" with the owners' ⋯ menu.
@@ -73,18 +84,33 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
     ]} />}</span> : undefined
     return { currency, info, action, rowFiltered }
   }
+  // OND-68, OND-70: the charts and cards for the PDF, drawn by the same components as above (no drill-down, no ⋯),
+  // with the active filter row (the viewer's choice) or over every row; each chart's own filters always apply.
+  const printItems = (): PrintItem[] => page.insights.map((insight) => {
+    const card = isCard(insight), size = sizeOf(insight).size
+    const own = insight.filters.length ? `Its own filters: ${filterText(page, insight)}` : undefined
+    return { id: insight.id, title: insight.title, card, size, render: (filters: boolean) => {
+      const currency = filters && narrowed.active ? chartCurrency(insight, narrowed) : ''
+      const rows = filters ? shown : page
+      return card ? <KpiCard page={rows} insight={insight} currency={currency} />
+        : <ChartPanel className="od-insight" size={size} source="owner" title={insight.title} titleHidden={insight.options?.elements?.title === false} detail={own}>
+          <InsightView quiet drill={false} page={rows} insight={insight} colors={page.colors} narrowed={filters && narrowed.active && narrowed.shown < narrowed.all} currency={currency} />
+        </ChartPanel>
+    } }
+  })
   return <>
     {/* OND-61: the heading in one line — the explanation behind ⓘ, Filters… and ＋ Add chart / table beside the title. */}
     <Panel className="od-insights-head" eyebrow={eyebrow} title="Insights"
       info={<>{page.insights.length} chart{page.insights.length === 1 ? '' : 's'} and tables from the {page.rows.length} row{page.rows.length === 1 ? '' : 's'} of {page.name}, the same for everyone. Charts and summary tables built from the rows on the Data tab: a bar / column chart, a line over time, a pie / donut, a Pareto, a KPI or a summary table, each with Count of rows, Sum, Average, Minimum or Maximum of a Number or Currency column (one currency at a time, never converted) or a Distinct count, filters of its own and display options (orientation, date grouping, Top N, running total, percent of total, a target line, colours, width and height). Click a bar, slice or point to list the rows behind it. When the filter row has a Currency filter, the currency chosen there is also shown by each chart that sums, averages or takes the minimum or maximum of that column (another can still be chosen above the chart); charts of other columns keep their own currency. Each change is saved to Git at once, with the page, and shown to everyone who sees the page; people allowed to set up On-Demand pages add, edit, reorder, size and remove them (the chart’s ⋯). Anyone can resize a chart for themselves with the handle on its bottom-right corner (or focus it and use the arrow keys): it is remembered for them, and Reset to default goes back to the owners’ size.</>}
       action={<span className="button-row nowrap">
         <button type="button" className="ghost" disabled={Boolean(filtersReason)} title={filtersReason || undefined} onClick={() => setSettingUp(true)}>Filters…</button>
-        {canSetup && page.insights.length > 0 && <button type="button" className="ghost" aria-pressed={arrange} title="Drag a chart’s corner to set its size for everyone" onClick={() => setArranging(!arrange)}>{arrange ? 'Done arranging' : 'Arrange sizes'}</button>}
+        {canSetup && page.insights.length > 0 && <button type="button" className="ghost" aria-pressed={arrange} title="Drag a chart by ⠿ to move it, or its corner to size it, for everyone" onClick={() => setArranging(!arrange)}>{arrange ? 'Done arranging' : 'Arrange charts'}</button>}
         <button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={() => setEditing({ insight: blankInsight(page, newId('i')), isNew: true })}>＋ Add chart / table</button>
+        <ViewActions label="Insights" items={[{ key: 'pdf', label: 'Export PDF…', disabled: !page.insights.length, title: page.insights.length ? undefined : 'No charts or tables to export yet.', onClick: () => setExporting(true) }]} />
       </span>}>
       <WriteBlocked reason={blockNote} />
       {!blockNote && noColumns && canSetup && <p className="muted">{addReason}</p>}
-      {arrange && <p className="muted chart-arrange-note" role="status">Arranging sizes for everyone: drag a chart’s bottom-right corner (or focus it and use the arrow keys, Enter to keep) — each size is saved to Git at once. Done arranging goes back to your own view.</p>}
+      {arrange && <p className="muted chart-arrange-note" role="status">Arranging the charts for everyone on the 12-column grid: drag a chart by ⠿ to move it (the others make room) and its bottom-right corner to size it — or focus ⠿ or the corner and use the arrow keys (Shift + arrows on the corner move it), Enter to keep. Each change is saved to Git at once. Done arranging goes back to your own view.</p>}
       {setup.dropped.length > 0 && <Notice tone="warning">Filter row: {setup.dropped.join(' ')}{canSetup ? ' Filters… sets it up again.' : ''}</Notice>}
       {!page.insights.length && <EmptyState title="No charts or tables yet." detail={canSetup && !noColumns ? 'Add the first one with ＋ Add chart / table.' : canSetup ? undefined : 'Someone allowed to set up On-Demand pages adds them.'} />}
       {saveBar}
@@ -97,19 +123,22 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
     {cards.length > 0 && <div className="metric-grid compact od-kpi-cards">
       {cards.map((insight) => { const parts = partsOf(insight); return <KpiCard key={insight.id} page={shown} insight={insight} currency={parts.currency} info={parts.info} action={parts.action(cards, false)} /> })}
     </div>}
-    <div className={`od-insights${sized ? ' chart-grid' : ''}`}>
+    {panels.length > 0 && <ChartGrid className="od-insights" entries={entries} arranging={arrange} canMove={canSetup} titleOf={(id) => page.insights.find((entry) => entry.id === id)?.title ?? id}
+      onResize={(id, next) => { const insight = page.insights.find((entry) => entry.id === id); if (insight) sizes.setOwn(insightChartId(page.id, id), next, sizeOf(insight).base, kindOf(insight.type)) }} onLayout={ownerLayout}>
       {panels.map((insight) => {
         const { currency, info, action, rowFiltered } = partsOf(insight)
-        const { size, source, base } = sizeOf(insight)
+        const { size, source } = sizeOf(insight)
         const id = insightChartId(page.id, insight.id)
-        return <ChartPanel key={insight.id} className="od-insight" legacyFull size={size} source={source} arranging={arrange} title={insight.title} titleHidden={insight.options?.elements?.title === false}
+        return <ChartPanel key={insight.id} id={insight.id} kind={kindOf(insight.type)} className="od-insight" size={size} source={source} arranging={arrange} title={insight.title} titleHidden={insight.options?.elements?.title === false}
           info={info} action={action(panels, true)}
-          onResize={(next) => arrange ? ownerSize(insight, next) : sizes.setOwn(id, next, base)} onReset={arrange ? undefined : () => sizes.setOwn(id, undefined)}>
+          onResize={arrange ? (next) => ownerSize(insight, next) : (next) => sizes.setOwn(id, next, sizeOf(insight).base, kindOf(insight.type))} onReset={arrange ? undefined : () => sizes.setOwn(id, undefined)}>
           <InsightView quiet page={shown} insight={insight} colors={page.colors} narrowed={rowFiltered} currency={currency} />
         </ChartPanel>
       })}
-    </div>
-    {sizing && <SizeDialog eyebrow={eyebrow} title={sizing.title} size={sizeOf(sizing).base} heightReason={sizing.type === 'kpi' || sizing.type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''} onCancel={() => setSizing(null)} onSave={(size) => { ownerSize(sizing, size); setSizing(null) }} />}
+    </ChartGrid>}
+    {sizing && <SizeDialog eyebrow={eyebrow} title={sizing.title} kind={kindOf(sizing.type)} size={sizeOf(sizing).base} heightReason={sizing.type === 'kpi' || sizing.type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''} onCancel={() => setSizing(null)} onSave={(size) => { ownerSize(sizing, size); setSizing(null) }} />}
+    {exporting && <PdfExport eyebrow={eyebrow} pageName={page.name} sample={Boolean(page.sample)} items={printItems()} onClose={() => setExporting(false)}
+      filtersLine={(filters) => narrowed.active ? filters ? `Filter row: ${scopeText(setup, choice, narrowed, currentYear)}` : `Without the filter row: all ${page.rows.length} row${page.rows.length === 1 ? '' : 's'} of ${page.name}.` : ''} />}
     {editing && <InsightDialog page={page} insight={editing.insight} isNew={editing.isNew} onCancel={() => setEditing(null)} onSave={(insight, colors) => {
       // CHT-09: the colour pins are the page's, saved with it.
       const next: OnDemandPage = { ...page, insights: editing.isNew ? [...page.insights, insight] : page.insights.map((entry) => entry.id === insight.id ? insight : entry) }
@@ -134,7 +163,7 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
 
 // OND-15 The pop-up of one insight: title, type, the fields, the measure, filters and sort, with a live preview of the
 // chart or table from the page's rows. Add / Save puts it in the page's unsaved changes.
-function InsightDialog({ page, insight, isNew, onCancel, onSave }: { page: OnDemandPage; insight: Insight; isNew: boolean; onCancel: () => void; onSave: (insight: Insight, colors: Record<string, number> | undefined) => void }) {
+function InsightDialog({ page, insight, isNew, onCancel, onSave }: { page: OnDemandPage; insight: Insight; isNew: boolean; onCancel: () => void; onSave: (insight: Insight, colors: ColorPins | undefined) => void }) {
   const [draft, setDraft] = useState<Insight>(insight)
   const [pins, setPins] = useState(page.colors)
   const [error, setError] = useState('')
@@ -245,7 +274,17 @@ function readStoredChoice(pageId: string, stored: unknown): ViewerChoice {
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 // CHT-17: an insight with the owners' size written into its options (a factory value left out).
 function withInsightSize(insight: Insight, size: ChartSize): Insight {
-  const options = cleanOptions(insight.type, insight.measure, withSizeOptions(insight.options, size))
+  const kind = kindOf(insight.type)
+  const options = cleanOptions(insight.type, insight.measure, withSizeOptions(insight.options, size, factoryOf(kind), false, kind))
+  const out: Insight = { ...insight }
+  if (options) out.options = options
+  else delete out.options
+  return out
+}
+
+// CHT-47: an insight with the owners' place on the grid (and the nearest presets for older apps).
+function withInsightBox(insight: Insight, box: GridBox): Insight {
+  const options = cleanOptions(insight.type, insight.measure, withGridBox(insight.options, box, kindOf(insight.type)))
   const out: Insight = { ...insight }
   if (options) out.options = options
   else delete out.options

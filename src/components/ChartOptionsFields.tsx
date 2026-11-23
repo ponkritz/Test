@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { additive, cleanOptions, hasOptions, maxAxisTitle, paletteSize, type ChartOptions, type DateGroup, type Insight, type OnDemandPage } from '../onDemand'
+import { additive, cleanOptions, hasOptions, maxAxisTitle, paletteSize, type ChartOptions, type ColorPin, type ColorPins, type DateGroup, type Insight, type OnDemandPage } from '../onDemand'
+import { contrastWarning, normalizeHex, pinColor, pinHex } from '../chartColors'
 import { autoAxisTitles, dateGroupLabels, limitsFor } from '../onDemandInsights'
 import { Info } from './ui'
 import { SizeFields } from './ChartSize'
-import { pairFactory, withSizeOptions } from '../chartSize'
+import { factoryOf, kindOf, sizeFromOptions, withSizeOptions } from '../chartSize'
 import { chartKind, contentLabels, contentsFor, defaultContent, defaultGridlines, defaultLegend, defaultPosition, gridlineKeys, gridlineLabels, labelPositions, legendLabels, legendPositions, positionLabels, resolveElements, trendlineFor, withElement, type ChartElements, type ChartKind, type Gridline, type LabelContent, type LabelPosition, type LegendPosition } from '../chartElements'
 
 // CHT-01…CHT-11, CHT-15, CHT-16 The Display options of a chart, the same in the Insights pop-up and the Dashboard block pop-up: only the
@@ -14,7 +15,7 @@ import { chartKind, contentLabels, contentsFor, defaultContent, defaultGridlines
 const tops: { value: string; label: string }[] = [{ value: '5', label: 'Top 5 + Other' }, { value: '10', label: 'Top 10 + Other' }, { value: '15', label: 'Top 15 + Other' }, { value: '20', label: 'Top 20 + Other' }, { value: 'all', label: 'All categories' }]
 const notAdditive = 'Only for Count of rows or Sum: an average, minimum, maximum or distinct count does not add up.'
 
-export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, scope = 'page' }: { page: OnDemandPage; insight: Insight; pins: Record<string, number> | undefined; onOptions: (options: ChartOptions | undefined) => void; onPins: (pins: Record<string, number> | undefined) => void; scope?: 'page' | 'dashboard' }) {
+export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, scope = 'page' }: { page: OnDemandPage; insight: Insight; pins: ColorPins | undefined; onOptions: (options: ChartOptions | undefined) => void; onPins: (pins: ColorPins | undefined) => void; scope?: 'page' | 'dashboard' }) {
   const options = insight.options ?? {}
   const [targetText, setTargetText] = useState(options.target ? String(options.target.value) : '')
   const type = insight.type
@@ -30,7 +31,7 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
   // The column whose values have colours: the stacks or lines, a pie's slices.
   const colored = type === 'pie' ? column(insight.category) : type === 'bar' || type === 'line' ? column(insight.second) : undefined
   const values = colored && hasOptions(colored.type) ? colored.options : []
-  const pin = (value: string, slot: number) => { const next = { ...(pins ?? {}) }; if (slot) next[value] = slot; else delete next[value]; onPins(Object.keys(next).length ? next : undefined) }
+  const pin = (value: string, slot: ColorPin | 0) => { const next = { ...(pins ?? {}) }; if (slot) next[value] = slot; else delete next[value]; onPins(Object.keys(next).length ? next : undefined) }
   const setTarget = (text: string, label = options.target?.label ?? '') => {
     setTargetText(text)
     const value = Number(text)
@@ -38,6 +39,9 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
     set({ target: { value, label } })
   }
   const kind = chartKind(type, options.orientation)
+  // CHT-44: the owners' size in grid units (the presets, or columns and rows when it is none of them).
+  const gridKind = kindOf(type)
+  const current = { ...factoryOf(gridKind), ...sizeFromOptions(options, gridKind) }
   // The currency code in a label: only for a Sum, Average, Minimum or Maximum of a Currency column.
   const money = column(insight.value)?.type === 'currency' && insight.measure !== 'count' && insight.measure !== 'distinct'
   // A dashboard's KPI tile sits in the tile row: nothing to choose.
@@ -48,6 +52,14 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
         <option value="horizontal">Horizontal bars{insight.second ? ' (stacked)' : ''}</option>
         <option value="vertical">Vertical columns{insight.second ? ' (stacked)' : ''}</option>
       </select>
+    </label>}
+    {/* CHT-40: with a second field, the series stacked (as before) or grouped side by side (Excel's clustered bars). */}
+    {type === 'bar' && insight.second && <label>Series
+      <select aria-label="Series" value={options.grouping ?? 'stacked'} onChange={(event) => set({ grouping: event.target.value === 'grouped' ? 'grouped' : undefined })}>
+        <option value="stacked">Stacked</option>
+        <option value="grouped">Grouped (side by side)</option>
+      </select>
+      <small>{options.grouping === 'grouped' ? 'One bar per value side by side: any measure (Average, Minimum, Maximum too).' : 'Stacked bars add their parts up: Count of rows or Sum only.'}</small>
     </label>}
     {dated && <label>Group dates by
       <select aria-label="Group dates by" value={options.dateGroup ?? 'month'} onChange={(event) => set({ dateGroup: event.target.value === 'month' ? undefined : event.target.value as DateGroup })}>
@@ -81,20 +93,45 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
       </select>
     </label>}
     {/* CHT-26…CHT-35: Excel's chart elements, only those the chart type takes. */}
-    {kind && <ElementsFields kind={kind} stacked={Boolean(insight.second)} percent={Boolean(options.percent)} money={money} elements={options.elements} onChange={(elements) => set({ elements })} />}
+    {kind && <ElementsFields kind={kind} stacked={Boolean(insight.second) && options.grouping !== 'grouped'} percent={Boolean(options.percent)} money={money} elements={options.elements} onChange={(elements) => set({ elements })} />}
     {/* CHT-15, CHT-16: the owner's size for everyone (each viewer may still resize the chart for themselves). */}
-    {type === 'kpi' && scope === 'page' && options.view !== 'panel' ? <small>A card takes its place in the row of KPI cards: no width or height to set.</small> : <SizeFields size={{ width: options.size ?? 'half', height: options.height ?? 'medium' }} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
-      onChange={(size) => onOptions(cleanOptions(type, insight.measure, withSizeOptions(options, size, pairFactory, Boolean(options.size) || size.height === (options.height ?? 'medium'))))} />}
+    {type === 'kpi' && scope === 'page' && options.view !== 'panel' ? <small>A card takes its place in the row of KPI cards: no width or height to set.</small> : <SizeFields size={current} kind={gridKind} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
+      onChange={(size) => onOptions(cleanOptions(type, insight.measure, withSizeOptions(options, size, factoryOf(gridKind), Boolean(options.size) || size.h === current.h, gridKind)))} />}
     {values.length > 0 && <div className="od-colors" role="group" aria-label={`Colours of ${colored!.name}`}>
-      <small>Colours of “{colored!.name}” — the same in every chart of this {scope}; “Default” keeps the palette order.</small>
-      {values.slice(0, 40).map((value) => { const slot = pins?.[value] ?? 0; return <label key={value} className="od-color"><i style={{ background: slot ? `var(--viz-series-${slot})` : 'transparent' }} aria-hidden="true" /><span>{value}</span>
-        <select aria-label={`Colour of ${value}`} value={slot} onChange={(event) => pin(value, Number(event.target.value))}>
-          <option value={0}>Default</option>
-          {Array.from({ length: paletteSize }, (_, index) => <option key={index} value={index + 1}>Colour {index + 1}</option>)}
-        </select>
-      </label> })}
+      <small>Colours of “{colored!.name}” — the same in every chart of this {scope}; “Default” keeps the palette order. Colour 1…5 follow the light and dark theme; an own colour (the picker or #rrggbb) is the same in both.</small>
+      {values.slice(0, 40).map((value) => <ColorPick key={value} value={value} pin={pins?.[value]} onPin={(slot) => pin(value, slot)} />)}
     </div>}
   </fieldset>
+}
+
+// CHT-09, CHT-41 One value's colour: Default, a palette colour (Colour 1…5, the presets) or an own colour — the picker
+// or a #rrggbb typed in (only hex digits are taken); a colour with less than 3:1 against the chart background in the
+// light or dark theme is kept with a warning (WCAG non-text contrast), never refused.
+function ColorPick({ value, pin, onPin }: { value: string; pin: ColorPin | undefined; onPin: (pin: ColorPin | 0) => void }) {
+  const hex = pin == null ? '' : pinHex(pin)
+  const custom = typeof pin === 'string'
+  const [text, setText] = useState(custom ? pin : '')
+  const [bad, setBad] = useState(false)
+  const warning = custom ? contrastWarning(pin) : ''
+  const choose = (next: string) => { const color = normalizeHex(next); setText(next); setBad(Boolean(next.trim()) && !color && (/[^#0-9a-f]/i.test(next.trim()) || next.trim().replace(/^#/, '').length >= 6)); if (color) onPin(color) }
+  const pick = (next: string) => {
+    if (next === 'custom') { const start = hex || pinHex(1); setText(start); onPin(start); return }
+    setText(''); setBad(false); onPin(Number(next))
+  }
+  return <div className="od-color">
+    <i style={{ background: pin == null ? 'transparent' : pinColor(pin) }} aria-hidden="true" /><span title={value}>{value}</span>
+    <span className="od-color-pick">
+      <select aria-label={`Colour of ${value}`} value={custom ? 'custom' : String(pin ?? 0)} onChange={(event) => pick(event.target.value)}>
+        <option value={0}>Default</option>
+        {Array.from({ length: paletteSize }, (_, index) => <option key={index} value={index + 1}>Colour {index + 1}</option>)}
+        <option value="custom">Own colour…</option>
+      </select>
+      <input type="color" aria-label={`Pick a colour for ${value}`} value={hex || pinHex(1)} onChange={(event) => choose(event.target.value)} />
+      <input className="od-color-hex" aria-label={`#rrggbb for ${value}`} aria-invalid={bad || undefined} maxLength={7} spellCheck={false} placeholder="#rrggbb" value={custom || bad ? text : ''} onChange={(event) => choose(event.target.value)} />
+    </span>
+    {bad && <small className="field-error od-color-note">Type a colour as #rrggbb (six hex digits, e.g. #1f77b4).</small>}
+    {warning && <small className="od-color-warn od-color-note" role="status">{warning}</small>}
+  </div>
 }
 
 // CHT-34 The "Chart elements" group of the Display fieldset, modelled on Excel's Chart Elements: chart heading (Excel's

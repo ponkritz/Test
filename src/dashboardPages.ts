@@ -1,6 +1,6 @@
 import { csvCell } from './csv.ts'
 import { merge3 } from './gitSaveQueue.ts'
-import { cleanOptions, hasOptions, measureKeys, moneyOf, parseColors, valuesOf, type ChartOptions, type Insight, type InsightFilter, type InsightMeasure, type OnDemandColumn, type OnDemandPage, type OnDemandRow } from './onDemand.ts'
+import { cleanOptions, hasOptions, measureKeys, moneyOf, parseColors, valuesOf, type ChartOptions, type Insight, type InsightFilter, type InsightMeasure, type OnDemandColumn, type OnDemandPage, type OnDemandRow, type ColorPins } from './onDemand.ts'
 import { bucketsOf, categoryColumns, chartData, dateGroupLabels, filterColumns, formatValue, grainOf, insightProblems, kpiData, measureText, noneKey, numberOf, otherKey, passesFilter, secondColumns, valueColumns, withType, type ChartData } from './onDemandInsights.ts'
 
 // DSH-01…DSH-12 On-Demand Dashboard pages: a page type of the page builder (PGB-01) that is read only for everyone and
@@ -34,8 +34,8 @@ export interface DashboardBlock {
 export interface DashboardTab { id: string; name: string }
 // A filter of the filter row: the viewer ticks values of a Dropdown / Multi-select column of one data source.
 export interface ViewerFilter { id: string; source: string; column: string }
-// colors (CHT-09): the dashboard's colour pins, a value's text → palette colour 1…5, used by every block's chart.
-export interface Dashboard { schema: 1; kind: 'dashboard'; id: string; tabs: DashboardTab[]; filters: ViewerFilter[]; blocks: DashboardBlock[]; colors?: Record<string, number> }
+// colors (CHT-09): the dashboard's colour pins, a value's text → palette colour 1…5 or #rrggbb (CHT-41), used by every block's chart.
+export interface Dashboard { schema: 1; kind: 'dashboard'; id: string; tabs: DashboardTab[]; filters: ViewerFilter[]; blocks: DashboardBlock[]; colors?: ColorPins }
 
 export const dashboardFolder = 'dashboards'
 export const dashboardPath = (id: string) => `${dashboardFolder}/${id}.json`
@@ -354,7 +354,7 @@ export function blockSubject(dataset: Dataset, block: DashboardBlock, currency =
   const measure = measureText(page, asInsight(block), currency)
   if (block.type === 'kpi') return measure
   const by = block.type === 'line' ? `per ${dateGroupLabels[grainOf(asInsight(block))].unit} of ${column(block.category)}` : `by ${column(block.category)}`
-  const split = block.second ? `, ${block.type === 'table' ? 'columns by' : block.type === 'line' ? 'one line per' : 'stacked by'} ${column(block.second)}` : ''
+  const split = block.second ? `, ${block.type === 'table' ? 'columns by' : block.type === 'line' ? 'one line per' : block.options?.grouping === 'grouped' ? 'grouped by' : 'stacked by'} ${column(block.second)}` : ''
   return `${measure} ${by}${split}`
 }
 export function periodNote(dataset: Dataset, block: DashboardBlock) {

@@ -30,6 +30,8 @@ const distinctTypes: OnDemandType[] = ['text', 'number', 'currency', 'date', 'dr
 const measureTypes = (measure: InsightMeasure) => measure === 'distinct' ? distinctTypes : valueTypes
 export const measureColumns = (page: OnDemandPage, measure: InsightMeasure) => page.columns.filter((column) => measureTypes(measure).includes(column.type))
 export const filterColumns = (page: OnDemandPage) => page.columns.filter((column) => hasOptions(column.type) || column.type === 'date')
+// CHT-40: a bar chart whose series are drawn side by side (grouped) — only with a second field.
+export const isGrouped = (insight: Pick<Insight, 'type' | 'second' | 'options'>) => insight.type === 'bar' && Boolean(insight.second) && insight.options?.grouping === 'grouped'
 export const secondLabel = (type: InsightType) => type === 'table' ? 'Columns by' : type === 'line' ? 'One line per' : 'Stacked by'
 // CHT-03: the words of a date grouping.
 export const dateGroupLabels: Record<DateGroup, { label: string; unit: string }> = { day: { label: 'Day', unit: 'day' }, week: { label: 'Week (ISO, from Monday)', unit: 'week' }, month: { label: 'Month', unit: 'month' }, quarter: { label: 'Quarter', unit: 'quarter' }, year: { label: 'Year', unit: 'year' } }
@@ -76,7 +78,8 @@ export function insightProblems(page: OnDemandPage, insight: Insight): string[] 
   if (insight.measure !== 'count') check(insight.value, `for the ${measureWord[insight.measure]}`, measureTypes(insight.measure))
   if (!additive(insight.measure) && insight.type === 'pie') problems.push('A pie shows shares of a total: choose Count of rows or Sum.')
   if (!additive(insight.measure) && insight.type === 'pareto') problems.push('A Pareto adds its categories up to 100%: choose Count of rows or Sum.')
-  if (!additive(insight.measure) && insight.type === 'bar' && insight.second) problems.push(`Stacked bars add their parts up: ${insight.measure === 'average' ? 'an Average' : `a ${measureWord[insight.measure]}`} cannot be stacked. Choose Count or Sum, or no stack.`)
+  // CHT-40: grouped bars (side by side) take every measure; stacked ones add their parts up.
+  if (!additive(insight.measure) && insight.type === 'bar' && insight.second && !isGrouped(insight)) problems.push(`Stacked bars add their parts up: ${insight.measure === 'average' ? 'an Average' : `a ${measureWord[insight.measure]}`} cannot be stacked. Choose Count or Sum, Grouped (side by side) under Display, or no stack.`)
   for (const filter of insight.filters) {
     const column = columnOf(page, filter.column)
     if (!column) problems.push('A filter’s column is no longer on the page (removed).')
@@ -409,7 +412,7 @@ export function insightSubject(page: OnDemandPage, insight: Insight) {
   const name = (id: string) => columnOf(page, id)?.name ?? '(removed column)'
   if (insight.type === 'kpi') return measureText(page, insight)
   const by = insight.type === 'line' ? `per ${dateGroupLabels[grainOf(insight)].unit} of ${name(insight.category)}` : `by ${name(insight.category)}`
-  const split = insight.second ? `, ${secondLabel(insight.type).toLowerCase()} ${name(insight.second)}` : ''
+  const split = insight.second ? `, ${isGrouped(insight) ? 'grouped by' : secondLabel(insight.type).toLowerCase()} ${name(insight.second)}` : ''
   return `${measureText(page, insight)} ${by}${split}`
 }
 // The filters in words, stated under the chart's title: "Category: Scrap, Rework · Found on: Jan 2026 – Jun 2026".

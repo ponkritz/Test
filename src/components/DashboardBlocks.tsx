@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { pairFactory, type ChartSize, type SizeSource } from '../chartSize'
+import { kindOf, pairFactory, type ChartSize, type SizeSource } from '../chartSize'
 import { ChartPanel } from './ChartSize'
 import { readChartLabels, saveChartLabel } from '../chartLabels'
 import { DataTable, type DataColumn } from './DataTable'
@@ -7,7 +7,7 @@ import { ChartOptionsFields } from './ChartOptionsFields'
 import { PreviewHeading } from './ChartElements'
 import { ChartCountInfo, InsightView } from './InsightCharts'
 import { EmptyState, Info, Metric, Modal, Notice, Pill } from './ui'
-import { hasOptions, type InsightFilter, type InsightMeasure } from '../onDemand'
+import { hasOptions, type ColorPins, type InsightFilter, type InsightMeasure } from '../onDemand'
 import { currencyText, formatShown, insightRules, measureColumns, measuresFor, noneKey, noneLabel, secondLabel, valueText } from '../onDemandInsights'
 import { asInsight, noData, blockData, blockError, blockProblems, blockSubject, blockTypeLabel, blockTypes, categoryColumns, filterColumns, kpiText, kpiValue, periodColumns, periodNote, secondColumns, summaryExportTotals, summaryRows, tableLimit, withBlockType, withSource, type Dashboard, type DashboardBlock, type Dataset, type Narrowed, type SummaryRow } from '../dashboardPages'
 
@@ -36,21 +36,21 @@ export function KpiTile({ dataset, block, narrowed, tabName, onOpenTab }: { data
 
 // A chart or a summary table in its panel. CHT-15…CHT-18: its size (the viewer's own, else the owners', else half
 // width and medium height), the corner handle and — for the dashboard's builders — its ⋯ menu (DSH-13).
-export function BlockPanel({ dataset, block, narrowed, colors, size = pairFactory, source = 'factory', arranging = false, action, onResize, onReset }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; colors?: Record<string, number>; size?: ChartSize; source?: SizeSource; arranging?: boolean; action?: ReactNode; onResize?: (size: ChartSize) => void; onReset?: () => void }) {
+export function BlockPanel({ id, dataset, block, narrowed, colors, size = pairFactory, source = 'factory', arranging = false, action, onResize, onReset }: { id?: string; dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; colors?: ColorPins; size?: ChartSize; source?: SizeSource; arranging?: boolean; action?: ReactNode; onResize?: (size: ChartSize) => void; onReset?: () => void }) {
   const filters = filtersText(dataset, block.filters)
   const problems = narrowed ? blockProblems(dataset, block) : [dataset.problem ?? '']
   // CHT-25: the header shows the title and ⓘ only; what the block measures, its period, filters and rows counted are in ⓘ,
   // and a neutral "Filtered" says when its own filters or the filter row's choices narrow it.
   const filteredBy = [block.filters.length ? `its own filters: ${filters}` : '', narrowed?.filtered ? 'the filter row above' : ''].filter(Boolean).join('; ').replace(/^./, (first) => `Filtered by ${first}`)
   const pill = filteredBy ? <span className="chart-filtered" title={filteredBy} aria-label={filteredBy}><Pill>Filtered</Pill></span> : null
-  return <ChartPanel className={`od-insight dsh-block dsh-block-${block.type}`} legacyFull size={size} source={source} arranging={arranging} title={block.title} titleHidden={block.options?.elements?.title === false}
+  return <ChartPanel id={id} kind={kindOf(block.type)} className={`od-insight dsh-block dsh-block-${block.type}`} size={size} source={source} arranging={arranging} title={block.title} titleHidden={block.options?.elements?.title === false}
     info={problems.length || !narrowed ? undefined : <ul className="od-rules"><li>Type: {blockTypeLabel(block.type)} · from {dataset.name}.</li><li>{blockSubject(dataset, block)}.</li><li>{periodNote(dataset, block)}.</li><li>Its own filters: {filters || 'none'}.</li><li>Rows: {counted(narrowed)}.</li>{block.type !== 'table' && <ChartCountInfo page={narrowed.page} insight={asInsight(block)} />}{insightRules(narrowed.page, asInsight(block)).map((entry) => <li key={entry}>{entry}</li>)}<li>The period (Year / Quarter / Month above) keeps the rows whose {dataset.page.columns.find((column) => column.id === block.period)?.name ?? 'date'} falls in it; rows without that date are left out.</li></ul>}
     action={pill || action ? <span className="button-row nowrap">{pill}{action}</span> : undefined} onResize={onResize} onReset={onReset}>
     <BlockBody dataset={dataset} block={block} narrowed={narrowed} problems={problems} colors={colors} />
   </ChartPanel>
 }
-function BlockPreviewBody(props: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; problems: string[]; colors?: Record<string, number> }) { return <BlockBody {...props} drill={false} quiet /> }
-function BlockBody({ dataset, block, narrowed, problems, colors, drill = true, quiet = drill }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; problems: string[]; colors?: Record<string, number>; drill?: boolean; quiet?: boolean }) {
+function BlockPreviewBody(props: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; problems: string[]; colors?: ColorPins }) { return <BlockBody {...props} drill={false} quiet /> }
+function BlockBody({ dataset, block, narrowed, problems, colors, drill = true, quiet = drill }: { dataset: Dataset; block: DashboardBlock; narrowed: Narrowed | null; problems: string[]; colors?: ColorPins; drill?: boolean; quiet?: boolean }) {
   // DSH-06: a dashboard chart starts with its data labels on (UI-17 keeps the viewer's own choice per chart): the choice is
   // set through the shared chart-labels helper once, before the chart reads it — the insight charts stay as they are.
   // CHT-28: not when the block's builders set data labels on or off for everyone (their choice is the default then).
@@ -91,7 +91,7 @@ function SummaryTable({ block, narrowed }: { block: DashboardBlock; narrowed: Na
 
 // DSH-05: the pop-up of one block — title, type, data source, the fields, the measure, the period's Date column, the
 // tab, filters — with a live preview over the current period. Add block / Save to Git saves the dashboard at once.
-export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCancel, onSave }: { datasets: Dataset[]; dashboard: Dashboard; block: DashboardBlock; isNew: boolean; preview: (dataset: Dataset, block: DashboardBlock) => Narrowed | null; onCancel: () => void; onSave: (block: DashboardBlock, colors: Record<string, number> | undefined) => Promise<void> }) {
+export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCancel, onSave }: { datasets: Dataset[]; dashboard: Dashboard; block: DashboardBlock; isNew: boolean; preview: (dataset: Dataset, block: DashboardBlock) => Narrowed | null; onCancel: () => void; onSave: (block: DashboardBlock, colors: ColorPins | undefined) => Promise<void> }) {
   const [draft, setDraft] = useState<DashboardBlock>(block)
   const [pins, setPins] = useState(dashboard.colors)
   const [error, setError] = useState('')

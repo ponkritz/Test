@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { EmptyState, Info, Metric, Metrics, Notice, Page, Panel, Pill, TablePanel } from '../components/ui'
 import { EpicMixChart, ParetoChart } from '../components/WorkloadCharts'
-import { BuiltInChart } from '../components/ChartSize'
-import { builtInCharts, needsGrid, stackFactory } from '../chartSize'
+import { BuiltInChart, BuiltInGrid } from '../components/ChartSize'
+import { builtInCharts } from '../chartSize'
 import { useChartSizes } from '../useChartSize'
 import { AxisTitles, DataLabelsToggle } from '../components/chartLabels'
 import { useDataLabels } from '../useDataLabels'
@@ -444,9 +444,9 @@ function StreamsTab({ rows, months, items, settings, streamFiltered }: { rows: P
       </tbody></table>
     </TablePanel>
     {streamFiltered && <Notice tone="info">The stream filter does not apply to the charts below: they show every Epic for the selected people.</Notice>}
-    {/* CHT-19: the charts by stable id, each resizable (the viewer's own size, else the Tool Owner's for everyone, else
-        full width as before); the wrapper becomes the 6-column grid only once one of them is narrower. */}
-    {trend.some((point) => point.actual != null) ? <><div className={needsGrid([builtInCharts.epicMix, builtInCharts.overrun, builtInCharts.adhoc].map((id) => sizes.resolve(id, stackFactory, sizes.shared(id)).size.width), stackFactory) ? 'chart-grid' : 'chart-flow'}>
+    {/* CHT-19, CHT-48: the charts by stable id on the chart grid, each resizable in grid units (the viewer's own size, else
+        the Tool Owner's for everyone, else full width as before), in their order — not moved. */}
+    {trend.some((point) => point.actual != null) ? <><BuiltInGrid sizes={sizes} ids={[builtInCharts.epicMix, builtInCharts.overrun, builtInCharts.adhoc]} titles={{ [builtInCharts.epicMix]: 'Epic mix by month', [builtInCharts.overrun]: 'Overrun hours', [builtInCharts.adhoc]: 'Ad-hoc hours' }}>
       <BuiltInChart sizes={sizes} id={builtInCharts.epicMix} title="Epic mix by month" info="Stacked bars: recorded hours per Epic over the period (the five largest keep their colour; the rest are grouped as Other Epics). Line: available hours on the same scale.">
         <EpicMixChart series={trend} selected={[...trend].reverse().find((point) => point.actual)?.month ?? months[months.length - 1]} colors={colors} />
       </BuiltInChart>
@@ -456,7 +456,7 @@ function StreamsTab({ rows, months, items, settings, streamFiltered }: { rows: P
       <BuiltInChart sizes={sizes} id={builtInCharts.adhoc} title="Ad-hoc hours" detail={`${formatHours(problems.adhoc.total)}h on ${problems.adhoc.tasks} Task${problems.adhoc.tasks === 1 ? '' : 's'} — ${formatPercent(problems.adhoc.share)} of recorded hours`} info="Hours on Tasks tagged ad-hoc: unplanned work that arrived after planning locked, over the period." action={levelToggle(adhocLevel, setAdhocLevel)}>
         <ParetoChart items={problems.adhoc[adhocLevel]} colors={colors} noun={adhocLevel === 'feature' ? 'Feature' : 'Epic'} measure="ad-hoc hours" shortLabel={adhocLevel === 'feature' ? shortFeatureTitle : undefined} />
       </BuiltInChart>
-    </div>
+    </BuiltInGrid>
     </> : null}
   </NoHours>
 }

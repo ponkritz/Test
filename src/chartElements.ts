@@ -274,3 +274,19 @@ export function dataTableModel({ categories, series, values, format, cumulative 
   if (cumulative) rows.push({ name: 'Cumulative share (%)', key: null, cells: cumulative.map((share) => `${share.toFixed(1)}%`) })
   return { categories, rows }
 }
+
+// CHT-40: grouped (clustered) bars — the bars of a category's series side by side in its band (`band` px: a row's height
+// for horizontal bars, a column's width for vertical columns): the group takes at most 80% of the band, each bar at most
+// `max` px thick with a 2 px gap (less when the band is tight). Returns each bar's thickness and its centre's offset from
+// the band's centre, in the order of the series.
+export function groupedSlots(band: number, series: number, max = 56): { size: number; gap: number; offsets: number[] } {
+  const n = Math.max(1, Math.floor(series))
+  const gap = n > 1 ? Math.min(2, band * 0.02) : 0
+  const group = Math.min(Math.max(1, band * 0.8), max * n + gap * (n - 1))
+  const size = Math.max(1, (group - gap * (n - 1)) / n)
+  const used = size * n + gap * (n - 1)
+  return { size, gap, offsets: Array.from({ length: n }, (_, index) => -used / 2 + index * (size + gap) + size / 2) }
+}
+// The row height of grouped horizontal bars: today's 30 px holds up to two bars; more series make the row taller so
+// each bar stays at least 6 px thick (the panel's height factor, CHT-16, applied on top).
+export const groupedRowHeight = (series: number, factor = 1) => Math.round(Math.max(30, 10 + 8 * Math.max(1, series)) * factor)

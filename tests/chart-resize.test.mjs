@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { blockChartId, builtInCharts, chartSizeKey, insightChartId, needsGrid, pairFactory, parseChartSize, resolveChartSize, sizeFromOptions, sizeText, snapHeight, snapWidth, spanWidth, stackFactory, stepSize, withSizeOptions } from '../src/chartSize.ts'
+import { blockChartId, builtInCharts, chartSizeKey, insightChartId, pairFactory, parseChartSize, resolveChartSize, sizeFromOptions, sizeText, snapHeight, snapWidth, spanWidth, stackFactory, stepSize, withSizeOptions } from '../src/chartSize.ts'
+import { packLayout } from '../src/chartGrid.ts'
 import { cleanOptions, parseInsights, serializeOnDemandPage, parseOnDemandPage } from '../src/onDemand.ts'
 import { emptyViews, parseViews, serializeViews, withDefaultEntry, withDefaults } from '../src/personalViews.ts'
 import { autoAxisTitles } from '../src/onDemandInsights.ts'
@@ -9,20 +10,20 @@ import { fitLabel } from '../src/chartUtils.ts'
 // CHT-15…CHT-24 Chart sizes (presets, the v10 values, precedence, validation, grid placement, the handle's keyboard and
 // snapping), the label fitting behind KB-83 and the owner's axis titles.
 
-test('CHT-15, CHT-16: the presets — ⅓ / ½ / ⅔ / Full of a 6-column grid and Small / Medium / Large; v10 half and full read as before (TC-CHT-13)', () => {
-  assert.deepEqual(sizeFromOptions({ size: 'half' }), { width: 'half' })
-  assert.deepEqual(sizeFromOptions({ size: 'full' }), { width: 'full' })
-  assert.deepEqual(sizeFromOptions({ size: 'twothirds', height: 'large' }), { width: 'twothirds', height: 'large' })
+test('CHT-15, CHT-16: the presets — ⅓ / ½ / ⅔ / Full and Small / Medium / Large, now in grid units; v10 half and full read as before (TC-CHT-13)', () => {
+  assert.deepEqual(sizeFromOptions({ size: 'half' }), { w: 6 })
+  assert.deepEqual(sizeFromOptions({ size: 'full' }), { w: 12 })
+  assert.deepEqual(sizeFromOptions({ size: 'twothirds', height: 'large' }), { w: 8, h: 12 })
   assert.equal(sizeFromOptions(undefined), undefined, 'nothing set: the factory size')
-  assert.equal(sizeText({ width: 'twothirds', height: 'large' }), 'width ⅔, height Large')
-  // The grid: 6 columns of a 1200 px grid with 18 px gaps; each preset's width.
-  assert.equal(Math.round(spanWidth(3, 1200, 18)), 591)
-  assert.equal(Math.round(spanWidth(6, 1200, 18)), 1200)
+  assert.equal(sizeText({ w: 8, h: 12 }), '8 × 12 (width ⅔, height Large)')
+  // The grid: 12 columns of a 1200 px grid with 18 px gaps; ½ = 6 columns, as wide as 3 of 6 were.
+  assert.equal(Math.round(spanWidth(6, 1200, 18)), 591)
+  assert.equal(Math.round(spanWidth(12, 1200, 18)), 1200)
   // The options: a factory value is left out, so a chart nobody resized is written as before.
-  assert.equal(withSizeOptions(undefined, { width: 'half', height: 'medium' }), undefined)
-  assert.deepEqual(withSizeOptions({ top: 5 }, { width: 'third', height: 'small' }), { top: 5, size: 'third', height: 'small' })
-  assert.deepEqual(withSizeOptions({ top: 5, size: 'full', height: 'large' }, { width: 'half', height: 'medium' }), { top: 5 })
-  assert.deepEqual(withSizeOptions(undefined, { width: 'half', height: 'medium' }, pairFactory, true), { size: 'half' }, 'a width picked in the pop-up is written as chosen (as v10)')
+  assert.equal(withSizeOptions(undefined, { w: 6, h: 8 }), undefined)
+  assert.deepEqual(withSizeOptions({ top: 5 }, { w: 4, h: 6 }), { top: 5, size: 'third', height: 'small' })
+  assert.deepEqual(withSizeOptions({ top: 5, size: 'full', height: 'large' }, { w: 6, h: 8 }), { top: 5 })
+  assert.deepEqual(withSizeOptions(undefined, { w: 6, h: 8 }, pairFactory, true), { size: 'half' }, 'a width picked in the pop-up is written as chosen (as v10)')
 })
 
 test('CHT-22, CHT-15, CHT-16: the size options are validated when read — unknown widths and heights dropped, no height for a KPI or a summary table (TC-CHT-14)', () => {
@@ -44,12 +45,14 @@ test('CHT-22, CHT-15, CHT-16: the size options are validated when read — unkno
 
 test('CHT-18, CHT-19: precedence — the viewer’s own size, then the owner’s (or shared) default, then the factory size; stored sizes validated (TC-CHT-15)', () => {
   assert.deepEqual(resolveChartSize({ factory: pairFactory }), { size: pairFactory, source: 'factory', base: pairFactory })
-  const owner = resolveChartSize({ owner: { width: 'twothirds' }, factory: pairFactory })
-  assert.deepEqual([owner.size, owner.source], [{ width: 'twothirds', height: 'medium' }, 'owner'])
-  const mine = resolveChartSize({ viewer: { width: 'full', height: 'large' }, owner: { width: 'twothirds' }, factory: pairFactory })
-  assert.deepEqual([mine.size, mine.source, mine.base], [{ width: 'full', height: 'large' }, 'viewer', { width: 'twothirds', height: 'medium' }])
-  assert.deepEqual(resolveChartSize({ viewer: { height: 'small' }, factory: stackFactory }).size, { width: 'full', height: 'small' }, 'field by field')
-  assert.deepEqual(parseChartSize({ width: 'third', height: 'giant', extra: 1 }), { width: 'third' })
+  const owner = resolveChartSize({ owner: { w: 8 }, factory: pairFactory })
+  assert.deepEqual([owner.size, owner.source], [{ w: 8, h: 8 }, 'owner'])
+  const mine = resolveChartSize({ viewer: { w: 12, h: 12 }, owner: { w: 8 }, factory: pairFactory })
+  assert.deepEqual([mine.size, mine.source, mine.base], [{ w: 12, h: 12 }, 'viewer', { w: 8, h: 8 }])
+  assert.deepEqual(resolveChartSize({ viewer: { h: 6 }, factory: stackFactory }).size, { w: 12, h: 6 }, 'field by field')
+  // A stored size: the presets of before (mapped) or grid units; unknown values dropped.
+  assert.deepEqual(parseChartSize({ width: 'third', height: 'giant', extra: 1 }), { w: 4 })
+  assert.deepEqual(parseChartSize({ width: 'half', height: 'small', w: 7, h: 9 }), { w: 7, h: 9 }, 'the grid units win over the presets written beside them')
   assert.equal(parseChartSize('full'), undefined); assert.equal(parseChartSize([]), undefined); assert.equal(parseChartSize({ width: 3 }), undefined)
   // Ids and their personal-views keys (the key pattern of personal views, at most 80 characters).
   assert.equal(chartSizeKey(insightChartId('conq', 'i1')), 'chart-size:ondemand:conq:i1')
@@ -60,39 +63,40 @@ test('CHT-18, CHT-19: precedence — the viewer’s own size, then the owner’s
   // The shared default of a built-in chart (Save size for everyone) is one entry of the views defaults; my own wins.
   const key = chartSizeKey(builtInCharts.overrun)
   const defaults = parseViews(serializeViews(withDefaultEntry(emptyViews(), key, { width: 'half', height: 'medium' })))
-  assert.deepEqual(parseChartSize(defaults.filters[key]), { width: 'half', height: 'medium' })
+  assert.deepEqual(parseChartSize(defaults.filters[key]), { w: 6, h: 8 })
   const merged = withDefaults({ ...emptyViews(), filters: { [key]: { width: 'third' } } }, defaults)
   assert.deepEqual(merged.filters[key], { width: 'third' })
   assert.equal(parseChartSize(parseViews(serializeViews(withDefaultEntry(defaults, key, null))).filters[key]), undefined, 'null: the factory size again')
 })
 
-test('CHT-20: grid placement — the 6-column grid only once a chart takes a width the old layout did not have (TC-CHT-15)', () => {
-  assert.equal(needsGrid(['half', 'full', 'half']), false, 'half and full: the layout of v10')
-  assert.equal(needsGrid(['half', 'third']), true)
-  assert.equal(needsGrid(['full', 'full'], stackFactory), false, 'built-in charts: full width as before')
-  assert.equal(needsGrid(['full', 'half'], stackFactory), true)
+test('CHT-20: grid placement — a page nobody arranged is laid out as before: half-width charts two per row, a full-width one on its own row (TC-CHT-15)', () => {
+  const entry = (id, w) => ({ id, kind: 'chart', size: { w, h: 8 } })
+  assert.deepEqual(packLayout([entry('a', 6), entry('b', 12), entry('c', 6), entry('d', 6)]), { a: { x: 0, y: 0, w: 6, h: 8 }, b: { x: 0, y: 8, w: 12, h: 8 }, c: { x: 0, y: 16, w: 6, h: 8 }, d: { x: 6, y: 16, w: 6, h: 8 } })
+  assert.deepEqual(Object.values(packLayout([entry('m', 12), entry('o', 12), entry('h', 12)])).map((box) => [box.x, box.y]), [[0, 0], [0, 8], [0, 16]], 'built-in charts: one under the other as before')
 })
 
-test('CHT-21: the handle — arrow keys step the presets (clamped), a drag snaps to the nearest preset (TC-CHT-16)', () => {
-  const at = { width: 'half', height: 'medium' }
-  assert.deepEqual(stepSize(at, 'ArrowRight'), { width: 'twothirds', height: 'medium' })
-  assert.deepEqual(stepSize(at, 'ArrowLeft'), { width: 'third', height: 'medium' })
-  assert.deepEqual(stepSize(at, 'ArrowDown'), { width: 'half', height: 'large' })
-  assert.deepEqual(stepSize(at, 'ArrowUp'), { width: 'half', height: 'small' })
-  assert.deepEqual(stepSize({ width: 'full', height: 'large' }, 'ArrowRight'), { width: 'full', height: 'large' }, 'clamped')
-  assert.deepEqual(stepSize({ width: 'third', height: 'small' }, 'ArrowUp'), { width: 'third', height: 'small' })
+test('CHT-21, CHT-49: the handle — arrow keys step one column or row (clamped to the minimum and the grid), a drag snaps to whole columns and rows (TC-CHT-16)', () => {
+  const at = { w: 6, h: 8 }
+  assert.deepEqual(stepSize(at, 'ArrowRight'), { w: 7, h: 8 })
+  assert.deepEqual(stepSize(at, 'ArrowLeft'), { w: 5, h: 8 })
+  assert.deepEqual(stepSize(at, 'ArrowDown'), { w: 6, h: 9 })
+  assert.deepEqual(stepSize(at, 'ArrowUp'), { w: 6, h: 7 })
+  assert.deepEqual(stepSize({ w: 12, h: 30 }, 'ArrowRight'), { w: 12, h: 30 }, 'clamped to the grid')
+  assert.deepEqual(stepSize({ w: 3, h: 5 }, 'ArrowLeft'), { w: 3, h: 5 }, 'a chart is at least 3 × 5')
+  assert.deepEqual(stepSize({ w: 4, h: 4 }, 'ArrowUp', 'table'), { w: 4, h: 4 }, 'a summary table at least 4 × 4')
+  assert.deepEqual(stepSize({ w: 6, h: 8 }, 'ArrowRight', 'chart', 6), { w: 8, h: 8 }, 'on the 6-column grid one column is two twelfths')
   assert.equal(stepSize(at, 'Tab'), null)
-  // Snapping in a 1200 px grid: ⅓ ≈ 388, ½ ≈ 591, ⅔ ≈ 794, Full 1200.
-  assert.equal(snapWidth(380, 1200, 18), 'third')
-  assert.equal(snapWidth(650, 1200, 18), 'half')
-  assert.equal(snapWidth(820, 1200, 18), 'twothirds')
-  assert.equal(snapWidth(1100, 1200, 18), 'full')
-  assert.equal(snapWidth(5000, 1200, 18), 'full')
-  // Heights: a 300 px Medium chart dragged 160 px down is Large (450), 70 px up Small (225).
-  assert.equal(snapHeight('medium', 300, 160), 'large')
-  assert.equal(snapHeight('medium', 300, -70), 'small')
-  assert.equal(snapHeight('medium', 300, 20), 'medium')
-  assert.equal(snapHeight('large', 450, -130), 'medium')
+  // Snapping in a 1200 px grid of 12 columns (about 83 px each, 18 px gaps): to the nearest whole column.
+  assert.equal(snapWidth(388, 1200, 18), 4)
+  assert.equal(snapWidth(591, 1200, 18), 6)
+  assert.equal(snapWidth(620, 1200, 18), 6)
+  assert.equal(snapWidth(700, 1200, 18), 7)
+  assert.equal(snapWidth(5000, 1200, 18), 12)
+  assert.equal(snapWidth(591, 1200, 18, 6), 6, 'on 6 columns a drag snaps to two twelfths')
+  // Heights: one row is 40 px and an 18 px gap — 8 rows dragged 120 px down are 10, 60 px up 7.
+  assert.equal(snapHeight(8, 120), 10)
+  assert.equal(snapHeight(8, -60), 7)
+  assert.equal(snapHeight(8, 20), 8)
 })
 
 test('CHT-23 (KB-83): a label is wrapped by words into its space, cut with "…" only when it does not fit (TC-CHT-17)', () => {
