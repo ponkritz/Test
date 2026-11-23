@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { useAppStore } from './store'
-import { canWrite, deleteFile, fileCommits, fileSha, readTextAt, forgetGitStorage, GitConflictError, historyUrl, listFolder, loadGitConfig, loadGitToken, planningData, readBinaryFile, readPlanningFile, readRawFile, readTextFile, saveGitConfig, saveGitToken, serializePlanning, siblingConfig, validateGitConfig, writeBinaryFile, writePlanningFile, writeTextFile, type GitConfig } from './gitStorage'
+import { canWrite, deleteFile, fileCommits, fileSha, readTextAt, forgetGitStorage, GitConflictError, historyUrl, listFolder, loadGitConfig, loadGitToken, planningData, readBinaryFile, readPlanningFile, readRawFile, readTextFile, saveGitConfig, saveGitToken, serializePlanning, siblingConfig, validateGitConfig, writePlanningFile, writeTextFile, type GitConfig } from './gitStorage'
 import { historyPath } from './history'
 import { packTemplateFile } from './pptxTemplate'
 import { applySnapshots, parseSnapshot, serializeSnapshot, snapshotDigest, snapshotFile, snapshotFileName, snapshotFolder, type SnapshotFile, type ViewSnapshot } from './gitSnapshots'
@@ -16,6 +16,7 @@ import { kpiTrackerFile } from './kpiTracker'
 import { freezeSnapshot, listSnapshots as listLteSnapshots, uploadSnapshot } from './cloudSnapshots'
 import { appBuild } from './buildInfo'
 import type { Snapshot } from './domain'
+import { mergeHistoryText, mergeKpiTrackerText, mergeViewsBackupText, mergeViewsDefaultsText, saveStamp, SaveQueue, writeQueuedBinary, writeQueuedText, type Merge, type QueueState } from './gitSaveQueue'
 import { changedFiles, fileLabel, watchedFolders, watchFocusGapMs, watchIntervalMs, type FolderEntry, type SeenVersions } from './gitWatch'
 
 export type GitStatus = 'off' | 'loading' | 'synced' | 'empty' | 'saving' | 'error' | 'conflict'
@@ -35,9 +36,26 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   const seen = useRef<SeenVersions>({})
   // Newer versions in Git not loaded here yet (path → version), named in the banner; reading or saving a file drops it.
   const [remote, setRemote] = useState<Record<string, string | null>>({})
+  // GIT-17: the text last read or written here per file: the base a queued save is merged from.
+  const seenText = useRef<Record<string, string | null>>({})
   const remember = (path: string, version: string | null) => { seen.current[path] = version; setRemote((current) => path in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== path)) : current) }
-  async function trackRead(target: GitConfig, key: string) { const read = await readTextFile(target, key); remember(target.path, read.sha); return read }
-  async function trackWrite(target: GitConfig, key: string, text: string, version: string | null, commitMessage: string) { const written = await writeTextFile(target, key, text, version, commitMessage); remember(target.path, written.sha); return written }
+  async function trackRead(target: GitConfig, key: string) { const read = await readTextFile(target, key); remember(target.path, read.sha); seenText.current[target.path] = read.text; return read }
+  // GIT-17: saves to the shared files that are merged rather than refused, queued per file in the order of their time.
+  const queue = useRef(new SaveQueue())
+  const [queueStates, setQueueStates] = useState<Record<string, QueueState>>({})
+  const queued = useRef(new Set<string>())
+  useEffect(() => queue.current.subscribe(() => setQueueStates(Object.fromEntries([...queued.current].map((path) => [path, queue.current.state(path)])))), [])
+  function queueText(target: GitConfig, key: string, text: string, commitMessage: string, merge: Merge, at = saveStamp()) {
+    queued.current.add(target.path)
+    return queue.current.enqueue(target.path, at, async () => {
+      const result = await writeQueuedText(target, key, { text, base: seenText.current[target.path] ?? null, at, message: commitMessage, merge })
+      remember(target.path, result.sha); seenText.current[target.path] = result.text
+      return { sha: result.sha ?? '', commitUrl: result.commitUrl || historyUrl(target), merged: result.merged, unchanged: result.unchanged, keptNewer: false, text: result.text }
+    })
+  }
+  const queueState = (file: string): QueueState => (config ? queueStates[siblingConfig(config, file).path] : undefined) ?? { waiting: 0, failed: 0, error: '' }
+  const retryQueued = (file: string) => config ? queue.current.retry(siblingConfig(config, file).path) : Promise.resolve([])
+  async function trackWrite(target: GitConfig, key: string, text: string, version: string | null, commitMessage: string) { const written = await writeTextFile(target, key, text, version, commitMessage); remember(target.path, written.sha); seenText.current[target.path] = text; return written }
   const current = serializePlanning(planningData(store.state))
   const connected = Boolean(config && token)
   // A read-only token (e.g. the viewers' shared token): baselines are shown but not edited here.
@@ -201,7 +219,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
     const target = siblingConfig(config, `${viewsBackupFolder}/${name}`)
-    return { path: target.path, ...(await writeTextFile(target, token, text, await fileSha(target, token), commitMessage)) }
+    return { path: target.path, ...(await queueText(target, token, text, commitMessage, mergeViewsBackupText)) }
   }
   async function resetViews(resetAt: string, commitMessage: string) {
     if (!config || !token || !viewsConfig) throw new Error('Connect Git storage first.')
@@ -262,8 +280,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   async function writeKpiTracker(text: string, commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
-    const target = siblingConfig(config, kpiTrackerFile)
-    return trackWrite(target, token, text, await fileSha(target, token), commitMessage)
+    return queueText(siblingConfig(config, kpiTrackerFile), token, text, commitMessage, mergeKpiTrackerText)
   }
   // SNP-04…08: LTE / PI Review snapshots as new files in lte-snapshots/ of the Git data repository (SharePoint is in the
   // backlog). Only with a token that can write, never with the synthetic sample; nothing is kept in the browser.
@@ -280,10 +297,10 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
     if (!config || !token) throw new Error('Connect Git storage first.')
     return trackRead(siblingConfig(config, historyPath), token)
   }, [config, token])
-  async function writeHistory(text: string, sha: string | null, commitMessage: string) {
+  async function writeHistory(text: string, commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
-    return trackWrite(siblingConfig(config, historyPath), token, text, sha, commitMessage)
+    return queueText(siblingConfig(config, historyPath), token, text, commitMessage, mergeHistoryText)
   }
   // The planning workbooks kept in the data repository (HIS-11): .xlsx files in its folder and in history/, read for the
   // import without downloading them first.
@@ -306,7 +323,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   async function removeHistory(commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
-    const removed = await deleteFile(siblingConfig(config, historyPath), token, commitMessage); remember(siblingConfig(config, historyPath).path, null); return removed
+    const removed = await deleteFile(siblingConfig(config, historyPath), token, commitMessage); remember(siblingConfig(config, historyPath).path, null); seenText.current[siblingConfig(config, historyPath).path] = null; return removed
   }
   // The Monthly pack: its shared setup (monthly-pack-setup.json) and a month's text (monthly-pack/<YYYY-MM>.json),
   // read and saved like the shared Feature setup.
@@ -329,9 +346,10 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   async function writePackTemplate(bytes: Uint8Array | null, commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
-    const target = siblingConfig(config, packTemplateFile)
-    if (!bytes) { await deleteFile(target, token, commitMessage); return null }
-    return writeBinaryFile(target, token, bytes, await fileSha(target, token), commitMessage)
+    const target = siblingConfig(config, packTemplateFile), at = saveStamp()
+    queued.current.add(target.path)
+    const result = await queue.current.enqueue(target.path, at, () => writeQueuedBinary(target, token, { bytes, at, message: commitMessage }))
+    return { ...result, commitUrl: result.commitUrl || historyUrl(target) }
   }
   // A person's own Feature setup (feature-setup/<email>.json): read and saved like the shared one.
   const readPersonalFeatureSetup = useCallback(async (email: string) => {
@@ -361,8 +379,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   async function writeViewsDefaults(text: string, commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
-    const target = siblingConfig(config, viewsDefaultsPath)
-    return trackWrite(target, token, text, await fileSha(target, token), commitMessage)
+    return queueText(siblingConfig(config, viewsDefaultsPath), token, text, commitMessage, mergeViewsDefaultsText)
   }
   async function writePersonalFeatureSetup(email: string, text: string, sha: string | null, commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
@@ -516,6 +533,6 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
     setConfig(null); setToken(''); setSynced(null); setStatus('off'); setMessage('Git storage disconnected in this browser. The data stays in the app and in the repository.'); sha.current = null
   }
 
-  return { saveSnapshot, listSnapshots, readPersonalViews, writePersonalViews, readViewsDefaults, writeViewsDefaults, backupViews, resetViews, readPackTemplate, writePackTemplate, packTemplateHistory: config ? historyUrl(siblingConfig(config, packTemplateFile)) : '', config, connected, readOnly, status, message, dirty, commitUrl, history: config ? historyUrl(config) : '', isSample, load: () => load(), connect, remoteChanges, save, disconnect, viewsPath: viewsConfig?.path ?? '', viewsHistory: viewsConfig ? historyUrl(viewsConfig) : '', readViews, writeViews, shareViews, removedViews, syncViews, pushWindchillAnalysis, accessScope: accessConfig && token ? `${accessConfig.owner}/${accessConfig.repo}@${accessConfig.branch}:${accessConfig.path}` : '', accessPath: accessConfig?.path ?? '', accessHistory: accessConfig ? historyUrl(accessConfig) : '', readAccess, writeAccess, readFeatureSetup, writeFeatureSetup, readEpicSetup, writeEpicSetup, epicSetupHistory: config ? historyUrl(siblingConfig(config, 'epic-setup.json')) : '', readPersonalFeatureSetup, writePersonalFeatureSetup, featureSetupHistory: config ? historyUrl(siblingConfig(config, 'feature-setup.json')) : '', readQeMapping, writeQeMapping, readKpiTracker, writeKpiTracker, kpiTrackerHistory: config ? historyUrl(siblingConfig(config, kpiTrackerFile)) : '', readHistory, writeHistory, removeHistory, listWorkbooks, readWorkbook, historyFileHistory: config ? historyUrl(siblingConfig(config, historyPath)) : '', readMonthlyPack, writeMonthlyPack, monthlyPackHistory: (name: string) => config ? historyUrl(siblingConfig(config, name)) : '', qeMappingHistory: config ? historyUrl(siblingConfig(config, 'qe-mapping.json')) : '', removeSnapshots, viewsSync, snapshotNotes, pushSnapshot, pullSnapshot, pullSnapshots, pushWindchill, pullWindchill, pullWindchillOne, snapshotsHistory: config ? historyUrl(siblingConfig(config, snapshotFolder)) : '' }
+  return { queueState, retryQueued, saveSnapshot, listSnapshots, readPersonalViews, writePersonalViews, readViewsDefaults, writeViewsDefaults, backupViews, resetViews, readPackTemplate, writePackTemplate, packTemplateHistory: config ? historyUrl(siblingConfig(config, packTemplateFile)) : '', config, connected, readOnly, status, message, dirty, commitUrl, history: config ? historyUrl(config) : '', isSample, load: () => load(), connect, remoteChanges, save, disconnect, viewsPath: viewsConfig?.path ?? '', viewsHistory: viewsConfig ? historyUrl(viewsConfig) : '', readViews, writeViews, shareViews, removedViews, syncViews, pushWindchillAnalysis, accessScope: accessConfig && token ? `${accessConfig.owner}/${accessConfig.repo}@${accessConfig.branch}:${accessConfig.path}` : '', accessPath: accessConfig?.path ?? '', accessHistory: accessConfig ? historyUrl(accessConfig) : '', readAccess, writeAccess, readFeatureSetup, writeFeatureSetup, readEpicSetup, writeEpicSetup, epicSetupHistory: config ? historyUrl(siblingConfig(config, 'epic-setup.json')) : '', readPersonalFeatureSetup, writePersonalFeatureSetup, featureSetupHistory: config ? historyUrl(siblingConfig(config, 'feature-setup.json')) : '', readQeMapping, writeQeMapping, readKpiTracker, writeKpiTracker, kpiTrackerHistory: config ? historyUrl(siblingConfig(config, kpiTrackerFile)) : '', readHistory, writeHistory, removeHistory, listWorkbooks, readWorkbook, historyFileHistory: config ? historyUrl(siblingConfig(config, historyPath)) : '', readMonthlyPack, writeMonthlyPack, monthlyPackHistory: (name: string) => config ? historyUrl(siblingConfig(config, name)) : '', qeMappingHistory: config ? historyUrl(siblingConfig(config, 'qe-mapping.json')) : '', removeSnapshots, viewsSync, snapshotNotes, pushSnapshot, pullSnapshot, pullSnapshots, pushWindchill, pullWindchill, pullWindchillOne, snapshotsHistory: config ? historyUrl(siblingConfig(config, snapshotFolder)) : '' }
 }
 export type GitStorage = ReturnType<typeof useGitStorage>

@@ -5,12 +5,13 @@ import { AxisTitles, DataLabelsToggle } from '../components/chartLabels'
 import { useDataLabels } from '../useDataLabels'
 import { epicColors, shortFeatureTitle } from '../chartUtils'
 import { capacityContext, capacityModel, defaultStandardHours, monthlyHours, normalizeCapacitySettings, oldCalculation, sharedTimeScopeLabel, sharedTimeScopes, standardHoursTotal, type SharedTimeScope, type StandardHourLine, problemBreakdown, regions, resourceRoles, type Region, type ResourceRole } from '../capacity'
-import { applyFilter, bandOf, byPerson, byRole, byStream, change, concentration, groupBy, noFilter, periodMonths, persistentOverload, personMonths, plannedOverload, quarterOf, rebalancing, streamTotals, totals, type Bands, type Dimension, type Period, type PersonMonth, type DashboardFilter } from '../dashboard'
+import { applyFilter, bandOf, byPerson, byRole, byStream, change, concentration, groupBy, noFilter, periodMonthNumbers, periodMonths, periodOf, persistentOverload, personMonths, plannedOverload, quarterMonths, quarterOf, rebalancing, streamTotals, totals, type Bands, type Dimension, type Period, type PersonMonth, type DashboardFilter } from '../dashboard'
 import { MultiSelect } from '../components/MultiSelect'
 import { timeWritingMonth } from '../azureInsights'
 import { anomalies, healthScore, monthForecast, planAccuracy, resilience, streamMomentum, type ForecastStatus, type AccuracyVerdict, type Momentum } from '../insights'
 import { streamCounts, type StreamCounts } from '../releaseOverview'
-import { formatDateTime, formatHours, formatPercent, monthName, todayIso } from '../format'
+import { formatDateTime, formatHours, formatPercent, monthName } from '../format'
+import { utcToday } from '../businessTime'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { MyWork } from '../useMyWork'
 import type { Page as PageId } from './registry'
@@ -36,18 +37,19 @@ type Tab = typeof tabs[number][0]
 interface Saved { tab: Tab; period: Period; filter: DashboardFilter }
 const storageKey = 'demand-planning-dashboard-v3'
 const list = <T extends string>(value: unknown, allowed?: readonly T[]) => Array.isArray(value) ? value.filter((entry): entry is T => typeof entry === 'string' && (!allowed || allowed.includes(entry as T))) : []
-const numbers = (value: unknown, max: number) => Array.isArray(value) ? [...new Set(value.filter((entry): entry is number => Number.isInteger(entry) && entry >= 1 && entry <= max))].sort((a, b) => a - b) : []
-// Starts on the quarter of the month picked in the header; the choice is remembered in this browser.
+// OV-15: the period starts on the year and quarter of the month picked in the header (Reset filters goes back to it).
+const defaultPeriod = (month: string): Period => ({ years: [Number(month.slice(0, 4))], quarters: [quarterOf(month)], months: [] })
+const samePeriod = (a: Period, b: Period) => JSON.stringify(a) === JSON.stringify(b)
+// The choice is remembered in this browser; a period saved in the earlier format ({ year, … }) still loads (periodOf).
 // MYD-08: with personal views the choice follows the person (Git), else this browser keeps it.
 const load = (month: string, stored?: unknown): Saved => {
-  const fallback: Saved = { tab: 'overview', period: { year: Number(month.slice(0, 4)), quarters: [quarterOf(month)], months: [] }, filter: noFilter }
+  const fallback: Saved = { tab: 'overview', period: defaultPeriod(month), filter: noFilter }
   try {
     const saved = (stored && typeof stored === 'object' ? stored : JSON.parse(localStorage.getItem(storageKey) ?? 'null')) as Partial<Saved> | null
     if (!saved) return fallback
-    const year = Number(saved.period?.year)
     return {
       tab: tabs.some(([key]) => key === saved.tab) ? saved.tab! : 'overview',
-      period: Number.isInteger(year) && year > 2000 && year < 2100 ? { year, quarters: numbers(saved.period?.quarters, 4), months: numbers(saved.period?.months, 12) } : fallback.period,
+      period: periodOf(saved.period, fallback.period),
       filter: { regions: list(saved.filter?.regions, regions), roles: list(saved.filter?.roles, resourceRoles), people: list(saved.filter?.people), streams: list(saved.filter?.streams) },
     }
   } catch { return fallback }
@@ -123,11 +125,23 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
   const [saved, setSaved] = useState(() => load(month, views?.filter('dashboard', (value) => value)))
   const update = (next: Partial<Saved>) => setSaved((current) => { const value = { ...current, ...next }; try { localStorage.setItem(storageKey, JSON.stringify(value)) } catch { /* convenience only */ } views?.setFilter('dashboard', value); return value })
   const setFilter = (change: Partial<DashboardFilter>) => update({ filter: { ...saved.filter, ...change } })
-  const today = todayIso()
-  const months = periodMonths(saved.period)
-  const setPeriod = (change: Partial<Period>) => update({ period: { ...saved.period, ...change } })
-  const toggle = (values: number[], value: number) => values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value].sort((a, b) => a - b)
-  const years = [...new Set([...azure.items.map((item) => Number(timeWritingMonth(item.title)?.slice(0, 4))).filter((year) => year > 2000), saved.period.year, Number(today.slice(0, 4))])].sort()
+  const today = utcToday()
+  // OV-15: the years offered are those in the Time Writing data, this year, the header month's year and any chosen;
+  // no year ticked = all of them. Month depends on Quarter: it offers only the chosen quarters' months.
+  const years = [...new Set([...azure.items.map((item) => Number(timeWritingMonth(item.title)?.slice(0, 4))).filter((year) => year > 2000), ...saved.period.years, Number(today.slice(0, 4)), Number(month.slice(0, 4))])].sort((a, b) => a - b)
+  const months = periodMonths(saved.period, years)
+  const periodYears = saved.period.years.length ? saved.period.years : years
+  const offeredMonths = quarterMonths(saved.period.quarters)
+  const setYears = (value: string[]) => update({ period: { ...saved.period, years: value.map(Number).sort((a, b) => a - b) } })
+  const setQuarters = (value: string[]) => { const quarters = value.map(Number).sort((a, b) => a - b), offered = quarterMonths(quarters); update({ period: { ...saved.period, quarters, months: saved.period.months.filter((entry) => offered.includes(entry)) } }) }
+  const setMonths = (value: string[]) => update({ period: { ...saved.period, months: value.map(Number).sort((a, b) => a - b) } })
+  const periodChanged = !samePeriod(saved.period, defaultPeriod(month))
+  // The scope line: one month by name; whole years as "2026 (whole year)"; several years as the years and the months
+  // of each ("2025, 2026 · Q1"); else the months.
+  const yearMonths = periodMonthNumbers(saved.period)
+  const periodLabel = months.length === 1 ? monthName(months[0])
+    : periodYears.length === 1 ? (yearMonths.length === 12 ? `${periodYears[0]} (whole year)` : months.map(short).join(', '))
+      : `${periodYears.join(', ')} · ${yearMonths.length === 12 ? 'whole years' : saved.period.months.length ? yearMonths.map((entry) => monthLabels[entry - 1]).join(', ') : saved.period.quarters.map((entry) => `Q${entry}`).join(', ')}`
   const everyone = personMonths(azure.items, months, today, settings)
   const rows = applyFilter(everyone, saved.filter)
   const all = totals(rows)
@@ -148,20 +162,17 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
 
   return <Page>
     <div className="dash-filters" role="group" aria-label="Dashboard filters">
+      <MultiSelect label="Year" options={years.map((year) => [String(year), String(year)])} value={saved.period.years.map(String)} onChange={setYears} />
+      <MultiSelect label="Quarter" options={[1, 2, 3, 4].map((quarter) => [String(quarter), `Q${quarter}`])} value={saved.period.quarters.map(String)} onChange={setQuarters} />
+      <MultiSelect label="Month" options={offeredMonths.map((entry) => [String(entry), monthLabels[entry - 1]])} value={saved.period.months.map(String)} onChange={setMonths} />
       <MultiSelect label="Region" options={regions.map((region) => [region, region])} value={saved.filter.regions} onChange={(value) => setFilter({ regions: value as Region[] })} />
       <MultiSelect label="Role" options={resourceRoles.map((role) => [role, role])} value={saved.filter.roles} onChange={(value) => setFilter({ roles: value as ResourceRole[] })} />
       <MultiSelect label="Team member" options={people.map((name) => [name, name === meName ? `${name} (me)` : name])} value={saved.filter.people} onChange={(value) => setFilter({ people: value })} />
       <MultiSelect label="Stream" options={streamOptions.map((stream) => [stream.key, stream.title])} value={saved.filter.streams} onChange={(value) => setFilter({ streams: value })} />
-      <button type="button" className="ghost" disabled={!filtered} onClick={() => update({ filter: noFilter })}>Reset filters</button>
+      <button type="button" className="ghost" disabled={!filtered && !periodChanged} onClick={() => update({ filter: noFilter, period: defaultPeriod(month) })}>Reset filters</button>
       {canLock && <ProfilePicker settings={shared} value={viewProfile} onChange={setViewProfile} />}
     </div>
-    <div className="dash-period" role="group" aria-label="Time period">
-      <label className="dash-select">Year<select value={saved.period.year} onChange={(event) => setPeriod({ year: Number(event.target.value) })}>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
-      <div className="dash-chips"><span className="multi-label">Quarters</span><div className="chip-row">{[1, 2, 3, 4].map((quarter) => <button key={quarter} type="button" className={`chip ${saved.period.quarters.includes(quarter) ? 'chip-on' : ''}`} aria-pressed={saved.period.quarters.includes(quarter)} onClick={() => setPeriod({ quarters: toggle(saved.period.quarters, quarter) })}>Q{quarter}</button>)}</div></div>
-      <div className="dash-chips"><span className="multi-label">Months</span><div className="chip-row">{monthLabels.map((label, index) => { const value = index + 1, inQuarter = saved.period.quarters.includes(Math.ceil(value / 3)); return <button key={label} type="button" className={`chip ${saved.period.months.includes(value) || inQuarter ? 'chip-on' : ''}`} aria-pressed={saved.period.months.includes(value) || inQuarter} disabled={inQuarter} title={inQuarter ? 'Included by its quarter' : undefined} onClick={() => setPeriod({ months: toggle(saved.period.months, value) })}>{label}</button> })}</div></div>
-      <button type="button" className="text-button" disabled={!saved.period.quarters.length && !saved.period.months.length} onClick={() => setPeriod({ quarters: [], months: [] })}>Whole year</button>
-    </div>
-    <p className="muted dash-scope">{months.length === 1 ? monthName(months[0]) : months.length === 12 ? `${saved.period.year} (whole year)` : months.map(short).join(', ')} · {all.people} {all.people === 1 ? 'person' : 'people'} · {rows.length} person-months · {filterNote}{months.some((entry) => activeFigureLock(settings, entry)) && <> · <span role="note">🔒 Locked figures: {months.filter((entry) => activeFigureLock(settings, entry)).map((entry) => { const lock = activeFigureLock(settings, entry)!; return `${short(entry)} (${lock.profileName}, ${formatDateTime(lock.lockedOn)} by ${lock.lockedBy})` }).join(', ')}</span></>}{notNow.length > 0 && <> · <span className="warning-text">{notNow.length === 1 ? `${short(notNow[0])} is` : `${notNow.map(short).join(', ')} are`} not finished: {notNow.length === 1 ? 'its' : 'their'} ratios are not results</span></>} <Info label="Utilization colours">{profileFormula(defaultProfile(settings), settings)} Locked months keep the figures they were locked with. <span className="util util-over">↑ red</span> above {bands.overloadedAt}% (overloaded), <span className="util util-balanced">green</span> balanced, <span className="util util-spare">↓ blue</span> below {bands.availableBelow}% (spare). The thresholds come from Admin → Capacity & time and apply to every number on this page. Hour differences carry no colour: + and − only say the direction. Partial and future months do not establish spare capacity or results.</Info></p>
+    <p className="muted dash-scope">{periodLabel} · {all.people} {all.people === 1 ? 'person' : 'people'} · {rows.length} person-months · {filterNote}{months.some((entry) => activeFigureLock(settings, entry)) && <> · <span role="note">🔒 Locked figures: {months.filter((entry) => activeFigureLock(settings, entry)).map((entry) => { const lock = activeFigureLock(settings, entry)!; return `${short(entry)} (${lock.profileName}, ${formatDateTime(lock.lockedOn)} by ${lock.lockedBy})` }).join(', ')}</span></>}{notNow.length > 0 && <> · <span className="warning-text">{notNow.length === 1 ? `${short(notNow[0])} is` : `${notNow.map(short).join(', ')} are`} not finished: {notNow.length === 1 ? 'its' : 'their'} ratios are not results</span></>} <Info label="Utilization colours">{profileFormula(defaultProfile(settings), settings)} Locked months keep the figures they were locked with. <span className="util util-over">↑ red</span> above {bands.overloadedAt}% (overloaded), <span className="util util-balanced">green</span> balanced, <span className="util util-spare">↓ blue</span> below {bands.availableBelow}% (spare). The thresholds come from Admin → Capacity & time and apply to every number on this page. Hour differences carry no colour: + and − only say the direction. Partial and future months do not establish spare capacity or results.</Info></p>
     {!rows.length ? <EmptyState title="No Time Writing data for this selection." detail="Change the period or filters, refresh from Azure, or load the synthetic sample." /> : <>
       <Metrics>
         <Metric label="Planned utilization" value={<Util value={all.planUtil} bands={bands} />} hint={`${formatHours(all.plan)}h plan / ${formatHours(all.capacity)}h capacity`} />
@@ -670,7 +681,7 @@ function DefinitionsTab({ terms, hoursPerDay, absenceEpicId, bands, formula }: {
 
 // The six headline tiles of the Team overview (MYD-10, MYD-11): one figure each with what it means, opening the tab
 // that explains it (delivery opens Pulse Check). Same calculations as the tabs.
-const noViews = { views: { schema: 1, kind: 'personal-views', sections: {}, menu: { pinned: [], hidden: [] }, filters: {} }, note: '', inGit: false, sections: () => undefined, setSections: () => {}, resetSections: () => {}, menu: { pinned: [], hidden: [] }, setMenu: () => {}, filter: () => undefined, setFilter: () => {}, saveAsDefault: async () => {} } as unknown as PersonalViewsStore
+const noViews = { views: { schema: 1, kind: 'personal-views', sections: {}, menu: { pinned: [], hidden: [] }, filters: {} }, note: '', inGit: false, sections: () => undefined, setSections: () => {}, resetSections: () => {}, menu: { pinned: [], hidden: [] }, setMenu: () => {}, filter: () => undefined, setFilter: () => {}, saveAsDefault: async () => ({ merged: false }), defaultsQueue: { waiting: 0, failed: 0, error: '' }, retryDefaults: async () => [] } as unknown as PersonalViewsStore
 function OverviewTiles({ rows, months, today, bands, all, overload, forecast, delivery, open, openPulse }: { rows: PersonMonth[]; months: string[]; today: string; bands: Bands; all: ReturnType<typeof totals>; overload: ReturnType<typeof plannedOverload>; forecast: ReturnType<typeof monthForecast> | null; delivery: StreamCounts[]; open: (tab: Tab) => void; openPulse: () => void }) {
   const accuracy = planAccuracy(rows, bands)
   const health = healthScore(rows, months, bands)

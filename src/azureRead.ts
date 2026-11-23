@@ -1,5 +1,6 @@
 // Reading from Azure DevOps: iterations, the backlog fetch and its mapping to work items, field names and team members.
 import { isFinishedState } from './workStates.ts'
+import { utcToday } from './businessTime.ts'
 import { fillClosedDates } from './closedHistory.ts'
 import type { AzureWorkItem } from './domain'
 import { collectionUrl, isCloudBase, normalizeBaseUrl, projectApiBase, requestAzure, type AzureConfig, type AzureRequest, type AzureTransport } from './azureClient.ts'
@@ -38,12 +39,9 @@ export async function readAzureIterations(config: AzureConfig, pat: string, tran
   if (!options.size) throw new Error('Could not load iteration paths. Check Azure DevOps access or enter the full path from Project settings → Project configuration → Iterations.')
   return [...options.values()].sort((a, b) => a.path.localeCompare(b.path))
 }
-function indiaDate(date: Date) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
-}
 
 function scheduledIterationPairs(iterations: AzureIteration[], date: Date, schedule: 'current' | 'future') {
-  const today = indiaDate(date)
+  const today = utcToday(date) // the current Sprint / PI is decided in UTC (NAV-51)
   const dated = iterations.filter((item) => {
     const start = item.attributes?.startDate?.slice(0, 10), finish = item.attributes?.finishDate?.slice(0, 10)
     return Boolean(start && finish && /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(finish))

@@ -161,6 +161,7 @@ This document lists every software component of the system: the in-house source 
 | capacity | `src/capacity.ts` | Capacity model: month tasks, absence, shared time, regions/roles, per-person and per-stream load and status. | CAP, SET |
 | calculationProfiles | `src/calculationProfiles.ts` | Calculation profiles (CAP-41, CAP-42): bucket treatment, plan source, capacity base, built-in Current (v4) and Old Calculation, the default profile, the formula in words; locked figures (CAP-43) and their normaliser. | CAP |
 | bucketRules | `src/bucketRules.ts` | Bucket rules (CAP-46): the words and tags for absence kinds, training and other NPRA, built-in defaults, normaliser and matching. | CAP |
+| businessTime | `src/businessTime.ts` | Business time is UTC (NAV-51): today, the month of a date, the month Task month label and the end of a lock day, all in UTC; plain dates never shift. | NAV, MON, ATM, BKL, QV |
 | insightThresholds | `src/insightThresholds.ts` | Insight thresholds (CAP-47): fields, ranges, built-in values and normaliser. | CAP, OVR |
 | chartUtils | `src/chartUtils.ts` | Chart helpers: month labels, ticks, bar/column/arc geometry, Epic colours, Pareto series, label wrapping. | OVR |
 | csv | `src/csv.ts` | CSV cell escaping with spreadsheet-formula injection guard. | CON |
@@ -178,7 +179,7 @@ This document lists every software component of the system: the in-house source 
 | homeTiles | `src/homeTiles.ts` | The Home tiles and links: types and the search over them (NAV-43, NAV-44); the tile / classic view choice (NAV-46). | NAV |
 | fetchOrder | `src/fetchOrder.ts` | What Refresh fetches and in which order: the Time Writing connection first, then the read-only ones (FET-22). | FET |
 | featureMonths | `src/featureMonths.ts` | The Time Writing months of a new Feature from its Start date and Target date (BKL-31, BKL-32). | BKL |
-| format | `src/format.ts` | Display formatting: hours, percent, dates in viewer time zone, month names, relative time. | UI |
+| format | `src/format.ts` | Display formatting: hours, percent, dates in viewer time zone (display only; business months in businessTime), month names, relative time. | UI |
 | packInputs | `src/packInputs.ts` | The Monthly pack's inputs for a month (streams' releases and supported counts, utilisation), shared by the pack tab and the Insights workspace. | PCK, WSP |
 | insights | `src/insights.ts` | Dashboard insights: month forecast, plan accuracy, stream momentum, resilience, anomalies and health score. | OVR |
 | markdown | `src/markdown.ts` | Small Markdown parser to plain data (headings with GitHub anchors, lists, tables, inline) and link targets. | DOC |
@@ -222,6 +223,7 @@ This document lists every software component of the system: the in-house source 
 | store | `src/store.ts` | `useAppStore`: app state with IndexedDB persistence and audit. | STO |
 | browserState | `src/browserState.ts` | IndexedDB state repository: validation, legacy migration, backup validation and ordered serialized writes. | STO |
 | gitStorage | `src/gitStorage.ts` | GitHub-repo planning data file: config/token, serialise/parse, read/write/delete with conflict detection, folder listing. | GIT |
+| gitSaveQueue | `src/gitSaveQueue.ts` | Queued saves to the shared Git files that are merged, not refused: the save time stamp, per-file merge (history rows, default views pages, KPI tracker sheets, backup connections), read-merge-write with bounded retries, the newest-wins template write and the per-file queue. | GIT, HIS, MYD, KPT, CON, PCK |
 | gitWatch | `src/gitWatch.ts` | Refresh while open: versions of the shared files read or saved, folders to list, the files changed in Git and their names for the banner. | GIT |
 | gitSnapshots | `src/gitSnapshots.ts` | On-prem read-only view fetches saved to Git (azure-data/) without PATs; parse, digest, apply. | GIT, FET |
 | cloudSnapshots | `src/cloudSnapshots.ts` | Frozen whitelisted snapshot files saved to the Git data repository (lte-snapshots/) as new files with read-back verification; listing history. | SNP |
@@ -261,7 +263,7 @@ This document lists every software component of the system: the in-house source 
 | useAzureWorkspace | `src/useAzureWorkspace.ts` | Azure connections state: fetch, save, preview, sample data, Git-backed on-prem data and fetch listeners. | CON, FET, SMP |
 | useDpBoardColumn | `src/useDpBoardColumn.tsx` | DP table "QMS-0025 match" column with search/export text and Create Feature. | QV |
 | useFeatureSetup | `src/useFeatureSetup.ts` | Shared and personal Feature setup from Git, cached locally, saved with a writable token. | CON |
-| useGitStorage | `src/useGitStorage.ts` | Git storage state: load/save planning data, views file, access, Feature setup, QE Mapping and Windchill files, including the windchill-analysis locations file. | GIT, CON, QEM |
+| useGitStorage | `src/useGitStorage.ts` | Git storage state: load/save planning data, views file, access, Feature setup, QE Mapping and Windchill files, including the windchill-analysis locations file; the save queue of the merged shared files (GIT-17). | GIT, CON, QEM |
 | useMyWork | `src/useMyWork.ts` | Who "me" is: Time Writing connection email plus a remembered display name. | ATM |
 | useNow | `src/useNow.ts` | Date that re-renders on an interval for clock and freshness labels. | NAV |
 | usePersonScope | `src/usePersonScope.ts` | Team / Individual scope and team filter, remembered per page. | MON, OVR |
@@ -317,6 +319,7 @@ This document lists every software component of the system: the in-house source 
 | backlog-health.test | `tests/backlog-health.test.mjs` | Backlog Health lists, columns, plain-text descriptions and CSV. | CON |
 | baseline.test | `tests/baseline.test.mjs` | Baseline formula, caps, normalisation, release rows and sample scopes. | BAS, SMP |
 | browser-state.test | `tests/browser-state.test.mjs` | IndexedDB persistence, legacy migration, failure safety and ordered saves. | STO, NFR |
+| business-time.test | `tests/business-time.test.mjs` | Business time in UTC: helpers, month / Sprint / lock boundaries, and the same results with TZ far from UTC (TC-NAV-51). | NAV, MON, ATM, QV |
 | capacity.test | `tests/capacity.test.mjs` | Capacity model: absence, streams, thresholds, shared time and holidays. | CAP |
 | calculation-profiles.test | `tests/calculation-profiles.test.mjs` | Calculation profiles (built-ins, custom profiles, default, normaliser) and Lock figures (CAP-41…43). | CAP |
 | bucket-rules.test | `tests/bucket-rules.test.mjs` | Bucket rules: built-in words, custom rules moving Tasks between buckets, the normaliser (CAP-46). | CAP |
@@ -353,6 +356,7 @@ This document lists every software component of the system: the in-house source 
 | hours-active.test | `tests/hours-active.test.mjs` | Hours make the month Time Writing Task and its story Active, reopening Closed ones (TC-BKL-30). | BKL |
 | git-snapshots.test | `tests/git-snapshots.test.mjs` | On-prem view snapshots via Git: no PATs, digests, helpers and validation. | GIT, FET |
 | git-storage.test | `tests/git-storage.test.mjs` | Git config, planning data round trip, read/write/conflict/write-check/delete. | GIT |
+| git-save-queue.test | `tests/git-save-queue.test.mjs` | Queued, merged saves: time stamps, merge by key, two saves in time order, conflict re-read and merge, bounded retries and Retry, newest template kept. | GIT, HIS, MYD, KPT, PCK |
 | git-watch.test | `tests/git-watch.test.mjs` | Files changed in Git since they were read here; banner names. | GIT |
 | insights.test | `tests/insights.test.mjs` | Forecast, plan accuracy, momentum, resilience, anomalies and health score. | OVR |
 | markdown.test | `tests/markdown.test.mjs` | Markdown anchors, tables, lists, paragraphs, inline and link targets. | DOC |

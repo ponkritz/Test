@@ -1,17 +1,17 @@
 import type { AzureWorkItem } from './domain.ts'
-import { currentIndiaMonth, updateAzureTimeWritingEffort, updateAzureWorkItem, type AzureConfig } from './azureDevOps.ts'
+import { utcMonthLabel, updateAzureTimeWritingEffort, updateAzureWorkItem, type AzureConfig } from './azureDevOps.ts'
 import { isTimeWritingStory, timeWritingMonth } from './azureInsights.ts'
 import { closeStates, isMine, isPending, type Me } from './myWork.ts'
 
 // BKL-39: the pop-up of what Close Feature / Close User Story closes — each open item listed with a tick box, the
 // person's own ticked, other people's not (named, to tick on purpose). A parent closes only with everything open
 // below it: ticking it ticks what is below; unticking an item unticks what is above it.
-// BKL-43: remove — a month Time Writing Task of a later month (than the current India month) under a Feature being
+// BKL-43: remove — a month Time Writing Task of a later month (than the current month, UTC: NAV-51) under a Feature being
 // closed early: it is not closed but set to 0 h Original Estimate and Removed (everyone's, ticked by default); one with
 // Completed Work is left as an ordinary row.
 export interface CloseRow { item: AzureWorkItem; depth: number; parentId?: number; mine: boolean; timeWriting: boolean; monthTask: boolean; remove?: boolean }
 
-export const monthKeyNow = (now = new Date()) => timeWritingMonth(currentIndiaMonth(now))!
+export const monthKeyNow = (now = new Date()) => timeWritingMonth(utcMonthLabel(now))!
 // A later month's Time Writing Task with no Completed Work: removed (0 h) when its Feature closes early.
 export function futureMonthTask(item: AzureWorkItem, now = new Date()) {
   const month = item.workItemType === 'Task' ? timeWritingMonth(item.title) : undefined

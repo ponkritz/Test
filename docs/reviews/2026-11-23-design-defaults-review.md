@@ -73,14 +73,14 @@ Recorded here as given; each is built as its own change (with its requirement ro
 
 | # | Decision | Answer |
 |---|---|---|
-| 1 | Business time zone | **UTC throughout** — months, new month Tasks, the current Sprint and the lock moment. |
+| 1 | Business time zone | **UTC throughout** — months, new month Tasks, the current Sprint and the lock moment. **Done** (NAV-51, KB-72). |
 | 2 | Access fail open or closed | **Allow nothing** until a policy is loaded (fail closed). |
 | 3 | Monthly pack status with no choice | **Not set** (no green). |
 | 4 | Edit form assignee when the item has none | **Stays unassigned**: Assigned to starts **blank**; the person may choose someone. **Done** (BKL-44, KB-66). |
 | 5 | Default Joined on | "Joined on" is really **the date time tracking started** (not the real joining date): it is **renamed "Time tracking started"**; "Left the team on" stays as it is. |
 | 6 | Baseline rules with nothing saved | **Backlog** — to be decided later. |
 | 7 | Ambiguous text dates | **Backlog** — the owner checks the real files first (PROJECT-PLAN.md → Backlog). |
-| 8 | Shared Git files written last-writer-wins | **Queue the saves and save both, in order of their timestamp (to the second).** |
+| 8 | Shared Git files written last-writer-wins | **Queue the saves and save both, in order of their timestamp (to the second).** **Done** (GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08, KB-73, DF-141, SM-95). |
 | 9 | Overloaded | **Strictly above** the limit. |
 | 10 | Finished states; Changed Date for Closed Date | Finished = **Closed, Resolved, Completed, Done** everywhere. Without a Closed Date, the close date is **taken from the item's history** (the change that moved it into a finished state), not from the last-changed date. |
 | 11 | LTE snapshot content | **All data present at the moment**, including the hours data and the release data. |

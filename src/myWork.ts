@@ -1,4 +1,5 @@
 import { finishedStates } from './workStates.ts'
+import { utcToday } from './businessTime.ts'
 import type { AzureWorkItem } from './domain'
 import { isTimeWritingStory, isTrainingWork, planMonthStory, timeWritingMonth, timeWritingStoryIds } from './azureInsights.ts'
 
@@ -157,12 +158,11 @@ function monthRows(items: AzureWorkItem[], me: Me, monthLabel: string, featureId
 
 // Dated iterations from Azure (path + start/finish), as read for the Sprint picker.
 export interface DatedIteration { path: string; attributes?: { startDate?: string; finishDate?: string } }
-const indiaToday = (date: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
-// A Sprint is past when its finish date is before today (India time). Undated or unknown iterations are not past.
+// A Sprint is past when its finish date is before today (UTC, NAV-51). Undated or unknown iterations are not past.
 export function isPastSprint(path: string, iterations: DatedIteration[], date = new Date()) {
   const sprint = iterations.find((item) => item.path.trim().toLowerCase() === path.trim().toLowerCase())
   const finish = sprint?.attributes?.finishDate?.slice(0, 10)
-  return Boolean(finish && /^\d{4}-\d{2}-\d{2}$/.test(finish) && finish < indiaToday(date))
+  return Boolean(finish && /^\d{4}-\d{2}-\d{2}$/.test(finish) && finish < utcToday(date))
 }
 
 // Move to the current Sprint applies only to my pending User Stories sitting in a past Sprint. Stories already in the

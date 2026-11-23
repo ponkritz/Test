@@ -8,7 +8,7 @@ import type { AzureWorkItem } from './domain'
 import { loadAzurePat, saveAzurePat, forgetAzurePat, listAzureConnectionProfiles, loadAzureConnectionProfile, saveAzureConnectionProfile, forgetAzureConnectionProfile, composeAzureUrl, collectionUrlFrom, type AzureConnectionProfile, type AzureConnectionProfileSummary, type AzureConnectionRole, loadServerPat, serverKey } from './azureCredentials'
 import { approvalDateFrom, checkWorkItemQuery, defaultReleaseQuery, fetchReleaseSource, normalizeReleaseSourceSettings, projectQuery, runWorkItemQuery, withAncestors } from './releaseSource'
 import { sampleDataset, sampleProfiles, sampleReleaseScopes } from './sampleData'
-import { indiaMonth } from './azureInsights'
+import { utcMonthKey } from './businessTime'
 import { fetchAllOrder } from './fetchOrder'
 import { syncTitlesAfterSave } from './monthTaskAction'
 import { columnName, pickFields, queryLayout } from './queryView'
@@ -76,7 +76,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
   // Synthetic dataset for demonstrations: replaces the Azure cache and the release source; never touches Azure DevOps.
   function loadSampleData() {
     if (!config) { setError('Enter a valid Azure DevOps project URL first.'); return }
-    const sampleMonth = indiaMonth(new Date().toISOString())!
+    const sampleMonth = utcMonthKey()!
     const sample = sampleDataset(config, sampleMonth)
     setPreview(null); setLastRefreshed('')
     store.update((draft) => {

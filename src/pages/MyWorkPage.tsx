@@ -5,7 +5,7 @@ import { CloseItemsDialog } from '../components/CloseItemsDialog'
 import { closeChosen, closeTree, storyCloseRows, type CloseRow, type closeSelection } from '../closeList'
 type CloseSelection = ReturnType<typeof closeSelection>
 import { EmptyState, Metric, Metrics, Notice, Page, Pill, TablePanel, type Tone } from '../components/ui'
-import { currentIndiaMonth, updateAzureWorkItem } from '../azureDevOps'
+import { utcMonthLabel, updateAzureWorkItem } from '../azureDevOps'
 import { capacityContext } from '../capacity'
 import { featureChildren, hasOptionalStories, isMine, matchesWork, monthTaskCandidates, nextStateFor, workTypes } from '../myWork'
 import { activateFeatureOf, closeRelated, type FollowUpResult } from '../closeChain'
@@ -46,7 +46,7 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
   const meEmail = (assign?.me || azure.creatorEmail).trim().toLowerCase()
   const toggle = (key: string) => setExpanded((current) => current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key])
   const { config, pat } = azure
-  const month = currentIndiaMonth()
+  const month = utcMonthLabel()
   const absenceEpicId = capacityContext(store.state).absenceEpicId
   const blocked = azure.isSample ? 'Synthetic sample data is loaded: changes to Azure DevOps are disabled.' : !config || !pat.trim() ? 'Connect the Time Writing connection (with its PAT) to change items in Azure DevOps.' : ''
   const pending = my.pending

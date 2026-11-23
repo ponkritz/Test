@@ -5,6 +5,11 @@ import { useBulkEpic, useStreamEpics } from '../useStreamEpics'
 import type { FeatureSetups } from '../featureSetup'
 import { useMemo, useState } from 'react'
 import { EmptyState, Page, Panel, Pill, Info } from '../components/ui'
+import type { PersonalViewsStore } from '../usePersonalViews'
+import { normalizeBacklogColumns } from '../backlogView'
+
+// BKL-47: the QMS-0025 column order a Tool Owner saves for everyone (in the shared views defaults in Git).
+const columnsDefaultKey = 'backlog-columns'
 import { AzureWorkItemTree } from '../components/AzureWorkItemTree'
 import { QueryView } from '../components/QueryView'
 import { ResultTabs } from '../components/ResultTabs'
@@ -38,7 +43,7 @@ import { normalizeReleaseSourceSettings, streamPatterns } from '../releaseSource
 
 // One page for all configured Azure DevOps views (each its own entry in the sidebar): the Time Writing backlog
 // (QMS-0025) as an editable tree, and every other shown connection as a read-only query view.
-export function BoardPage({ azure, store, current, month, git, onOpenConnection, assign, featureSetup, qeMapping }: { azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null }) {
+export function BoardPage({ azure, store, current, month, git, onOpenConnection, assign, featureSetup, qeMapping, views, canSetDefault = false }: { views?: PersonalViewsStore; canSetDefault?: boolean; azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null }) {
   const { items, config, preview, pat, featureCreated, rememberPat } = azure
   const [filter, setFilter] = useState('')
   if (current.readOnly) return <ReadOnlyView key={current.id} id={current.id} name={current.name} role={current.role} azure={azure} store={store} month={month} gitNote={git?.snapshotNotes[current.id]} onOpenConnection={onOpenConnection} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} />
@@ -48,7 +53,7 @@ export function BoardPage({ azure, store, current, month, git, onOpenConnection,
   for (const item of activeItems) counts.set(item.workItemType || 'Unknown', (counts.get(item.workItemType || 'Unknown') ?? 0) + 1)
 
   // BKL-12, BKL-45: the board and its source details are two tabs; the board is the page's only scroller.
-  const board = config ? <Panel className="connection-panel backlog-panel"><AzureWorkItemTree items={items} config={config} tabs={<span />} onCreated={featureCreated} savedPat={pat} creatorEmail={azure.creatorEmail} onSavePat={rememberPat} assign={assign} featureSetup={featureSetup} month={month} /></Panel> : <Panel><EmptyState title="Configure a valid Azure DevOps project to use Backlogs." /><button className="primary" onClick={onOpenConnection}>Open connection settings</button></Panel>
+  const board = config ? <Panel className="connection-panel backlog-panel"><AzureWorkItemTree items={items} config={config} tabs={<span />} teamColumns={views?.filter(columnsDefaultKey, (value) => Array.isArray(value) ? normalizeBacklogColumns(value) : undefined)} onSaveColumnsForEveryone={canSetDefault && views ? async (columns) => { await views.saveEntryAsDefault(columnsDefaultKey, columns) } : undefined} onCreated={featureCreated} savedPat={pat} creatorEmail={azure.creatorEmail} onSavePat={rememberPat} assign={assign} featureSetup={featureSetup} month={month} /></Panel> : <Panel><EmptyState title="Configure a valid Azure DevOps project to use Backlogs." /><button className="primary" onClick={onOpenConnection}>Open connection settings</button></Panel>
   const sourceDetails = <Panel className="connection-panel" title={preview ? 'Work-item preview' : 'Saved work items'} detail={`${items.length} items · ${preview ? `Scope: ${preview.areaPaths.join(', ')}` : 'Refresh source data from connection settings.'}`} info="Only verified team-backlog records are shown. Missing target/closure dates stay blank. Saving a fresh scoped result replaces the Azure cache; no Azure source records or demand-planning data are deleted." action={<input aria-label="Search work-item details" className="search" placeholder="Search ID, title, type or state" value={filter} onChange={(event) => setFilter(event.target.value)} />}>
     <div className="button-row">{[...counts].map(([type, count]) => <Pill key={type} tone="info">{type}: {count}</Pill>)}</div>
     {shown.length > 0 ? <div className="azure-table"><table><thead><tr><th>ID / Title</th><th>Type / State</th><th>Assigned to</th><th>Iteration / Parent</th><th>Target / Closed</th><th>Last fetched</th></tr></thead><tbody>{shown.slice(0, 100).map((item) => <tr key={item.key}><td><a href={item.url} target="_blank" rel="noreferrer">#{item.id}</a><strong>{item.title}</strong></td><td>{item.workItemType}<small>{item.state}</small></td><td>{item.assignedTo || 'Unassigned'}</td><td>{item.iterationPath}<small>{item.parentId ? `Parent #${item.parentId}` : 'No parent supplied'}</small></td><td>{formatDate(item.targetDate, 'No target date')}<small>{formatDate(item.closedDate, 'No closed date')}</small></td><td>{formatDateTime(item.syncedAt)}</td></tr>)}</tbody></table><p className="muted">Showing {Math.min(shown.length, 100)} of {shown.length} matching work items.</p></div> : <EmptyState title={items.length ? 'No matching work items.' : 'No work items loaded yet.'} />}
@@ -122,9 +127,9 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     items={[...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => void azure.loadFromGit(id) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]} />
   // Information about the view sits behind the ⓘ next to its name, not as banners; only errors and warnings stay on the page.
   const notes = [
-    source && isDp ? `Month filter: by DDT Date in your time zone; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with “All months”.` : ''}` : '',
-    source && isCp ? `CP: the whole release-folder tree is read; the month is the QA/QE signature date in your time zone (header month). ${cp!.enrichmentName ? `Release names come from “${cp!.enrichmentName}”.` : 'Add a second CP connection (e.g. “CP Releases”, with Release and Content) for the release names.'}` : '',
-    source && !isDp && !isCp && undated > 0 ? `Month filter: by Author Approval Date in your time zone. ${undated} of ${source.items.length} items have no approval date${role === 'release-source' ? '' : ' in the query’s columns'}, so their Changed Date is used.` : '',
+    source && isDp ? `Month filter: by DDT Date in UTC; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with “All months”.` : ''}` : '',
+    source && isCp ? `CP: the whole release-folder tree is read; the month is the QA/QE signature date in UTC (header month). ${cp!.enrichmentName ? `Release names come from “${cp!.enrichmentName}”.` : 'Add a second CP connection (e.g. “CP Releases”, with Release and Content) for the release names.'}` : '',
+    source && !isDp && !isCp && undated > 0 ? `Month filter: by Author Approval Date in UTC. ${undated} of ${source.items.length} items have no approval date${role === 'release-source' ? '' : ' in the query’s columns'}, so their Changed Date is used.` : '',
     isDp ? dpMilestones.map(([milestone]) => `${dpMilestoneNames[milestone].short} = ${dpMilestoneNames[milestone].long} (${milestone})`).join(' · ') : '',
     status?.state === 'ok' && status.message.includes('Git') ? status.message : '',
     !azure.isSample && gitNote && gitNote.tone !== 'error' ? gitNote.text : '',

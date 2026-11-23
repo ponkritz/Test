@@ -1,4 +1,4 @@
-import { todayIso } from '../format'
+import { utcMonthKey } from '../businessTime'
 import { useState } from 'react'
 import { EmptyState, Modal, Notice, Panel, Pill, type Tone, Info } from './ui'
 import { formatDateTime } from '../format'
@@ -248,7 +248,7 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
     {show('mapping') && <NamingPatternsPanel store={store} canManage={canManageStreams} />}
     {show('epics') && <FeatureEpicsPanel store={store} items={azure.items} canManage={canManage} />}
     {show('bulk') && <BulkEpicsPanel store={store} items={azure.items} canManage={canManage} />}
-    {show('counts') && <ReleaseCountsAdmin store={store} canManage={canEnterCounts} month={todayIso().slice(0, 7)} />}
+    {show('counts') && <ReleaseCountsAdmin store={store} canManage={canEnterCounts} month={utcMonthKey()!} />}
     {show('views') && <Panel className="connection-panel" eyebrow="STEP 3" title="Other views" info="Any other Azure DevOps view: custom queries, backlog views and background sources such as the DHP release register (Pedestal). Each is saved as soon as it is fetched (an empty Time Writing result never replaces saved data without asking). Nothing is written to Azure DevOps when fetching. Connections on a server with a PAT need no PAT of their own."
       action={<div className="button-row"><button type="button" className="ghost" onClick={() => { setFormError(''); setForm(empty(connectionProfiles.some((profile) => profile.role === 'time-tracking') ? 'reference' : 'time-tracking')) }}>＋ Add connection</button><button type="button" className="primary" disabled={!connectionProfiles.length || fetchingAll || busy} onClick={() => { setFetchingAll(true); void azure.fetchAll().finally(() => setFetchingAll(false)) }}>{fetchingAll ? 'Fetching all…' : 'Fetch all'}</button></div>}>
       {otherPresets.length > 0 && <div className="preset-list">{otherPresets.map((preset) => <div className="preset-row" key={preset.key}>

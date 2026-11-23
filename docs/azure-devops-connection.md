@@ -29,7 +29,7 @@ Feature titles use `Program | Service | vRelease`. The review identifier is `Ser
 - Full Release: optional PRD, SFV, DT and IQOQ review User Stories.
 - Each selected review is named `<Milestone> : Review of Deliverables (<Service> <Release>)`.
 - Both types always include `<Feature title> - Time Writing` as a User Story, even if all milestones are skipped.
-- That story always gets a Task named `<Month Year> | <Feature title>`, for the current calendar month in Asia/Kolkata.
+- That story always gets a Task named `<Month Year> | <Feature title>`, for the current calendar month in UTC (NAV-51).
 - User Stories inherit the Feature's area and resolved iteration. The Time Writing Task inherits its area but uses the **project-root iteration** (`Patient Safety and Quality` for the configured project).
 
 Every child is validated, saved, linked and read back. Multi-item creation is not atomic: Azure DevOps cannot create this entire hierarchy in one transaction. If a later child fails, known successful IDs are retained and reported. **Complete children** on the existing Feature checks direct children by type/title/parent and creates only missing selected stories and the current month Task. Duplicates or conflicting area/iteration values stop completion for review. Using it in a later month creates only that missing Task. No rollback or deletion is performed automatically.

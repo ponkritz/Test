@@ -65,6 +65,13 @@ export function Notice({ children, tone = 'info', className = '' }: { children: 
   return <div className={`notice ${tone === 'info' ? '' : tone} ${className}`} role={tone === 'error' ? 'alert' : 'status'}>{children}</div>
 }
 
+// GIT-17: the save queue of a shared Git file, shown where the save happens: how many saves are waiting, or the changes
+// kept after a failed save, with Retry. Nothing when the queue is empty.
+export function SaveQueueStatus({ state, onRetry }: { state: { waiting: number; failed: number }; onRetry: () => void }) {
+  if (state.failed) return <Notice tone="warning">Not saved to Git: {state.failed} change{state.failed === 1 ? '' : 's'} kept in the queue. <button type="button" className="ghost" onClick={onRetry}>Retry</button></Notice>
+  return state.waiting > 1 ? <p className="muted" role="status">Waiting to save ({state.waiting} in queue).</p> : null
+}
+
 export function EmptyState({ title, detail }: { title: string; detail?: string }) {
   return <div className="empty-state"><strong>{title}</strong>{detail && <p>{detail}</p>}</div>
 }

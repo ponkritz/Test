@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { parseAzureProjectUrl, fetchAzureWorkItems, mergeAzureWorkItems, buildWorkItemQuery, createAzureFeature, featurePatch, featureDescription, withFeatureDoD, releaseClassifications, releaseHierarchyTitles, currentIndiaMonth, createAzureReleaseHierarchy, completeReleaseHierarchy, HierarchyCreationError, readAzureIterations, projectIterationPaths, currentIterationPairs, futureIterationPairs, mapAzureWorkItem, savedBacklogItems, sameAzureScope, updateAzureTimeWritingEffort } from '../src/azureDevOps.ts'
+import { parseAzureProjectUrl, fetchAzureWorkItems, mergeAzureWorkItems, buildWorkItemQuery, createAzureFeature, featurePatch, featureDescription, withFeatureDoD, releaseClassifications, releaseHierarchyTitles, utcMonthLabel, createAzureReleaseHierarchy, completeReleaseHierarchy, HierarchyCreationError, readAzureIterations, projectIterationPaths, currentIterationPairs, futureIterationPairs, mapAzureWorkItem, savedBacklogItems, sameAzureScope, updateAzureTimeWritingEffort } from '../src/azureDevOps.ts'
 import { buildWorkItemTree } from '../src/azureHierarchy.ts'
 import { loadAzurePat, saveAzurePat, forgetAzurePat, listAzurePatProfiles, loadAzurePatProfile, saveAzurePatProfile, forgetAzurePatProfile, listAzureConnectionProfiles, loadAzureConnectionProfile, saveAzureConnectionProfile, forgetAzureConnectionProfile } from '../src/azureCredentials.ts'
 import { normalizeBacklogColumns, defaultBacklogColumns, plainAzureText, visibleBacklogRows } from '../src/backlogView.ts'
@@ -384,7 +384,7 @@ function fakeHierarchyServer() {
   return { transport, records, writes, failOn: (title) => { failureTitle = title } }
 }
 
-test('release naming and India month rollover implement the final task-title correction', () => {
+test('release naming and UTC month rollover implement the final task-title correction (NAV-51)', () => {
   const pu = releaseHierarchyTitles('Example | Service | v1.0', 'PU', 'October 2026')
   assert.deepEqual(pu.reviews.map((item) => item.milestone), ['SFV', 'DT', 'IQOQ'])
   assert.equal(pu.reviews[0].title, 'SFV : Review of Deliverables (Service 1.0)')
@@ -396,8 +396,9 @@ test('release naming and India month rollover implement the final task-title cor
   const free = releaseHierarchyTitles('Audit readiness 2027', 'PU', 'October 2026')
   assert.deepEqual([free.reviews[0].title, free.timeWriting, free.task], ['SFV : Review of Deliverables (Audit readiness 2027)', 'Audit readiness 2027 - Time Writing', 'October 2026 | Audit readiness 2027'])
   assert.throws(() => releaseHierarchyTitles('  ', 'PU', 'October 2026'), /Enter the Feature title/)
-  assert.equal(currentIndiaMonth(new Date('2026-10-31T18:29:00Z')), 'October 2026')
-  assert.equal(currentIndiaMonth(new Date('2026-10-31T18:30:00Z')), 'November 2026')
+  assert.equal(utcMonthLabel(new Date('2026-10-31T18:30:00Z')), 'October 2026', 'already November in India, still October in UTC')
+  assert.equal(utcMonthLabel(new Date('2026-10-31T23:59:59Z')), 'October 2026')
+  assert.equal(utcMonthLabel(new Date('2026-11-01T00:00:00Z')), 'November 2026')
 })
 
 for (const [kind, milestones, expectedStories] of [['PU', undefined, 5], ['Release', undefined, 6], ['PU', [], 2], ['Release', [], 2], ['Release', ['PRD', 'IQOQ'], 4]]) {
@@ -466,10 +467,11 @@ test('multi-select state filters include both New and Active, with ancestor cont
   assert.equal(buildWorkItemTree(data, ['All'], '')[0].children[0].children[0].children.length, 1)
 })
 
-test('current dates resolve PI and nested Sprint with inclusive India-day boundaries', () => {
+test('current dates resolve PI and nested Sprint with inclusive UTC-day boundaries (NAV-51)', () => {
   const iterations = projectIterationPaths({ name: 'Quality Project', children: [{ name: 'PI A', attributes: { startDate: '2026-10-01T00:00:00Z', finishDate: '2026-12-31T00:00:00Z' }, children: [{ name: 'Sprint 1', attributes: { startDate: '2026-10-01T00:00:00Z', finishDate: '2026-10-16T00:00:00Z' } }, { name: 'Sprint 2', attributes: { startDate: '2026-10-17T00:00:00Z', finishDate: '2026-10-30T00:00:00Z' } }] }] })
-  assert.equal(currentIterationPairs(iterations, new Date('2026-10-16T18:29:59Z'))[0].sprint.name, 'Sprint 1')
-  assert.equal(currentIterationPairs(iterations, new Date('2026-10-16T18:30:00Z'))[0].sprint.name, 'Sprint 2')
+  assert.equal(currentIterationPairs(iterations, new Date('2026-10-16T18:30:00Z'))[0].sprint.name, 'Sprint 1', 'already 17 October in India, still the 16th in UTC')
+  assert.equal(currentIterationPairs(iterations, new Date('2026-10-16T23:59:59Z'))[0].sprint.name, 'Sprint 1')
+  assert.equal(currentIterationPairs(iterations, new Date('2026-10-17T00:00:00Z'))[0].sprint.name, 'Sprint 2')
   assert.equal(currentIterationPairs(iterations, new Date('2027-01-01T00:00:00Z')).length, 0)
   assert.equal(currentIterationPairs([{ name: 'No dates', path: 'Quality Project\\Unknown' }]).length, 0)
 })

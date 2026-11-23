@@ -220,7 +220,6 @@ td small{color:var(--text-3)}
   .dash-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .dash-filters>button{grid-column:1/-1}
   .multi-select,.multi-button,.dash-select select{width:100%;max-width:none;min-width:0}
-  .dash-period{display:grid;gap:10px}
   .chip-row{flex-wrap:wrap}
   .dash-tabs,.overview-tabs,.backlog-tabs{flex-wrap:nowrap;overflow-x:auto;gap:4px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .dash-tabs button,.overview-tabs button,.backlog-tabs button{white-space:nowrap;flex-shrink:0;min-height:40px}

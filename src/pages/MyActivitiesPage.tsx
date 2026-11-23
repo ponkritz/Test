@@ -13,7 +13,8 @@ import { EmptyState, Metric, Metrics, Modal, Page } from '../components/ui'
 import { personMonths, totals } from '../dashboard'
 import type { AzureWorkItem } from '../domain'
 import { setupHours, type FeatureSetups } from '../featureSetup'
-import { formatDate, formatHours, monthName, todayIso } from '../format'
+import { formatDate, formatHours, monthName } from '../format'
+import { endOfUtcDay, utcToday } from '../businessTime'
 import { absenceStoryType, assignablePeople, byFeatureNumber, isMine, isPending, leaveTaskCandidates, myNames, monthTaskCandidates, type MonthTaskCandidate } from '../myWork'
 import { actualsLockDate, actualsLocked as isActualsLocked, planLockDate, planningLocked as isPlanningLocked } from '../planningLock'
 import type { AzureWorkspace } from '../useAzureWorkspace'
@@ -125,15 +126,15 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   const percent = tracked.length ? Math.round((updated / tracked.length) * 100) : 0
   const planDay = planLockDate(locks, month), actualsDay = actualsLockDate(locks, month)
   const deadline = planLocked ? actualsDay : planDay
-  const daysLeft = Math.ceil((new Date(`${deadline}T23:59:59`).getTime() - now.getTime()) / 86400000)
+  const daysLeft = Math.ceil((endOfUtcDay(deadline).getTime() - now.getTime()) / 86400000)
   // KPI cards (ACT-11): the figures of Monthly Time Writing for the person (their month Tasks), their capacity as on
   // My dashboard, and the monthly update.
   const kpiItems = my.known ? azure.items.filter((item) => item.workItemType !== 'Task' || isMine(item, my.me)) : []
-  const kpi = azureInsights(kpiItems, month, todayIso())
+  const kpi = azureInsights(kpiItems, month, utcToday())
   // CAP-56: found by every name the person goes by (their work email's Assigned To names too); when they are not in
   // the month's capacity, the tile says why instead of 0h.
   const names = my.known ? myNames(azure.items, my.me) : []
-  const ownRows = names.length ? personMonths(azure.items, [month], todayIso(), locks).filter((row) => names.includes(row.person)) : []
+  const ownRows = names.length ? personMonths(azure.items, [month], utcToday(), locks).filter((row) => names.includes(row.person)) : []
   const capacity = ownRows.length ? totals(ownRows).capacity : null
   const capacityWhy = names.length && !ownRows.length ? capacityGap(capacityModel(azure.items, month, locks), names) : undefined
   const unsaved = pendingCount + Object.keys(newHours).filter((key) => newHours[key as keyof Hours]?.trim()).length

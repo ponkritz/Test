@@ -148,7 +148,7 @@ Cases marked **UAT** are also run in acceptance testing.
   - Hovering the title shows the page description.
   - No page repeats a header inside its content.
   - `2026-13` is not accepted. `2026-09` updates the page.
-  - On first load the month is the current India month.
+  - On first load the month is the current UTC month (NAV-51).
 
 **TC-NAV-04 Notices once, below the header** — Req NAV-13, FET-12…14
 - Pre: Clean profile.
@@ -287,13 +287,15 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-ACC-02 New work is always assigned; creating for others** — Req CON-50, CON-51 — L1 `my-work.test.mjs` (the month story and task carry the assignee; ＋ User Story / ＋ Task go under the right parent type with the chosen email and iteration; no assignee → refused in the browser transport before sending and in the Windows app request builder; people to choose: everyone with an email, a shared name shows the email), `azure-devops.test.mjs` (every item of a new Feature hierarchy is assigned), `access.test.mjs` (Scrum Master has the right, Team Member not); browser check with Azure DevOps mocked: ＋ User Story on a Feature → the picker starts on the Feature's assignee, choosing Ben creates the story assigned to ben@x.com. **UAT**
 
-**TC-OV-11 Dashboard: period, filters and six tabs** — Req OV-11 — L1 `dashboard.test.mjs` (periods: a year with any quarters and months, none = whole year; month status against today; person-month plan, actual, capacity, region, role, plan lines and blank actuals; filters incl. stream; streams and month-on-month change); browser check on sample data at 1500 px and 390 px: the tabs Summary, Insights, Months, People, Streams and Definitions open without console errors or horizontal page scroll; Months switches Recorded / Planned and hides months without entries; People groups by person, role or region; Streams shows the Epic mix and the overrun and ad-hoc Pareto for the period; each tab shows an empty state when nothing is planned or recorded. **UAT**
+**TC-OV-11 Dashboard: period, filters and six tabs** — Req OV-11 — L1 `dashboard.test.mjs` (periods: Year, Quarter and Month, see TC-OV-15; month status against today; person-month plan, actual, capacity, region, role, plan lines and blank actuals; filters incl. stream; streams and month-on-month change); browser check on sample data at 1500 px and 390 px: the tabs Summary, Insights, Months, People, Streams and Definitions open without console errors or horizontal page scroll; Months switches Recorded / Planned and hides months without entries; People groups by person, role or region; Streams shows the Epic mix and the overrun and ad-hoc Pareto for the period; each tab shows an empty state when nothing is planned or recorded. **UAT**
 
 **TC-OV-12 Rebalancing within role and month** — Req OV-12 — L1 `dashboard.test.mjs` ("overload, persistent overload, concentration and rebalancing within role and month"; "rebalancing leaves people without a role out of the relief and receiver lists, and counts them apart"); browser check: Summary → relief needs and receivers are full width, cut at 8 rows with "Show all (+N more)".
 
 **TC-OV-13 Insights** — Req OV-13 — L1 `insights.test.mjs` (elapsed share; month-end forecast; plan accuracy; stream momentum; resilience; unusual months; health score); browser check: every Insights section has its Info text, and the Delivery section says the Dashboard filters do not apply there. **UAT**
 
 **TC-OV-14 One utilization model from Settings** — Req OV-14 — L1 `dashboard.test.mjs` ("bandOf and plannedOverload follow the Settings thresholds"), `insights.test.mjs` ("the Settings bands decide what counts as over capacity and balanced"); browser check: with Settings → Capacity at 90 / 70, 92% shows ↑ red, 80% green and 65% ↓ blue on every tab, and differences in hours (+ / −) carry no colour.
+
+**TC-OV-15 Team overview period: Year, Quarter and Month drop-downs** — Req OV-15 — L1 `dashboard.test.mjs` ("periods: Year, Quarter and Month, each multi-select; months narrow the quarters; month status against today (OV-15, TC-OV-15)"; "a saved period loads in this format and the earlier { year } one, keeping its months (OV-15, MYD-08, TC-OV-15)"); E2E `shell.e2e.mjs` ("TC-OV-15: Team overview — Year, Quarter and Month are the first drop-downs of the filter row; Month follows Quarter; Reset filters restores the period"); browser check at 1440 px and 390 px: Year, Quarter and Month are the first three drop-downs of the one filter row and the row wraps without horizontal page scroll; Q1 limits Month to Jan–Mar; choosing Mar and then Q2 instead of Q1 drops Mar; Reset filters returns to the header month's year and quarter and is disabled again; two years ticked show both years in the charts and the scope line ("2025, 2026 · Q1"); a period saved before this change still opens with the same months. **UAT**
 
 **TC-NAV-21 Pulse Check ongoing activities** — Req NAV-20 — L1 `pulse-check.test.mjs` (in-progress Features and User Stories per stream, booked hours this month, overdue; absence and finished items left out); browser check: tabs Releases (last month), Last month, Ongoing activities, Current month releases. **UAT**
 
@@ -334,6 +336,8 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-NAV-47 Person picker on the person-based pages** — Req NAV-47, MYD-01, ACT-14 — L1 `app-frame.test.mjs` ("NAV-47: My dashboard always shows you — your work email, else the name you chose before an email; never the Person picked on other pages (TC-NAV-47)"); E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages", "TC-ACT-10: Time Writing can show another person, chosen at the top right"); browser check: Person in the top bar on Time Writing, My Tasks [Board] and Sprint check only; choosing someone changes those pages and not My dashboard.
 
 **TC-NAV-48 Profile menu and footer** — Req NAV-48, NAV-49, NAV-15 — E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages"); browser check: the profile button at the top right opens My settings, Classic / Tile view, View as… (Admin), Search settings, Customize menu; the footer shows only the desktop app download, “v{x.y.z} (Build n)” and Force Update, whose window shows the build ID, build time and where data is saved; scrolled to the end, the last row of a long table is fully visible above it; in Admin → Epic & Feature setup the Unsaved changes bar sits above the footer; every My settings section has the same width and starts under the tabs (KB-61).
+
+**TC-NAV-51 Business time is UTC** — Req NAV-51, NAV-11, NAV-12, QV-18, MON-06, MON-07, ATM-08, BKL-43 — L1 `business-time.test.mjs` ("NAV-51: the business helpers work in UTC; a plain date never shifts by a day (TC-NAV-51)"; "NAV-51: months of dates, new month Tasks, the current Sprint and the locks change at midnight UTC (TC-NAV-51)"; "NAV-51: the same months, Sprint and locks with TZ=Pacific/Auckland / America/Los_Angeles / Asia/Kolkata at month boundaries (TC-NAV-51)"), `planning-lock.test.mjs`, `azure-devops.test.mjs` ("release naming and UTC month rollover …"; "current dates resolve PI and nested Sprint with inclusive UTC-day boundaries (NAV-51)"), `azure-insights.test.mjs`, `release-source.test.mjs`, `release-overview.test.mjs`; the whole unit suite also passes with `TZ=Pacific/Auckland` and `TZ=America/Los_Angeles`; E2E `backlog.e2e.mjs` (New Feature and ＋ Time Writing Task months are the UTC month); browser check with the computer set to America/New_York on the last day of a month after 19:00 (20:00 in winter): the header month is already the next month, a new month Task is titled for the next month, the Period control shows the month's plan locked from midnight UTC, and the fetched-at times in the header and the view bars still show local time (EST / EDT).
 
 **TC-NAV-50 Pages fill the width inside a border, with set margins** — Req NAV-50 — L1 `page-layout.test.mjs` ("NAV-50: the page margins default to 10 / 20 / 10 / 20 px with a border"; "NAV-50: each side is kept between 0 and 64 px; anything else falls back to its default"; "NAV-50: a saved layout is read back; a broken saved value gives the defaults"; "NAV-50: applying sets one CSS variable per side and turns the border off only when asked"); E2E `shell.e2e.mjs` ("TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded"); browser check in the desktop app: fold the menu — the page widens; set Left to 40 — the gap grows at once.
 
@@ -405,9 +409,9 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-ACC-05 View as a person, read only** — Req CON-90, CON-92 — L1 `view-as.test.mjs` ("View as: a person gets the roles of their work email (else the default role); a role gets that role only (CON-90, CON-91)"; "View as is read only: writes to Git storage and Azure DevOps are refused while it is on (CON-92)"); browser check with the Time Writing data fetched: view as a team member — My dashboard and My Tasks [Board] show their hours and work, the menu follows their roles; Save in Monthly Time Writing, a state change in My Tasks [Board] and Save to Git all report "Read only while viewing as …" and nothing changes in Azure DevOps or Git.
 
-**TC-NAV-12 Freshness in the viewer's time zone** — Req NAV-12 — L1 `format.test.mjs` and `app-update.test.mjs` (the same instant in Asia/Kolkata, America/New_York and UTC; local "today"); browser check in America/New_York: a fetch at 09:00 UTC shows "05:00 AM EDT".
+**TC-NAV-12 Freshness in the viewer's time zone** — Req NAV-12 — L1 `format.test.mjs` and `app-update.test.mjs` (the same instant in Asia/Kolkata, America/New_York and UTC; the business "today" is UTC, TC-NAV-51); browser check in America/New_York: a fetch at 09:00 UTC shows "05:00 AM EDT".
 
-**TC-OV-10 Releases summary, tracking Feature and local approval dates** — Req QV-18, QV-19, OV-10 — L1 `release-overview.test.mjs`, `format.test.mjs`, `release-source.test.mjs` (the same UTC instant is 30 September in New York and 1 October in India); browser check in Asia/Kolkata with CP, DP and IOCC loaded from Git: October shows three stream quadrants and the total (3 releases, 4 documents); September shows the CP release approved 29 Sep 18:30 UTC as “September 30, 2026”, in both the quadrant and the CP view.
+**TC-OV-10 Releases summary, tracking Feature and approval dates** — Req QV-18, QV-19, OV-10 — L1 `release-overview.test.mjs`, `format.test.mjs`, `release-source.test.mjs` (the same UTC instant is shown as 30 September in New York and 1 October in India, and counted in its UTC month for everyone); browser check in Asia/Kolkata with CP, DP and IOCC loaded from Git: October shows three stream quadrants and the total (3 releases, 4 documents); September shows the CP release approved 29 Sep 18:30 UTC as “September 30, 2026”, in both the quadrant and the CP view.
 
 **TC-PERF-01 Pages load on demand** — Req NFR-08 — L1 `bundle-split.test.mjs` ("NFR-08: pages load on demand — the shell imports only the start pages; the documents come with the Documentation page (TC-PERF-01)"); E2E every page opened through `navigate` (helpers.mjs waits for the page's code) and "TC-DOC-01" (the documents load with the page); browser check: `pnpm build:web` lists the main script under 1 MB and one chunk per page.
 
@@ -554,7 +558,7 @@ Cases marked **UAT** are also run in acceptance testing.
   - The columns are as in MON-05, and the links open the Azure items.
   - The planning and actuals pills show.
 
-**TC-MON-03 Lock boundaries** — Req MON-06, MON-07, MON-09, MON-10. L1 for the rule, plus L3 with the system clock or the period settings:
+**TC-MON-03 Lock boundaries** — Req MON-06, MON-07, MON-09, MON-10, NAV-51. L1 for the rule (`planning-lock.test.mjs`, `business-time.test.mjs`), plus L3 with the system clock or the period settings; every time below is UTC (NAV-51), whatever the computer's time zone:
 
 | Situation | Planning (OE) | Actuals (CW) |
 |---|---|---|
@@ -800,6 +804,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-35 State and Assigned to multi-select filters** — Req BKL-46, BKL-21 — E2E `backlog.e2e.mjs` ("TC-BKL-35: QMS-0025 filters State and Assigned to with multi-select drop-downs; Reset filters goes back to New + Active and me"); L1 `my-work.test.mjs` ("QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)"); browser check with real data: two people chosen show only their work with its Epics and Features; Unassigned shows unassigned items; Closed added to State shows closed items.
 
+**TC-BKL-36 Column order saved for everyone** — Req BKL-47, BKL-03 — L1 `personal-views.test.mjs` ("BKL-47: Save for everyone sets one entry (the QMS-0025 column order) in the defaults and keeps every other default (TC-BKL-36)"); E2E `backlog.e2e.mjs` ("TC-BKL-36: QMS-0025 starts on the column order saved for everyone; Apply keeps my own; Reset to the team default goes back"); browser check with Git storage as a Tool Owner: Save for everyone writes personal-views-defaults.json with the order; another person (no own order) sees it after a reload; a person without the right sees no Save for everyone.
+
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
 **TC-CON-45 Git view data with another query is not applied** — Req CON-77 — L1 `git-snapshots.test.mjs` ("a snapshot fetched with another query than the connection has here is not applied"); browser check:
@@ -892,7 +898,7 @@ Cases marked **UAT** are also run in acceptance testing.
   2. Open Overview, Monthly and My Tasks [Board].
 - Expected: that Task appears on none of them.
 
-**TC-QV-05 Releases, Name/Release columns and month filter** — Req QV-12…17 — per-view snapshots: `view-sources.test.mjs`; month: `viewMonthOf` (approval date in India time, else approval-date field, else Changed Date); browser check: picker shown on read-only views and not on QMS-0025, “All months” shows every item — L1 `release-source.test.mjs` (incl. planned/booked hours per release: month Tasks only, Removed excluded, no double counting), `query-view.test.mjs`.
+**TC-QV-05 Releases, Name/Release columns and month filter** — Req QV-12…17 — per-view snapshots: `view-sources.test.mjs`; month: `viewMonthOf` (approval date in UTC, NAV-51, else approval-date field, else Changed Date); browser check: picker shown on read-only views and not on QMS-0025, “All months” shows every item — L1 `release-source.test.mjs` (incl. planned/booked hours per release: month Tasks only, Removed excluded, no double counting), `query-view.test.mjs`.
 - L3 steps:
   1. Open the release-source view (TD-01).
   2. Open another read-only view whose items have "…\Name\Release x.y.z" in their Area or Iteration Path.
@@ -916,7 +922,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-QV-12 Rich-text cells as plain text** — Req QV-27 — L1 `query-view.test.mjs` ("rich-text values (Acceptance Criteria) show as text: tags removed, entities decoded, lines joined"; "rich text of any size becomes text in linear time; script and style blocks are dropped (KB-03, TC-QV-12)"); browser check with Azure DevOps mocked (a query with [Microsoft.VSTS.Common.AcceptanceCriteria] holding `<div><b>Given</b>…</div>`): the cell reads "Given … · When … · Then …" with no tags, the hover shows the same, the CSV holds the text; no page errors.
 
-**TC-QV-13 View notes behind Info** — Req QV-28 — browser check with Azure DevOps mocked (DP view, October, a Git save note): no info banners above the counts; the ⓘ Info next to "DP" lists "Month filter: by DDT Date in your time zone." and the legend "DT = Design Transfer (DDT) · SFV = … · PRD = … · RPE = …"; a fetch error still shows as a banner; no page errors.
+**TC-QV-13 View notes behind Info** — Req QV-28 — browser check with Azure DevOps mocked (DP view, October, a Git save note): no info banners above the counts; the ⓘ Info next to "DP" lists "Month filter: by DDT Date in UTC." and the legend "DT = Design Transfer (DDT) · SFV = … · PRD = … · RPE = …"; a fetch error still shows as a banner; no page errors.
 
 **TC-QV-14 DP rows matched to the QMS-0025 board** — Req QV-29 — L1 `dp-board-match.test.mjs` ("DP row → QMS-0025: SourceProgram + Title, or Title alone when the board title has no SourceProgram"; "name and version must both match: another version or none on the board stays below 80%"; "no match at 80%: the closest item is kept as a hint; nothing in common is no match"; "a new Feature title maps back when it holds the Title; the service part drops the version"; "a Title unlike the PsName: the search combines PsName and Release, so the Feature Create Feature made is found"); browser check with Azure DevOps mocked (QMS-0025 board with a Feature and a User Story naming one DP row's Title, one DP row without a match): the matched row shows "Feature id n%" and "Story id n%" as links; the other shows "no match" and Create Feature, whose opens the default Create Feature form (TC-QV-16); the CSV holds the "QMS-0025 match" column; no page errors. **UAT**
 
@@ -1143,6 +1149,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - `repo.git` is accepted as `repo`.
 
 **TC-GIT-09 Loading from Git asks before replacing unsaved changes** — Req GIT-16 — L1 `git-storage.test.mjs` ("GIT-16: loading from Git asks first only when there are unsaved changes, and names what is replaced"); browser check with a writable Git connection: change a person's region, then Load latest — the confirmation names what is replaced; Cancel keeps the change; OK loads the copy in Git.
+
+**TC-GIT-10 Saves to shared files are queued and merged, never written over** — Req GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 — L1 `git-save-queue.test.mjs` ("GIT-17: the save time is to the second and travels in the commit message"; "GIT-17: merging by key keeps both sides; the later time wins only for an entry both changed"; "GIT-17 / HIS-04: two history imports both survive; the later one wins for the same row and the import details"; "GIT-17: default views by page, the KPI tracker by sheet and backups by connection id"; "GIT-17: two saves with different times are both written, in the order of their time, each as its own commit"; "GIT-17: a conflict at write time reads the file again, merges and saves both changes"; "GIT-17: after the retries the save fails with a clear error and stays in the queue until Retry"; "GIT-17: the Monthly pack template is not merged: an older save never replaces a newer one"); browser check with two browsers A and B on the same writable repository: open My dashboard → Customize in both; in A use as default with one section hidden, in B (without reloading) move another section and use as default — B says "Saved as the default for everyone — merged with a change by someone else", and `personal-views-defaults.json` in GitHub has both changes in two commits ending `[saved …]` in time order; upload a template in A, then another in B: both are commits in GitHub with their `[saved …]` times and B's (the later) is the template (an older-timed save arriving last is covered by L1).
 
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
@@ -1676,6 +1684,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | NAV-48 | TC-NAV-48 |
 | NAV-49 | TC-NAV-48 |
 | NAV-50 | TC-NAV-50 |
+| NAV-51 | TC-NAV-51, TC-NAV-03, TC-MON-03 |
 | CON-01…03 | TC-CON-01 |
 | CON-04…08, CON-19 | TC-CON-02 |
 | CON-09 | TC-CON-03 |
@@ -1835,6 +1844,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-44 | TC-BKL-33 |
 | BKL-45 | TC-BKL-34 |
 | BKL-46 | TC-BKL-35 |
+| BKL-47 | TC-BKL-36 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -1885,6 +1895,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OV-12 | TC-OV-12 |
 | OV-13 | TC-OV-13 |
 | OV-14 | TC-OV-14 |
+| OV-15 | TC-OV-15 |
 | OVR-09, CAP-01…09 | TC-CAP-01 |
 | CAP-04, CAP-05, CAP-10…12 | TC-CAP-02 |
 | CAP-13 | TC-CAP-03 |
@@ -1930,6 +1941,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-14 | TC-GIT-07 |
 | GIT-15 | TC-GIT-08 |
 | GIT-16 | TC-GIT-09 |
+| GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2128,18 +2140,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 | Use case | Test cases |
 |---|---|
-| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08 |
+| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
-| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33 |
+| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
-| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61 |
-| UC-09 | TC-OV-11…14, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
+| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51 |
+| UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-CON-62 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |

@@ -29,13 +29,40 @@ export function monthStatus(month: string, today: string): MonthStatus {
   return month < current ? 'elapsed' : month === current ? 'partial' : 'future'
 }
 
-// Period: a year with any quarters and months of it (multi-select); nothing chosen = the whole year.
-export interface Period { year: number; quarters: number[]; months: number[] }
-export function periodMonths(period: Period) {
-  const chosen = new Set(period.months.filter((month) => month >= 1 && month <= 12))
-  for (const quarter of period.quarters) if (quarter >= 1 && quarter <= 4) for (let index = 0; index < 3; index += 1) chosen.add((quarter - 1) * 3 + 1 + index)
-  const months = chosen.size ? [...chosen].sort((a, b) => a - b) : Array.from({ length: 12 }, (_, index) => index + 1)
-  return months.map((month) => `${period.year}-${String(month).padStart(2, '0')}`)
+// Period (OV-15): Year, Quarter and Month, each multi-select (nothing ticked = all). The months depend on the quarters:
+// a year counts the chosen months that lie in the chosen quarters, else the months of the chosen quarters, else all
+// twelve; no year ticked = every year offered (`allYears`). Months outside the chosen quarters are ignored.
+export interface Period { years: number[]; quarters: number[]; months: number[] }
+const inRange = (values: unknown, min: number, max: number) => Array.isArray(values) ? [...new Set(values.filter((entry): entry is number => Number.isInteger(entry) && entry >= min && entry <= max))].sort((a, b) => a - b) : []
+// The months the Month filter offers: those of the chosen quarters, all twelve when none is chosen.
+export function quarterMonths(quarters: number[]) {
+  const valid = inRange(quarters, 1, 4)
+  return Array.from({ length: 12 }, (_, index) => index + 1).filter((month) => !valid.length || valid.includes(Math.ceil(month / 3)))
+}
+// The chosen months of a year, after the quarters narrowed them.
+export function periodMonthNumbers(period: Pick<Period, 'quarters' | 'months'>) {
+  const offered = quarterMonths(period.quarters)
+  const chosen = inRange(period.months, 1, 12).filter((month) => offered.includes(month))
+  return chosen.length ? chosen : offered
+}
+export function periodMonths(period: Period, allYears: number[] = []) {
+  const years = inRange(period.years.length ? period.years : allYears, 2001, 2099)
+  const months = periodMonthNumbers(period)
+  return years.flatMap((year) => months.map((month) => `${year}-${String(month).padStart(2, '0')}`))
+}
+// A saved period, in this format or the earlier one ({ year, quarters, months } where quarters and months added up):
+// the earlier one keeps exactly its months — chosen months become the Month choice (with no quarter), else its quarters.
+export function periodOf(value: unknown, fallback: Period): Period {
+  if (!value || typeof value !== 'object') return fallback
+  const saved = value as { years?: unknown; year?: unknown; quarters?: unknown; months?: unknown }
+  const quarters = inRange(saved.quarters, 1, 4), months = inRange(saved.months, 1, 12)
+  if (Array.isArray(saved.years)) return { years: inRange(saved.years, 2001, 2099), quarters, months: months.filter((month) => quarterMonths(quarters).includes(month)) }
+  const year = Number(saved.year)
+  if (!Number.isInteger(year) || year <= 2000 || year >= 2100) return fallback
+  if (!months.length) return { years: [year], quarters, months: [] }
+  const union = new Set(months)
+  for (const quarter of quarters) for (let index = 1; index <= 3; index += 1) union.add((quarter - 1) * 3 + index)
+  return { years: [year], quarters: [], months: [...union].sort((a, b) => a - b) }
 }
 export const quarterOf = (month: string) => Math.ceil(Number(month.slice(5)) / 3)
 

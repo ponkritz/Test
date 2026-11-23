@@ -54,7 +54,8 @@ import { PersonPicker } from './components/PersonPicker'
 import { ProfileMenu, type ProfileAction } from './components/ProfileMenu'
 import { backlogViews, loadBacklogTab, otherMenuViews, saveBacklogTab, timeWritingView } from './backlogViews'
 import { detectWorkEmail, mergeAzureWorkItems } from './azureDevOps'
-import { formatDateTime, todayIso } from './format'
+import { formatDateTime } from './format'
+import { utcMonthKey } from './businessTime'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
@@ -210,8 +211,8 @@ export default function App() {
   const [requested, setPage] = useState<Page>(() => startPageOf(loadStartView()))
   const switchView = (next: StartView) => { setStartView(saveStartView(next)); setPage(startPageOf(next)) }
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null)
-  // The selected month starts on the viewer's current month (their time zone).
-  const [month, setMonth] = useState(() => todayIso().slice(0, 7))
+  // The selected month starts on the current month in UTC (NAV-11, NAV-51), the same for every viewer.
+  const [month, setMonth] = useState(() => utcMonthKey()!)
   // The Monthly pack is for the month before the header month (the month presented in the following month's call).
   const monthlyPack = useMonthlyPack(git, previousMonth(month))
 
@@ -425,7 +426,7 @@ export default function App() {
       {page === 'baselines' && <BaselinesPage azure={azure} month={month} store={store} git={git} onOpenSettings={() => openSettings('storage', 'git')} canEdit={access.can('baselines.edit')} />}
       {page === 'windchill' && (windchillView ? <WindchillPage view={windchillView} windchill={windchill} git={git} gitNote={git.snapshotNotes[`wc:${windchillView.id}`]} month={month} board={{ azure, stream: windchillStreamExports(windchillViews).find((entry) => entry.view?.id === windchillView.id)?.stream.name ?? windchillView.name, threshold: normalizeReleaseSourceSettings(store.state.releaseSourceSettings).matchThreshold ?? defaultMatchThreshold, assign, featureSetup: featureSetup.setups }} /> : access.can('windchill.import') ? <WindchillExportImport key={windchillFor} stream={windchillFor} windchill={windchill} git={git} onImported={(id) => openWindchill(id)} /> : <Notice tone="info">Your role does not include importing Windchill exports. Open an export from the menu; an Admin can change this in Admin → People & roles → Role rights.</Notice>)}
       {page === 'health' && <BacklogHealthPage azure={azure} store={store} />}
-      {page === 'board' && <BoardPage azure={azure} store={store} current={view} month={month} git={git} onOpenConnection={openConnection} assign={assign} featureSetup={featureSetup.setups} qeMapping={qeMapping.file} />}
+      {page === 'board' && <BoardPage views={personalViews} canSetDefault={access.can('layout.defaults') && git.connected && !git.readOnly && !git.isSample} azure={azure} store={store} current={view} month={month} git={git} onOpenConnection={openConnection} assign={assign} featureSetup={featureSetup.setups} qeMapping={qeMapping.file} />}
       {page === 'snapshots' && <SnapshotsPage {...pageProps} git={git} who={my.me.email || my.me.name || 'unknown'} />}
       {page === 'admin' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage />}
