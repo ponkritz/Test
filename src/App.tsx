@@ -20,7 +20,8 @@ import { HomePage } from './pages/HomePage'
 import { loadStartView, saveStartView, startPageOf, visibleTiles, type HomeLink, type HomeTile, type StartView } from './homeTiles'
 import { lookLabel, mySettingsLabel, readSettingsTab, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, type SettingsTab } from './settingsTabs'
 import { normalizeReleaseSourceSettings } from './releaseSource'
-import { dataSets, defaultMatchThreshold, defaultStreams, profileForDataSet, profileForStream, windchillStreamExports } from './streams'
+import { allStreams, dataSets, defaultMatchThreshold, defaultStreams, profileForDataSet, profileForStream, windchillStreamExports } from './streams'
+import { CustomStreamsContext, useCustomStreams, useStreamsVersion } from './useCustomStreams'
 import { connectionPresets } from './connectionPresets'
 import { gitSyncedIds, markViewsSynced, removeDuplicateConnections } from './viewDefinitions'
 import { listAzureConnectionProfiles } from './azureCredentials'
@@ -204,6 +205,9 @@ export default function App() {
   // QV-60: my own naming patterns changing redraws the figures.
   useSyncExternalStore(subscribeMyPatterns, myPatternsVersion)
   const qeMapping = useQeMapping(git)
+  // STR-01…06: the custom streams from Git; a change redraws the menu, Home and every stream list.
+  const customStreams = useCustomStreams(git)
+  useStreamsVersion()
   // OND-01…10: the On-Demand pages (CoNQ, and those added), each in the menu by its name.
   const onDemand = useOnDemand(git)
   const [onDemandId, setOnDemandId] = useState(() => { try { return localStorage.getItem('demand-planning-on-demand-page-v1') ?? '' } catch { return '' } })
@@ -316,7 +320,7 @@ export default function App() {
   const tileOf = (tile: Omit<HomeTile, 'open'> & { open?: () => void }): HomeTile | null => tile.open ? { ...tile, open: tile.open } : tile.links.length ? { ...tile, open: tile.links[0].open } : null
   const firstAllowed = (...ids: Page[]) => { const id = ids.find((entry) => allowed(entry)); return id ? () => setPage(id) : undefined }
   const streamLinks: HomeLink[] = access.sees('release') ? [
-    ...defaultStreams.filter((stream) => stream.source === 'azure').map((stream) => { const profile = profileForStream(stream, azure.connectionProfiles), entry = profile && views.find((item) => item.id === profile.id); return entry ? { key: `stream:${stream.name}`, label: stream.name, icon: pageMeta('board').icon, open: () => openView(entry.id) } : { key: `stream:${stream.name}`, label: stream.name, icon: '＋', note: 'not set up yet — opens Stream mapping', open: openConnection } }),
+    ...allStreams().filter((stream) => stream.source === 'azure').map((stream) => { const profile = profileForStream(stream, azure.connectionProfiles), entry = profile && views.find((item) => item.id === profile.id); return entry ? { key: `stream:${stream.name}`, label: stream.name, icon: pageMeta('board').icon, open: () => openView(entry.id) } : { key: `stream:${stream.name}`, label: stream.name, icon: '＋', note: 'not set up yet — opens Stream mapping', open: openConnection } }),
     ...windchillStreamExports(windchillViews).map(({ stream, name, view: entry }) => ({ key: `windchill:${entry?.id ?? stream.name}`, label: name, icon: entry ? pageMeta('windchill').icon : '＋', ...(entry ? {} : { note: 'not imported yet' }), open: () => entry ? openWindchill(entry.id) : openWindchill('', stream.name) })),
     ...pageLink('brite'),
   ] : []
@@ -371,7 +375,7 @@ export default function App() {
   if (!store.ready) return <main className="content"><h1>I&amp;D Quality Demand Planning</h1>{store.loadError ? <Notice tone="error"><p>{store.loadError}</p><p>Do not clear browser data. If you still have an older tab open with unsaved changes, export its JSON backup first.</p><button className="primary" onClick={store.retryLoad}>Retry loading saved data</button></Notice> : <p role="status">Loading saved browser data…</p>}{buildStatus}</main>
 
   // UI-12: every table follows the shared design default.
-  return <TableDefaultsContext.Provider value={tableDesign}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><CanContext.Provider value={access.can}><ReadOnlyContext.Provider value={access.readOnly}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><HeaderSlot.Provider value={headerSlot}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
+  return <TableDefaultsContext.Provider value={tableDesign}><CustomStreamsContext.Provider value={customStreams}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><CanContext.Provider value={access.can}><ReadOnlyContext.Provider value={access.readOnly}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><HeaderSlot.Provider value={headerSlot}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
     {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
     <aside className="sidebar" id="primary-navigation">
       <div className="brand" title="I&amp;D Quality Demand Planning"><div className="brand-mark"><BrandMark /></div><div><strong>I&amp;D Quality</strong><span>Demand Planning</span></div><button type="button" className="nav-mini-toggle" aria-pressed={menuMini} aria-label={menuMini ? 'Expand the menu' : 'Collapse the menu'} title={menuMini ? 'Show the menu with names' : 'Fold the menu to icons'} onClick={toggleMenuMini}>{menuMini ? '»' : '«'}</button></div>
@@ -385,7 +389,7 @@ export default function App() {
           // The default streams in order; one without a connection (shown in the menu) leads to Settings to set it up.
           // BRITE (CON-84): planned, at the root of Release Details until its exports and rules are known.
           { key: 'release:root', entries: access.sees('release') ? [navButton('brite', pageMeta('brite').icon, 'BRITE', page === 'brite', () => setPage('brite'))] : [] },
-          { key: 'release:ads', label: 'Azure DevOps Server', entries: access.sees('release') ? defaultStreams.filter((stream) => stream.source === 'azure').map((stream) => { const profile = profileForStream(stream, azure.connectionProfiles), entry = profile && views.find((item) => item.id === profile.id); return entry ? navButton(`view:${entry.id}`, pageMeta('board').icon, stream.name, page === 'board' && view.id === entry.id, () => openView(entry.id)) : <button key={`stream:${stream.name}`} className="nav-missing" title={`Not set up: add a connection named “${stream.name}”`} onClick={openConnection}><span className="nav-icon">＋</span>{stream.name}</button> }) : [] },
+          { key: 'release:ads', label: 'Azure DevOps Server', entries: access.sees('release') ? allStreams().filter((stream) => stream.source === 'azure').map((stream) => { const profile = profileForStream(stream, azure.connectionProfiles), entry = profile && views.find((item) => item.id === profile.id); return entry ? navButton(`view:${entry.id}`, pageMeta('board').icon, stream.name, page === 'board' && view.id === entry.id, () => openView(entry.id)) : <button key={`stream:${stream.name}`} className="nav-missing" title={`Not set up: add a connection named “${stream.name}”`} onClick={openConnection}><span className="nav-icon">＋</span>{stream.name}</button> }) : [] },
           { key: 'release:windchill', label: 'Windchill exports', entries: access.sees('release') ? [...windchillStreamExports(windchillViews).flatMap(({ stream, name, view: entry }, index, all) => [entry ? navButton(entry.id, windchillMeta.icon, name, page === 'windchill' && windchillView?.id === entry.id, () => openWindchill(entry.id)) : <button key={`stream:${stream.name}`} className="nav-missing" title={`Not imported yet: import the ${stream.name} export`} onClick={() => openWindchill('', stream.name)}><span className="nav-icon">＋</span>{stream.name}</button>,
             // Several ECP exports (CON-87): after the last one, "＋ ECP export" adds another with its own name and setup.
             ...(entry && stream.project && all[index + 1]?.stream !== stream ? [<button key={`stream:${stream.name}:add`} className="nav-missing" title={`Import another ${stream.name} export (its own name and project folder)`} onClick={() => openWindchill('', stream.name)}><span className="nav-icon">＋</span>{stream.name} export</button>] : [])]), ...(access.can('windchill.import') ? [navButton('windchill', '＋', windchillMeta.label, page === 'windchill' && !windchillView, () => openWindchill(''))] : [])] : [] },
@@ -444,5 +448,5 @@ export default function App() {
       </Suspense>
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>
     </main>
-  </div></HeaderSlot.Provider></OnPremContext.Provider></EpicSetupContext.Provider></ReadOnlyContext.Provider></CanContext.Provider></ReleaseSettingsContext.Provider></TableDefaultsContext.Provider>
+  </div></HeaderSlot.Provider></OnPremContext.Provider></EpicSetupContext.Provider></ReadOnlyContext.Provider></CanContext.Provider></ReleaseSettingsContext.Provider></CustomStreamsContext.Provider></TableDefaultsContext.Provider>
 }

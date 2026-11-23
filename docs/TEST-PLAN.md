@@ -1708,6 +1708,22 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-20 Column descriptions** — Req OND-25, OND-26 — L1 `on-demand-rows.test.mjs` ("OND-25: a column description — kept in the file, set in Set up columns…, capped at 300 characters (TC-OND-20)"); E2E `on-demand.e2e.mjs` ("TC-OND-16: row details — Long text and Currency columns with a description, a row gets CONQ-0001 on Save to Git with who added it and when, an edit is logged in History and in the file"); browser check: a description of 301 characters cannot be typed (300 at most); clearing a description removes the ⓘ and the help line; an older app version that saves the page drops the descriptions (LIM-19).
 
+### 6.29 Custom streams
+
+**TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details → Azure DevOps Server, on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
+
+**TC-STR-02 The file read from Git is validated** — Req STR-05 — L1 `custom-streams.test.mjs` ("STR-05: the file read from Git — round trip, each stream checked on its own (unknown rule, CP, built-in names refused with why), a broken file refused whole (TC-STR-02)"); E2E `custom-streams.e2e.mjs` ("TC-STR-07: …": a stream with CP's rule listed as not used, with why); browser check: a hand-edited `custom-streams.json` with a stream named "Content", one with rule "formula" and one valid — the valid one is used, the panel lists the other two with their reasons; a file that is not JSON leaves the streams of the last read in use with a warning
+
+**TC-STR-03 Add, rename and remove; the rules by plain names** — Req STR-01, STR-06 — L1 `custom-streams.test.mjs` ("STR-01, STR-06: add, rename (the old name kept as an earlier name) and remove; the offered rules by plain names (TC-STR-03)"); browser check as Tool Owner: ＋ Add stream… offers the four Azure DevOps rules and, with Source Windchill export, the two Windchill rules, each with what it gives and an example; a name of a built-in stream is refused in the pop-up; Edit → rename "Labeling" to "Labels" — the commit "Rename stream: Labeling → Labels", the connection "Labeling" still feeds it; Remove asks first, names what changes and that the connection and data are kept; after it the view is under Other views
+
+**TC-STR-04 A custom stream “Like IOCC” reads its documents** — Req STR-03, STR-04 — L1 `custom-streams.test.mjs` ("STR-03: a custom stream “Like IOCC” reads its documents into releases grouped by the Area Path after its name, with Completed and Supported (TC-STR-04)"); browser check: a custom stream "Recalls" (Like IOCC, fuzzy on, Epic 13946) on a query whose documents sit under …\Recalls\<type> — the Release page shows Type of Release, Releases in the month, Completed and Supported with "What was counted", the match % against Features of Epic 13946 only, and Select / Create Features
+
+**TC-STR-05 Custom Windchill streams** — Req STR-03, STR-02 — L1 `custom-streams.test.mjs` ("STR-03: a custom Windchill stream — “Like S&S IT” has its export, “Like ECP” its exports read by project; ECP keeps its own (TC-STR-05)"); browser check: a custom stream "Field Actions" (Like ECP): ＋ Field Actions under Windchill exports opens the import with the ECP logic; two exports "Field Actions - EU" and "Field Actions - US" are listed on their own and in Pulse Check, read by project; ECP's own exports stay under ECP
+
+**TC-STR-06 Tool Owner adds “Labeling” and gets its Release page** — Req STR-01, STR-02, STR-03 — **UAT** — E2E `custom-streams.e2e.mjs` ("TC-STR-06: as Tool Owner add a stream “Labeling” (Azure DevOps, Like Content), map a connection named “Labeling” — the menu lists it under Release Details and its Release page has the §10 parts"); UAT with Git storage: add the stream, map its query in the Stream mapping (Add query), open Release Details → Labeling — source bar, Releases in the month with "What was counted", Releases | Source data tabs, the common columns with Time Writing Feature, Planned (h), Booked (h), QMS-0025 match (Create Feature) and Select / Create Features; another computer gets the stream at its next start
+
+**TC-STR-07 Read only without the right** — Req STR-07 — E2E `custom-streams.e2e.mjs` ("TC-STR-07: a viewer without “Change the stream mapping” sees the custom streams read only — ＋ Add stream…, Edit and Remove disabled with the reason; the stream is still in the menu"); browser check: as Team Member ＋ Add stream…, Edit and Remove are disabled with the reason; without Git storage the line says to connect it; with the synthetic sample loaded nothing is saved
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2224,6 +2240,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
+| STR-01 | TC-STR-03, TC-STR-06 |
+| STR-02 | TC-STR-01, TC-STR-05, TC-STR-06 |
+| STR-03 | TC-STR-04, TC-STR-05, TC-STR-06 |
+| STR-04 | TC-STR-04 |
+| STR-05 | TC-STR-02 |
+| STR-06 | TC-STR-03 |
+| STR-07 | TC-STR-07 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2239,13 +2262,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | Use case | Test cases |
 |---|---|
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51 |
-| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11 |
+| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |

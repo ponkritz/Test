@@ -232,8 +232,8 @@ export function approvalMonthOf(date: string | undefined, timeZone: string = bus
 
 // QV-64: the releases of a month as a stream's Releases table lists them and Pulse Check counts them (Content: one per
 // Title or naming pattern; Tool Validations: one per tool) — its documents approved in the month, else changed in it.
-export function monthReleaseCount(items: AzureWorkItem[], month: string, rule?: ReleaseRule, patterns?: NamingPattern[], timeZone?: string) {
-  return releaseRegister(items.filter((item) => viewMonthOf(item, timeZone) === month), [], { rule, patterns }).length
+export function monthReleaseCount(items: AzureWorkItem[], month: string, rule?: ReleaseRule, patterns?: NamingPattern[], timeZone?: string, area?: string[]) {
+  return releaseRegister(items.filter((item) => viewMonthOf(item, timeZone) === month), [], { rule, patterns, area }).length
 }
 
 // Releases completed in a month: those whose approval date falls in it.
@@ -340,11 +340,12 @@ export function matchScore(title: string | PreparedTitle, name: string | Prepare
 
 // rule: how the stream reads its releases (streams.ts); fuzzy: match Features by matchScore, the best one tracking the
 // release when it reaches the threshold (%), instead of the exact rule.
-export interface RegisterOptions { rule?: ReleaseRule; fuzzy?: boolean; threshold?: number; patterns?: NamingPattern[] }
+// area: a custom stream “Like IOCC” groups by the Area Path segment after its own name (STR-03).
+export interface RegisterOptions { rule?: ReleaseRule; fuzzy?: boolean; threshold?: number; patterns?: NamingPattern[]; area?: string[] }
 export function releaseRegister(source: AzureWorkItem[] | undefined, backlog: AzureWorkItem[], options: RegisterOptions = {}): ReleaseEntry[] {
   const entries = new Map<string, ReleaseEntry>()
   for (const item of source ?? []) {
-    const found = releaseFor(item, options.rule, options.patterns)
+    const found = releaseFor(item, options.rule, options.patterns, options.area)
     if (!found) continue
     const key = `${found.group ?? ''}\u0000${found.name}\u0000${normalizeVersion(found.release)}`.toLowerCase()
     const entry = entries.get(key) ?? { key: [found.group, found.name, found.release].filter(Boolean).join(' '), ...(found.group ? { group: found.group } : {}), name: found.name, release: found.release, documents: 0, items: [], tracked: false, trackedBy: [], features: [], planned: 0, booked: 0, hourTasks: 0 }

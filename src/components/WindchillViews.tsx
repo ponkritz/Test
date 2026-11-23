@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import { isRunning, recordJob, runInBackground, subscribeJobs } from '../backgroundJobs'
 import { projectLevels, windchillOps, windchillCell, type WindchillFilter, type WindchillLogic, type WindchillView } from '../windchillViews'
-import { defaultStreams, windchillOptionsForView } from '../streams'
+import { streamNamed, windchillOptionsForView } from '../streams'
 import { ResultTabs } from './ResultTabs'
 import { DataTable, type DataColumn } from './DataTable'
 import { releasesInMonth, windchillDateValue } from '../windchillReleases'
@@ -157,9 +157,9 @@ function ExportFileButton({ label, onFile, onError, title, className = 'primary 
 // The Logic dropdown (CON-87): Standard reads releases (S&S IT's rules); ECP reads projects "<number> <name>" from the
 // Location folder chosen under "Project details at" (2nd, 3rd…); several ECP exports each get their own name.
 export function WindchillExportImport({ windchill, git, onImported, stream = '' }: { windchill: WindchillWorkspace; git?: GitStorage; onImported: (id: string) => void; stream?: string }) {
-  const ecpStream = defaultStreams.find((entry) => entry.project)?.name ?? 'ECP'
+  // ECP and a custom stream "Like ECP" (STR-03) start on the ECP logic.
   const [name, setName] = useState(stream)
-  const [logic, setLogic] = useState<WindchillLogic>(stream === ecpStream ? 'ecp' : 'standard')
+  const [logic, setLogic] = useState<WindchillLogic>(streamNamed(stream)?.project ? 'ecp' : 'standard')
   const [projectLevel, setProjectLevel] = useState(2)
   const [error, setErrorText] = useState('')
   // An import that fails stays in the form above its button until fixed (§8) and is a Background jobs entry too.

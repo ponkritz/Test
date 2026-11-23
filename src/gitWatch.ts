@@ -30,6 +30,7 @@ const fileNames: [RegExp, string][] = [
   [/(^|\/)feature-setup\/[^/]+\.json$/, 'Your Feature setup'],
   [/(^|\/)qe-mapping\.json$/, 'QE Mapping'],
   [/(^|\/)azure-views\.json$/, 'Stream mapping and connections'],
+  [/(^|\/)custom-streams\.json$/, 'Custom streams'],
   [/(^|\/)monthly-pack-setup\.json$/, 'Monthly pack setup'],
   [/(^|\/)monthly-pack\/(\d{4}-\d{2})\.json$/, 'Monthly pack $2'],
   [/(^|\/)personal-views-defaults\.json$/, 'Default views'],

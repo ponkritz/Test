@@ -39,7 +39,7 @@ import { predecessorRef, successorRef, type AzureConfig } from '../azureDevOps'
 import type { PageProps } from './types'
 import type { GitStorage } from '../useGitStorage'
 import { columnName, queryLayout, type QueryColumn, type QueryOrder } from '../queryView'
-import { dataSetOfProfile, defaultMatchThreshold, streamOfProfile } from '../streams'
+import { dataSetOfProfile, defaultMatchThreshold, streamArea, streamOfProfile } from '../streams'
 import { normalizeReleaseSourceSettings, streamPatterns } from '../releaseSource'
 
 // One page for all configured Azure DevOps views (each its own entry in the sidebar): the Time Writing backlog
@@ -111,7 +111,9 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const unresolved = stale ? current?.unresolved : source?.unresolved
   // Month filter (header month picker): items approved in the month, else changed in it; "All months" turns it off.
   // DP: the month is the DDT Date's (dpMilestones); other views: Author Approval Date, else Changed Date.
-  const isDp = stream?.rule === 'dp'
+  // STR-03: a custom stream "Like DP" lists its releases by DP's path rule (ReleaseView); DP's milestones are DP's own.
+  const isDp = stream?.rule === 'dp' && !stream.custom
+  const area = streamArea(stream)
   // QV-55: the stream's naming patterns (saved in the shared settings, else built in), once per settings change.
   const savedSettings = store.state.releaseSourceSettings, streamName = stream?.name ?? name
   const namingPatterns = streamPatterns(savedSettings, streamName)
@@ -169,12 +171,13 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
 
   // (2) QV-58: CP, DP and IOCC count their Completed and Supported releases of the header month (as Pulse Check), with
   // the counts an Admin entered while the stream has no data; Releases in the month as the Releases table lists them.
-  const countStream = stream && (countStreams as readonly string[]).includes(stream.name) ? stream.name : undefined
+  // STR-03: a custom stream "Like IOCC" counts its Completed and Supported releases by IOCC's rules.
+  const countStream = stream && ((countStreams as readonly string[]).includes(stream.name) || (stream.custom && stream.rule === 'iocc')) ? stream.name : undefined
   const counted = countStream ? defaultStreamReleases(store.state, azure.connectionProfiles, month).find((entry) => entry.name === countStream) : undefined
   const dpCounts = useMemo(() => isDp && source ? dpMonthCounts(source.items, month) : null, [isDp, source, month])
   const isIocc = stream?.rule === 'iocc'
   const ioccItems = isIocc ? monthItems : noItems
-  const ioccMonth = useMemo(() => ioccItems.length ? releaseRegister(ioccItems, [], { rule: 'iocc', patterns: namingPatterns }).length : 0, [ioccItems, namingPatterns])
+  const ioccMonth = useMemo(() => ioccItems.length ? releaseRegister(ioccItems, [], { rule: 'iocc', patterns: namingPatterns, area }).length : 0, [ioccItems, namingPatterns, area])
   // QV-64: Content and Tool Validations count the releases (Tool Validations: the tools) the Releases table lists for
   // the month, as Pulse Check does; Tool Validations' Supported is the same list (Pulse Check's Supported line).
   const listRule = stream?.rule === 'title' || stream?.rule === 'tool' ? stream.rule : undefined
@@ -189,7 +192,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
       counted={<ul><li><strong>Releases in {monthName(month)}</strong>: the {noun}s the Releases table lists for the month — each {noun} with a document approved in the month (Author Approval Date in UTC), else changed in it; the same count as Pulse Check.</li>{tool ? <li><strong>Supported</strong>: the same tools — Pulse Check's Supported line counts every tool with a document in the month (validated or supported), once each.</li> : <li><strong>Supported</strong> is not counted: Content has no rule for a supported release apart from the releases listed.</li>}<li><strong>Completed</strong> is not counted: the documents carry no completion event (no Release Notes signature or milestone), only their approval date.</li></ul>} />
   }
   if (countStream && counted) {
-    const rules = countRules[countStream]
+    const rules = countRules[countStream] ?? countRules.IOCC
     const value = (count: number | undefined, hint: ReactNode): CountValue => counted.noData && !counted.entered ? { value: '—', hint: `No data (${counted.noData}) — placeholder` } : counted.noData ? { value: count ?? '—', hint: `Entered by an Admin · no data (${counted.noData})` } : { value: count ?? '—', hint }
     const listed = isDp ? monthItems.length : isCp && cp ? cp.report.rows.length : ioccMonth
     counts = <ReleaseCounts month={month}
@@ -213,7 +216,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
         <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose more={dpColumns} extra={boardColumn} actions={dpBulk} />
       </TablePanel>} raw={raw(items)} />
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={cp.report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
-    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} fuzzy={stream?.fuzzy} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
+    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   return <Page className="release-page">
     {/* (1) QV-48: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}
