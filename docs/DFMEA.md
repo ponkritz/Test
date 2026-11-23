@@ -192,6 +192,6 @@ An RPN ≥ 40, or S = 5 with D ≥ 3, needs an action. The **Residual RPN** is t
 | With S = 5 | 10 (DF-01…04, 06, 23, 24, 27, 28) — all with residual D = 1 |
 | Initial RPN ≥ 40 | 4 (DF-01, DF-02, DF-23, DF-59) — DF-01, DF-02, DF-23 reduced to 5, DF-59 to 12 |
 | Residual RPN ≥ 15 | 0 (DF-26 reduced to 12 by reading the Location column first; LIM-04 keeps the correction table as a further option) |
-| Open actions | R-06 code signing, R-07 SHA pinning, R-08 CSP, KB-03/KB-04 input caps, PT-11 https check, LIM-04 correction table; open decisions OI-02, OI-03, OI-11, OI-12 |
+| Open actions | R-06 code signing, R-07 SHA pinning, R-08 CSP, KB-03/KB-04 input caps, PT-11 https check, LIM-04 correction table; open decisions OI-02, OI-03, OI-12 |
 
 The DFMEA is reviewed with every pull request that adds a function or changes a control (the pull request names the DF rows it touches), and in full at each release.

@@ -58,3 +58,4 @@ One table row per finding:
 | Date | Scope | Report |
 |---|---|---|
 | 2026-11-23 | UI/UX role only, all components, pages and styles (4 slices, 106 files) | [2026-11-23-ui-ux-review.md](2026-11-23-ui-ux-review.md) |
+| 2026-11-23 | Design defaults role only, all source, scripts, CI and build settings (6 slices) | [2026-11-23-design-defaults-review.md](2026-11-23-design-defaults-review.md) |
