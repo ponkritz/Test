@@ -1692,6 +1692,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-14 Line, pie and the pop-up** — Req OND-12, OND-14, OND-15 — L1 `on-demand-insights.test.mjs` ("OND-12: a pie keeps the 5 largest categories and puts the rest, with “(none)”, in “Other”; stacks keep 5 series (TC-OND-14)"); browser check: a Line over time by Found on, one line per Sites, shows every month from the first to the last with a legend and axis names; a Pie by Category with 7 categories shows 5 and "Other"; Average is not offered for a pie; ↑ ↓ reorder; Remove asks in a pop-up and Discard brings the chart back; Data labels and Table / Chart work on each chart; a filter with nothing ticked is refused with the reason.
 
+**TC-OND-15 Row keys** — Req OND-18 — L1 `on-demand.test.mjs` ("OND-18: every row has a unique key from the moment it is added — prefix, date, 4 random characters; unique after two saves merge; old rows keyed on save; the prefix fixed once used (TC-OND-15)", "OND-04: rows — …": a new row's key, kept on edit, searchable, in the CSV); E2E `on-demand.e2e.mjs` ("TC-OND-01: …": the Key column, the key matches CONQ-yymmdd-XXXX and is the one saved in on-demand/conq.json); browser check with the real Git repository: two people add a row each at the same time and save; both rows keep different keys; a page saved before keys gets them on its next save; the prefix field is fixed once rows have keys.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2196,6 +2198,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-15 | TC-OND-09, TC-OND-13, TC-OND-14 |
 | OND-16 | TC-OND-09, TC-OND-11 |
 | OND-17 | TC-OND-12 |
+| OND-18 | TC-OND-15 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
@@ -2247,7 +2250,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…14 |
+| UC-37 | TC-OND-01…15 |
 
 ## 8. Result record
 

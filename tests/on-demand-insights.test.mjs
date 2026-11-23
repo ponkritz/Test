@@ -11,11 +11,11 @@ const columns = [
   { id: 'c5', name: 'Sites', type: 'multi', options: ['Berlin', 'Leeds', 'Lyon'], required: false },
 ]
 const rows = [
-  { id: 'r1', cells: { c1: 'Label', c2: '100', c3: '2026-01-10', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
-  { id: 'r2', cells: { c1: 'Late', c2: '50', c3: '2026-01-20', c4: 'Scrap', c5: ['Leeds'] } },
-  { id: 'r3', cells: { c1: 'Seal', c2: '30', c3: '2026-03-05', c4: 'Rework', c5: ['Berlin'] } },
-  { id: 'r4', cells: { c1: 'Odd', c3: 'soon', c4: 'Retired option' } }, // no cost, not a date, not in the list, no site
-  { id: 'r5', cells: { c2: '20', c4: 'Complaint', c5: ['Lyon', 'Gone'] } },
+  { id: 'r1', key: 'CONQ-260101-AAA2', cells: { c1: 'Label', c2: '100', c3: '2026-01-10', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
+  { id: 'r2', key: 'CONQ-260101-AAA3', cells: { c1: 'Late', c2: '50', c3: '2026-01-20', c4: 'Scrap', c5: ['Leeds'] } },
+  { id: 'r3', key: 'CONQ-260101-AAA4', cells: { c1: 'Seal', c2: '30', c3: '2026-03-05', c4: 'Rework', c5: ['Berlin'] } },
+  { id: 'r4', key: 'CONQ-260101-AAA5', cells: { c1: 'Odd', c3: 'soon', c4: 'Retired option' } }, // no cost, not a date, not in the list, no site
+  { id: 'r5', key: 'CONQ-260101-AAA6', cells: { c2: '20', c4: 'Complaint', c5: ['Lyon', 'Gone'] } },
 ]
 const page = () => ({ ...conqPage(), columns: structuredClone(columns), rows: structuredClone(rows) })
 const insight = (fields) => ({ ...blankInsight(page(), 'i1'), title: 'T', ...fields })

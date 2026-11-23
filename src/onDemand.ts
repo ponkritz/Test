@@ -18,8 +18,8 @@ export const typeLabel = (type: OnDemandType) => onDemandTypes.find((entry) => e
 export const hasOptions = (type: OnDemandType) => type === 'dropdown' || type === 'multi'
 export type OnDemandValue = string | string[]
 export interface OnDemandColumn { id: string; name: string; type: OnDemandType; options: string[]; required: boolean }
-export interface OnDemandRow { id: string; cells: Record<string, OnDemandValue> }
-export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[] }
+export interface OnDemandRow { id: string; key?: string; cells: Record<string, OnDemandValue> }
+export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; keyPrefix: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[] }
 
 // OND-11…OND-17 Insights: charts and summary tables built from the page's rows, kept in the same file (an `insights`
 // list, written only when the page has one) so they travel with the page and are merged with it. Columns are referred
@@ -46,8 +46,33 @@ export const pageIdOfFile = (name: string) => { const match = /^([a-z0-9][a-z0-9
 
 // OND-02: CoNQ is there from the start — shown (not yet in Git) while the folder has no page; the first save creates it.
 export const conqId = 'conq'
-export const conqPage = (): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id: conqId, name: 'CoNQ', description: 'Cost of Non-Quality', columns: [], rows: [], insights: [] })
-export const emptyPage = (id: string, name: string, description = ''): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id, name: cleanName(name, 80), description: description.trim().slice(0, 300), columns: [], rows: [], insights: [] })
+export const conqPage = (): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id: conqId, name: 'CoNQ', description: 'Cost of Non-Quality', keyPrefix: 'CONQ', columns: [], rows: [], insights: [] })
+export const emptyPage = (id: string, name: string, description = ''): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id, name: cleanName(name, 80), description: description.trim().slice(0, 300), keyPrefix: prefixFor(name), columns: [], rows: [], insights: [] })
+
+// OND-18: every row has a key the moment it is added — the page's prefix, the date (UTC, yymmdd) and 4 random
+// characters, e.g. CONQ-261123-K7Q2. It is made without asking Git, so two people adding rows at the same time (each
+// saving on their own) get different keys; the 4 characters are drawn from 31 that cannot be mistaken for each other
+// (no 0/O, 1/I/L), 923,521 per page and day. A key is checked against the page's keys when made, and a key that still
+// turns up twice in a file (two saves merged) is replaced for the later row on the next save — it never changes otherwise.
+export const keyPrefixPattern = /^[A-Z0-9]{1,8}$/
+export const rowKeyPattern = /^[A-Z0-9]{1,8}-\d{6}-[2-9A-HJKMNP-Z]{4}$/
+const keyAlphabet = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+export const prefixFor = (name: string) => name.toUpperCase().normalize('NFKD').replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'ROW'
+export function newRowKey(prefix: string, taken: Set<string>, random: () => number = Math.random, now: () => number = Date.now) {
+  const day = new Date(now()).toISOString().slice(2, 10).replace(/-/g, '')
+  for (;;) {
+    const key = `${keyPrefixPattern.test(prefix) ? prefix : 'ROW'}-${day}-${Array.from({ length: 4 }, () => keyAlphabet[Math.floor(random() * keyAlphabet.length)]).join('')}`
+    if (!taken.has(key)) return key
+  }
+}
+// The page with a key on every row: rows without one (added before keys, or a duplicate dropped on reading) get one,
+// in the page's order.
+export function withRowKeys(page: OnDemandPage, random: () => number = Math.random, now: () => number = Date.now): OnDemandPage {
+  if (page.rows.every((row) => row.key)) return page
+  const taken = new Set(page.rows.flatMap((row) => row.key ? [row.key] : []))
+  return { ...page, rows: page.rows.map((row) => { if (row.key) return row; const key = newRowKey(page.keyPrefix, taken, random, now); taken.add(key); return { ...row, key } }) }
+}
+export const hasRowKeys = (page: OnDemandPage) => page.rows.some((row) => row.key)
 
 // Ids that two people adding at the same time cannot both get (the merge keeps entries apart by id).
 export function newId(prefix: 'c' | 'r' | 'i', random: () => number = Math.random, now: () => number = Date.now) {
@@ -104,15 +129,25 @@ const cleanCells = (columns: OnDemandColumn[], cells: Record<string, OnDemandVal
   const text = cellText(value).trim().slice(0, maxValue)
   return text ? [[column.id, text]] : []
 }))
-export function upsertRow(page: OnDemandPage, row: OnDemandRow): OnDemandPage {
-  const next = { id: row.id, cells: cleanCells(page.columns, row.cells) }
+export function upsertRow(page: OnDemandPage, row: OnDemandRow, random: () => number = Math.random, now: () => number = Date.now): OnDemandPage {
+  const existing = page.rows.find((entry) => entry.id === row.id)
+  const key = existing?.key ?? row.key ?? newRowKey(page.keyPrefix, new Set(page.rows.flatMap((entry) => entry.key ? [entry.key] : [])), random, now)
+  const next = { id: row.id, key, cells: cleanCells(page.columns, row.cells) }
   return page.rows.some((entry) => entry.id === row.id) ? { ...page, rows: page.rows.map((entry) => entry.id === row.id ? next : entry) } : { ...page, rows: [...page.rows, next] }
 }
 export const removeRow = (page: OnDemandPage, id: string): OnDemandPage => ({ ...page, rows: page.rows.filter((row) => row.id !== id) })
 export function filterRows(page: OnDemandPage, search: string) {
   const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (!words.length) return page.rows
-  return page.rows.filter((row) => { const text = page.columns.map((column) => cellText(row.cells[column.id])).join(' ').toLowerCase(); return words.every((word) => text.includes(word)) })
+  return page.rows.filter((row) => { const text = [row.key ?? '', ...page.columns.map((column) => cellText(row.cells[column.id]))].join(' ').toLowerCase(); return words.every((word) => text.includes(word)) })
+}
+// OND-18: the prefix of the page's row keys, set in Set up columns…; fixed once a row has a key.
+export function setKeyPrefix(page: OnDemandPage, prefix: string): OnDemandPage {
+  const value = prefix.trim().toUpperCase()
+  if (value === page.keyPrefix) return page
+  if (hasRowKeys(page)) throw new Error('The key prefix cannot change: rows already have keys.')
+  if (!keyPrefixPattern.test(value)) throw new Error('The key prefix is 1 to 8 letters (A–Z) or digits.')
+  return { ...page, keyPrefix: value }
 }
 export const renamePage = (page: OnDemandPage, name: string, description: string): OnDemandPage => {
   const value = cleanName(name, 80)
@@ -190,7 +225,7 @@ export function applyColumns(page: OnDemandPage, drafts: ColumnDraft[], id: () =
 }
 
 // ---- export ----
-export const tableRows = (page: OnDemandPage, rows = page.rows) => [page.columns.map((column) => column.name), ...rows.map((row) => page.columns.map((column) => cellText(row.cells[column.id])))]
+export const tableRows = (page: OnDemandPage, rows = page.rows) => [['Key', ...page.columns.map((column) => column.name)], ...rows.map((row) => [row.key ?? '', ...page.columns.map((column) => cellText(row.cells[column.id]))])]
 export const tableCsv = (page: OnDemandPage, rows = page.rows) => tableRows(page, rows).map((row) => row.map(csvCell).join(',')).join('\r\n')
 
 // ---- the Git file (OND-08) ----
@@ -215,20 +250,25 @@ export function parseOnDemandPage(raw: string, expectedId?: string): OnDemandPag
     const options = hasOptions(type) && Array.isArray(column.options) ? [...new Set(column.options.map((option) => cleanName(text(option, 120))).filter(Boolean))].slice(0, maxOptions) : []
     return [{ id: column.id, name: cleanName(text(column.name, 120)) || column.id, type, options, required: column.required === true }]
   }).slice(0, maxColumns)
-  const rowIds = new Set<string>()
+  const rowIds = new Set<string>(), rowKeys = new Set<string>()
   const rows = (file.rows as unknown[]).flatMap((entry): OnDemandRow[] => {
     const row = entry as Partial<Record<keyof OnDemandRow, unknown>> | null
     if (!row || typeof row.id !== 'string' || !idPattern.test(row.id) || rowIds.has(row.id)) return []
     rowIds.add(row.id)
+    // OND-18: a valid key is kept; a second row with the same key loses it here and gets a new one on the next save.
+    const key = typeof row.key === 'string' && rowKeyPattern.test(row.key) && !rowKeys.has(row.key) ? row.key : undefined
+    if (key) rowKeys.add(key)
     const cells = row.cells && typeof row.cells === 'object' && !Array.isArray(row.cells) ? row.cells as Record<string, unknown> : {}
-    return [{ id: row.id, cells: Object.fromEntries(columns.flatMap((column): [string, OnDemandValue][] => {
+    return [{ id: row.id, ...(key ? { key } : {}), cells: Object.fromEntries(columns.flatMap((column): [string, OnDemandValue][] => {
       const value = cells[column.id]
       if (column.type === 'multi') { const list = [...new Set((Array.isArray(value) ? value : [value]).map((item) => text(item, maxValue).trim()).filter(Boolean))].slice(0, maxOptions); return list.length ? [[column.id, list]] : [] }
       const single = (Array.isArray(value) ? value.map((item) => text(item, maxValue)).filter(Boolean).join(', ') : text(value, maxValue)).trim().slice(0, maxValue)
       return single ? [[column.id, single]] : []
     })) }]
   }).slice(0, maxRows)
-  return { schema: 1, kind: 'on-demand-page', id, name: cleanName(text(file.name, 80)) || id, description: text(file.description, 300).trim(), columns, rows, insights: parseInsights(file.insights) }
+  const name = cleanName(text(file.name, 80)) || id
+  const keyPrefix = typeof file.keyPrefix === 'string' && keyPrefixPattern.test(file.keyPrefix) ? file.keyPrefix : prefixFor(name)
+  return { schema: 1, kind: 'on-demand-page', id, name, description: text(file.description, 300).trim(), keyPrefix, columns, rows, insights: parseInsights(file.insights) }
 }
 // OND-16: the insights of a page file — an unknown type, a bad or repeated id is dropped; a reference to a column that
 // is not (or no longer) on the page is kept as written and shown as broken (OND-17); sizes are capped.
@@ -257,8 +297,10 @@ export function parseInsights(list: unknown): Insight[] {
   }).slice(0, maxInsights)
 }
 const insightOut = ({ id, title, type, category, second, measure, value, filters, sort }: Insight) => ({ id, title, type, category, ...(second ? { second } : {}), measure, ...(value ? { value } : {}), ...(filters.length ? { filters } : {}), sort })
-export function serializeOnDemandPage(page: OnDemandPage) {
-  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, columns: page.columns.map(({ id, name, type, options, required }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}) })), rows: page.rows, ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}) }, null, 1)}\n`
+export function serializeOnDemandPage(input: OnDemandPage) {
+  // OND-18: a saved file has a key on every row.
+  const page = withRowKeys(input)
+  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, keyPrefix: page.keyPrefix, columns: page.columns.map(({ id, name, type, options, required }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}) })), rows: page.rows.map(({ id, key, cells }) => ({ id, ...(key ? { key } : {}), cells })), ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}) }, null, 1)}\n`
   if (new TextEncoder().encode(out).length > onDemandMaxBytes) throw new Error(`The page is too large to save to Git (over ${Math.round(onDemandMaxBytes / 1000)} KB). Remove rows, or split it into two pages.`)
   return out
 }
@@ -285,7 +327,8 @@ export const mergeOnDemandText: Merge = (baseText, mineText, theirsText, mineLat
   const read = (raw: string | null) => { if (!raw) return null; try { return parseOnDemandPage(raw) } catch { return null } }
   const mine = read(mineText), theirs = read(theirsText), base = read(baseText)
   if (!mine || !theirs) return mineText
-  const head = later(base ? { name: base.name, description: base.description } : undefined, { name: mine.name, description: mine.description }, { name: theirs.name, description: theirs.description }, mineLater) ?? { name: mine.name, description: mine.description }
+  const headOf = (page: OnDemandPage) => ({ name: page.name, description: page.description, keyPrefix: page.keyPrefix })
+  const head = later(base ? headOf(base) : undefined, headOf(mine), headOf(theirs), mineLater) ?? headOf(mine)
   const columns = mergeById(base?.columns ?? null, mine.columns, theirs.columns, mineLater)
   const order = later(base?.columns.map((column) => column.id), mine.columns.map((column) => column.id), theirs.columns.map((column) => column.id), mineLater) ?? mine.columns.map((column) => column.id)
   const ordered = [...order.flatMap((id) => columns.filter((column) => column.id === id)), ...columns.filter((column) => !order.includes(column.id))]

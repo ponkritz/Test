@@ -77,7 +77,10 @@ test('TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column
   await row.getByRole('button', { name: 'Add row' }).click()
   await row.waitFor({ state: 'detached' })
   const table = page.locator('.od-panel table')
-  assert.match(await text(table.locator('thead')), /Category.*Sites.*Actions/i)
+  assert.match(await text(table.locator('thead')), /Key.*Category.*Sites.*Actions/i)
+  // OND-18: the row has its key the moment it is added — prefix, date (UTC), 4 random characters.
+  const key = await text(table.locator('tbody tr').first().locator('code.od-key'))
+  assert.match(key, new RegExp(`^CONQ-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-[2-9A-HJKMNP-Z]{4}$`))
   assert.match(await text(table.locator('tbody tr').first()), /Rework Berlin, Lyon/)
   assert.match(await text(page.locator('.od-panel')), /1 of 1 row/)
 
@@ -92,6 +95,8 @@ test('TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column
   assert.deepEqual([file.kind, file.id, file.name, file.description], ['on-demand-page', 'conq', 'CoNQ', 'Cost of Non-Quality'])
   assert.deepEqual(file.columns.map((column) => [column.name, column.type, column.options]), [['Category', 'dropdown', ['Scrap', 'Rework']], ['Sites', 'multi', ['Berlin', 'Leeds', 'Lyon']]])
   assert.deepEqual(file.rows.map((entry) => entry.cells), [{ [file.columns[0].id]: 'Rework', [file.columns[1].id]: ['Berlin', 'Lyon'] }])
+  assert.equal(file.rows[0].key, key, 'the key shown is the key saved')
+  assert.equal(file.keyPrefix, 'CONQ')
   assert.match(saved[0].message, /\[saved \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]$/, 'a queued save carries its time (GIT-17)')
   assert.equal(JSON.stringify(writes).includes('test-token'), false, 'no token in the data repository')
   // §8: the result is a Background jobs entry.

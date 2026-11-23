@@ -4,7 +4,7 @@ import { DataTable, type DataColumn } from '../components/DataTable'
 import { ResultTabs } from '../components/ResultTabs'
 import { EmptyState, Info, Modal, Notice, Page, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText } from '../gitSaveQueue'
-import { applyColumns, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, emptyPage, filterRows, hasOptions, newId, onDemandPath, onDemandTypes, pageIdFor, removeRow, renamePage, rowError, upsertRow, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
+import { applyColumns, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, emptyPage, filterRows, hasOptions, newId, onDemandPath, onDemandTypes, pageIdFor, removeRow, renamePage, rowError, upsertRow, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
@@ -54,6 +54,8 @@ export function OnDemandPage({ git, store, pageId, onOpen }: { git: GitStorage; 
   const discard = () => { store.setDraft(page.id, null); setSaveError('') }
 
   const columns: DataColumn<OnDemandRow>[] = [
+    // OND-18: the row's key, made when the row is added; rows from before keys get theirs on the next Save to Git.
+    { id: 'od-key', label: 'Key', value: (row) => row.key ?? '', render: (row) => row.key ? <code className="od-key">{row.key}</code> : <small className="muted" title="Given on the next Save to Git">on save</small> },
     ...page.columns.map((column): DataColumn<OnDemandRow> => ({
       id: column.id, label: column.name, align: column.type === 'number' ? 'right' : undefined,
       value: (row) => cellSortValue(column, row.cells[column.id]),
@@ -127,9 +129,10 @@ function RowDialog({ page, row, isNew, pending, onCancel, onSave }: { page: Page
   const [cells, setCells] = useState<Record<string, OnDemandValue>>(row.cells)
   const [error, setError] = useState('')
   const set = (id: string, value: OnDemandValue) => { setCells({ ...cells, [id]: value }); setError('') }
-  const submit = (event: React.FormEvent) => { event.preventDefault(); const problem = rowError(page.columns, cells); if (problem) { setError(problem); return } onSave({ id: row.id, cells }) }
+  const submit = (event: React.FormEvent) => { event.preventDefault(); const problem = rowError(page.columns, cells); if (problem) { setError(problem); return } onSave({ id: row.id, ...(row.key ? { key: row.key } : {}), cells }) }
   return <Modal eyebrow={eyebrowOf(page)} title={isNew ? 'Add a row' : 'Edit the row'} onClose={onCancel}>
     <form onSubmit={submit} className="od-row-form" noValidate>
+      <p className="od-row-key"><small className="muted">Key</small> {row.key ? <code className="od-key">{row.key}</code> : isNew ? <span className="muted">given when the row is added (unique, it never changes)</span> : <span className="muted">given on the next Save to Git</span>}</p>
       {page.columns.map((column, index) => <Field key={column.id} column={column} value={cells[column.id]} first={index === 0} onChange={(value) => set(column.id, value)} />)}
       {pending && <p className="muted">The page has other unsaved changes; this row is saved to Git with them.</p>}
       {error && <Notice tone="error">{error}</Notice>}
@@ -158,6 +161,8 @@ function Field({ column, value, first, onChange }: { column: OnDemandColumn; val
 // to the values already in the rows, and asks; Save columns then puts the change in the page's unsaved changes.
 function ColumnsDialog({ page, onCancel, onSave }: { page: PageFile; onCancel: () => void; onSave: (page: PageFile) => void }) {
   const [drafts, setDrafts] = useState<ColumnDraft[]>(() => columnDrafts(page.columns))
+  const [prefix, setPrefix] = useState(page.keyPrefix)
+  const prefixFixed = hasRowKeys(page)
   const [error, setError] = useState('')
   const [effects, setEffects] = useState<string[] | null>(null)
   const edit = (index: number, change: Partial<ColumnDraft>) => { setDrafts(drafts.map((draft, at) => at === index ? { ...draft, ...change } : draft)); setError(''); setEffects(null) }
@@ -166,9 +171,11 @@ function ColumnsDialog({ page, onCancel, onSave }: { page: PageFile; onCancel: (
     event.preventDefault()
     const problem = columnsError(drafts)
     if (problem) { setError(problem); return }
+    let keyed: PageFile
+    try { keyed = setKeyPrefix(page, prefix) } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); return }
     const lines = columnEffects(page, drafts)
     if (lines.length && !effects) { setEffects(lines); return }
-    onSave(applyColumns(page, drafts))
+    onSave(applyColumns(keyed, drafts))
   }
   return <Modal eyebrow={eyebrowOf(page)} title="Set up columns" wide onClose={onCancel}>
     <form onSubmit={submit} className="od-columns-form">
@@ -177,6 +184,8 @@ function ColumnsDialog({ page, onCancel, onSave }: { page: PageFile; onCancel: (
         <ul>{effects.map((line) => <li key={line}>{line}</li>)}</ul>
         <p className="muted">Nothing is lost by a type change or a removed option: those values are kept and marked. Saved for everyone with Save to Git.</p>
       </div> : <>
+        <label className="od-prefix">Row key prefix<input aria-label="Row key prefix" required maxLength={8} pattern="[A-Za-z0-9]{1,8}" value={prefix} disabled={prefixFixed} onChange={(event) => { setPrefix(event.target.value.toUpperCase()); setError('') }} />
+          <small>{prefixFixed ? `Fixed: rows already have keys such as ${page.rows.find((row) => row.key)?.key}.` : `Every row gets a key such as ${prefix || page.keyPrefix}-261123-K7Q2 (prefix, date, 4 random characters) the moment it is added. 1 to 8 letters or digits; it cannot change once rows have keys.`}</small></label>
         {!drafts.length && <EmptyState title="No columns yet." detail="Add the first one with ＋ Add column." />}
         <ol className="od-columns">{drafts.map((draft, index) => <li key={draft.id} className="od-column">
           <div className="od-column-head">

@@ -12,8 +12,8 @@ const columns = [
   { id: 'c5', name: 'Sites', type: 'multi', options: ['Berlin', 'Leeds', 'Lyon'], required: false },
 ]
 const page = () => ({ ...conqPage(), columns: structuredClone(columns), rows: [
-  { id: 'r1', cells: { c1: 'Label misprint', c2: '1200', c3: '2026-11-02', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
-  { id: 'r2', cells: { c1: 'Late delivery', c4: 'Complaint', c5: ['Leeds'] } },
+  { id: 'r1', key: 'CONQ-261102-AAA2', cells: { c1: 'Label misprint', c2: '1200', c3: '2026-11-02', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
+  { id: 'r2', key: 'CONQ-261109-AAA3', cells: { c1: 'Late delivery', c4: 'Complaint', c5: ['Leeds'] } },
 ] })
 
 test('OND-08: an On-Demand page file is validated when read back from Git — unknown types, bad ids and values cleaned, a file that is not a page refused (TC-OND-02)', () => {
@@ -49,12 +49,16 @@ test('OND-04: rows — required fields, numbers and dates checked; values cleane
   assert.equal(rowError(file.columns, { c1: 'x', c5: [] }), '')
   assert.match(rowError(columns.map((column) => ({ ...column, required: false })), {}), /at least one field/)
   const added = upsertRow(file, { id: 'r3', cells: { c1: '  Scrap batch ', c5: ['Lyon', 'Lyon', ''], c4: '' } })
-  assert.deepEqual(added.rows[2], { id: 'r3', cells: { c1: 'Scrap batch', c5: ['Lyon'] } })
+  const { key: newKey, ...addedRow } = added.rows[2]
+  assert.deepEqual(addedRow, { id: 'r3', cells: { c1: 'Scrap batch', c5: ['Lyon'] } })
+  assert.match(newKey, /^CONQ-\d{6}-[2-9A-HJKMNP-Z]{4}$/, 'OND-18: a new row gets its key at once')
+  assert.equal(upsertRow(added, { id: 'r3', cells: { c1: 'Scrap' } }).rows[2].key, newKey, 'an edit keeps the key')
   assert.deepEqual(upsertRow(added, { id: 'r3', cells: { c1: 'Scrap', c4: 'Scrap' } }).rows[2].cells, { c1: 'Scrap', c4: 'Scrap' }, 'an edit replaces the row')
   assert.deepEqual(removeRow(added, 'r1').rows.map((row) => row.id), ['r2', 'r3'])
   assert.deepEqual(filterRows(file, 'leeds complaint').map((row) => row.id), ['r2'])
   assert.equal(cellSortValue(file.columns[1], '1200'), 1200)
-  assert.equal(tableCsv(file).split('\r\n')[1], 'Label misprint,1200,2026-11-02,Rework,"Berlin, Lyon"')
+  assert.equal(tableCsv(file).split('\r\n')[1], 'CONQ-261102-AAA2,Label misprint,1200,2026-11-02,Rework,"Berlin, Lyon"')
+  assert.deepEqual(filterRows(file, 'conq-261109').map((row) => row.id), ['r2'], 'search finds the key')
   assert.notEqual(newId('r'), newId('r'), 'ids two people add at the same time do not collide')
   assert.equal(pageIdFor('Cost of Scrap & Rework', ['cost-of-scrap-rework']), 'cost-of-scrap-rework-2')
   assert.equal(renamePage(file, ' CoNQ 2026 ', 'Cost of Non-Quality').name, 'CoNQ 2026')
@@ -156,4 +160,42 @@ test('CON-103: the On-Demand rights — area for every role, setup and data edit
   assert.ok(none.areas.has('ondemand') && !none.actions.has('ondemand.edit'))
   assert.equal(writeBlockedReason(true, ['ondemand.edit'], 'on this page'), 'Read only: the access roles are not loaded yet, so nothing can be changed on this page.')
   assert.match(writeBlockedReason(false, ['ondemand.edit'], 'on this page'), /Your role does not allow “Edit On-Demand data \(rows\)”/)
+})
+
+test('OND-18: every row has a unique key from the moment it is added — prefix, date, 4 random characters; unique after two saves merge; old rows keyed on save; the prefix fixed once used (TC-OND-15)', async () => {
+  const { newRowKey, withRowKeys, setKeyPrefix, prefixFor, rowKeyPattern } = await import('../src/onDemand.ts')
+  const day = () => Date.parse('2026-11-23T10:00:00Z')
+  assert.equal(newRowKey('CONQ', new Set(), () => 0, day), 'CONQ-261123-2222')
+  assert.equal(newRowKey('CONQ', new Set(['CONQ-261123-2222']), (() => { let n = 0; return () => (n++ < 4 ? 0 : 0.999) })(), day), 'CONQ-261123-ZZZZ', 'a key already on the page is never given again')
+  assert.match(newRowKey('CONQ', new Set()), rowKeyPattern)
+  assert.equal(prefixFor('CoNQ'), 'CONQ'); assert.equal(prefixFor('Scrap & rework log'), 'SCRAPREW'); assert.equal(prefixFor('—'), 'ROW')
+  // Two people add a row each at the same time and get the same key (forced here); after the merge both rows stay and
+  // every key in the file is unique.
+  const base = serializeOnDemandPage(page())
+  const same = { key: 'CONQ-261123-K7Q2' }
+  const mine = serializeOnDemandPage({ ...page(), rows: [...page().rows, { id: 'rMine', ...same, cells: { c1: 'Mine' } }] })
+  const theirs = serializeOnDemandPage({ ...page(), rows: [...page().rows, { id: 'rTheirs', ...same, cells: { c1: 'Theirs' } }] })
+  const merged = parseOnDemandPage(mergeOnDemandText(base, mine, theirs, true), 'conq')
+  assert.deepEqual(merged.rows.map((row) => row.id).sort(), ['r1', 'r2', 'rMine', 'rTheirs'])
+  const keys = merged.rows.map((row) => row.key)
+  assert.equal(new Set(keys).size, 4, 'keys unique after the merge')
+  assert.ok(keys.every((key) => rowKeyPattern.test(key)))
+  assert.ok(keys.includes('CONQ-261123-K7Q2'), 'one of the two keeps it; only the second gets a new one')
+  // Rows from before keys get one on the next save, in their order; keys already there do not change.
+  const old = { ...page(), rows: [{ id: 'o1', cells: { c1: 'Old' } }, page().rows[0]] }
+  const saved = parseOnDemandPage(serializeOnDemandPage(old), 'conq')
+  assert.match(saved.rows[0].key, rowKeyPattern)
+  assert.equal(saved.rows[1].key, 'CONQ-261102-AAA2')
+  assert.deepEqual(withRowKeys(page()), page(), 'a page whose rows all have keys is left as it is')
+  // A duplicate key in a file is dropped on reading (and replaced on the next save).
+  const dup = parseOnDemandPage(JSON.stringify({ kind: 'on-demand-page', id: 'conq', name: 'CoNQ', columns, rows: [{ id: 'a', key: 'CONQ-261123-K7Q2', cells: { c1: 'x' } }, { id: 'b', key: 'CONQ-261123-K7Q2', cells: { c1: 'y' } }, { id: 'c', key: 'bad key', cells: { c1: 'z' } }] }), 'conq')
+  assert.deepEqual(dup.rows.map((row) => row.key), ['CONQ-261123-K7Q2', undefined, undefined])
+  // The prefix: set per page, 1–8 letters or digits, fixed once a row has a key; kept in the file and merged with the name.
+  const fresh = { ...emptyPage('waste', 'Waste log') }
+  assert.equal(fresh.keyPrefix, 'WASTELOG')
+  assert.equal(setKeyPrefix(fresh, ' wst ').keyPrefix, 'WST')
+  assert.throws(() => setKeyPrefix(fresh, 'TOO-LONG-1'), /1 to 8 letters/)
+  assert.throws(() => setKeyPrefix(page(), 'NEW'), /cannot change: rows already have keys/)
+  assert.equal(JSON.parse(serializeOnDemandPage(setKeyPrefix(fresh, 'WST'))).keyPrefix, 'WST')
+  assert.equal(parseOnDemandPage(JSON.stringify({ kind: 'on-demand-page', id: 'x', name: 'Odd name', columns: [], rows: [] }), 'x').keyPrefix, 'ODDNAME', 'a file without a prefix takes it from the name')
 })
