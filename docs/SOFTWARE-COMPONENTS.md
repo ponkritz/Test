@@ -49,6 +49,7 @@ This document lists every software component of the system: the in-house source 
 | PersonalLayout | `src/components/PersonalLayout.tsx` | Customize a page's sections (show, hide, order, reset, default for everyone) and the menu (pin, hide). | MYD |
 | QeMappingPage | `src/pages/QeMappingPage.tsx` | QE Mapping: upload Excel/CSV, edit cells/rows/columns, filter and group, then save to Git or export. | QEM |
 | OnDemandPage | `src/pages/OnDemandPage.tsx` | On-Demand page (CoNQ and the pages added): the work table, the row pop-up, the Columns pop-up with types and options, add / rename / remove a page, Save to Git with the unsaved-changes bar. | OND, CON |
+| OnDemandInsights | `src/pages/OnDemandInsights.tsx` | The Insights tab of an On-Demand page: the list of charts and tables, ＋ Add chart / table and Edit pop-up with a live preview, reorder and remove, read only without the setup right. | OND, CON |
 | KpiTrackerPage | `src/pages/KpiTrackerPage.tsx` | KPI tracker page: the Git copy or a live read in the desktop app, sheet choice, table, save to Git for admins. | KPT |
 | DpBulkCreate | `src/components/DpBulkCreate.tsx` | DP Create Features dialog: the plan per selected release, PI / Sprint, creation as a background job. | DPF |
 | FormulaBar | `src/components/FormulaBar.tsx` | The fx bar of a calculation profile: typed formula, insert buttons, check as typed. | CAP |
@@ -146,7 +147,8 @@ This document lists every software component of the system: the in-house source 
 | WindchillReleasesPanel | `src/components/WindchillReleasesPanel.tsx` | Lists a Windchill export's unique releases from Location or document names (source and columns chosen), filtered to the header month (Show in the page's source bar), columns in the UI-STANDARDS §10 order, sortable, with draggable widths and a QMS-0025 match column with Create Feature; the unique locations, CSV exports and Save locations to Git. | CON, QV |
 | WindchillSettingsPanel | `src/components/WindchillSettingsPanel.tsx` | Windchill host and service path setup with connection test and sign-in (browser or desktop). | CON |
 | WindchillViews | `src/components/WindchillViews.tsx` | Windchill views settings, the Windchill export page as a Release page (UI-STANDARDS §10, QV-62) and import of results saved or copied from the browser. | CON |
-| WorkloadCharts | `src/components/WorkloadCharts.tsx` | SVG charts: utilization, Epic mix, Epic bullet, Pareto, utilization heatmap and donut. | OVR |
+| WorkloadCharts | `src/components/WorkloadCharts.tsx` | SVG charts: utilization, Epic mix, Epic bullet, Pareto, utilization heatmap and donut; the shared chart frame (legend, Data labels, Table / Chart) and tooltip used by the On-Demand insights. | OVR, OND |
+| InsightCharts | `src/components/InsightCharts.tsx` | On-Demand insights drawn: bar / column (stacked), line over time, pie / donut and the summary (pivot) table, in the chart frame, with the message of a broken insight. | OND |
 | columnWidths | `src/components/columnWidths.tsx` | `useColumnWidths` hook: draggable table column widths kept per table in this browser. | UI |
 | ui | `src/components/ui.tsx` | Shared UI primitives: Page, Panel, TablePanel, Metrics, Pill, Notice, EmptyState, Modal, Info, SettingsSummary. | UI |
 
@@ -200,6 +202,7 @@ This document lists every software component of the system: the in-house source 
 | viewAs | `src/viewAs.ts` | View as: who may use it, the rights of the viewed person or role, the people to choose from, the read-only write guard. | CON |
 | qeMapping | `src/qeMapping.ts` | QE Mapping table model: sheets with stable column/row ids, edits, filter, group, CSV, Git file parse/serialise. | QEM |
 | onDemand | `src/onDemand.ts` | On-Demand page model: columns (Text, Number, Date, Dropdown, Multi-select) and rows with stable ids, value checks and type changes that keep values, the Git file parse / validate / serialise and the merge of two saves. | OND |
+| onDemandInsights | `src/onDemandInsights.ts` | On-Demand insights: the columns each part may use, reference checks (broken insights), the aggregation of rows (count / sum / average, Multi-select per value, months, "(none)", "Other", totals) and the filters, and their wording. | OND |
 | kpiTracker | `src/kpiTracker.ts` | KPI tracker model: link check, workbook to text sheets within limits, Git file parse/serialise, sheet table. | KPT |
 | dpBulk | `src/dpBulk.ts` | DP releases: release type from x.y.z.a, QE from the QE Mapping, possible QEs, bulk Create Features plan. | DPF |
 | formula | `src/formula.ts` | Typed utilization formula: tokenizer and parser (figures, operators, MAX/MIN/ROUND/IF), check as typed, starting formula from the ticks. | CAP |
@@ -379,6 +382,7 @@ This document lists every software component of the system: the in-house source 
 | monthly-pack.test | `tests/monthly-pack.test.mjs` | Monthly pack files, Epic counts, lines, YoY, slide text and the .pptx writer. | PCK |
 | qe-mapping.test | `tests/qe-mapping.test.mjs` | xlsx/CSV read/write and QE Mapping editing and Git file handling. | QEM |
 | on-demand.test | `tests/on-demand.test.mjs` | On-Demand pages: the Git file validated, rows, column type changes and option renames that keep values, the merge of two saves, the On-Demand rights and older access.json files (TC-OND-02…06). | OND, CON |
+| on-demand-insights.test | `tests/on-demand-insights.test.mjs` | On-Demand insights: count, sum, average, stacking and pivot totals, months, Multi-select per value, filters, "(none)" and "Other", broken references, the insights in the page file and their merge (TC-OND-09…12, TC-OND-14). | OND |
 | kpi-tracker.test | `tests/kpi-tracker.test.mjs` | SharePoint link and read (one GET, sign-in detection), the Git copy and its limits, sheet tables. | KPT, IF |
 | dp-bulk.test | `tests/dp-bulk.test.mjs` | DP release type and sets, QE match, possible QEs, bulk plan. | DPF |
 | formula.test | `tests/formula.test.mjs` | Typed formula: evaluation, functions, blank on / 0, error messages. | CAP |
@@ -421,7 +425,7 @@ The end-to-end suite (`pnpm test:e2e`, after `pnpm build:web`) drives the built 
 | documents-and-data.e2e | `e2e/documents-and-data.e2e.mjs` | Documentation tabs, links and download; Windchill export releases from names and from Location with the locations CSV; "＋ ECP" import named after the stream with the ECP CSV and the common Release name / Release columns, an ECP setup at the 3rd folder with the type-2 CSV (TC-CON-53, 54, 55); the table default on the Windchill raw data — move, hide, density, Excel export with dates, Settings → Table defaults (TC-UI-04, 05); My Work tree, Backlog Health and Baselines on the default (TC-UI-06); neutralised CSV; JSON backup without credentials (TC-DOC-01, 02, TC-CON-39, 40, 37, TC-STO-04, TC-INS-01); Windchill releases' QMS-0025 match column (TC-QV-23); auto-fit tables and Wrap text (TC-CON-42); the DP Supported Releases list in Pulse Check folded until Show list (TC-QV-17); every Release page (DP, IOCC, Content, S&S IT) with the source bar, counts, Releases | Source data tabs and the common columns in order (TC-QV-43). | DOC, CON, STO, NFR, QV |
 | backlog.e2e | `e2e/backlog.e2e.mjs` | New User Story form from a Feature row of the Backlogs (TC-BKL-10); the Edit form from Feature, User Story and Task rows (TC-BKL-11); New Feature sections, Start date and the Time Writing months with hours per month (TC-BKL-19, TC-BKL-21); DoD and User Stories per Release Classification value (TC-DPF-06); User Story templates (TC-STT-01). | CI, BKL |
 | monthly-pack.e2e | `e2e/monthly-pack.e2e.mjs` | Monthly pack tab with the synthetic sample, the .pptx download and the setup tab (TC-PCK-04). | CI |
-| on-demand.e2e | `e2e/on-demand.e2e.mjs` | On-Demand → CoNQ against a mocked GitHub: columns with options, a row, Save to Git of on-demand/conq.json and reading it back (TC-OND-01); read only without the rights (TC-OND-07). | OND, CON |
+| on-demand.e2e | `e2e/on-demand.e2e.mjs` | On-Demand → CoNQ against a mocked GitHub: columns with options, a row, Save to Git of on-demand/conq.json and reading it back (TC-OND-01); read only without the rights (TC-OND-07); Insights — a bar chart and a summary table saved in the page file and read back (TC-OND-09); Insights read only and a broken chart (TC-OND-13). | OND, CON |
 
 ## 2. Third-party components (SOUP)
 

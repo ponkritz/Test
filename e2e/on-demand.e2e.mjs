@@ -132,3 +132,123 @@ test('TC-OND-07: a viewer without the On-Demand rights sees the page read only �
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
 })
+
+// OND-11…OND-17 Insights: CoNQ with its columns in Git; rows added on the Data tab, then a Bar chart and a Summary table.
+const conqColumns = [
+  { id: 'c1', name: 'Category', type: 'dropdown', options: ['Scrap', 'Rework', 'Complaint'] },
+  { id: 'c2', name: 'Sites', type: 'multi', options: ['Berlin', 'Leeds', 'Lyon'] },
+  { id: 'c3', name: 'Cost (EUR)', type: 'number' },
+  { id: 'c4', name: 'Found on', type: 'date' },
+]
+const insightsTab = (page) => page.getByRole('tab', { name: /^Insights/ })
+
+test('TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost by Category and a Summary table, Save to Git writes them into on-demand/conq.json, a reload shows them and the Table view lists the values', async () => {
+  const files = { 'on-demand/conq.json': JSON.stringify({ schema: 1, kind: 'on-demand-page', id: 'conq', name: 'CoNQ', description: 'Cost of Non-Quality', columns: conqColumns, rows: [] }) }
+  const { page, context, errors } = await openPage(app, { init: gitStorage })
+  const writes = await mockGitHub(context, files)
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await navigate(page, 'CoNQ')
+  await page.getByText('No rows yet.').waitFor()
+  // Data tab: three rows.
+  for (const [category, sites, cost] of [['Rework', ['Berlin', 'Lyon'], '1200'], ['Scrap', ['Leeds'], '300'], ['Rework', ['Berlin'], '450']]) {
+    await page.getByRole('button', { name: '＋ Add row' }).click()
+    const row = page.getByRole('dialog', { name: 'Add a row' })
+    await row.getByLabel('Category').selectOption(category)
+    for (const site of sites) await row.getByRole('checkbox', { name: site }).check()
+    await row.getByLabel('Cost (EUR)', { exact: true }).fill(cost)
+    await row.getByLabel('Found on', { exact: true }).fill('2026-11-02')
+    await row.getByRole('button', { name: 'Add row' }).click()
+    await row.waitFor({ state: 'detached' })
+  }
+  assert.match(await text(page.locator('.od-panel')), /3 of 3 rows/)
+
+  // Insights tab: empty at first.
+  await insightsTab(page).click()
+  await page.getByText('No charts or tables yet.').waitFor()
+  // ＋ Add chart / table → Bar / column, Sum of Cost (EUR) by Category, with a live preview.
+  await page.getByRole('button', { name: '＋ Add chart / table' }).click()
+  let dialog = page.getByRole('dialog', { name: 'Add a chart or table' })
+  await dialog.getByLabel('Title').fill('Cost by category')
+  await dialog.getByRole('radio', { name: 'Bar / column' }).check()
+  await dialog.getByLabel('Categories by').selectOption({ label: 'Category (Dropdown)' })
+  await dialog.getByLabel('Measure').selectOption('sum')
+  await dialog.getByLabel('Of the Number column').selectOption({ label: 'Cost (EUR)' })
+  const preview = dialog.getByRole('region', { name: 'Preview' })
+  assert.match(await text(preview), /Sum of Cost \(EUR\) by Category · Filters: All rows/)
+  await preview.locator('svg[role="img"] title', { hasText: 'Rework 1,650' }).waitFor({ state: 'attached' })
+  await dialog.getByRole('button', { name: 'Add chart' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  // ＋ Add chart / table → Summary table: Count of rows by Category, columns by Sites.
+  await page.getByRole('button', { name: '＋ Add chart / table' }).click()
+  dialog = page.getByRole('dialog', { name: 'Add a chart or table' })
+  await dialog.getByLabel('Title').fill('Rows by category and site')
+  await dialog.getByRole('radio', { name: 'Summary table' }).check()
+  await dialog.getByLabel('Rows by').selectOption({ label: 'Category (Dropdown)' })
+  await dialog.getByLabel('Columns by').selectOption({ label: 'Sites' })
+  await dialog.getByRole('button', { name: 'Add chart' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  assert.match(await text(insightsTab(page)), /Insights \(2\)/)
+  const bar = page.locator('.od-insight', { hasText: 'Cost by category' })
+  assert.match(await text(bar.locator('.panel-heading')), /BAR \/ COLUMN Cost by category.*Sum of Cost \(EUR\) by Category Filters: All rows/)
+  const pivot = page.locator('.od-insight', { hasText: 'Rows by category and site' })
+  assert.match(await text(pivot.locator('thead')), /^Category Berlin Leeds Lyon Total$/i)
+  assert.match(await text(pivot.locator('tbody tr', { hasText: 'Rework' })), /^Rework 2 0 1 2$/)
+  assert.match(await text(pivot.locator('tbody tr.matrix-total')), /^Total 2 1 1 3$/)
+
+  // Save to Git: the insights are in the page file, with the rows.
+  const saveBar = page.locator('.git-bar-dirty')
+  await saveBar.getByRole('button', { name: 'Save to Git' }).click()
+  await saveBar.waitFor({ state: 'detached' })
+  const saved = writes.filter((write) => write.path === 'on-demand/conq.json')
+  assert.equal(saved.length, 1)
+  const file = saved[0].data
+  assert.equal(file.rows.length, 3)
+  assert.deepEqual(file.insights.map(({ title, type, category, second, measure, value }) => ({ title, type, category, second, measure, value })), [
+    { title: 'Cost by category', type: 'bar', category: 'c1', second: undefined, measure: 'sum', value: 'c3' },
+    { title: 'Rows by category and site', type: 'table', category: 'c1', second: 'c2', measure: 'count', value: undefined },
+  ])
+
+  // Reload without the copy kept in this browser: read back from Git, the Insights tab remembered.
+  await page.evaluate(() => localStorage.removeItem('demand-planning-on-demand-v1'))
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await navigate(page, 'CoNQ')
+  const again = page.locator('.od-insight', { hasText: 'Cost by category' })
+  await again.waitFor()
+  assert.equal(await insightsTab(page).getAttribute('aria-selected'), 'true', 'the chosen tab is remembered for the page')
+  // The chart's Table view lists the values (largest first).
+  await again.getByRole('button', { name: 'Table', exact: true }).click()
+  await again.locator('table').waitFor()
+  assert.deepEqual(await again.locator('tbody tr').evaluateAll((list) => list.map((row) => row.innerText.replace(/\s+/g, ' ').trim())), ['Rework 1,650', 'Scrap 300', 'Total 1,950'])
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await context.close()
+})
+
+test('TC-OND-13: a viewer without the setup right sees the Insights read only — charts shown, Add chart / table, Edit, ↑ ↓ and Remove disabled with the reason', async () => {
+  const conq = { schema: 1, kind: 'on-demand-page', id: 'conq', name: 'CoNQ', description: 'Cost of Non-Quality', columns: conqColumns,
+    rows: [{ id: 'r1', cells: { c1: 'Rework', c2: ['Berlin'], c3: '100', c4: '2026-10-01' } }, { id: 'r2', cells: { c1: 'Scrap', c3: '40', c4: '2026-11-03' } }],
+    insights: [{ id: 'i1', title: 'Cost per month', type: 'line', category: 'c4', measure: 'sum', value: 'c3', sort: 'label' }, { id: 'i2', title: 'Old chart', type: 'bar', category: 'gone', measure: 'count', sort: 'value' }] }
+  const files = { 'on-demand/conq.json': JSON.stringify(conq) }
+  const { page, context, errors } = await openPage(app, { init: gitStorage })
+  const writes = await mockGitHub(context, files, 'Team Member')
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await navigate(page, 'CoNQ')
+  await insightsTab(page).click()
+  const line = page.locator('.od-insight', { hasText: 'Cost per month' })
+  await line.locator('svg[role="img"]').waitFor()
+  assert.match(await text(line), /2 of 2 rows counted/)
+  // A chart whose column is gone says so instead of failing.
+  assert.match(await text(page.locator('.od-insight', { hasText: 'Old chart' })), /This chart cannot be shown: The column for the categories is no longer on the page \(removed\)\./)
+  assert.equal(await page.getByRole('button', { name: '＋ Add chart / table' }).isDisabled(), true)
+  for (const name of ['Edit Cost per month', 'Remove Cost per month', 'Move Cost per month up', 'Move Cost per month down']) assert.equal(await page.getByRole('button', { name, exact: true }).isDisabled(), true, `${name} is disabled`)
+  assert.equal(await text(page.locator('.od-insights-head .write-blocked')), 'Your role does not allow “Set up On-Demand pages (pages, columns, options)”. An Admin can change this in Admin → People & roles → Role rights.')
+  assert.match(await page.getByRole('button', { name: 'Edit Cost per month' }).getAttribute('title'), /Your role does not allow “Set up On-Demand pages/)
+  // The Data tab is unchanged.
+  await page.getByRole('tab', { name: 'Data' }).click()
+  await page.locator('.od-panel table tbody tr').first().waitFor()
+  assert.equal(writes.length, 0, 'nothing is written')
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await context.close()
+})

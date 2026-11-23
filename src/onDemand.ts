@@ -19,7 +19,20 @@ export const hasOptions = (type: OnDemandType) => type === 'dropdown' || type ==
 export type OnDemandValue = string | string[]
 export interface OnDemandColumn { id: string; name: string; type: OnDemandType; options: string[]; required: boolean }
 export interface OnDemandRow { id: string; cells: Record<string, OnDemandValue> }
-export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; columns: OnDemandColumn[]; rows: OnDemandRow[] }
+export interface OnDemandPage { schema: 1; kind: 'on-demand-page'; id: string; name: string; description: string; columns: OnDemandColumn[]; rows: OnDemandRow[]; insights: Insight[] }
+
+// OND-11…OND-17 Insights: charts and summary tables built from the page's rows, kept in the same file (an `insights`
+// list, written only when the page has one) so they travel with the page and are merged with it. Columns are referred
+// to by id, so a renamed column is followed; a removed one (or one whose type no longer fits) is kept as written and
+// the insight says so instead of drawing (OND-17).
+export type InsightType = 'bar' | 'line' | 'pie' | 'table'
+export type InsightMeasure = 'count' | 'sum' | 'average'
+// A filter on a Dropdown / Multi-select column (values: the options kept; '' is "(none)") or on a Date column (from / to
+// month, YYYY-MM, either may be open).
+export interface InsightFilter { column: string; values?: string[]; from?: string; to?: string }
+export interface Insight { id: string; title: string; type: InsightType; category: string; second: string; measure: InsightMeasure; value: string; filters: InsightFilter[]; sort: 'value' | 'label' }
+export const insightTypeKeys: InsightType[] = ['bar', 'line', 'pie', 'table']
+export const maxInsights = 40, maxFilters = 10
 
 export const onDemandFolder = 'on-demand'
 export const onDemandPath = (id: string) => `${onDemandFolder}/${id}.json`
@@ -33,11 +46,11 @@ export const pageIdOfFile = (name: string) => { const match = /^([a-z0-9][a-z0-9
 
 // OND-02: CoNQ is there from the start — shown (not yet in Git) while the folder has no page; the first save creates it.
 export const conqId = 'conq'
-export const conqPage = (): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id: conqId, name: 'CoNQ', description: 'Cost of Non-Quality', columns: [], rows: [] })
-export const emptyPage = (id: string, name: string, description = ''): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id, name: cleanName(name, 80), description: description.trim().slice(0, 300), columns: [], rows: [] })
+export const conqPage = (): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id: conqId, name: 'CoNQ', description: 'Cost of Non-Quality', columns: [], rows: [], insights: [] })
+export const emptyPage = (id: string, name: string, description = ''): OnDemandPage => ({ schema: 1, kind: 'on-demand-page', id, name: cleanName(name, 80), description: description.trim().slice(0, 300), columns: [], rows: [], insights: [] })
 
 // Ids that two people adding at the same time cannot both get (the merge keeps entries apart by id).
-export function newId(prefix: 'c' | 'r', random: () => number = Math.random, now: () => number = Date.now) {
+export function newId(prefix: 'c' | 'r' | 'i', random: () => number = Math.random, now: () => number = Date.now) {
   return `${prefix}${now().toString(36)}${Math.floor(random() * 36 ** 5).toString(36).padStart(5, '0')}`
 }
 // A page id from its name: lower case, letters, digits and hyphens; a taken one gets -2, -3 …
@@ -215,10 +228,37 @@ export function parseOnDemandPage(raw: string, expectedId?: string): OnDemandPag
       return single ? [[column.id, single]] : []
     })) }]
   }).slice(0, maxRows)
-  return { schema: 1, kind: 'on-demand-page', id, name: cleanName(text(file.name, 80)) || id, description: text(file.description, 300).trim(), columns, rows }
+  return { schema: 1, kind: 'on-demand-page', id, name: cleanName(text(file.name, 80)) || id, description: text(file.description, 300).trim(), columns, rows, insights: parseInsights(file.insights) }
 }
+// OND-16: the insights of a page file — an unknown type, a bad or repeated id is dropped; a reference to a column that
+// is not (or no longer) on the page is kept as written and shown as broken (OND-17); sizes are capped.
+const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/
+const ref = (value: unknown) => typeof value === 'string' && idPattern.test(value) ? value : ''
+export function parseInsights(list: unknown): Insight[] {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  return list.flatMap((entry): Insight[] => {
+    const item = entry as Partial<Record<keyof Insight, unknown>> | null
+    if (!item || typeof item !== 'object' || typeof item.id !== 'string' || !idPattern.test(item.id) || seen.has(item.id) || !insightTypeKeys.includes(item.type as InsightType)) return []
+    seen.add(item.id)
+    const type = item.type as InsightType
+    const measure: InsightMeasure = item.measure === 'sum' || item.measure === 'average' ? item.measure : 'count'
+    const filters = (Array.isArray(item.filters) ? item.filters : []).flatMap((raw): InsightFilter[] => {
+      const filter = raw as Partial<Record<keyof InsightFilter, unknown>> | null
+      const column = ref(filter?.column)
+      if (!filter || !column) return []
+      const values = Array.isArray(filter.values) ? [...new Set(filter.values.filter((value): value is string => typeof value === 'string').map((value) => cleanName(value, 120)))].slice(0, maxOptions) : undefined
+      const from = typeof filter.from === 'string' && monthPattern.test(filter.from) ? filter.from : undefined
+      const to = typeof filter.to === 'string' && monthPattern.test(filter.to) ? filter.to : undefined
+      if (!values?.length && !from && !to) return []
+      return [{ column, ...(values?.length ? { values } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) }]
+    }).slice(0, maxFilters)
+    return [{ id: item.id, title: cleanName(text(item.title, 120)) || 'Untitled', type, category: ref(item.category), second: type === 'pie' ? '' : ref(item.second), measure, value: measure === 'count' ? '' : ref(item.value), filters, sort: type === 'line' ? 'label' : item.sort === 'label' ? 'label' : 'value' }]
+  }).slice(0, maxInsights)
+}
+const insightOut = ({ id, title, type, category, second, measure, value, filters, sort }: Insight) => ({ id, title, type, category, ...(second ? { second } : {}), measure, ...(value ? { value } : {}), ...(filters.length ? { filters } : {}), sort })
 export function serializeOnDemandPage(page: OnDemandPage) {
-  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, columns: page.columns.map(({ id, name, type, options, required }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}) })), rows: page.rows }, null, 1)}\n`
+  const out = `${JSON.stringify({ schema: 1, kind: 'on-demand-page', id: page.id, name: page.name, description: page.description, columns: page.columns.map(({ id, name, type, options, required }) => ({ id, name, type, ...(hasOptions(type) ? { options } : {}), ...(required ? { required } : {}) })), rows: page.rows, ...(page.insights.length ? { insights: page.insights.map(insightOut) } : {}) }, null, 1)}\n`
   if (new TextEncoder().encode(out).length > onDemandMaxBytes) throw new Error(`The page is too large to save to Git (over ${Math.round(onDemandMaxBytes / 1000)} KB). Remove rows, or split it into two pages.`)
   return out
 }
@@ -250,6 +290,10 @@ export const mergeOnDemandText: Merge = (baseText, mineText, theirsText, mineLat
   const order = later(base?.columns.map((column) => column.id), mine.columns.map((column) => column.id), theirs.columns.map((column) => column.id), mineLater) ?? mine.columns.map((column) => column.id)
   const ordered = [...order.flatMap((id) => columns.filter((column) => column.id === id)), ...columns.filter((column) => !order.includes(column.id))]
   const rows = mergeById(base?.rows ?? null, mine.rows, theirs.rows, mineLater)
+  // OND-16: insights merged by id like the columns, their order following the save that changed it.
+  const insights = mergeById(base?.insights ?? null, mine.insights, theirs.insights, mineLater)
+  const insightOrder = later(base?.insights.map((entry) => entry.id), mine.insights.map((entry) => entry.id), theirs.insights.map((entry) => entry.id), mineLater) ?? mine.insights.map((entry) => entry.id)
+  const orderedInsights = [...insightOrder.flatMap((id) => insights.filter((entry) => entry.id === id)), ...insights.filter((entry) => !insightOrder.includes(entry.id))]
   // Read back through the parser: values of columns that are gone are dropped, every rule of the file applies.
-  return serializeOnDemandPage(parseOnDemandPage(JSON.stringify({ schema: 1, kind: 'on-demand-page', id: mine.id, ...head, columns: ordered, rows }), mine.id))
+  return serializeOnDemandPage(parseOnDemandPage(JSON.stringify({ schema: 1, kind: 'on-demand-page', id: mine.id, ...head, columns: ordered, rows, insights: orderedInsights.map(insightOut) }), mine.id))
 }

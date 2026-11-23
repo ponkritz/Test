@@ -1680,6 +1680,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-08 Add, rename and remove a page** — Req OND-10, OND-01, OND-02 — browser check with "Set up On-Demand pages" and Git storage that can save: ＋ Add page… "Supplier escapes" (description optional) — a commit creates `on-demand/supplier-escapes.json`, the page opens and is listed under On-Demand in name order and on the Home tile; Rename page… puts the new name in the unsaved changes and Save to Git commits it; Remove page… names the page, its rows and columns and that its file is deleted, Cancel keeps it, Remove page deletes the file and opens the next page; removing the last page offers CoNQ again.
 
+**TC-OND-09 Insights: a bar chart and a summary table saved to Git** — Req OND-11, OND-12, OND-15, OND-16 — **UAT** — L1 `on-demand-insights.test.mjs` ("OND-16: insights in the page file — written only when there are, validated on read (unknown types and bad ids dropped, broken references kept), merged by id (TC-OND-11)"); E2E `on-demand.e2e.mjs` ("TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost by Category and a Summary table, Save to Git writes them into on-demand/conq.json, a reload shows them and the Table view lists the values"); UAT: with Git storage that can save and a role allowed both On-Demand permissions, on CoNQ with the columns Category (Dropdown), Sites (Multi-select), Cost (EUR) (Number) and Found on (Date) add three rows on the Data tab; open **Insights** — "No charts or tables yet."; ＋ Add chart / table → title "Cost by category", Bar / column, Categories by Category, Measure Sum of Cost (EUR) — the preview shows the bars, largest first; Add chart; ＋ Add chart / table → "Rows by category and site", Summary table, Rows by Category, Columns by Sites — the table shows a Total column and row; Save to Git — `on-demand/conq.json` has both under `insights`; after a reload (or on a second computer) the Insights tab opens again with both; the bar chart's **Table** lists each category with its sum and the total; light and dark mode, and on a phone, the charts are readable.
+
+**TC-OND-10 Aggregation: count, sum, average, Multi-select, months, filters** — Req OND-13, OND-14 — L1 `on-demand-insights.test.mjs` ("OND-13: Count, Sum and Average by a Dropdown — largest first, “(none)” for a value not in the list or empty, rows without a number left out (TC-OND-10)", "OND-13: a Multi-select row counts once in each of its values; totals take each row once; a value not in the list goes to “(none)” (TC-OND-10)", "OND-13: stacking by a second field and the pivot totals — cells per category × series, totals per row, per column and overall (TC-OND-10)", "OND-13: a Date column in months — a line over time fills every month from the first to the last and leaves rows without a date out (TC-OND-10)", "OND-14: filters — a Dropdown / Multi-select value set (with “(none)”) and a Date range from / to month, all applied, stated under the title (TC-OND-10)"); browser check: with a row of two Sites, a summary table by Sites shows the row under both and the Total once, and the note under the table says so; a filter Found on Jan–Mar 2026 changes "{used} of {all} rows counted" and is stated under the title.
+
+**TC-OND-11 Insights in the page file, validated and merged** — Req OND-16, GIT-17 — L1 `on-demand-insights.test.mjs` ("OND-16: insights in the page file — written only when there are, validated on read (unknown types and bad ids dropped, broken references kept), merged by id (TC-OND-11)"); browser check with two browsers on CoNQ: one adds a chart, the other edits another and adds a row; Save to Git in both — both charts and the row are kept; a hand-edited insight of type "radar" is not shown.
+
+**TC-OND-12 A removed or changed column: a clear message** — Req OND-17 — L1 `on-demand-insights.test.mjs` ("OND-17: a removed column, a changed type or a forbidden combination shows a clear message instead of a chart; a renamed column is followed (TC-OND-12)"); E2E `on-demand.e2e.mjs` ("TC-OND-13: a viewer without the setup right sees the Insights read only — charts shown, Add chart / table, Edit, ↑ ↓ and Remove disabled with the reason"); browser check: rename the Category column — the chart shows the new name; remove the Cost column — the Sum chart says "This chart cannot be shown: The column for the sum is no longer on the page (removed)." and Edit lets you choose another; the other charts still draw.
+
+**TC-OND-13 Insights read only without the setup right** — Req OND-15, OND-11, CON-103 — E2E `on-demand.e2e.mjs` ("TC-OND-13: a viewer without the setup right sees the Insights read only — charts shown, Add chart / table, Edit, ↑ ↓ and Remove disabled with the reason"); browser check: as a Team Member the Insights tab shows the charts; ＋ Add chart / table, ↑, ↓, Edit and Remove are disabled and a line names the missing permission "Set up On-Demand pages (pages, columns, options)"; the Data tab is as before.
+
+**TC-OND-14 Line, pie and the pop-up** — Req OND-12, OND-14, OND-15 — L1 `on-demand-insights.test.mjs` ("OND-12: a pie keeps the 5 largest categories and puts the rest, with “(none)”, in “Other”; stacks keep 5 series (TC-OND-14)"); browser check: a Line over time by Found on, one line per Sites, shows every month from the first to the last with a legend and axis names; a Pie by Category with 7 categories shows 5 and "Other"; Average is not offered for a pie; ↑ ↓ reorder; Remove asks in a pop-up and Discard brings the chart back; Data labels and Table / Chart work on each chart; a filter with nothing ticked is refused with the reason.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -1981,7 +1993,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-15 | TC-GIT-08, TC-OND-02 |
 | GIT-16 | TC-GIT-09 |
 | GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
-| GIT-17 (On-Demand pages) | TC-OND-05 |
+| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2177,7 +2189,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-08 | TC-OND-02 |
 | OND-09 | TC-OND-01, TC-OND-05 |
 | OND-10 | TC-OND-08 |
-| CON-103 | TC-OND-06, TC-OND-07 |
+| OND-11 | TC-OND-09, TC-OND-13 |
+| OND-12 | TC-OND-09, TC-OND-14 |
+| OND-13 | TC-OND-10 |
+| OND-14 | TC-OND-10, TC-OND-14 |
+| OND-15 | TC-OND-09, TC-OND-13, TC-OND-14 |
+| OND-16 | TC-OND-09, TC-OND-11 |
+| OND-17 | TC-OND-12 |
+| CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2228,7 +2247,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…08 |
+| UC-37 | TC-OND-01…14 |
 
 ## 8. Result record
 

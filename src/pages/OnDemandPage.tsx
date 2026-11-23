@@ -1,18 +1,21 @@
 import { useMemo, useState } from 'react'
 import { recordJob } from '../backgroundJobs'
 import { DataTable, type DataColumn } from '../components/DataTable'
+import { ResultTabs } from '../components/ResultTabs'
 import { EmptyState, Info, Modal, Notice, Page, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText } from '../gitSaveQueue'
 import { applyColumns, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, emptyPage, filterRows, hasOptions, newId, onDemandPath, onDemandTypes, pageIdFor, removeRow, renamePage, rowError, upsertRow, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
+import { InsightsTab } from './OnDemandInsights'
 
 // OND-03…OND-07 One On-Demand page (CoNQ, or one added under On-Demand): a work table in the shared DataTable — one
 // column per configured column, ＋ Add row and Edit in a row pop-up (one way for every row, UI-STANDARDS §3/§4), Remove,
 // search, sort, the row count and Export. Set up columns… (the setup right) sets the columns, their type and options. Every
 // change is a draft of this page until Save to Git (the unsaved-changes bar, as on QE Mapping), whose result goes to
-// Background jobs (§8). Add, rename and remove a page with the setup right.
+// Background jobs (§8). Add, rename and remove a page with the setup right. OND-11: two tabs, Data (the table) and
+// Insights (charts and tables from its rows, src/pages/OnDemandInsights.tsx), the choice remembered per page.
 export function OnDemandPage({ git, store, pageId, onOpen }: { git: GitStorage; store: OnDemandStore; pageId: string; onOpen: (id: string) => void }) {
   const page = store.pages.find((entry) => entry.id === pageId) ?? store.pages[0]
   const draft = page ? store.drafts[page.id] : undefined
@@ -62,6 +65,18 @@ export function OnDemandPage({ git, store, pageId, onOpen }: { git: GitStorage; 
     </span> },
   ]
 
+  // The unsaved-changes bar, on both tabs: changes to rows, columns and insights are one draft of the page (OND-09).
+  const saveBar = <>
+    <SaveQueueStatus state={queue} onRetry={() => void store.retry(page.id)} />
+    {draft && (canRows || canSetup) && <form className="git-bar git-bar-dirty" onSubmit={(event) => void save(event)}>
+      <span><strong>Unsaved changes to {draft.name}</strong> — not yet in Git</span>
+      <input aria-label="Change description" value={commit} onChange={(event) => setCommit(event.target.value)} placeholder="Describe the change (optional)" />
+      {saveError && <Notice tone="error">{saveError}</Notice>}
+      <button type="button" className="ghost" disabled={busy} onClick={discard}>Discard</button>
+      <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save to Git'}</button>
+    </form>}
+  </>
+
   return <Page className="on-demand-page" intro="A table the team sets up itself, shared with everyone through Git."
     actions={<>
       <button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} onClick={() => setPageDialog('add')}>＋ Add page…</button>
@@ -72,7 +87,9 @@ export function OnDemandPage({ git, store, pageId, onOpen }: { git: GitStorage; 
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected && store.inGit(page.id) ? ' The page last loaded in this browser is shown.' : ''}</Notice>}
     {store.errors.map((error) => <Notice key={error} tone="error">On-Demand: {error}</Notice>)}
     {store.loaded && !store.inGit(page.id) && !draft && <Notice tone="info">{page.name} is not in Git yet: it is created with its first Save to Git.</Notice>}
-    <TablePanel className="od-panel" eyebrow="ON-DEMAND" title={page.name} detail={page.description || undefined}
+    <ResultTabs id={`on-demand:${page.id}`} mainLabel="Data" rawLabel="Insights" rawCount={page.insights.length}
+      raw={<InsightsTab page={page} canSetup={canSetup} setupReason={setupReason} blockNote={gitReason ? '' : block.noteFor('on this tab', 'ondemand.setup')} saveBar={saveBar} onChange={change} />}
+      main={<TablePanel className="od-panel" eyebrow="ON-DEMAND" title={page.name} detail={page.description || undefined}
       info={<>Each column has a type — Text, Number, Date, Dropdown (one value) or Multi-select with the options of its list. A value that no longer fits its column (an option removed, the type changed) is kept and marked, e.g. “not in the list”, until it is changed. Saved in Git as {onDemandPath(page.id)}; two saves at the same time are merged row by row and column by column, the later one winning where both changed the same.{store.history(page.id) && <> <a href={store.history(page.id)} target="_blank" rel="noreferrer">History in GitHub</a></>}</>}
       action={<button type="button" className="ghost" disabled={!canSetup} title={setupReason || undefined} onClick={() => setColumnsOpen(true)}>Set up columns…</button>}>
       {!gitReason && <WriteBlocked reason={block.noteFor('on this page', 'ondemand.edit', 'ondemand.setup')} />}
@@ -82,15 +99,8 @@ export function OnDemandPage({ git, store, pageId, onOpen }: { git: GitStorage; 
         status={`${rows.length} of ${page.rows.length} row${page.rows.length === 1 ? '' : 's'}`}
         empty={<EmptyState title={page.rows.length ? 'No row matches the search.' : 'No rows yet.'} detail={page.rows.length ? undefined : canRows ? 'Add the first one with ＋ Add row.' : undefined} />} />
         : <EmptyState title="No columns yet." detail={canSetup ? 'Add them with Set up columns…: a name and a type for each, and the options of a Dropdown or Multi-select.' : 'Someone allowed to set up On-Demand pages adds the columns.'} />}
-      <SaveQueueStatus state={queue} onRetry={() => void store.retry(page.id)} />
-      {draft && (canRows || canSetup) && <form className="git-bar git-bar-dirty" onSubmit={(event) => void save(event)}>
-        <span><strong>Unsaved changes to {draft.name}</strong> — not yet in Git</span>
-        <input aria-label="Change description" value={commit} onChange={(event) => setCommit(event.target.value)} placeholder="Describe the change (optional)" />
-        {saveError && <Notice tone="error">{saveError}</Notice>}
-        <button type="button" className="ghost" disabled={busy} onClick={discard}>Discard</button>
-        <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save to Git'}</button>
-      </form>}
-    </TablePanel>
+      {saveBar}
+    </TablePanel>} />
     {rowDialog && <RowDialog page={page} row={rowDialog.row} isNew={rowDialog.isNew} pending={Boolean(draft)} onCancel={() => setRowDialog(null)} onSave={(row) => { change(upsertRow(page, row)); setRowDialog(null) }} />}
     {columnsOpen && <ColumnsDialog page={page} onCancel={() => setColumnsOpen(false)} onSave={(next) => { change(next); setColumnsOpen(false) }} />}
     {pageDialog === 'add' && <PageNameDialog title="Add a page" action="Add page" onCancel={() => setPageDialog(null)} onSave={async (name, description) => {
