@@ -11,7 +11,7 @@ no code and judge the code as it is, not as the documents say it is.
 | `review-tester` | **Tester** — what is not proven? | untested functions and branches, tests that cannot fail, missing negative / boundary / E2E cases, flaky waits | TST-nn |
 | `review-peer` | **Peer review** — could a new team member safely change it? | readability, naming, size and complexity, duplication, dead code, coupling, comments that disagree with the code | PEER-nn |
 | `review-code` | **Code review** — standards, safety and performance | types and casts, lint, security (injection, XSS, secrets, trust boundaries), performance, memory, dependencies, build and CI | CR-nn |
-| `review-uiux` | **UI/UX** — can people use it? | accessibility (roles, labels, keyboard, focus, contrast), layout and overflow, responsive, empty / loading / error states, wording, consistency | UX-nn |
+| `review-uiux` | **UI/UX** — can people use it, and does every page look the same way? | accessibility (roles, labels, keyboard, focus, contrast), layout and overflow, responsive, empty / loading / error states, wording; **UI defaults** (pre-ticked, pre-filled, pre-selected, first tab, default sort and filters) and **uniformity** against [UI-STANDARDS.md](../UI-STANDARDS.md) | UX-nn |
 | `review-defaults` | **Design defaults** — are the defaults right and safe? | default values and switches, fallbacks, time zones, limits, first-run behaviour, defaults in code vs in the documents | DEF-nn |
 
 ## Method
