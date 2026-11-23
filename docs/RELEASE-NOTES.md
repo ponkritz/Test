@@ -2,6 +2,51 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.3.0 — 2026-11-23
+
+**Added**
+- **Grouped bars** — a bar chart (horizontal bars or vertical columns) with a second field can now show its series **grouped side by side** (Excel's clustered bars) instead of stacked: Display → Series "Grouped (side by side)". Grouped bars take every measure, also Average, Minimum, Maximum and Distinct count; their data labels sit at Center, Inside End, Inside Base or Outside End of each bar, and the trendline is drawn per series. Stacked stays the default (CHT-40).
+- **Any colour per value** — besides Colour 1…5, a value's colour can be an own colour, chosen with a colour picker or typed as #rrggbb, on the Insights tab and in the Dashboard block pop-up. Existing pins keep working and charts without pins look as before. A colour with low contrast against the chart background in the light or dark theme is kept with a warning, and data labels on it are drawn in dark text or white, whichever reads better (CHT-41, CHT-42).
+
+DF-214, SM-116, LIM-40; TC-CHT-32, TC-CHT-33.
+
+PR #379.
+
+**Added**
+- **Chart grid: resize and drag to move** — charts on the Insights tab, On-Demand Dashboards and Team overview → Streams now sit on a 12-column grid with rows of about 40 px instead of the ⅓ / ½ / ⅔ / Full snapping: a chart is 2…12 columns wide and any number of rows high (at least 3 × 5; a summary table 4 × 4), its size shown as "8 × 6"; the others move out of the way and gaps close upward. The page's owners (a dashboard's builders) click **Arrange charts** (Dashboard: ⋯ → **Arrange on the page**): the grid's lines show and they drag a chart by ⠿ to another place or by its corner to another size — or use the keyboard (arrows on ⠿ move, arrows on the corner resize, Shift + arrows on the corner move) — and the layout is saved to Git for everyone. Everyone can still resize a chart for themselves (now by columns and rows) but not move it; on a phone every chart is full width. The sizes of before map exactly onto the grid, so nothing changes until someone arranges (CHT-43…CHT-50).
+
+**Changed**
+- The resize handle snaps to columns and rows instead of the four widths and three heights; "Arrange sizes" is now "Arrange charts" (Dashboard: "Arrange on the page") (CHT-49, CHT-47). Older app versions show the nearest size and ignore the places (LIM-41).
+
+DF-215, SM-117, LIM-41; TC-CHT-34…TC-CHT-37.
+
+PR #379.
+
+**Added**
+- **Export PDF… of the Insights and of On-Demand Dashboards** — in the ⋯ of the Insights heading and in a dashboard's page ⋯ (OND-68). The pop-up picks the charts (all, or a selection, KPI cards included), whether the active filters apply (stated under the title), A4 or Letter, portrait or landscape, and the footer's date and / or time of the export; the footer always shows the page name and "Page n of m" (OND-69, OND-71). The charts are the ones on screen, as vector graphics at their size, on white paper and never split over two pages; the date and time are in your own time zone, e.g. "24 Nov 2026, 14:32 CET"; "Sample data" in Sample (OND-70, OND-71, OND-67).
+- The **desktop app** saves the PDF where you choose (Chromium's printToPDF and a save dialog); a **browser** opens a print view and its print dialog — choose "Save as PDF" (page numbers in Chrome and Edge; Firefox and Safari print the footer without them) (OND-72).
+
+DF-218, DF-219, SM-119, LIM-43; TC-OND-55…TC-OND-59.
+
+PR #379.
+
+**Added**
+- **Live | Sample on table pages** — every table page (Table and Table + Insights, CoNQ included) has **Data: Live | Sample** first in its page actions, per person and remembered (personal views, else this browser), Live by default. **Sample** shows 50 made-up rows generated from the page's own columns (Dropdown / Multi-select options, realistic numbers, amounts in the column's currency, dates of the last 12 months, short phrases; IDs SAMPLE-0001…), the same for the same column setup and new when a column or its options change (OND-63, OND-64).
+- In Sample the Data tab, the Insights (filter row, drill-down) and every On-Demand Dashboard reading the page show the sample rows — for that viewer only — under the banner **"Sample data — nothing is saved."** (OND-65). Nothing is written to Git: every change of the page is disabled with the reason, and the save path and the file writer both refuse a sample page (OND-66). Excel / CSV exports of sample rows are named "Sample-…" and start with a "Sample data" line (OND-67).
+
+DF-216, DF-217, SM-118, LIM-42; TC-OND-51…TC-OND-54.
+
+PR #379.
+
+**Added**
+- **Publish standalone HTML…** — the Tool Owner and a page's co-owners can publish any table page (CoNQ included) as one self-contained, offline `.html` file: "Published by {name} on {date, time, zone}", the filters of the charts, the Insights charts and KPI cards, and every row that is not hidden with sort and search (OND-73, OND-74, OND-80). A pop-up first warns that the file contains every row of the page. Never from Sample (OND-75).
+- The file goes **where you choose** (default "{page}.html") and each publish overwrites it: the desktop app asks once with its save dialog and remembers the file per page on that computer; Chrome and Edge remember it in the browser (File System Access, the permission asked again at most once per session); Firefox and Safari download it instead (OND-76). Every value is escaped and a Content-Security-Policy in the file blocks every request; it holds no token (OND-77).
+- **Scheduled publish** — Off / Daily / Weekly at a time, per page, saved on your computer only (never in Git); it runs while the app is open, a missed run runs at the next start, results go to Background jobs and a failure (permission lost, folder missing) also shows on the page (OND-78, OND-79).
+
+DF-220…DF-223, SM-120…SM-123, LIM-44; TC-OND-60…TC-OND-65.
+
+PR #379.
+
 ## v10.2.0 — 2026-11-23
 
 **Added**
