@@ -845,6 +845,17 @@ test('TC-ACT-02: Time Writing shows the person\'s KPI cards, month tasks, hours 
   assert.match(await text(content.locator('.act-message')), /Synthetic sample data/, 'nothing is written with sample data')
   await content.getByRole('checkbox', { name: 'Close Features' }).uncheck()
   assert.equal(await content.locator('.act-table').first().getByRole('checkbox', { name: /^Close / }).count(), 0, 'the tick boxes go with Close mode')
+  // BKL-42: Close Tasks — the same, for this month's Tasks (TC-BKL-31).
+  await content.getByRole('checkbox', { name: 'Close Tasks' }).check()
+  assert.equal(await content.getByRole('checkbox', { name: 'Close Features' }).isChecked(), false, 'one close mode at a time')
+  assert.ok(await content.getByRole('button', { name: 'Tick Tasks to close' }).isDisabled())
+  const taskBoxes = content.locator('.act-table').first().getByRole('checkbox', { name: /^Close / })
+  assert.ok(await taskBoxes.count() > 0, 'open Tasks get tick boxes')
+  await taskBoxes.first().check()
+  await content.getByRole('button', { name: 'Close 1 Task' }).click()
+  assert.match(await text(content.locator('.act-message')), /Synthetic sample data/, 'nothing is written with sample data')
+  await content.getByRole('checkbox', { name: 'Close Tasks' }).uncheck()
+  assert.equal(await taskBoxes.count(), 0)
   await content.getByRole('textbox', { name: /^Actual hours for / }).first().fill('1')
   assert.match(await text(content.locator('.act-top .metric-grid')), /Unsaved changes/)
   // ACT-20: ＋ Add a new activity is a button of the list (in its heading row, not a page heading) and opens a pop-up.

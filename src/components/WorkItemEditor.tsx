@@ -8,7 +8,7 @@ import { isTimeWritingStory } from '../azureInsights'
 import { Modal } from './ui'
 import { PersonPicker } from './PersonPicker'
 import { assignablePeople, hasActiveStory } from '../myWork'
-import { activateFeatureOf } from '../closeChain'
+import { activateAfterHours, activateFeatureOf } from '../closeChain'
 import { runInBackground } from '../backgroundJobs'
 import { formatDateTime } from '../format'
 
@@ -151,12 +151,17 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
         // ATM-28: a User Story set to Active makes its New Feature Active.
         let activated: AzureWorkItem | null = null
         if (edit.state) { try { activated = await activateFeatureOf(config, token, items, updated) } catch (failure) { failed.push(`Feature not set to Active: ${failure instanceof Error ? failure.message : 'failed'}`) } }
+        // BKL-41: hours typed on a month Task make it and its Time Writing story Active (a Closed one is reopened and named),
+        // unless the State was chosen in this form.
+        const hours = !edit.state && (edit.originalEstimate != null || edit.completedWork != null) ? await activateAfterHours(config, token, items, updated) : { activated: [], notes: [], failed: [] }
+        failed.push(...hours.failed)
+        const current = hours.activated.find((entry) => entry.id === updated.id) ?? updated
         // BKL-36: the Feature's Time Writing story and month Tasks follow its name (checked on every save, silently).
         progress('Checking the Time Writing titles…')
-        const titles = await syncTitlesAfterSave(config, token, items, updated)
-        onUpdated?.([updated, ...moved, ...(activated ? [activated] : []), ...titles.renamed])
-        const text = `#${opened.id} saved and verified${moved.length ? `; ${moved.length} User Stor${moved.length === 1 ? 'y' : 'ies'} moved to ${storySprint.split('\\').pop()}` : ''}${activated ? `; Feature #${activated.id} is now Active` : ''}.${titles.note}${failed.length ? ` ${failed.length} not done — ${failed.join(' · ')}` : ''}`
-        onDone?.(text, updated)
+        const titles = await syncTitlesAfterSave(config, token, items, current)
+        onUpdated?.([current, ...hours.activated.filter((entry) => entry.id !== updated.id), ...moved, ...(activated ? [activated] : []), ...titles.renamed])
+        const text = `#${opened.id} saved and verified${moved.length ? `; ${moved.length} User Stor${moved.length === 1 ? 'y' : 'ies'} moved to ${storySprint.split('\\').pop()}` : ''}${activated ? `; Feature #${activated.id} is now Active` : ''}.${hours.notes.map((note) => ` ${note}`).join('')}${titles.note}${failed.length ? ` ${failed.length} not done — ${failed.join(' · ')}` : ''}`
+        onDone?.(text, current)
         return { text, failed: failed.length > 0 }
       } catch (failure) {
         const text = failure instanceof Error ? failure.message : 'The work item could not be saved.'

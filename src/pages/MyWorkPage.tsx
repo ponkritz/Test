@@ -10,6 +10,7 @@ import { capacityContext } from '../capacity'
 import { featureChildren, hasOptionalStories, isMine, matchesWork, monthTaskCandidates, nextStateFor, workTypes } from '../myWork'
 import { activateFeatureOf, closeRelated, type FollowUpResult } from '../closeChain'
 import { formatHours } from '../format'
+import { timeWritingMonth } from '../azureInsights'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { MyWork } from '../useMyWork'
@@ -66,7 +67,7 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
   // Time Writing story and Tasks); a Task or Bug is closed after one confirmation as before.
   const [closeAsk, setCloseAsk] = useState<{ item: AzureWorkItem; rows: CloseRow[] } | null>(null)
   // With sample data Close on a Feature or User Story still opens the pop-up, to see what would close (nothing is written).
-  const previewClose = (entry: AzureWorkItem, state: string) => azure.isSample && state === 'Closed' && (entry.workItemType === 'Feature' || entry.workItemType === 'User Story')
+  const previewClose = (entry: AzureWorkItem, state: string) => azure.isSample && state === 'Closed' && (entry.workItemType === 'Feature' || entry.workItemType === 'User Story' || (entry.workItemType === 'Task' && timeWritingMonth(entry.title) != null))
   async function closeSelected(item: AzureWorkItem, selection: CloseSelection) {
     setCloseAsk(null)
     if (blocked || !config) return
@@ -74,14 +75,18 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
     try {
       const result = await closeChosen(config, pat, selection)
       if (result.closed.length) { azure.applyWorkItems(result.closed, 'Close item', result.closed.map((entry) => `#${entry.id} → ${entry.state}`).join(', ')); note({ tone: 'success', text: `Closed ${result.closed.map((entry) => `#${entry.id}`).join(', ')}.` }) }
+      // BKL-43: the later months' Time Writing Tasks removed with 0 h.
+      if (result.removed.length) { azure.applyWorkItems(result.removed, 'Close item', result.removed.map((entry) => `#${entry.id} → Removed, 0 h`).join(', ')); note({ tone: 'success', text: `Removed the later months' Time Writing Tasks ${result.removed.map((entry) => `#${entry.id}`).join(', ')} (0 h).` }) }
       for (const text of [...result.failed, ...result.skipped]) note({ tone: result.failed.includes(text) ? 'error' : 'info', text })
       note({ tone: 'info', text: 'Refreshing data…' }); await azure.refresh()
     } finally { setBusy('') }
   }
   async function finish(item: AzureWorkItem, state: string) {
     // BKL-39: the pop-up opens with sample data too (to see what would close); its Close is disabled then.
-    if (state === 'Closed' && (item.workItemType === 'Feature' || item.workItemType === 'User Story')) {
-      const rows = item.workItemType === 'Feature' ? closeTree(azure.items, item, my.me) : storyCloseRows(azure.items, item, my.me)
+    // BKL-42: a month Time Writing Task closes through the same pop-up (with the question whether its hours are entered).
+    const monthTask = item.workItemType === 'Task' && timeWritingMonth(item.title) != null
+    if (state === 'Closed' && (item.workItemType === 'Feature' || item.workItemType === 'User Story' || monthTask)) {
+      const rows = item.workItemType === 'User Story' ? storyCloseRows(azure.items, item, my.me) : closeTree(azure.items, item, my.me)
       if (rows.length) { setCloseAsk({ item, rows }); return }
     }
     if (blocked || !config) return

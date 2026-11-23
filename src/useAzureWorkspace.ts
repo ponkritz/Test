@@ -1,6 +1,7 @@
 import { fetchProblemKind, type FetchProblem } from './setupGuide'
 import { useEffect, useRef, useState } from 'react'
 import { initialWorkEmail, saveWorkEmail } from './workEmail'
+import { activateAfterHours } from './closeChain'
 import { dependencyFields, fetchAzureWorkItems, guardSampleWrites, isCloudBase, mapAzureWorkItem, mergeAzureWorkItems, parseAzureProjectUrl, readFieldNames, savedBacklogItems, sameAzureScope, updateAzureTimeWritingEffort, type AzureFetchResult, type AzureConfig } from './azureDevOps'
 import type { PageProps } from './pages/types'
 import type { AzureWorkItem } from './domain'
@@ -195,15 +196,18 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
     const updated = await updateAzureTimeWritingEffort(config, pat, workItemId, planHours, actualHours, markAdhoc)
     // BKL-36: a month Task saved: its Feature's Time Writing titles follow the Feature name (silently).
     const titles = await syncTitlesAfterSave(config, pat, items, updated)
-    const changed = [updated, ...titles.renamed]
+    // BKL-41: hours make the Task and its Time Writing story Active (a Closed one is reopened; the person is told).
+    const hours = await activateAfterHours(config, pat, items, updated)
+    const saved = hours.activated.find((entry) => entry.id === updated.id) ?? updated
+    const changed = [saved, ...hours.activated.filter((entry) => entry.id !== updated.id), ...titles.renamed]
     setPreview((current) => current ? { ...current, items: mergeAzureWorkItems(current.items, changed), scope: { ...current.scope, itemKeys: [...new Set([...current.scope.itemKeys, ...changed.map((entry) => entry.key)])] } } : current)
     store.update((draft) => {
       draft.azureWorkItems = mergeAzureWorkItems(draft.azureWorkItems ?? [], changed)
       draft.audits.unshift({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), actor: 'u-owner', action: 'Update Azure effort', entity: 'AzureDevOps Time Writing Task', entityId: String(updated.id), detail: `Updated Original Estimate to ${planHours ?? 'unchanged'}h and Completed Work to ${actualHours ?? 'unchanged'}h on Azure DevOps Task #${updated.id}${markAdhoc ? '; tagged ad-hoc' : ''}.${titles.note}` })
       return draft
     })
-    setMessage(`Azure DevOps Task #${updated.id} saved and verified.${titles.note}`); setError('')
-    return updated
+    setMessage(`Azure DevOps Task #${updated.id} saved and verified.${titles.note}${[...hours.notes, ...hours.failed].map((note) => ` ${note}`).join('')}`); setError('')
+    return { updated: saved, notes: [...hours.notes, ...hours.failed] }
   }
 
   // Connection sets: base URL + project (+ team), PAT, optional query and what the data is used for.

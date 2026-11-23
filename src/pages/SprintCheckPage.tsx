@@ -73,6 +73,8 @@ export function SprintCheckPage({ azure, store, my }: { azure: AzureWorkspace; s
     try {
       const result = await closeChosen(config, pat, selection)
       if (result.closed.length) { azure.applyWorkItems(result.closed, 'State check', result.closed.map((entry) => `#${entry.id} → ${entry.state}`).join(', ')); note({ tone: 'success', text: `Closed ${result.closed.map((entry) => `#${entry.id}`).join(', ')}.` }) }
+      // BKL-43: the later months' Time Writing Tasks removed with 0 h.
+      if (result.removed.length) { azure.applyWorkItems(result.removed, 'State check', result.removed.map((entry) => `#${entry.id} → Removed, 0 h`).join(', ')); note({ tone: 'success', text: `Removed the later months' Time Writing Tasks ${result.removed.map((entry) => `#${entry.id}`).join(', ')} (0 h).` }) }
       for (const text of [...result.failed, ...result.skipped]) note({ tone: result.failed.includes(text) ? 'error' : 'info', text })
       note({ tone: 'info', text: 'Refreshing data…' }); await azure.refresh()
     } finally { setBusy('') }

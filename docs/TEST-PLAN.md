@@ -784,6 +784,12 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-29 Edit form keeps the PAT field while typing** — Req BKL-40 — E2E `backlog.e2e.mjs` ("TC-BKL-29: Edit without a saved PAT keeps the PAT field while it is typed in; nothing is read until Load"); browser check: Edit on a row without a saved PAT, type a token — the field stays, no "Reading #…" until Load.
 
+**TC-BKL-30 Hours make the Time Writing Task and story Active** — Req BKL-41 — L1 `hours-active.test.mjs` ("BKL-41: hours on a month Task make the Task and its Time Writing story Active, and say so"; "BKL-41: a Closed Task or story is reopened to Active and named; Active ones are left alone; Removed stays Removed"; "BKL-41: nothing changes without hours, for a Task that is not a month Task, or under a story that is not Time Writing"; "BKL-41: a failed write is reported, not thrown"); browser check with a Time Writing connection: enter hours on a New month Task and Save — the message names the Task and the story set to Active; close the story, enter hours again — the story is reopened and named.
+
+**TC-BKL-31 Close Task on Time Writing and My Tasks [Board]** — Req BKL-42 — L1 `close-list.test.mjs` ("BKL-42: Close Tasks lists the ticked Task alone, with the hours question; a User Story close removes later months only when it closes the Feature"); E2E `shell.e2e.mjs` ("TC-ACT-02: Time Writing shows the person's KPI cards, month tasks, hours and deadline", Close Tasks steps); browser check: My Tasks [Board] → Close on a month Task opens the pop-up with the hours question.
+
+**TC-BKL-32 Early close removes later months' Time Writing Tasks** — Req BKL-43 — L1 `close-list.test.mjs` ("BKL-43: closing a Feature early lists its later months’ Time Writing Tasks to remove (everyone’s, ticked; not those with Completed Work)"; "BKL-43: a later month that cannot be removed keeps its story and the Feature open"); browser check with a Feature whose Time Writing runs to next year: Close Feature — the later months are listed "→ Removed, 0 h", ticked; after Close they are Removed with 0 h Original Estimate.
+
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
 **TC-CON-45 Git view data with another query is not applied** — Req CON-77 — L1 `git-snapshots.test.mjs` ("a snapshot fetched with another query than the connection has here is not applied"); browser check:
@@ -1812,6 +1818,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-38 | TC-BKL-27 |
 | BKL-39 | TC-BKL-28 |
 | BKL-40 | TC-BKL-29 |
+| BKL-41 | TC-BKL-30 |
+| BKL-42 | TC-BKL-31 |
+| BKL-43 | TC-BKL-32 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -2107,9 +2116,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
-| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29 |
+| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31 |
 | UC-05 | TC-MON-07 |
-| UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43 |
+| UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61 |
 | UC-09 | TC-OV-11…14, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
