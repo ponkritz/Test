@@ -18,7 +18,7 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, o
   const eyebrow = `ON-DEMAND · ${page.name.toUpperCase()}`
   return <>
     <Panel className="od-insights-head" eyebrow={eyebrow} title="Insights" detail={`${page.insights.length} chart${page.insights.length === 1 ? '' : 's'} and tables from the ${page.rows.length} row${page.rows.length === 1 ? '' : 's'} of ${page.name}, the same for everyone.`}
-      info={<>Charts and summary tables built from the rows on the Data tab: a bar / column chart, a line over time, a pie / donut or a summary table, each with Count of rows, Sum or Average of a Number column, and filters of its own. They are saved with the page in Git (Save to Git) and shown to everyone who sees the page; people allowed to set up On-Demand pages add, edit, reorder and remove them.</>}
+      info={<>Charts and summary tables built from the rows on the Data tab: a bar / column chart, a line over time, a pie / donut or a summary table, each with Count of rows, Sum or Average of a Number or Currency column (one currency at a time, never converted), and filters of its own. They are saved with the page in Git (Save to Git) and shown to everyone who sees the page; people allowed to set up On-Demand pages add, edit, reorder and remove them.</>}
       action={<button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={() => setEditing({ insight: blankInsight(page, newId('i')), isNew: true })}>＋ Add chart / table</button>}>
       <WriteBlocked reason={blockNote} />
       {!blockNote && noColumns && canSetup && <p className="muted">{addReason}</p>}
@@ -96,13 +96,13 @@ function InsightDialog({ page, insight, isNew, onCancel, onSave }: { page: OnDem
           <div className="form-row">
             <label>Measure
               <select aria-label="Measure" value={draft.measure} onChange={(event) => { const measure = event.target.value as InsightMeasure; edit({ measure, value: measure === 'count' ? '' : draft.value || numbers[0]?.id || '' }) }}>
-                {measures.filter((measure) => !(measure.key === 'average' && draft.type === 'pie')).map((measure) => <option key={measure.key} value={measure.key} disabled={measure.key !== 'count' && !numbers.length}>{measure.label}{measure.key !== 'count' && !numbers.length ? ' (needs a Number column)' : ''}</option>)}
+                {measures.filter((measure) => !(measure.key === 'average' && draft.type === 'pie')).map((measure) => <option key={measure.key} value={measure.key} disabled={measure.key !== 'count' && !numbers.length}>{measure.label}{measure.key !== 'count' && !numbers.length ? ' (needs a Number or Currency column)' : ''}</option>)}
               </select>
             </label>
             {measureNeedsNumber && <label>Of the Number column
               <select aria-label="Of the Number column" value={draft.value} onChange={(event) => edit({ value: event.target.value })}>
                 {!numbers.some((column) => column.id === draft.value) && <option value={draft.value}>— Choose —</option>}
-                {numbers.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
+                {numbers.map((column) => <option key={column.id} value={column.id}>{column.name}{column.type === 'currency' ? ' (Currency)' : ''}</option>)}
               </select>
             </label>}
           </div>

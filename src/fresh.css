@@ -976,3 +976,18 @@ td .od-flag{display:inline-block;margin-top:0}
 .od-filter{display:grid;gap:6px;width:100%;padding:8px;border-radius:8px;background:var(--surface-2)}.od-filter-head{display:flex;gap:8px;align-items:center}.od-filter-head select{flex:1}
 @media(max-width:900px){.od-insight-editor{grid-template-columns:1fr}}
 .od-key{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;letter-spacing:.3px;white-space:nowrap}.od-row-key{margin:0;display:flex;gap:8px;align-items:baseline}.od-prefix{max-width:28rem}.od-prefix input{max-width:10rem;text-transform:uppercase}
+/* OND-19…25: row IDs, who added a row, History, Long text, Currency and column descriptions. */
+th .info-button{margin-left:4px;padding:0 6px;font-size:10px}
+.od-long{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;white-space:pre-line;max-width:42rem;min-width:12rem}
+.od-row-facts{margin:0;display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px}.od-row-facts div{display:flex;gap:6px;align-items:baseline}.od-row-facts dt{color:var(--text-3);font-weight:600}.od-row-facts dd{margin:0}
+.od-help{display:block}
+.od-money{border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:grid;gap:4px}.od-money legend{font-size:11px;font-weight:700;color:var(--text-2);padding:0 4px}.od-money small{font-size:11px;color:var(--muted)}
+.od-money-inputs{display:grid;grid-template-columns:minmax(0,1fr) 7rem;gap:8px}.od-money-inputs input{text-align:right}
+.od-multi>.od-help{flex-basis:100%;font-size:11px;color:var(--muted)}
+.od-currency-default{max-width:32rem}.od-description textarea{min-height:2.6em}
+.od-currency-pick{display:inline-flex;gap:8px;align-items:center;font-size:12px;margin:0 0 6px}.od-currency-pick select{width:auto}
+.od-history{border-top:1px solid var(--line);margin-top:6px;padding-top:10px;display:grid;gap:6px}.od-history h3{margin:0;font-size:14px}
+.od-history ol{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:16rem;overflow:auto}.od-history li{font-size:12px}
+.od-history ol>li{border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;background:var(--surface-2)}
+.od-history-head{margin:0 0 2px;color:var(--text-2)}.od-history ul{margin:0;padding-left:18px;display:grid;gap:2px;overflow-wrap:anywhere}
+.od-history del{color:var(--danger-text,var(--text-3))}.od-history ins{text-decoration:none;font-weight:600}.od-history-field{font-weight:600}.od-history-comment{margin:2px 0 0;font-style:italic}

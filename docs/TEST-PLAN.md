@@ -1696,6 +1696,16 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-15 Row keys** — Req OND-18 — L1 `on-demand.test.mjs` ("OND-18: every row has a unique key from the moment it is added — prefix, date, 4 random characters; unique after two saves merge; old rows keyed on save; the prefix fixed once used (TC-OND-15)", "OND-04: rows — …": a new row's key, kept on edit, searchable, in the CSV); E2E `on-demand.e2e.mjs` ("TC-OND-01: …": the Key column, the key matches CONQ-yymmdd-XXXX and is the one saved in on-demand/conq.json); browser check with the real Git repository: two people add a row each at the same time and save; both rows keep different keys; a page saved before keys gets them on its next save; the prefix field is fixed once rows have keys.
 
+**TC-OND-16 Row details: ID, who added it, History, Long text, Currency, descriptions** — Req OND-19, OND-20, OND-21, OND-22, OND-23, OND-25 — **UAT** — L1 `on-demand-rows.test.mjs` ("OND-19: a readable sequential ID per page — given on Save to Git in row order, never changed, the next free number; rows from before numbered (TC-OND-16)", "OND-19: two people add rows at the same time and save on their own — the numbers stay unique after the merge; a number already in Git never changes (TC-OND-16)"); E2E `on-demand.e2e.mjs` ("TC-OND-16: row details — Long text and Currency columns with a description, a row gets CONQ-0001 on Save to Git with who added it and when, an edit is logged in History and in the file"); UAT: with your work email set, Git storage that can save and a role allowed both On-Demand permissions, on CoNQ Set up columns… → add **Details** (Long text) and **Cost** (Currency, default USD), each with a Description, Save; the column headings show ⓘ with the description; ＋ Add row — the descriptions are under the fields, the ID says "given on Save to Git"; type a paragraph of two lines and 1200, Add row — the table shows "on save" as ID, "1,200.00 USD" right-aligned, the paragraph in at most 3 lines, your email as Added by and the time as Added on; Save to Git — the row shows **CONQ-0001**; Edit — "Added {time} by {your email}", change the cost to 1500 EUR, Save, Save to Git — Edit again: **History** shows "Changed · {time} · {your email} — Cost: 1,200.00 USD → 1,500.00 EUR" above "Added"; `on-demand/conq.json` holds `seq`, `addedBy`, `addedAt` and the `log`; Columns → tick Last updated by / on; Export (Excel) has ID, Added by / on and Last updated by / on, not the History; on a phone and in dark mode the pop-up and the History are readable.
+
+**TC-OND-17 Who added a row, the update log and its merge** — Req OND-20, OND-21, GIT-17 — L1 `on-demand-rows.test.mjs` ("OND-20, OND-21: who added a row and when, set once; every saved edit logged with who, when and what changed (old → new) (TC-OND-17)", "OND-21: two saves of the same row — the later save wins for the values, the logs are merged so no entry is lost (TC-OND-17)"), `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); browser check with two browsers (two work emails) on the same row: each changes a different field and saves — the later values win, and History lists both changes with each person's email; Save without a change adds no entry; a row saved before shows "—" as Added by / on and "No changes recorded yet" until its first change.
+
+**TC-OND-18 Long text and Currency values** — Req OND-22, OND-23, OND-06, OND-26 — L1 `on-demand-rows.test.mjs` ("OND-22, OND-23: Long text and Currency — kept, validated, shown and sorted; a type change keeps the values (TC-OND-18)"); browser check: a Long text of 10,000 characters is kept and exported in full; "abc" as a Cost is refused with "“Cost” is not an amount."; sorting by Cost sorts by amount; changing a Text column with "250" to Currency shows "250.00 {default}", changing the Currency column to Number marks "1200 EUR" as "not a number" after asking first; JPY amounts show without decimals; Other code… accepts "THB".
+
+**TC-OND-19 Currency in the Insights: one currency at a time** — Req OND-24 — L1 `on-demand-rows.test.mjs` ("OND-24: Sum and Average of a Currency column — one total per currency, never converted; the line says which currencies were found (TC-OND-19)"); browser check: on CoNQ with costs in EUR and USD, a Bar chart of Sum of Cost by Category shows the EUR rows, "Sum of Cost (EUR)" on the axis and legend, and "Currencies found: EUR (3 rows), USD (1 row); shown: EUR"; choosing USD in the Currency list above the chart redraws it with the USD rows only; the summary table and the Table view never add EUR and USD; Count of rows counts every row.
+
+**TC-OND-20 Column descriptions** — Req OND-25, OND-26 — L1 `on-demand-rows.test.mjs` ("OND-25: a column description — kept in the file, set in Set up columns…, capped at 300 characters (TC-OND-20)"); E2E `on-demand.e2e.mjs` ("TC-OND-16: row details — Long text and Currency columns with a description, a row gets CONQ-0001 on Save to Git with who added it and when, an edit is logged in History and in the file"); browser check: a description of 301 characters cannot be typed (300 at most); clearing a description removes the ⓘ and the help line; an older app version that saves the page drops the descriptions (LIM-19).
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -1997,7 +2007,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-15 | TC-GIT-08, TC-OND-02 |
 | GIT-16 | TC-GIT-09 |
 | GIT-17, HIS-04, MYD-09, KPT-03, CON-88, PCK-08 | TC-GIT-10 |
-| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11 |
+| GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
 | SNP-01…03 | TC-SNP-01 |
@@ -2188,7 +2198,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-03 | TC-OND-01, TC-OND-03 |
 | OND-04 | TC-OND-01, TC-OND-03 |
 | OND-05 | TC-OND-01, TC-OND-04 |
-| OND-06 | TC-OND-04 |
+| OND-06 | TC-OND-04, TC-OND-18 |
 | OND-07 | TC-OND-06, TC-OND-07 |
 | OND-08 | TC-OND-02 |
 | OND-09 | TC-OND-01, TC-OND-05 |
@@ -2201,6 +2211,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-16 | TC-OND-09, TC-OND-11 |
 | OND-17 | TC-OND-12 |
 | OND-18 | TC-OND-15 |
+| OND-19 | TC-OND-16 |
+| OND-20 | TC-OND-16, TC-OND-17 |
+| OND-21 | TC-OND-16, TC-OND-17 |
+| OND-22 | TC-OND-16, TC-OND-18 |
+| OND-23 | TC-OND-16, TC-OND-18 |
+| OND-24 | TC-OND-19 |
+| OND-25 | TC-OND-16, TC-OND-20 |
+| OND-26 | TC-OND-18, TC-OND-20 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | IF-05 | TC-KPT-02 |
@@ -2253,7 +2271,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…15 |
+| UC-37 | TC-OND-01…20 |
 
 ## 8. Result record
 

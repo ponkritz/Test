@@ -2,7 +2,7 @@ import { useId, useState, type KeyboardEvent } from 'react'
 import { arcPath, barPath, epicSlots, niceTicks, otherColor, useElementWidth, wrapLabel } from '../chartUtils'
 import { useDataLabels } from '../useDataLabels'
 import type { Insight, OnDemandPage } from '../onDemand'
-import { aggregate, formatValue, insightProblems, measureText, noneKey, otherKey, type Bucket, type InsightData } from '../onDemandInsights'
+import { aggregate, currencyText, formatValue, insightProblems, measureText, noneKey, otherKey, type Bucket, type InsightData } from '../onDemandInsights'
 import { AxisTitles } from './chartLabels'
 import { Notice } from './ui'
 import { ChartFrame, LegendBar, LegendLine, Tooltip, TooltipRow } from './WorkloadCharts'
@@ -23,15 +23,24 @@ function scale(min: number, max: number, count: number) {
   return Array.from({ length: Math.round((high - low) / step) + 1 }, (_, index) => Number((low + index * step).toFixed(6)))
 }
 
+// OND-24: a Sum / Average of a Currency column shows one currency at a time — a choice above the chart when the rows
+// hold several (not saved: the one with most rows comes first for everyone). Stacking or adding the currencies up would
+// draw amounts of different currencies as one total; one currency at a time keeps every bar, slice and total in one unit.
 export function InsightView({ page, insight }: { page: OnDemandPage; insight: Insight }) {
+  const [currency, setCurrency] = useState('')
   const problems = insightProblems(page, insight)
   if (problems.length) return <Notice tone="warning"><strong>This {insight.type === 'table' ? 'table' : 'chart'} cannot be shown:</strong> {problems.join(' ')} {' '}Edit it to choose the columns again, or remove it.</Notice>
-  const data = aggregate(page, insight, insight.type === 'pie' ? { maxCategories: 5 } : insight.type === 'table' ? {} : { maxCategories: insight.type === 'bar' ? 20 : undefined, maxSeries: 5 })
+  const data = aggregate(page, insight, { ...(insight.type === 'pie' ? { maxCategories: 5 } : insight.type === 'table' ? {} : { maxCategories: insight.type === 'bar' ? 20 : undefined, maxSeries: 5 }), currency })
   const notes = [
     data.rows.noNumber ? `${data.rows.noNumber} row${data.rows.noNumber === 1 ? '' : 's'} without a number left out.` : '',
     data.rows.noDate ? `${data.rows.noDate} row${data.rows.noDate === 1 ? '' : 's'} without a valid date left out.` : '',
+    data.rows.otherCurrency ? `${data.rows.otherCurrency} row${data.rows.otherCurrency === 1 ? '' : 's'} in other currencies left out.` : '',
+    currencyText(data),
   ].filter(Boolean).join(' ')
-  const status = <p className="muted od-insight-count" role="status">{data.rows.used} of {data.rows.all} row{data.rows.all === 1 ? '' : 's'} counted{data.rows.matched < data.rows.all ? ` (${data.rows.matched} match the filters)` : ''}.{notes ? ` ${notes}` : ''}</p>
+  const status = <>
+    {data.currencies.length > 1 && <label className="od-currency-pick">Currency<select aria-label={`Currency of ${insight.title || 'the chart'}`} value={data.currency} onChange={(event) => setCurrency(event.target.value)}>{data.currencies.map((entry) => <option key={entry.code} value={entry.code}>{entry.code} ({entry.rows} row{entry.rows === 1 ? '' : 's'})</option>)}</select></label>}
+    <p className="muted od-insight-count" role="status">{data.rows.used} of {data.rows.all} row{data.rows.all === 1 ? '' : 's'} counted{data.rows.matched < data.rows.all ? ` (${data.rows.matched} match the filters)` : ''}.{notes ? ` ${notes}` : ''}</p>
+  </>
   if (!data.categories.length) return <>{status}<div className="empty-state"><strong>No rows to show.</strong><p>{page.rows.length ? 'No row matches the filters, or none has the values this needs.' : 'Add rows on the Data tab.'}</p></div></>
   return <>
     {status}
@@ -48,7 +57,7 @@ const name = (page: OnDemandPage, id: string) => page.columns.find((column) => c
 // cell, a Total column and row (each row once).
 export function PivotTable({ page, insight, data, share = false }: { page: OnDemandPage; insight: Insight; data: InsightData; share?: boolean }) {
   const split = Boolean(insight.second)
-  const measure = measureText(page, insight)
+  const measure = measureText(page, insight, data.currency)
   const sum = data.values.reduce((all, row) => all + (row[0] ?? 0), 0)
   return <div className="azure-table od-pivot"><table className="matrix viz-table">
     <thead><tr><th>{name(page, insight.category)}{insight.type === 'line' ? ' (month)' : ''}</th>{split ? data.series.map((ser) => <th key={ser.key} className="num">{ser.label}</th>) : null}<th className="num">{split ? 'Total' : measure}</th>{share && <th className="num">Share (%)</th>}</tr></thead>
@@ -87,7 +96,7 @@ function BarChart({ page, insight, data }: { page: OnDemandPage; insight: Insigh
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setHover((value) => Math.min(data.categories.length - 1, Math.max(0, (value ?? -1) + (event.key === 'ArrowUp' ? -1 : 1)))) }
     else if (event.key === 'Escape') setHover(null)
   }
-  const legend = stacked ? <Legend series={data.series} palette={palette} /> : <LegendBar color={palette[0]} label={measureText(page, insight)} />
+  const legend = stacked ? <Legend series={data.series} palette={palette} /> : <LegendBar color={palette[0]} label={measureText(page, insight, data.currency)} />
   return <ChartFrame legend={legend} table={table} setTable={setTable} labels={labels}><div ref={wrap}>
     {table ? <PivotTable page={page} insight={insight} data={data} /> : <div className="viz-plot">
       <svg className="viz-fixed" width={width} height={height} style={{ width, height }} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`} tabIndex={0} onKeyDown={keyDown} onPointerLeave={() => setHover(null)}>
@@ -107,10 +116,10 @@ function BarChart({ page, insight, data }: { page: OnDemandPage; insight: Insigh
           <text className="viz-end-label" x={x(Math.max(0, ends[index] > 0 ? stacks[index].reduce((all, part) => Math.max(all, part.end), 0) : 0)) + 6} y={rowY(index) + barHeight / 2} dominantBaseline="middle">{formatValue(stacked ? ends[index] : data.values[index][0])}</text>
         </g>)}
         {low < 0 && <line className="viz-reference" x1={x(0)} x2={x(0)} y1={pad.top} y2={height - pad.bottom} />}
-        <AxisTitles x={measureText(page, insight)} y={name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} />
+        <AxisTitles x={measureText(page, insight, data.currency)} y={name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} />
       </svg>
       {hover != null && <Tooltip left={x(Math.max(0, ends[hover]))} top={rowY(hover) + rowHeight} width={width}><strong>{data.categories[hover].label}</strong>
-        {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={formatValue(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={formatValue(data.values[hover][0])} label={measureText(page, insight)} />}
+        {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={formatValue(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={formatValue(data.values[hover][0])} label={measureText(page, insight, data.currency)} />}
         {stacked && <small>Total (each row once): {formatValue(data.categoryTotals[hover])}</small>}</Tooltip>}
     </div>}
   </div></ChartFrame>
@@ -137,7 +146,7 @@ function LineChart({ page, insight, data }: { page: OnDemandPage; insight: Insig
   const y = (value: number) => pad.top + plotHeight - (value - low) / (high - low || 1) * plotHeight
   const step = Math.max(1, Math.ceil(46 / band))
   const path = (col: number) => { let d = '', open = false; data.values.forEach((row, index) => { const value = row[col]; if (value == null) { open = false; return } d += `${open ? 'L' : 'M'}${x(index).toFixed(1)},${y(value).toFixed(1)}`; open = true }); return d }
-  const legend = split ? data.series.map((ser, index) => <LegendLine key={ser.key} color={palette[index]} label={ser.label} />) : <LegendLine color={palette[0]} label={measureText(page, insight)} />
+  const legend = split ? data.series.map((ser, index) => <LegendLine key={ser.key} color={palette[index]} label={ser.label} />) : <LegendLine color={palette[0]} label={measureText(page, insight, data.currency)} />
   const pick = (clientX: number, rect: DOMRect) => Math.min(count - 1, Math.max(0, Math.floor((clientX - rect.left - pad.left) / band)))
   return <ChartFrame legend={legend} table={table} setTable={setTable} labels={labels}><div ref={wrap}>
     {table ? <PivotTable page={page} insight={insight} data={data} /> : <div className="viz-plot">
@@ -153,10 +162,10 @@ function LineChart({ page, insight, data }: { page: OnDemandPage; insight: Insig
           {labels[0] && count <= 24 && data.values.map((row, index) => row[col] != null && <text key={index} className="viz-data-label" x={x(index)} y={y(row[col]!) - 9} textAnchor="middle">{tick(row[col]!)}</text>)}
         </g>)}
         {data.categories.map((cat, index) => index % step === 0 && <text key={cat.key} className="viz-tick" x={x(index)} y={height - pad.bottom + 16} textAnchor="middle">{cat.label.replace(/ (\d{2})(\d{2})$/, ' ’$2')}</text>)}
-        <AxisTitles x={`Month of ${name(page, insight.category)}`} y={measureText(page, insight)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
+        <AxisTitles x={`Month of ${name(page, insight.category)}`} y={measureText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
       </svg>
       {hover != null && <Tooltip left={x(hover)} width={width}><strong>{data.categories[hover].label}</strong>
-        {data.series.map((ser, col) => <TooltipRow key={ser.key} color={palette[col]} value={formatValue(data.values[hover][col])} label={split ? ser.label : measureText(page, insight)} />)}</Tooltip>}
+        {data.series.map((ser, col) => <TooltipRow key={ser.key} color={palette[col]} value={formatValue(data.values[hover][col])} label={split ? ser.label : measureText(page, insight, data.currency)} />)}</Tooltip>}
     </div>}
   </div></ChartFrame>
 }

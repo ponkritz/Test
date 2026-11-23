@@ -10,7 +10,7 @@ const cacheKey = 'demand-planning-on-demand-v1'
 function cached(): OnDemandPage[] | null {
   try { const list = JSON.parse(localStorage.getItem(cacheKey) ?? 'null') as unknown; return Array.isArray(list) ? list.flatMap((text) => { try { return typeof text === 'string' ? [parseOnDemandPage(text)] : [] } catch { return [] } }) : null } catch { return null }
 }
-function remember(pages: OnDemandPage[]) { try { localStorage.setItem(cacheKey, JSON.stringify(pages.map((page) => serializeOnDemandPage(page)))) } catch { /* too large or blocked: this visit only */ } }
+function remember(pages: OnDemandPage[]) { try { localStorage.setItem(cacheKey, JSON.stringify(pages.map((page) => serializeOnDemandPage(page, { fill: false })))) } catch { /* too large or blocked: this visit only */ } }
 
 interface State { scope: string; pages: OnDemandPage[]; inGit: string[]; errors: string[]; loaded: boolean }
 

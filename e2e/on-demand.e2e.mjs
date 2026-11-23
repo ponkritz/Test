@@ -257,3 +257,111 @@ test('TC-OND-13: a viewer without the setup right sees the Insights read only �
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
 })
+
+// OND-19…OND-25: a Long text and a Currency column with descriptions, a row with its ID given on Save to Git, who added
+// it and when, and an edit logged in the row's History and in the file (TC-OND-16, UAT).
+test('TC-OND-16: row details — Long text and Currency columns with a description, a row gets CONQ-0001 on Save to Git with who added it and when, an edit is logged in History and in the file', async () => {
+  const email = 'qe.lead@example.com'
+  const files = { 'on-demand/conq.json': JSON.stringify({ schema: 1, kind: 'on-demand-page', id: 'conq', name: 'CoNQ', description: 'Cost of Non-Quality', keyPrefix: 'CONQ', columns: [{ id: 'c1', name: 'Category', type: 'dropdown', options: ['Scrap', 'Rework'] }], rows: [] }) }
+  const { page, context, errors } = await openPage(app, { init: (work) => {
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+    localStorage.setItem('demand-planning-work-email-v1', work)
+  }, initArg: email })
+  const writes = await mockGitHub(context, files)
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await navigate(page, 'CoNQ')
+  await page.getByText('No rows yet.').waitFor()
+
+  // Set up columns…: a Long text and a Currency (default USD), each with a description of how to fill it.
+  await page.getByRole('button', { name: 'Set up columns…' }).click()
+  const columns = page.getByRole('dialog', { name: 'Set up columns' })
+  await columns.getByRole('button', { name: '＋ Add column' }).click()
+  await columns.getByLabel('Column 2 name').fill('Details')
+  await columns.getByLabel('Column 2 type').selectOption('longtext')
+  await columns.getByLabel('Column 2 description').fill('What went wrong and what was done, in a few sentences.')
+  await columns.getByRole('button', { name: '＋ Add column' }).click()
+  await columns.getByLabel('Column 3 name').fill('Cost')
+  await columns.getByLabel('Column 3 type').selectOption('currency')
+  await columns.getByLabel('Column 3 default currency').selectOption('USD')
+  await columns.getByLabel('Column 3 description').fill('The cost in the supplier’s currency, without VAT.')
+  await columns.getByRole('button', { name: 'Save', exact: true }).click()
+  await columns.waitFor({ state: 'detached' })
+
+  // ＋ Add row: the descriptions are shown under the fields; the ID is given on Save to Git.
+  await page.getByRole('button', { name: '＋ Add row' }).click()
+  let row = page.getByRole('dialog', { name: 'Add a row' })
+  assert.match(await text(row), /What went wrong and what was done, in a few sentences\./)
+  assert.match(await text(row), /The cost in the supplier’s currency, without VAT\./)
+  assert.match(await text(row.locator('.od-row-facts')), /ID given on Save to Git/)
+  await row.getByLabel('Category').selectOption('Rework')
+  const paragraph = 'The seal ring was cut too short.\nThe batch was reworked on site and checked again before shipping.'
+  await row.getByLabel('Details', { exact: true }).fill(paragraph)
+  assert.equal(await row.getByLabel('Cost currency').inputValue(), 'USD', 'the column’s default currency')
+  await row.getByLabel('Cost', { exact: true }).fill('1200')
+  await row.getByRole('button', { name: 'Add row' }).click()
+  await row.waitFor({ state: 'detached' })
+  const table = page.locator('.od-panel table')
+  assert.match(await text(table.locator('thead')), /ID.*Key.*Category.*Details.*Cost.*Added by.*Added on.*Actions/i)
+  assert.equal(await table.getByRole('button', { name: 'About Cost' }).count(), 1, 'the description behind ⓘ on the heading')
+  const first = table.locator('tbody tr').first()
+  assert.match(await text(first), /^on save CONQ-\d{6}-[2-9A-HJKMNP-Z]{4} Rework/)
+  assert.match(await text(first), /1,200\.00 USD/)
+  assert.match(await text(first), new RegExp(email.replace(/\./g, '\\.')))
+
+  // Save to Git: the row gets CONQ-0001, and the file has who added it, when and the first log entry.
+  const bar = page.locator('.git-bar-dirty')
+  await bar.getByRole('button', { name: 'Save to Git' }).click()
+  await bar.waitFor({ state: 'detached' })
+  await first.locator('code.od-key', { hasText: 'CONQ-0001' }).waitFor()
+  let saved = writes.filter((write) => write.path === 'on-demand/conq.json')
+  assert.equal(saved.length, 1)
+  let file = saved[0].data
+  const [, details, cost] = file.columns
+  assert.deepEqual([details.type, details.description, cost.type, cost.currency, cost.description], ['longtext', 'What went wrong and what was done, in a few sentences.', 'currency', 'USD', 'The cost in the supplier’s currency, without VAT.'])
+  assert.equal(file.rows[0].seq, 1)
+  assert.equal(file.rows[0].addedBy, email)
+  assert.match(file.rows[0].addedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  assert.ok(Math.abs(Date.parse(file.rows[0].addedAt) - Date.now()) < 10 * 60_000, 'added now')
+  assert.equal(file.rows[0].cells[details.id], paragraph, 'the paragraph kept with its line break')
+  assert.equal(file.rows[0].cells[cost.id], '1200 USD')
+  assert.deepEqual(file.rows[0].log.map((entry) => [entry.added, entry.by]), [[true, email]])
+
+  // Edit: change the cost; Save logs the change on its own — History shows who, when and old → new.
+  await first.getByRole('button', { name: /^Edit row/ }).click()
+  row = page.getByRole('dialog', { name: 'Edit the row' })
+  assert.match(await text(row.locator('.od-row-facts')), new RegExp(`ID CONQ-0001.*Added .* by ${email.replace(/\./g, '\\.')}`))
+  assert.equal(await row.getByLabel(/^Why/).count(), 0, 'no comment to type: the change is logged on its own')
+  await row.getByLabel('Cost', { exact: true }).fill('1500')
+  await row.getByLabel('Cost currency').selectOption('EUR')
+  await row.getByRole('button', { name: 'Save', exact: true }).click()
+  await row.waitFor({ state: 'detached' })
+  assert.match(await text(first), /1,500\.00 EUR/)
+  await page.locator('.git-bar-dirty').getByRole('button', { name: 'Save to Git' }).click()
+  await page.locator('.git-bar-dirty').waitFor({ state: 'detached' })
+  saved = writes.filter((write) => write.path === 'on-demand/conq.json')
+  assert.equal(saved.length, 2)
+  file = saved[1].data
+  assert.equal(file.rows[0].seq, 1, 'the ID never changes')
+  assert.equal(file.rows[0].addedBy, email)
+  assert.equal(file.rows[0].log.length, 2)
+  const edit = file.rows[0].log[1]
+  assert.equal(edit.by, email)
+  assert.match(edit.at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  assert.equal(edit.comment, undefined)
+  assert.deepEqual(edit.changes, [{ column: cost.id, from: '1200 USD', to: '1500 EUR' }])
+  // History in the row pop-up, newest first.
+  await first.getByRole('button', { name: /^Edit row/ }).click()
+  row = page.getByRole('dialog', { name: 'Edit the row' })
+  const history = row.getByRole('region', { name: 'History' })
+  const entries = history.locator('ol > li')
+  assert.equal(await entries.count(), 2)
+  assert.match(await text(entries.nth(0)), new RegExp(`^Changed · .* · ${email.replace(/\./g, '\\.')} Cost: 1,200\\.00 USD → 1,500\\.00 EUR$`))
+  assert.match(await text(entries.nth(1)), /^Added · .* Category: Rework Details: The seal ring was cut too short\./)
+  await row.getByRole('button', { name: 'Cancel' }).click()
+  // Last updated by / on: hidden at first, offered in the Columns list.
+  assert.doesNotMatch(await text(table.locator('thead')), /Last updated/)
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await context.close()
+})

@@ -1,4 +1,4 @@
-import { hasOptions, valuesOf, type Insight, type InsightFilter, type InsightMeasure, type InsightType, type OnDemandColumn, type OnDemandPage, type OnDemandRow, type OnDemandType } from './onDemand.ts'
+import { hasOptions, moneyOf, valuesOf, type Insight, type InsightFilter, type InsightMeasure, type InsightType, type OnDemandColumn, type OnDemandPage, type OnDemandRow, type OnDemandType } from './onDemand.ts'
 
 // OND-11…OND-17 Insights of an On-Demand page: what each chart or summary table is made of, the checks of its column
 // references, and the aggregation of the page's rows into categories × series. Kept free of React so that every rule
@@ -18,7 +18,9 @@ const categoryTypes: Record<InsightType, OnDemandType[]> = { bar: ['dropdown', '
 const secondTypes: Record<InsightType, OnDemandType[]> = { bar: ['dropdown', 'multi'], line: ['dropdown', 'multi'], pie: [], table: ['dropdown', 'multi', 'text', 'date'] }
 export const categoryColumns = (page: OnDemandPage, type: InsightType) => page.columns.filter((column) => categoryTypes[type].includes(column.type))
 export const secondColumns = (page: OnDemandPage, type: InsightType) => page.columns.filter((column) => secondTypes[type].includes(column.type))
-export const valueColumns = (page: OnDemandPage) => page.columns.filter((column) => column.type === 'number')
+// OND-24: Sum and Average take a Number or a Currency column.
+const valueTypes: OnDemandType[] = ['number', 'currency']
+export const valueColumns = (page: OnDemandPage) => page.columns.filter((column) => valueTypes.includes(column.type))
 export const filterColumns = (page: OnDemandPage) => page.columns.filter((column) => hasOptions(column.type) || column.type === 'date')
 export const secondLabel = (type: InsightType) => type === 'table' ? 'Columns by' : type === 'line' ? 'One line per' : 'Stacked by'
 
@@ -36,7 +38,7 @@ export function withType(page: OnDemandPage, insight: Insight, type: InsightType
 
 // ---- references (OND-17) ----
 const columnOf = (page: OnDemandPage, id: string) => page.columns.find((column) => column.id === id)
-const typeName: Record<OnDemandType, string> = { text: 'Text', number: 'Number', date: 'Date', dropdown: 'Dropdown', multi: 'Multi-select' }
+const typeName: Record<OnDemandType, string> = { text: 'Text', longtext: 'Long text', number: 'Number', currency: 'Currency', date: 'Date', dropdown: 'Dropdown', multi: 'Multi-select' }
 const allowed = (types: OnDemandType[]) => types.map((type) => typeName[type]).join(', ').replace(/, ([^,]*)$/, ' or $1')
 // Why an insight cannot be drawn with the page's columns as they are now — empty when it can. A removed column is named
 // by its role (its name went with it); a renamed column is simply followed.
@@ -52,7 +54,7 @@ export function insightProblems(page: OnDemandPage, insight: Insight): string[] 
     if (insight.second === insight.category) problems.push('The same column is used twice: choose another one, or none.')
     else check(insight.second, insight.type === 'table' ? 'for the table’s columns' : insight.type === 'line' ? 'for the lines' : 'for the stacks', secondTypes[insight.type])
   }
-  if (insight.measure !== 'count') check(insight.value, `for the ${insight.measure === 'sum' ? 'sum' : 'average'}`, ['number'])
+  if (insight.measure !== 'count') check(insight.value, `for the ${insight.measure === 'sum' ? 'sum' : 'average'}`, valueTypes)
   if (insight.measure === 'average' && insight.type === 'pie') problems.push('A pie shows shares of a total: choose Count of rows or Sum.')
   if (insight.measure === 'average' && insight.type === 'bar' && insight.second) problems.push('Stacked bars add their parts up: an Average cannot be stacked. Choose Count or Sum, or no stack.')
   for (const filter of insight.filters) {
@@ -114,7 +116,11 @@ export interface InsightData {
   categoryTotals: (number | null)[] // each row once per category, whatever its series
   seriesTotals: (number | null)[]
   total: number | null // each row once
-  rows: { all: number; matched: number; used: number; noNumber: number; noDate: number; multi: boolean }
+  rows: { all: number; matched: number; used: number; noNumber: number; noDate: number; multi: boolean; otherCurrency: number }
+  // OND-24: for a Sum / Average of a Currency column, the currencies found in the matched rows (with how many rows
+  // each, most first) and the one shown; '' / [] otherwise. Amounts of different currencies are never added up.
+  currencies: { code: string; rows: number }[]
+  currency: string
 }
 interface Acc { sum: number; n: number }
 const result = (measure: InsightMeasure, acc: Acc | undefined): number | null => measure === 'average' ? acc && acc.n ? acc.sum / acc.n : null : measure === 'count' ? acc?.n ?? 0 : acc?.sum ?? 0
@@ -126,16 +132,27 @@ const dedupe = (buckets: Bucket[]) => buckets.filter((bucket, index) => buckets.
 // (a Multi-select row in two categories counts once in the total), so with a Multi-select field the parts can add up
 // to more than the total — said in the insight's ⓘ. maxCategories / maxSeries keep that many largest values and put the
 // rest, with "(none)", in "Other" (pie: 5 + Other = 6 slices; stacks and lines: the 5 series colours + Other).
-export function aggregate(page: OnDemandPage, insight: Insight, limits: { maxCategories?: number; maxSeries?: number } = {}): InsightData {
+// limits.currency: the currency to show for a Currency column (OND-24); not found or not given, the one of most rows.
+export function aggregate(page: OnDemandPage, insight: Insight, limits: { maxCategories?: number; maxSeries?: number; currency?: string } = {}): InsightData {
   const category = columnOf(page, insight.category)
   const second = insight.second ? columnOf(page, insight.second) : undefined
   const value = insight.measure === 'count' ? undefined : columnOf(page, insight.value)
   const matched = filterRowsFor(page, insight)
-  const empty: InsightData = { categories: [], series: [], values: [], categoryTotals: [], seriesTotals: [], total: null, rows: { all: page.rows.length, matched: matched.length, used: 0, noNumber: 0, noDate: 0, multi: false } }
+  // OND-24: a Currency column — the currencies of the matched rows; only the rows of one of them are measured.
+  const money = value?.type === 'currency'
+  const found = new Map<string, number>()
+  if (money) for (const row of matched) { const amount = moneyOf(row.cells[value.id], value.currency); if (amount) found.set(amount.currency, (found.get(amount.currency) ?? 0) + 1) }
+  const currencies = [...found].map(([code, rows]) => ({ code, rows })).sort((a, b) => b.rows - a.rows || a.code.localeCompare(b.code))
+  const currency = !money ? '' : currencies.some((entry) => entry.code === limits.currency) ? limits.currency! : currencies[0]?.code ?? value.currency ?? ''
+  const empty: InsightData = { categories: [], series: [], values: [], categoryTotals: [], seriesTotals: [], total: null, rows: { all: page.rows.length, matched: matched.length, used: 0, noNumber: 0, noDate: 0, multi: false, otherCurrency: 0 }, currencies, currency }
   if (!category) return empty
-  let noNumber = 0, noDate = 0, multi = false
+  let noNumber = 0, noDate = 0, multi = false, otherCurrency = 0
   const prepared = matched.flatMap((row) => {
-    const x = insight.measure === 'count' ? 1 : value ? numberOf(row.cells[value.id]) : null
+    let x: number | null = 1
+    if (insight.measure !== 'count') {
+      if (money) { const amount = moneyOf(row.cells[value.id], value.currency); x = amount?.amount ?? null; if (amount && amount.currency !== currency) { otherCurrency++; return [] } }
+      else x = value ? numberOf(row.cells[value.id]) : null
+    }
     if (x == null) { noNumber++; return [] }
     let cats = bucketsOf(category, row.cells[category.id])
     if (insight.type === 'line') { cats = cats.filter((bucket) => bucket.key !== noneKey); if (!cats.length) { noDate++; return [] } }
@@ -188,15 +205,23 @@ export function aggregate(page: OnDemandPage, insight: Insight, limits: { maxCat
     categoryTotals: categories.map((cat) => result(insight.measure, catTotals.get(cat.key))),
     seriesTotals: series.map((ser) => result(insight.measure, serTotals.get(ser.key))),
     total: prepared.length ? result(insight.measure, all.get('')) : insight.measure === 'average' ? null : 0,
-    rows: { all: page.rows.length, matched: matched.length, used: prepared.length, noNumber: insight.measure === 'count' ? 0 : noNumber, noDate, multi },
+    rows: { all: page.rows.length, matched: matched.length, used: prepared.length, noNumber: insight.measure === 'count' ? 0 : noNumber, noDate, multi, otherCurrency },
+    currencies, currency,
   }
 }
 
 // ---- words (OND-11, OND-14) ----
 export const formatValue = (value: number | null | undefined) => value == null ? '—' : Number(value.toFixed(2)).toLocaleString('en')
-export function measureText(page: OnDemandPage, insight: Insight) {
+// currency: the currency shown (OND-24), named after the column: "Sum of Cost (EUR)".
+export function measureText(page: OnDemandPage, insight: Insight, currency = '') {
   const value = columnOf(page, insight.value)?.name ?? '?'
-  return insight.measure === 'count' ? 'Count of rows' : `${insight.measure === 'sum' ? 'Sum' : 'Average'} of ${value}`
+  return insight.measure === 'count' ? 'Count of rows' : `${insight.measure === 'sum' ? 'Sum' : 'Average'} of ${value}${currency ? ` (${currency})` : ''}`
+}
+// OND-24: the line under a Currency chart — which currencies were found and which one is shown.
+export function currencyText(data: Pick<InsightData, 'currencies' | 'currency'>) {
+  if (!data.currencies.length) return ''
+  const list = data.currencies.map((entry) => `${entry.code} (${entry.rows} row${entry.rows === 1 ? '' : 's'})`).join(', ')
+  return data.currencies.length === 1 ? `Currency: ${list}.` : `Currencies found: ${list}; shown: ${data.currency} — amounts in different currencies are not added up.`
 }
 // "Sum of Cost (EUR) by Category, stacked by Sites" — what is measured and how it is split.
 export function insightSubject(page: OnDemandPage, insight: Insight) {
@@ -221,6 +246,7 @@ export function insightRules(page: OnDemandPage, insight: Insight): string[] {
   const lines: string[] = []
   const used = [insight.category, insight.second].map((id) => columnOf(page, id)).filter((column): column is OnDemandColumn => Boolean(column))
   lines.push(insight.measure === 'count' ? 'Each row counts once in its category.' : insight.measure === 'sum' ? `The ${columnOf(page, insight.value)?.name ?? 'Number'} values of the rows are added up; rows without a number are left out.` : `The average of the ${columnOf(page, insight.value)?.name ?? 'Number'} values of the rows; rows without a number are left out.`)
+  if (insight.measure !== 'count' && columnOf(page, insight.value)?.type === 'currency') lines.push('A Currency column: amounts are never converted or added up across currencies. The chart shows one currency at a time (the one with most rows first; choose another above the chart); rows in the other currencies are left out and the line above the chart says how many.')
   for (const column of used.filter((entry) => entry.type === 'multi')) lines.push(`“${column.name}” is a Multi-select: a row with several values counts once in each of them, so the parts can add up to more than the total (the total takes each row once).`)
   for (const column of used.filter((entry) => entry.type === 'date')) lines.push(`“${column.name}” is grouped by month.`)
   lines.push(`Rows with no value, a value “not in the list” or no valid date go to “${noneLabel}”${insight.type === 'line' ? ' (a line leaves rows without a date out)' : ''}.`)

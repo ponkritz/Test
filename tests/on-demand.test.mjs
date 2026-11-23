@@ -12,8 +12,8 @@ const columns = [
   { id: 'c5', name: 'Sites', type: 'multi', options: ['Berlin', 'Leeds', 'Lyon'], required: false },
 ]
 const page = () => ({ ...conqPage(), columns: structuredClone(columns), rows: [
-  { id: 'r1', key: 'CONQ-261102-AAA2', cells: { c1: 'Label misprint', c2: '1200', c3: '2026-11-02', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
-  { id: 'r2', key: 'CONQ-261109-AAA3', cells: { c1: 'Late delivery', c4: 'Complaint', c5: ['Leeds'] } },
+  { id: 'r1', key: 'CONQ-261102-AAA2', seq: 1, cells: { c1: 'Label misprint', c2: '1200', c3: '2026-11-02', c4: 'Rework', c5: ['Berlin', 'Lyon'] } },
+  { id: 'r2', key: 'CONQ-261109-AAA3', seq: 2, cells: { c1: 'Late delivery', c4: 'Complaint', c5: ['Leeds'] } },
 ] })
 
 test('OND-08: an On-Demand page file is validated when read back from Git — unknown types, bad ids and values cleaned, a file that is not a page refused (TC-OND-02)', () => {
@@ -49,15 +49,19 @@ test('OND-04: rows — required fields, numbers and dates checked; values cleane
   assert.equal(rowError(file.columns, { c1: 'x', c5: [] }), '')
   assert.match(rowError(columns.map((column) => ({ ...column, required: false })), {}), /at least one field/)
   const added = upsertRow(file, { id: 'r3', cells: { c1: '  Scrap batch ', c5: ['Lyon', 'Lyon', ''], c4: '' } })
-  const { key: newKey, ...addedRow } = added.rows[2]
+  const { key: newKey, addedBy, addedAt, log, ...addedRow } = added.rows[2]
   assert.deepEqual(addedRow, { id: 'r3', cells: { c1: 'Scrap batch', c5: ['Lyon'] } })
+  assert.equal(addedBy, 'unknown', 'OND-20: no one known — “unknown”')
+  assert.match(addedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  assert.deepEqual(log.map((entry) => [entry.added, entry.by, entry.changes]), [[true, 'unknown', [{ column: 'c1', from: '', to: 'Scrap batch' }, { column: 'c5', from: '', to: 'Lyon' }]]])
   assert.match(newKey, /^CONQ-\d{6}-[2-9A-HJKMNP-Z]{4}$/, 'OND-18: a new row gets its key at once')
   assert.equal(upsertRow(added, { id: 'r3', cells: { c1: 'Scrap' } }).rows[2].key, newKey, 'an edit keeps the key')
   assert.deepEqual(upsertRow(added, { id: 'r3', cells: { c1: 'Scrap', c4: 'Scrap' } }).rows[2].cells, { c1: 'Scrap', c4: 'Scrap' }, 'an edit replaces the row')
   assert.deepEqual(removeRow(added, 'r1').rows.map((row) => row.id), ['r2', 'r3'])
   assert.deepEqual(filterRows(file, 'leeds complaint').map((row) => row.id), ['r2'])
   assert.equal(cellSortValue(file.columns[1], '1200'), 1200)
-  assert.equal(tableCsv(file).split('\r\n')[1], 'CONQ-261102-AAA2,Label misprint,1200,2026-11-02,Rework,"Berlin, Lyon"')
+  assert.equal(tableCsv(file).split('\r\n')[0], 'ID,Key,Topic,Cost (EUR),Found on,Category,Sites,Added by,Added on,Last updated by,Last updated on')
+  assert.equal(tableCsv(file).split('\r\n')[1], 'CONQ-0001,CONQ-261102-AAA2,Label misprint,1200,2026-11-02,Rework,"Berlin, Lyon",,,,', 'rows from before keep Added by / on empty')
   assert.deepEqual(filterRows(file, 'conq-261109').map((row) => row.id), ['r2'], 'search finds the key')
   assert.notEqual(newId('r'), newId('r'), 'ids two people add at the same time do not collide')
   assert.equal(pageIdFor('Cost of Scrap & Rework', ['cost-of-scrap-rework']), 'cost-of-scrap-rework-2')
