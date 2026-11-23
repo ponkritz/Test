@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.6.0 — 2026-11-23
+
+**Added**
+- **On-Demand pages** — a new menu group **On-Demand** of blank pages the team sets up itself; **CoNQ** (*Cost of Non-Quality*) is there from the start, and people allowed to set up the pages add, rename and remove more (OND-01, OND-02, OND-10).
+- **Columns of your own** — **Set up columns…** adds, renames, reorders and removes columns, each of type Text, Number, Date, Dropdown (one value) or Multi-select with an option list you define; a change that touches values already in the rows says what happens and asks first: values are kept and marked "not in the list" / "not a number" / "not a date" until changed, a renamed option follows in every row (OND-05, OND-06).
+- **Rows in a pop-up** — the page is one shared table (search, sort, row count, Export); ＋ Add row and Edit open the row with a field per column (OND-03, OND-04).
+- **Saved to Git** — each page is `on-demand/<page>.json` in the Git data repository, saved with **Save to Git** from the unsaved-changes bar; two saves at the same time are merged by row and column, the later one winning where both changed the same; everything read back is validated (OND-07…OND-09, GIT-17).
+- **Two new rights** in Role rights, group *On-Demand*: *Set up On-Demand pages (pages, columns, options)* and *Edit On-Demand data (rows)* — by default every role sees the pages and Tool Owner and Admin may change them, also for an `access.json` saved before (CON-103).
+
+DF-145, DF-146, DF-147, SM-96, SM-97; TC-OND-01…08.
+
+PR #364.
+
 ## v9.5.0 — 2026-11-23
 
 **Added**
