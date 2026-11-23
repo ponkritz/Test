@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.16.0 — 2026-11-23
+
+**Added**
+- **Insights filter row** — the owners of a Table + Insights page (CoNQ included) can give its Insights tab a filter row with **Filters…**, next to ＋ Add chart / table: a period on one Date column (Year → Quarter → Month as on the On-Demand Dashboard, the current year to start with) and up to 6 filters (Dropdown / Multi-select values, a Date's from / to month, a Text's "contains", a Number's from / to), saved to Git at once in the page's file as the optional field `insightFilters` (validated when read; a removed column left out with a note; merged as one entry). Each viewer narrows every chart and table of the tab with it — the Table views and the rows behind a bar too — on top of each chart's own filters, with a line naming the choice and "n of m rows counted" and **Reset filters**; the choice is remembered per viewer and page (personal views). Without the right Filters… is disabled with the reason. Pages without a filter row and the On-Demand Dashboard pages are unchanged (OND-50…OND-56).
+
+DF-190, DF-191, DF-192, SM-110, LIM-35, OI-18; TC-OND-40…45.
+
+PR #375.
+
 ## v9.15.0 — 2026-11-23
 
 **Changed**
