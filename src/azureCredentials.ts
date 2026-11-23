@@ -37,9 +37,18 @@ const validConnection = (profile: unknown): profile is AzureConnectionProfile =>
 // The connections last synced with the shared setup in Git (viewDefinitions), by ID.
 export const viewsBaselineKey = 'demand-planning-views-git-baseline-v1'
 function sharedIds(storage: Pick<Storage, 'getItem'>) { try { const raw = JSON.parse(storage.getItem(viewsBaselineKey) ?? '{}') as unknown; return new Set(raw && typeof raw === 'object' ? Object.keys(raw) : []) } catch { return new Set<string>() } }
+// CON-100 (owner decision 12): a connection saved without a role is read-only ('reference'), never the role that writes.
+// One exception keeps setups saved before roles existed working: on this computer, the first role-less connection on
+// Azure DevOps Services, not taken from the shared setup in Git, stays Time Writing while no other connection here is.
+type RoleCandidate = { id: string; role?: AzureConnectionRole; baseUrl?: string }
+export function roleOf(profile: RoleCandidate, all: RoleCandidate[], shared: Set<string> = new Set()): AzureConnectionRole {
+  if (profile.role) return profile.role
+  const legacy = !all.some((entry) => entry.role === 'time-tracking') && all.find((entry) => !entry.role && !entry.baseUrl && !shared.has(entry.id))?.id === profile.id
+  return legacy ? 'time-tracking' : 'reference'
+}
 export function listAzureConnectionProfiles(storage: Pick<Storage, 'getItem'> = localStorage): AzureConnectionProfileSummary[] {
   const shared = sharedIds(storage)
-  try { const raw = JSON.parse(storage.getItem(connectionProfilesKey) ?? '[]'); return Array.isArray(raw) ? raw.filter(validConnection).map(({ id, url, reason, creatorEmail, role, query, baseUrl, apiVersion, viewName, showInMenu, mine }) => ({ id, url, reason, role: role ?? 'time-tracking', ...(mine === true ? { mine: true } : {}), ...(shared.has(id) ? { shared: true } : {}), ...(viewName?.trim() ? { viewName: viewName.trim() } : {}), ...(showInMenu != null ? { showInMenu } : {}), ...(creatorEmail?.trim() ? { creatorEmail: creatorEmail.trim() } : {}), ...(query?.trim() ? { query: query.trim() } : {}), ...(baseUrl ? { baseUrl } : {}), ...(apiVersion ? { apiVersion } : {}) })) : [] } catch { return [] }
+  try { const raw = JSON.parse(storage.getItem(connectionProfilesKey) ?? '[]'); const valid = Array.isArray(raw) ? raw.filter(validConnection) : []; return Array.isArray(raw) ? valid.map(({ id, url, reason, creatorEmail, role, query, baseUrl, apiVersion, viewName, showInMenu, mine }) => ({ id, url, reason, role: roleOf({ id, role, baseUrl }, valid, shared), ...(mine === true ? { mine: true } : {}), ...(shared.has(id) ? { shared: true } : {}), ...(viewName?.trim() ? { viewName: viewName.trim() } : {}), ...(showInMenu != null ? { showInMenu } : {}), ...(creatorEmail?.trim() ? { creatorEmail: creatorEmail.trim() } : {}), ...(query?.trim() ? { query: query.trim() } : {}), ...(baseUrl ? { baseUrl } : {}), ...(apiVersion ? { apiVersion } : {}) })) : [] } catch { return [] }
 }
 // One PAT per server: an on-prem collection (its base URL) or a cloud organization (dev.azure.com/<org>). Every
 // connection on the server uses it, so it is entered once; a connection's own PAT is only a fallback (older setups).
@@ -89,8 +98,10 @@ export function hasServerPat(key: string, storage: Pick<Storage, 'getItem'> = lo
 export function loadAzureConnectionProfile(id: string, storage: Pick<Storage, 'getItem'> = localStorage) {
   try {
     const raw = JSON.parse(storage.getItem(connectionProfilesKey) ?? '[]')
-    const profile = Array.isArray(raw) ? raw.filter(validConnection).find(item => item.id === id) ?? null : null
-    if (!profile) return null
+    const valid = Array.isArray(raw) ? raw.filter(validConnection) : []
+    const found = valid.find(item => item.id === id) ?? null
+    if (!found) return null
+    const profile = { ...found, role: roleOf(found, valid, sharedIds(storage)) }
     // The server's PAT wins; a PAT saved on the connection itself is used until one is set for the server.
     return { ...profile, token: loadServerPat(serverKey(profile), storage) || profile.token }
   } catch { return null }

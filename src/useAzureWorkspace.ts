@@ -142,7 +142,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
   function selectConnectionProfile(id: string) {
     const profile = id ? loadAzureConnectionProfile(id) : null
     if (!profile) { setActiveConnectionProfileId(''); setError(''); return }
-    setProjectUrl(profile.url); setPreview(null); setActiveConnectionProfileId(id); setPat(profile.token); setRole(profile.role ?? 'time-tracking'); setError('')
+    setProjectUrl(profile.url); setPreview(null); setActiveConnectionProfileId(id); setPat(profile.token); setRole(profile.role); setError('')
     setServer({ baseUrl: profile.baseUrl, apiVersion: profile.apiVersion })
     try { setTeam(connectionConfig(profile).team) } catch { /* saved profile validation already prevents this */ }
   }
@@ -271,7 +271,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
   // Writing) joins the one already running and gets its result, instead of failing.
   const timeWritingRun = useRef<Promise<boolean> | null>(null)
   function fetchConnection(id: string): Promise<boolean> {
-    if ((loadAzureConnectionProfile(id)?.role ?? 'time-tracking') !== 'time-tracking') return fetchConnectionNow(id)
+    if ((loadAzureConnectionProfile(id)?.role ?? 'reference') !== 'time-tracking') return fetchConnectionNow(id)
     if (timeWritingRun.current) return timeWritingRun.current
     const run = fetchConnectionNow(id).finally(() => { if (timeWritingRun.current === run) timeWritingRun.current = null })
     timeWritingRun.current = run

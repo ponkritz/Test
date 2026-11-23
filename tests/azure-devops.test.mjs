@@ -49,9 +49,9 @@ test('ADS configurations retain URL, reason and PAT as one selectable browser-lo
   const first = { id: 'quality-read', url: 'https://dev.azure.com/example-org/Quality%20Project/_backlogs/backlog/Team%20A/Epics', reason: 'Quality backlog read', token: 'quality-read-token' }
   const second = { id: 'release-write', url: 'https://dev.azure.com/another-org/Release%20Project/_backlogs/backlog/Release%20Team/Epics', reason: 'Release work-item write', token: 'release-write-token' }
   saveAzureConnectionProfile(first, storage); saveAzureConnectionProfile(second, storage)
-  assert.deepEqual(listAzureConnectionProfiles(storage), [{ id: first.id, url: first.url, reason: first.reason, role: 'time-tracking' }, { id: second.id, url: second.url, reason: second.reason, role: 'time-tracking' }])
+  assert.deepEqual(listAzureConnectionProfiles(storage), [{ id: first.id, url: first.url, reason: first.reason, role: 'time-tracking' }, { id: second.id, url: second.url, reason: second.reason, role: 'reference' }], 'CON-100: only the first role-less connection (an older Time Writing setup) keeps the writing role; another one is read-only')
   assert.equal(JSON.stringify(listAzureConnectionProfiles(storage)).includes('token'), false)
-  assert.deepEqual(loadAzureConnectionProfile(second.id, storage), second)
+  assert.deepEqual(loadAzureConnectionProfile(second.id, storage), { ...second, role: 'reference' }, 'loaded with the role it is used with (CON-100)')
   forgetAzureConnectionProfile(first.id, storage)
   assert.deepEqual(listAzureConnectionProfiles(storage), [{ id: second.id, url: second.url, reason: second.reason, role: 'time-tracking' }])
 })
@@ -733,4 +733,14 @@ test('BKL-28: a new month Task gets the Epic setup\'s default hours; an existing
   assert.deepEqual([november.status, november.task.title, november.task.originalEstimate, november.story.title], ['created', 'November 2026 | Example | Service | v1.0', 4, 'Example | Service | v1.0 - Time Writing'])
   const again = await ensure(config, pat, created.feature.id, feature.assignedTo, 'November 2026', server.transport, false, 9)
   assert.deepEqual([again.status, again.task.id, again.task.originalEstimate], ['exists', november.task.id, 4], 'reused, hours unchanged')
+})
+
+test('CON-100: a connection without a role is read-only, except the one older Time Writing setup (TC-CON-100)', async () => {
+  const { roleOf } = await import('../src/azureCredentials.ts')
+  const tw = { id: 'tw', role: 'time-tracking' }, old = { id: 'old' }, onprem = { id: 'tfs', baseUrl: 'https://tfs.example.com/tfs/Collection' }
+  assert.equal(roleOf(old, [tw, old]), 'reference', 'another connection already writes: read-only')
+  assert.equal(roleOf(old, [old]), 'time-tracking', 'the only, older cloud connection keeps working as Time Writing')
+  assert.equal(roleOf(onprem, [onprem]), 'reference', 'an on-premises server is never the writing one')
+  assert.equal(roleOf(old, [old], new Set(['old'])), 'reference', 'a role-less connection from the shared setup in Git is read-only')
+  assert.equal(roleOf({ id: 'x', role: 'documents' }, []), 'documents', 'a saved role is kept')
 })

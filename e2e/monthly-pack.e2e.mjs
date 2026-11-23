@@ -30,7 +30,7 @@ test('TC-PCK-04: Pulse Check → Monthly pack shows both slides for the month be
   assert.equal(await panel.locator('.pack-plus, .pack-add, .pack-bullets input').count(), 0, 'the bullets are read-only without a Git token that can save: no + and no fields (PCK-10)')
   assert.equal(await panel.locator('.pack-box > textarea').count(), 0, 'no free-text boxes any more: bullets with + (PCK-10)')
   assert.equal(await panel.locator('ul.pack-bullets').count(), 11, 'one bullet list per typed slide box, Actions/Deliverables Realized included; Overall status is chosen (PCK-08)')
-  assert.deepEqual(await panel.getByLabel(/^Overall status for /).locator('option').allInnerTexts(), ['On Track (default)', 'On Track', 'At Risk', 'Off Track'])
+  assert.deepEqual(await panel.getByLabel(/^Overall status for /).locator('option').allInnerTexts(), ['Not set', 'On Track', 'At Risk', 'Off Track'])
   assert.match(body, /Performance Pulse update .*2x2 /, 'page 1 the Performance Pulse, page 2 the 2x2 (PCK-01)')
   const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Download .pptx' }).click()])
   assert.equal(download.suggestedFilename(), `pulse-check-${previousMonthKey()}.pptx`)

@@ -106,7 +106,7 @@ export function groupBy<K extends string>(rows: PersonMonth[], key: (row: Person
   return [...groups].map(([name, entries]) => ({ name, rows: entries, ...totals(entries) }))
 }
 
-// One utilization model for the whole Dashboard, from Admin → Capacity & time: overloaded at or above `overloadedAt` %
+// One utilization model for the whole Dashboard, from Admin → Capacity & time: overloaded strictly above `overloadedAt` %
 // of capacity, spare below `availableBelow` %, balanced in between.
 // CAP-47: the insight thresholds travel with the utilization bands (built-in values when absent).
 export interface Bands { overloadedAt: number; availableBelow: number; thresholds?: InsightThresholds }
@@ -114,7 +114,7 @@ export const defaultBands: Bands = { overloadedAt: 100, availableBelow: 80 }
 export type Band = 'over' | 'balanced' | 'spare'
 export function bandOf(utilization: number | null | undefined, bands: Bands = defaultBands): Band | null {
   if (utilization == null) return null
-  return utilization >= bands.overloadedAt ? 'over' : utilization < bands.availableBelow ? 'spare' : 'balanced'
+  return utilization > bands.overloadedAt ? 'over' : utilization < bands.availableBelow ? 'spare' : 'balanced'
 }
 const utilOf = (hours: number, capacity: number) => capacity > 0 ? hours / capacity * 100 : null
 
@@ -124,7 +124,7 @@ export function plannedOverload(rows: PersonMonth[], bands: Bands = defaultBands
   return { over: people.filter((person) => bandOf(person.planUtil, bands) === 'over').map((person) => person.name), people: people.length }
 }
 
-// Persistent overload: at or above the overloaded threshold in at least `streak` consecutive elapsed months (missing
+// Persistent overload: strictly above the overloaded threshold in at least `streak` consecutive elapsed months (missing
 // months break it).
 export function persistentOverload(rows: PersonMonth[], months: string[], measure: 'actual' | 'plan', streak = 3, bands: Bands = defaultBands) {
   const elapsed = months.filter((month) => rows.some((row) => row.month === month && row.status === 'elapsed'))

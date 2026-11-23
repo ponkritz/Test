@@ -63,7 +63,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
       <Metrics>
         <Metric label="Planned" value={`${formatHours(now.plan)}h`} hint={`Capacity ${formatHours(now.capacity)}h`} />
         <Metric label="Recorded" value={`${formatHours(now.actual)}h`} hint={now.absence ? `${formatHours(now.absence)}h absence` : 'No absence booked'} />
-        <Metric label="Utilization" value={formatPercent(now.actualUtil ?? now.planUtil)} hint={now.actualUtil != null ? 'Recorded ÷ capacity' : 'Planned ÷ capacity'} tone={(now.actualUtil ?? now.planUtil ?? 0) >= settings.overloadedAt ? 'negative' : undefined} />
+        <Metric label="Utilization" value={formatPercent(now.actualUtil ?? now.planUtil)} hint={now.actualUtil != null ? 'Recorded ÷ capacity' : 'Planned ÷ capacity'} tone={(now.actualUtil ?? now.planUtil ?? 0) > settings.overloadedAt ? 'negative' : undefined} />
         <Metric label="Overrun · ad-hoc" value={`${formatHours(problems.overrun.total)}h · ${formatHours(problems.adhoc.total)}h`} hint="Above estimate · tagged ad-hoc" />
       </Metrics>
       {rows.length > 0 ? <div className="azure-table"><table><thead><tr><th>Month</th><th>Planned</th><th>Recorded</th><th>Capacity</th><th>Utilization</th></tr></thead><tbody>

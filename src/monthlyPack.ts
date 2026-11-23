@@ -277,12 +277,12 @@ export function packSlides(pack: MonthlyPack): Slide[] {
   ]
 }
 // What the exported template is filled with (pptxTemplate.ts): the Performance Pulse boxes and the 2x2 boxes, as the
-// pack shows them. The overall status is the first line typed for it (On Track when blank).
+// pack shows them. The overall status is the one chosen (PCK-08: "Not set" when none is chosen).
 export function packFill(pack: MonthlyPack, department = ''): PulseFill {
   const [grid, pulse] = packSlides(pack)
   const lines = (slide: Slide, key: string) => slide.boxes.find((box) => box.key === key)?.lines ?? []
   return {
-    department, monthLine: pulse.subtitle, summary: lines(pulse, 'summary'), status: lines(pulse, 'status')[0] ?? 'On Track',
+    department, monthLine: pulse.subtitle, summary: lines(pulse, 'summary'), status: lines(pulse, 'status')[0] ?? '',
     takeaways: lines(pulse, 'takeaways'), nextSteps: lines(pulse, 'next'), decision: lines(pulse, 'decision'), risks: lines(pulse, 'risks'), mitigation: lines(pulse, 'mitigation'), leadership: lines(pulse, 'leadership'),
     kpis: pack.kpis.map((row) => ({ label: row.label, value: row.value || '—' })),
     twoByTwo: { deliverables: lines(grid, 'deliverables'), observations: lines(grid, 'observations'), focus: lines(grid, 'focus'), support: lines(grid, 'support') },
