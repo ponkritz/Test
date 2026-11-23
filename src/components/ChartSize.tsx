@@ -9,13 +9,13 @@ import { Modal, Notice, Panel } from './ui'
 // corner (drag, snapping to the presets, with an outline of the size it will take; or the keyboard) and, when the
 // viewer chose their own size, "Size: yours · Reset to default".
 
-export function ChartPanel({ title, eyebrow, detail, info, action, className = '', size, source, legacyFull = false, onResize, onReset, extra, arranging = false, children }: {
-  title: string; eyebrow?: string; detail?: ReactNode; info?: ReactNode; action?: ReactNode; className?: string
+export function ChartPanel({ title, eyebrow, detail, info, action, className = '', size, source, legacyFull = false, onResize, onReset, extra, arranging = false, titleHidden = false, children }: {
+  title: string; eyebrow?: string; detail?: ReactNode; info?: ReactNode; action?: ReactNode; className?: string; titleHidden?: boolean
   size: ChartSize; source: SizeSource; legacyFull?: boolean
   onResize?: (size: ChartSize) => void; onReset?: () => void; extra?: ReactNode; arranging?: boolean; children: ReactNode
 }) {
   const classes = [className, 'chart-panel', `chart-w-${size.width}`, `chart-h-${size.height}`, legacyFull && size.width === 'full' ? 'od-insight-full' : '', arranging ? 'chart-arranging' : ''].filter(Boolean).join(' ')
-  return <Panel className={classes} eyebrow={eyebrow} title={title} detail={detail} info={info} action={action}>
+  return <Panel className={classes} eyebrow={eyebrow} title={title} detail={detail} info={info} action={action} titleHidden={titleHidden}>
     <ChartHeightContext.Provider value={heightFactor[size.height]}>{children}</ChartHeightContext.Provider>
     {(source === 'viewer' && onReset) || extra ? <p className="chart-size-note muted">{source === 'viewer' && onReset && <>Size: yours · <button type="button" className="text-button" aria-label={`Reset ${title} to the default size`} onClick={onReset}>Reset to default</button></>}{extra}</p> : null}
     {onResize && <ResizeHandle title={title} size={size} arranging={arranging} onCommit={onResize} />}

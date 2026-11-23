@@ -52,11 +52,11 @@ import { createPage, useMenuLayout } from './useMenuLayout'
 import { addPageReason, builtInGroupOf, findGroup, gitReasonOf, isHidden, kindOf, menuGroups, pagesOfGroup, placementOf, type Viewer } from './menuLayout'
 import { AddPageDialog } from './components/PageDialogs'
 import { OwnerPeopleContext, PageNamesContext } from './usePageNames'
-import { knownPeople } from './ownerPeople'
+import { knownPeople, teamPeopleOnce, type KnownPerson } from './ownerPeople'
 import { duplicatePageNames, menuLabel, type MenuPageName } from './pageNames'
 import { useMonthlyPack } from './useMonthlyPack'
 import { previousMonth } from './pulseCheck'
-import { canManagePages, type Area } from './access'
+import { accessChangedText, canManagePages, rightsChanges, rightsFor, type Area } from './access'
 import { useMyWork } from './useMyWork'
 import { setLockSettings } from './planningLock'
 import { DesktopDownload } from './components/DesktopDownload'
@@ -67,13 +67,13 @@ import { applyPageLayout, loadPageLayout } from './pageLayout'
 import { PersonPicker } from './components/PersonPicker'
 import { ProfileMenu, type ProfileAction } from './components/ProfileMenu'
 import { backlogViews, loadBacklogTab, otherMenuViews, saveBacklogTab, timeWritingView } from './backlogViews'
-import { detectWorkEmail, mergeAzureWorkItems } from './azureDevOps'
+import { detectWorkEmail, fetchTeamMembers, mergeAzureWorkItems } from './azureDevOps'
 import { formatDateTime } from './format'
 import { utcMonthKey } from './businessTime'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
-import { confirmReplace, defaultGitRepository, normalizeSetupLinks, type SetupLinks } from './gitStorage'
+import { confirmReplace, defaultGitRepository, normalizeSetupLinks, setCommitSaver, type SetupLinks } from './gitStorage'
 import { guideKey, requiredOpen, setupSteps } from './setupGuide'
 import { azureResources, capacityContext, setAccessRoles, setAzureEmails } from './capacity'
 import { hasServerPat, serverKey } from './azureCredentials'
@@ -168,6 +168,15 @@ export default function App() {
   const [gitWaitOver, setGitWaitOver] = useState(false)
   useEffect(() => { const timer = window.setTimeout(() => setGitWaitOver(true), 10000); return () => window.clearTimeout(timer) }, [])
   const autoFetched = useRef(false)
+  // PGB-21: the members of the Time Writing connection's team (CAP-30), read once after the start fetch and kept for the
+  // session; offered as page and group co-owners with everyone Assigned To fetched work. Refused: nobody, silently.
+  const [teamPeople, setTeamPeople] = useState<KnownPerson[]>([])
+  const readTeam = useRef(() => {})
+  useEffect(() => { readTeam.current = () => {
+    const config = azure.config, pat = azure.pat.trim()
+    if (!config || !pat || azure.isSample || !config.organization || !config.project || !config.team) return
+    void teamPeopleOnce(`${config.organization}/${config.project}/${config.team}`, () => fetchTeamMembers(config, pat)).then(setTeamPeople)
+  } })
   useEffect(() => {
     if (autoFetched.current || !store.ready || azure.isSample || (git.connected && !setupSynced && !gitWaitOver)) return
     autoFetched.current = true
@@ -176,6 +185,8 @@ export default function App() {
     runInBackground('startup:fetch', 'Fetch Azure DevOps at start', async (progress) => {
       progress('Fetching the Time Writing connection…')
       const result = await azure.fetchCloud()
+      // PGB-21: then the Time Writing team's members, once per session, for the co-owner list (quietly; no job text).
+      readTeam.current()
       const text = result.skipped || (result.targets ? `${result.ok} of ${result.targets} connection${result.targets === 1 ? '' : 's'} fetched and saved.${result.ok < result.targets ? ' See Admin → Streams for the one that failed.' : ''}` : 'Nothing to fetch.')
       return { text, failed: Boolean(result.skipped) || result.ok < result.targets }
     })
@@ -189,6 +200,10 @@ export default function App() {
   setAzureEmails(azure.items)
   const viewedPerson = access.viewingAs?.kind === 'person' ? access.viewingAs : undefined
   const my = useMyWork(azure, store, viewedPerson)
+  // GIT-22: the app user named in every commit the app writes — the display name Azure DevOps gives for the work email
+  // and the work email itself (none while viewing as someone else: nothing is saved then).
+  const saverName = my.self.me.email ? my.self.me.name ?? '' : '', saverEmail = azure.isSample ? '' : azure.creatorEmail
+  useEffect(() => { setCommitSaver(access.viewingAs ? {} : { name: saverName, email: saverEmail }) }, [access.viewingAs, saverName, saverEmail])
   // Admin → Data & sharing: everything shared through Git, loaded now (as at start, plus the planning data, roles and
   // Feature setup); each part reports separately so one failure does not hide the rest.
   async function loadEverything() {
@@ -215,6 +230,11 @@ export default function App() {
   const featureSetup = useFeatureSetup(git, azure.creatorEmail)
   const epicSetup = useEpicSetup(git)
   // EPS-06: the fetched on-prem data, for the drop-downs of Feature fields that name an on-prem field.
+  // DSH-16: the Time Writing hours of the On-Demand Dashboards — Team overview's items (with the historical hours) and
+  // capacity settings; viewing follows who may see Team overview ("Team insights").
+  // (the access roles and Azure emails capacityContext reads are set from the policy and the items: renewed with them)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dashboardHoursSettings = useMemo(() => capacityContext({ capacitySettings: store.state.capacitySettings, resourceProfiles: store.state.resourceProfiles }), [store.state.capacitySettings, store.state.resourceProfiles, access.policy, reportAzure.items])
   const onPremSources = useMemo(() => [...(store.state.releaseSource ? [store.state.releaseSource] : []), ...(store.state.azureSources ?? [])], [store.state.releaseSource, store.state.azureSources])
   // QV-60: my own naming patterns changing redraws the figures.
   useSyncExternalStore(subscribeMyPatterns, myPatternsVersion)
@@ -317,8 +337,8 @@ export default function App() {
   ]
   const duplicateNames = duplicatePageNames(menuNames)
   // PGB-18: the people co-owners are picked from — everyone Assigned To fetched work (CAP-51), with their work email,
-  // and the people given app roles by work email (People & roles).
-  const ownerPeople = knownPeople(azure.items, Object.keys(access.policy?.members ?? {}).map((email) => ({ name: email, email })))
+  // the members of the Time Writing team read at start (PGB-21) and the people given app roles by work email.
+  const ownerPeople = knownPeople(azure.items, [...(azure.isSample ? [] : teamPeople), ...Object.keys(access.policy?.members ?? {}).map((email) => ({ name: email, email }))])
   const addedLabel = (entry: { id: string; name: string }) => menuLabel({ key: `ondemand:${entry.id}`, name: entry.name, group: groupNameOf(placementOf(menu.layout, entry.id).group) }, duplicateNames)
   const addedButtons = (groupId: string) => addedPages(groupId).map((entry) => navButton(`ondemand:${entry.id}`, placementOf(menu.layout, entry.id).icon, addedLabel(entry), page === 'ondemand' && onDemandPage?.id === entry.id, () => openOnDemand(entry.id)))
   const addedLinks = (groupId: string): HomeLink[] => addedPages(groupId).map((entry) => ({ key: `ondemand:${entry.id}`, label: addedLabel(entry), icon: placementOf(menu.layout, entry.id).icon, open: () => openOnDemand(entry.id) }))
@@ -426,7 +446,9 @@ export default function App() {
   // The dashboards whose blocks or filters read an On-Demand page (from the definitions last read in this browser).
   const dashboardsReading = (pageId: string) => Object.entries(menu.layout.pages).filter(([, entry]) => entry.type === 'dashboard').map(([id]) => id).filter((id) => { const dashboard = cachedDashboard(id); return Boolean(dashboard && [...dashboard.blocks, ...dashboard.filters].some((entry) => pageOfSource(entry.source) === pageId)) })
   const targetOf = (path: string): FilePages => pagesOfFile(path, git.config?.path ?? '', dashboardsReading)
-  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views'
+  // GIT-23: the access roles are loaded quietly too, except on Admin → People & roles (someone may be editing them there).
+  const rolesPage = pageKey === 'admin:resources'
+  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage)
   // An added page's file is named by the page's name ("CoNQ"; its blocks for a dashboard).
   const pageChanges = changesForPage(git.remoteChanges, pageKey, targetOf, quietTarget).map((change) => {
     const added = /(?:^|\/)(on-demand|dashboards)\/([a-z0-9-]+)(?:\.json|\/page\.json|\/rows)$/.exec(change.path), name = added && onDemand.pages.find((entry) => entry.id === added[2])?.name
@@ -466,13 +488,27 @@ export default function App() {
   // not known here), one they deleted leaves the menu — unless it is the page in use with edits not saved here (it stays,
   // with its notice of GIT-18).
   const keepOpen = (id: string) => pageKey === `ondemand:${id}` && editsHere.length > 0
-  const quietLoad = useRef({ menu: menu.reload, views: personalViews.reload, pages: () => onDemand.loadNew(keepOpen) })
-  useEffect(() => { quietLoad.current = { menu: menu.reload, views: personalViews.reload, pages: () => onDemand.loadNew(keepOpen) } })
+  // GIT-23: a newer access.json loaded quietly; when the viewer's own rights change, a short info line on the page in use
+  // says who changed them and what (once: it goes with the page or when dismissed). Fail closed stays (CON-101): until
+  // the file is read again the rights in force are the ones loaded before.
+  const [accessNote, setAccessNote] = useState<{ page: string; text: string } | null>(null)
+  const loadAccessQuietly = async () => {
+    const change = git.remoteChanges.find((entry) => /(^|\/)access\.json$/.test(entry.path))
+    const before = access.ownRights, at = pageKey
+    const policy = await access.reload()
+    if (policy === undefined) return
+    const changes = rightsChanges(before, rightsFor(policy, access.email, false))
+    if (changes.length) setAccessNote({ page: at, text: accessChangedText(change?.otherWindow ? 'you in another window of this browser' : change?.by ?? '', changes) })
+  }
+  const quietLoad = useRef({ menu: menu.reload, views: personalViews.reload, pages: () => onDemand.loadNew(keepOpen), access: loadAccessQuietly })
+  useEffect(() => { quietLoad.current = { menu: menu.reload, views: personalViews.reload, pages: () => onDemand.loadNew(keepOpen), access: loadAccessQuietly } })
   useEffect(() => {
     if (!quietPaths) return
     if (quietPaths.includes('menu-layout.json@')) { void quietLoad.current.menu(); void quietLoad.current.pages().catch(() => undefined) }
     if (/personal-views/.test(quietPaths)) quietLoad.current.views()
+    if (/(^|\/|\|)access\.json@/.test(quietPaths)) void quietLoad.current.access().catch(() => undefined)
   }, [quietPaths])
+  useEffect(() => { setAccessNote((note) => note && note.page !== pageKey ? null : note) }, [pageKey])
   if (!store.ready) return <main className="content"><h1>I&amp;D Quality Demand Planning</h1>{store.loadError ? <Notice tone="error"><p>{store.loadError}</p><p>Do not clear browser data. If you still have an older tab open with unsaved changes, export its JSON backup first.</p><button className="primary" onClick={store.retryLoad}>Retry loading saved data</button></Notice> : <p role="status">Loading saved browser data…</p>}{buildStatus}</main>
 
   // CHT-17…CHT-20: chart sizes — each viewer's own in their personal views; a Tool Owner (Table, chart and page defaults)
@@ -541,7 +577,7 @@ export default function App() {
       {access.readOnly && <Notice tone="warning" className="access-read-only"><strong>Read-only:</strong> {access.bootstrap ? <>there are no access roles yet (no {access.path || 'access.json'} in Git storage), so no changes can be made. <button type="button" className="text-button" onClick={() => openSettings('resources', 'rights')}>Set up roles →</button></> : access.error ? <>the access roles ({access.path || 'access.json'}) could not be read, so no changes can be made: {access.error} <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Open Git storage →</button></> : git.accessScope && !access.loaded ? <>loading the access roles ({access.path || 'access.json'}) from Git storage; no changes can be made until they are loaded.</> : <>the access roles (access.json) are not loaded, so no changes can be made. <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Connect Git storage →</button></>}</Notice>}
       {guideOpen && <SetupGuide steps={steps} busy={azure.busy} problem={azure.fetchProblem} links={setupLinks} linkDefaults={linkDefaults} editLinks={access.can('layout.defaults') && git.connected && !git.readOnly && !azure.isSample ? { links: store.state.setupLinks ?? {}, onChange: (links) => store.update((draft) => { draft.setupLinks = links; return draft }), saveBar: <GitSyncBar git={git} /> } : undefined} inputs={{ connectGit: (token) => git.connect({ ...defaultGitRepository, ...git.config }, token, true), saveEmail: (email) => { azure.setCreatorEmail(email) }, savePat: (token) => { azure.rememberPat(token); azure.reloadConnectionProfiles() }, detectEmail: () => azure.config ? detectWorkEmail(azure.config, azure.pat) : Promise.reject(new Error('Set up the Time Writing connection first.')), gitMessage: git.status === 'error' ? git.message : undefined }} onClose={() => setGuideOpen(false)} onDismiss={dismissGuide} onOpenTab={(tab, section) => { openSettings(tab, section); setGuideOpen(false) }} onFetch={() => void azure.refresh()} />}
       {store.cache.status === 'error' && <Notice tone="error"><p>{store.cache.message}</p><div className="button-row"><button className="ghost" onClick={() => exportStateJson(store.state)}>Export JSON backup now</button><button className="primary" onClick={store.retrySave}>Retry browser save</button></div></Notice>}
-      <div className="data-notices"><PageGitNotice key={pageKey} page={pageName} changes={pageChanges} unsaved={unsavedHere} fullReload={fullReload} onLoad={loadNewer} /></div>
+      <div className="data-notices"><PageGitNotice key={pageKey} page={pageName} changes={pageChanges} unsaved={unsavedHere} fullReload={fullReload} onLoad={loadNewer} />{accessNote?.page === pageKey && <Notice tone="info" className="access-changed-note">{accessNote.text}{' '}<button type="button" className="text-button" onClick={() => setAccessNote(null)}>Dismiss</button></Notice>}</div>
       <Suspense fallback={<p className="muted page-loading" role="status">Loading the page…</p>}><Fragment key={pageReads}>
       {page === 'home' && <HomePage tiles={homeTiles} name={my.me.name} />}
       {page === 'mydash' && <MyDashboardPage month={month} azure={reportAzure} store={store} my={{ ...my, ...my.self }} navigate={setPage} views={personalViews} canSetDefault={access.can('layout.defaults')} windchill={windchill} />}
@@ -550,7 +586,7 @@ export default function App() {
       {page === 'pireview' && <PiReviewPage />}
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
-      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} />}
+      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} />}
       {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}

@@ -9,7 +9,7 @@ import { ResultTabs } from '../components/ResultTabs'
 import { Drawer, EmptyState, Info, Modal, Notice, Page, Pill, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText, type QueuedOutcome } from '../gitSaveQueue'
 import { formatDateTime } from '../format'
-import { applyColumns, hasTable, isRowHidden, withoutHidden, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, filterRows, hasOptions, lastUpdate, maxDescription, maxLog, maxLongValue, moneyOf, newId, onDemandPath, onDemandTypes, renamePage, rowError, rowId, rowSave, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
+import { applyColumns, hasTable, isRowHidden, withoutHidden, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, filterRows, hasOptions, lastUpdate, maxDescription, maxLog, maxLongValue, moneyOf, newId, onDemandPath, onDemandTypes, pageFileBytes, suggestRowFiles, renamePage, rowError, rowId, rowSave, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
@@ -74,6 +74,12 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const drawerRow = drawer?.id
   useEffect(() => { if (drawerRow) void refreshLocks() }, [drawerRow, refreshLocks])
   const [converting, setConverting] = useState(false)
+  // OND-62: the suggestion to convert a large single-file page, dismissed per page and person in this browser.
+  const hintKey = `${me}|${pageId}`
+  const [hintDismissed, setHintDismissed] = useState(() => readList(convertHintKey).includes(hintKey))
+  const dismissHint = () => { setHintDismissed(true); try { localStorage.setItem(convertHintKey, JSON.stringify([...readList(convertHintKey).filter((entry) => entry !== hintKey), hintKey].slice(-200))) } catch { /* this visit only */ } }
+  const singleFile = Boolean(page && page.storage !== 'rows' && hasTable(kind))
+  const fileBytes = useMemo(() => page && singleFile ? pageFileBytes(page) : 0, [page, singleFile])
   // A lock is shown until it expires (checked every 30 seconds).
   const now = useNow().getTime()
   // GIT-18: what Load the newer data would drop: the columns or the name being set up (a change kept after a failed
@@ -99,6 +105,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   // OND-32: Convert to row files — a Tool Owner, on a table page in Git that is still one file.
   const convertReason = gitReason || (!store.inGit(page.id) ? `${page.name} is not in Git yet.` : viewer.manager ? '' : 'Only a Tool Owner (“Manage pages and menu groups”) converts a page to row files.')
   const showConvert = !rowFiles && hasTable(kind) && (viewer.manager || rights.setup)
+  // OND-62: only the Tool Owner, who can convert, sees the suggestion; everyone else nothing.
+  const suggestConvert = showConvert && viewer.manager && !convertReason && !hintDismissed && suggestRowFiles(page.rows.length, fileBytes)
   const resultText = (saved: QueuedOutcome, what = '') => `${outcomeText(saved)} ${path}${what ? ` — ${what}` : ''}${saved.commitUrl ? ` — ${saved.commitUrl}` : ''}`
 
   // OND-28: one change of the page saved to Git at once, as a Background job (§8): "Saving to Git…", then its result.
@@ -190,6 +198,7 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
       ...(showConvert ? [{ key: 'convert', label: 'Convert to row files…', disabled: Boolean(convertReason), title: convertReason || undefined, onClick: () => setConverting(true) }] : []),
       ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { if (pending.length && !window.confirm(`Discard the changes to ${page.name} that are not saved to Git?`)) return; store.discard(page.id); void store.reload() } }] : []),
     ]} />}>
+    {suggestConvert && <Notice tone="info" className="od-convert-hint">This page has {page.rows.length.toLocaleString('en-US')} rows; converting it to row files keeps it fast and lets several people edit at once.{' '}<button type="button" className="ghost" onClick={() => setConverting(true)}>Convert to row files…</button>{' '}<button type="button" className="text-button" onClick={dismissHint}>Dismiss</button></Notice>}
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected && store.inGit(page.id) ? ' The page last loaded in this browser is shown.' : ''}</Notice>}
     {store.errors.map((error) => <Notice key={error} tone="error">On-Demand: {error}</Notice>)}
     {hidden && <Notice tone="info" className="od-hidden-note">{page.name} is hidden: it is not in the menu, on Home or in search for anyone. Its rows stay in Git and dashboards keep reading them; it opens from Admin → Pages & menu.{!hidingReason && <>{' '}<button type="button" className="ghost" onClick={toggleHidden}>Show page</button></>}</Notice>}
@@ -261,6 +270,9 @@ function inBackground<T>(label: string, work: () => Promise<{ value: T; text: st
 const recordRemoved = (page: PageFile) => recordJob(`ondemand:${page.id}`, `Delete page · ${page.name}`, { text: `Deleted ${page.storage === 'rows' ? `${pageFolder(page.id)}/` : onDemandPath(page.id)} with its ${page.rows.length} row${page.rows.length === 1 ? '' : 's'}; its history stays in GitHub.` })
 
 const showHiddenKey = 'demand-planning-od-show-hidden-v1'
+// OND-62: the convert suggestions dismissed in this browser, as "{work email}|{page id}".
+const convertHintKey = 'demand-planning-od-convert-hint-v1'
+const readList = (key: string): string[] => { try { const value = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown; return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [] } catch { return [] } }
 const rowLabel = (page: PageFile, row: OnDemandRow) => { const first = page.columns.find((column) => cellText(row.cells[column.id])); return first ? cellText(row.cells[first.id]).slice(0, 60) : row.id }
 const eyebrowOf = (page: PageFile) => `ON-DEMAND · ${page.name.toUpperCase()}`
 const sameCells = (columns: OnDemandColumn[], a: Record<string, OnDemandValue>, b: Record<string, OnDemandValue>) => columns.every((column) => cellText(a[column.id]) === cellText(b[column.id]))

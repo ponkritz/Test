@@ -1,5 +1,6 @@
 import { csvCell } from './csv.ts'
 import type { Merge } from './gitSaveQueue.ts'
+import { cleanElements, type ChartElements } from './chartElements.ts'
 
 // OND-01…OND-10 On-Demand pages: blank tables the team sets up itself — CoNQ (Cost of Non-Quality) first, more pages
 // added, renamed and removed by the roles allowed "Set up On-Demand pages". Each page is one JSON file in the Git data
@@ -60,6 +61,8 @@ export interface ChartOptions {
   height?: 'small' | 'large' // the chart's height (medium, today's, when absent; CHT-16) — not for a KPI or a summary table
   xTitle?: string // the owner's title of the X axis (the automatic one when absent; CHT-24) — bar, line, Pareto
   yTitle?: string // the owner's title of the Y axis (the automatic one when absent; CHT-24) — bar, line, Pareto
+  elements?: ChartElements // Excel-style chart elements set by the owners (as before when absent; CHT-26…CHT-35)
+  view?: 'panel' // a KPI shown as a chart panel instead of a card in the Insights tab's card row (CHT-36)
 }
 export interface Insight { id: string; title: string; type: InsightType; category: string; second: string; measure: InsightMeasure; value: string; filters: InsightFilter[]; sort: 'value' | 'label'; options?: ChartOptions }
 export const insightTypeKeys: InsightType[] = ['bar', 'line', 'pie', 'table', 'pareto', 'kpi']
@@ -91,6 +94,11 @@ export function cleanOptions(type: InsightType, measure: InsightMeasure, raw: un
   if (type !== 'kpi' && type !== 'table' && (item.height === 'small' || item.height === 'large')) out.height = item.height
   // CHT-24: the axis titles of a chart with axes, plain text of up to 60 characters; empty means automatic.
   if (type === 'bar' || type === 'line' || type === 'pareto') for (const key of ['xTitle', 'yTitle'] as const) { const text = typeof item[key] === 'string' ? (item[key] as string).trim().replace(/\s+/g, ' ').slice(0, maxAxisTitle) : ''; if (text) out[key] = text }
+  // CHT-35: the chart elements, each checked against the type (and its orientation and Percent of total).
+  const elements = cleanElements(type, out, item.elements)
+  if (elements) out.elements = elements
+  // CHT-36: a KPI shown as a panel (a card when absent).
+  if (type === 'kpi' && item.view === 'panel') out.view = 'panel'
   return Object.keys(out).length ? out : undefined
 }
 // CHT-09: a page's (or a dashboard's) colour pins — a value's text → a palette colour 1…5; anything else is dropped.
@@ -529,6 +537,12 @@ export function serializeOnDemandPage(input: OnDemandPage, { fill = true }: { fi
   if (new TextEncoder().encode(out).length > onDemandMaxBytes) throw new Error(`The page is too large to save to Git (over ${Math.round(onDemandMaxBytes / 1000)} KB). Remove rows, or split it into two pages.`)
   return out
 }
+// OND-62: a table page still in one file is suggested to be converted to row files (OND-32) when it has more than
+// 500 rows or its file is over 600 KB (two thirds of the 900 KB a single file may have, OND-08). The size is the file as
+// written (a page too large to be written counts as over).
+export const suggestRowFilesAt = { rows: 500, bytes: 600_000 }
+export function pageFileBytes(page: OnDemandPage) { try { return new TextEncoder().encode(serializeOnDemandPage(page, { fill: false })).length } catch { return onDemandMaxBytes + 1 } }
+export const suggestRowFiles = (rows: number, bytes: number) => rows > suggestRowFilesAt.rows || bytes > suggestRowFilesAt.bytes
 // GIT-21: what a newer menu layout makes the app read: the pages listed in Git and not known here (read), and the pages
 // known here that are no longer listed (dropped) — except keep(id), the page in use with edits not saved here.
 export function pageListChange(known: string[], listed: { id: string; rows: boolean }[], keep: (id: string) => boolean = () => false) {

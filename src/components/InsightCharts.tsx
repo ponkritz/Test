@@ -1,12 +1,14 @@
-import { useId, useState, type KeyboardEvent } from 'react'
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { arcPath, barPath, columnPath, epicSlots, niceTicks, otherColor, useElementWidth } from '../chartUtils'
 import { useDataLabels } from '../useDataLabels'
 import { useHeightFactor } from '../useChartSize'
 import { displayText, rowId, type Insight, type OnDemandPage, type OnDemandRow } from '../onDemand'
 import { chartData, countLines, currencyText, dateGroupLabels, drillRows, formatShown, formatValue, grainOf, insightProblems, measureText, noneKey, otherKey, valueText, type Bucket, type ChartData, type InsightData } from '../onDemandInsights'
 import { AxisTitles, WrappedLabel } from './chartLabels'
+import { barLabelAt, chartKind, dataTableModel, fitText, inside, keepApart, labelNumber, labelPercent, labelText, lineLabelAt, minorTicks, pieLabels, resolveElements, shortName, textWidth, trendLines, trendName, type LabelContent, type ResolvedElements } from '../chartElements'
+import { ChartDataTable, ChartLabel, LegendAround, LegendTrend } from './ChartElements'
 import { DataTable, type DataColumn } from './DataTable'
-import { Metric, Modal, Notice } from './ui'
+import { Info, Metric, Modal, Notice } from './ui'
 import { ChartFrame, LegendBar, LegendLine, Tooltip, TooltipRow } from './WorkloadCharts'
 
 // OND-12 The charts and the summary table of an On-Demand insight, drawn from aggregate() (src/onDemandInsights.ts) in
@@ -38,7 +40,8 @@ function scale(min: number, max: number, count: number) {
   return Array.from({ length: Math.round((high - low) / step) + 1 }, (_, index) => Number((low + index * step).toFixed(6)))
 }
 type Drill = (category: number, series: number | null) => void
-interface ChartProps { page: OnDemandPage; insight: Insight; data: ChartData; pins: ColorPins; onDrill?: Drill }
+// el: the chart elements (CHT-26…CHT-35) resolved; raw: with Percent of total, the measured amounts (a label's Value).
+interface ChartProps { page: OnDemandPage; insight: Insight; data: ChartData; pins: ColorPins; onDrill?: Drill; el: ResolvedElements; raw?: ChartData }
 const drillHint = 'Click a bar, slice or point — or press Enter on the highlighted one — to list the rows behind it.'
 
 // OND-24: a Sum / Average of a Currency column shows one currency at a time — a choice above the chart when the rows
@@ -73,7 +76,10 @@ export function InsightView({ page, insight, colors: pins, drill = true, narrowe
   if (insight.type === 'kpi') return <>{status}<div className="metric-grid compact od-kpi"><Metric label={insight.title || 'Untitled'} value={data.total == null ? '—' : `${formatValue(data.total)}${data.currency ? ` ${data.currency}` : ''}`} hint={measureText(page, insight, data.currency)} /></div></>
   if (!data.categories.length) return <>{status}<div className="empty-state"><strong>No rows to show.</strong><p>{page.rows.length ? 'No row matches the filters, or none has the values this needs.' : narrowed ? 'No row matches the filter row above: change it, or Reset filters.' : 'Add rows on the Data tab.'}</p></div></>
   const onDrill: Drill | undefined = drill ? (category, series) => setDrilled({ category, series }) : undefined
-  const props: ChartProps = { page, insight, data, pins, onDrill }
+  // CHT-26…CHT-35: the owners' chart elements; each default draws the chart as before.
+  const el = resolveElements(chartKind(insight.type, insight.options?.orientation) ?? 'bar', insight.options?.elements, { stacked: Boolean(insight.second), percent: data.unit === '%' })
+  const raw = data.unit === '%' && !el.plain && el.content.includes('value') ? chartData(page, { ...insight, options: { ...insight.options, percent: undefined } }, currency) : undefined
+  const props: ChartProps = { page, insight, data, pins, onDrill, el, raw }
   return <>
     {status}
     {insight.type === 'table' ? <PivotTable page={page} insight={insight} data={data} />
@@ -113,12 +119,40 @@ function TargetLegend({ insight, unit }: { insight: Insight; unit: '' | '%' }) {
   return target ? <li><i className="viz-key-target" aria-hidden="true" />{target.label || 'Target'} ({formatShown(target.value, unit)})</li> : null
 }
 
+// CHT-26…CHT-35 What the chart elements share. A label's text from the owner's contents (Value, Percentage, Category
+// name, Series name, joined with ", "); with Percent of total, Value is the measured amount and Percentage the share.
+function labelMaker({ page, insight, data, raw, el }: ChartProps, short: (value: number) => string) {
+  const split = Boolean(insight.second)
+  const has = (entry: LabelContent) => el.content.includes(entry)
+  return (category: number, col: number, drawn: number, share?: number) => labelText({
+    value: has('value') ? labelNumber(raw ? raw.values[category]?.[col] ?? 0 : drawn, { decimals: el.decimals, code: el.code, currency: data.currency, short: raw ? tick : short }) : undefined,
+    percent: has('percent') ? labelPercent(share ?? drawn, el.decimals, el.kind === 'pie' ? 0 : 1) : undefined,
+    category: has('category') ? shortName(data.categories[category]?.label ?? '') : undefined,
+    series: has('series') ? shortName(split ? data.series[col]?.label ?? '' : valueText(page, insight, data.currency)) : undefined,
+  }, el.content)
+}
+// The numbers of the data table and the totals: as the chart shows them, or in the owner's number format (CHT-28).
+function valueFormat(el: ResolvedElements, data: ChartData) {
+  if (el.decimals == null && !el.code) return (value: number | null | undefined) => formatShown(value, data.unit)
+  return (value: number | null | undefined) => value == null ? '—' : data.unit === '%' ? labelPercent(value, el.decimals, 1) : labelNumber(value, { decimals: el.decimals, code: el.code, currency: data.currency, short: formatValue })
+}
+const seriesNames = (page: OnDemandPage, insight: Insight, data: ChartData) => insight.second ? data.series.map((ser) => ser.label) : [valueText(page, insight, data.currency)]
+function TrendLegend({ trends, names, palette }: { trends: { col: number }[]; names: string[]; palette: string[] }) {
+  return <>{trends.map((line) => <LegendTrend key={line.col} color={palette[line.col]} label={trendName(names[line.col] ?? '')} />)}</>
+}
+function DataTableOf({ page, insight, data, el, palette }: ChartProps & { palette: string[] }) {
+  const format = valueFormat(el, data)
+  const pareto = insight.type === 'pareto' ? data.cumulative : undefined
+  return <ChartDataTable title={insight.title || 'Untitled'} palette={palette} model={dataTableModel({ categories: data.categories.map((cat) => cat.label), series: seriesNames(page, insight, data), values: data.values, format, cumulative: pareto })} />
+}
+
 // Horizontal bars (long category names stay readable, also on a phone), stacked by the second field.
-function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
+function BarChart(props: ChartProps) {
+  const { page, insight, data, pins, onDrill, el } = props
   const [wrap, width] = useElementWidth<HTMLDivElement>()
   const [table, setTable] = useState(false)
   const [hover, setHover] = useState<number | null>(null)
-  const labels = useDataLabels(`ondemand-${insight.id}`)
+  const labels = useDataLabels(`ondemand-${insight.id}`, el.labels)
   const id = useId()
   const stacked = Boolean(insight.second)
   const palette = stacked ? colors(data.series, pins) : ['var(--viz-series-1)']
@@ -127,12 +161,21 @@ function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const target = insight.options?.target
   const stacks = data.values.map((row) => { let pos = 0, neg = 0; return row.map((value) => { const v = value ?? 0; const start = v >= 0 ? pos : neg; if (v >= 0) pos += v; else neg += v; return { start, end: start + v, value: v } }) })
   const ends = stacks.map((row) => row.reduce((all, part) => all + part.value, 0))
-  const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end))), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)))
+  // CHT-33: the trendlines' ends are on the value axis too.
+  const trends = el.trendline ? trendLines(data.values, data.series.length) : []
+  const reach = trends.flatMap((line) => [line.from, line.to])
+  const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end)), ...reach), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)), ...reach)
   // CHT-16: the panel's height (Small / Medium / Large) scales the rows; Medium is today's 30 px.
   const factor = useHeightFactor()
   const rowHeight = Math.round(30 * factor), barHeight = Math.round(18 * Math.min(factor, 1.3))
   const narrow = width < 520
-  const pad = { top: target ? 20 : 6, right: 64, bottom: 44, left: Math.min(narrow ? 110 : 180, Math.round(width * 0.34)) }
+  // CHT-28: the owner's data labels (position, contents, number format); the plain labels are drawn as before.
+  const custom = labels[0] && !el.plain
+  const label = labelMaker(props, ticked)
+  const texts = custom ? data.values.map((row, index) => row.map((value, col) => label(index, col, value ?? 0))) : []
+  const outside = custom && !stacked && el.position === 'outsideEnd'
+  // CHT-27, CHT-28: an axis or its title left out gives its room to the plot; Outside End labels take what they need.
+  const pad = { top: target ? 20 : 6, right: outside ? Math.min(Math.round(width * 0.4), Math.max(64, ...texts.map((row) => textWidth(row[0]) + 12))) : 64, bottom: el.axisX ? el.titleX ? 44 : 30 : el.titleX ? 26 : 10, left: el.axisY ? Math.min(narrow ? 110 : 180, Math.round(width * 0.34)) : el.titleY ? 28 : 10 }
   const plotWidth = Math.max(10, width - pad.left - pad.right)
   const ticks = scale(min, max, Math.max(2, Math.min(5, Math.floor(plotWidth / 80))))
   const low = ticks[0], high = ticks[ticks.length - 1]
@@ -145,44 +188,65 @@ function BarChart({ page, insight, data, pins, onDrill }: ChartProps) {
     else if (event.key === 'Enter' && hover != null && onDrill) { event.preventDefault(); onDrill(hover, null) }
     else if (event.key === 'Escape') setHover(null)
   }
-  const legend = <>{stacked ? <Legend series={data.series} palette={palette} /> : <LegendBar color={palette[0]} label={valueText(page, insight, data.currency)} />}<TargetLegend insight={insight} unit={data.unit} /></>
-  return <ChartFrame legend={legend} table={table} setTable={setTable} labels={labels}><div ref={wrap}>
+  // A label along a bar from `base` to `end` (px), at the owner's position; nothing when it does not fit.
+  const along = (text: string, base: number, end: number, room: number) => {
+    const size = textWidth(text)
+    const at = barHeight >= 10 ? barLabelAt(el.position, base, end, size, room) : null
+    return at == null ? null : { at, text }
+  }
+  const names = seriesNames(page, insight, data)
+  const legend = <>{stacked ? <Legend series={data.series} palette={palette} /> : <LegendBar color={palette[0]} label={valueText(page, insight, data.currency)} />}<TargetLegend insight={insight} unit={data.unit} /><TrendLegend trends={trends} names={names} palette={palette} /></>
+  const rows = data.categories.length
+  return <ChartFrame legend={legend} legendAt={el.legend} table={table} setTable={setTable} labels={labels}><LegendAround at={el.legend} legend={legend}><div ref={wrap}>
     {table ? <PivotTable page={page} insight={insight} data={data} /> : <div className="viz-plot">
       <svg className={`viz-fixed${onDrill ? ' viz-drill' : ''}`} width={width} height={height} style={{ width, height }} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`} aria-describedby={onDrill ? `${id}-desc` : undefined} tabIndex={0} onKeyDown={keyDown} onPointerLeave={() => setHover(null)}>
         <title id={`${id}-title`}>{`${insight.title}: ${data.categories.map((cat, index) => `${cat.label} ${show(ends[index])}`).join(', ')}`}</title>
         {onDrill && <desc id={`${id}-desc`}>{drillHint}</desc>}
-        {ticks.map((value) => <g key={value}><line className="viz-grid" x1={x(value)} x2={x(value)} y1={pad.top} y2={height - pad.bottom} /><text className="viz-tick" x={x(value)} y={height - pad.bottom + 16} textAnchor="middle">{ticked(value)}</text></g>)}
-        {data.categories.map((cat, index) => <g key={cat.key} onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(index, null) : undefined}>
-          <rect className={index === hover ? 'viz-row-active' : 'viz-row-hit'} x={0} y={pad.top + index * rowHeight} width={width} height={rowHeight} rx={4} />
-          <WrappedLabel className="viz-row-label" text={cat.label} x={pad.left - 8} y={rowY(index) + barHeight / 2} anchor="end" middle chars={chars} lines={rowHeight >= 28 ? 2 : 1} lineHeight={12} />
-          {stacks[index].map((part, at) => {
-            const left = x(Math.min(part.start, part.end)), w = Math.abs(x(part.end) - x(part.start))
-            const last = at === stacks[index].length - 1 || stacks[index].slice(at + 1).every((next) => next.value === 0)
-            return <g key={data.series[at].key} onClick={onDrill && stacked ? (event) => { event.stopPropagation(); onDrill(index, at) } : undefined}>
-              <path className="viz-bar viz-bar-active" d={last && part.value > 0 ? barPath(left, rowY(index), w, barHeight) : w > 0 ? `M${left},${rowY(index)}h${w}v${barHeight}h${-w}Z` : ''} fill={palette[at]} />
-              {labels[0] && stacked && w > 34 && part.value !== 0 && <text className="viz-slice-label" x={left + w / 2} y={rowY(index) + barHeight / 2} textAnchor="middle" dominantBaseline="middle">{ticked(part.value)}</text>}
-            </g>
-          })}
-          <text className="viz-end-label" x={x(Math.max(0, ends[index] > 0 ? stacks[index].reduce((all, part) => Math.max(all, part.end), 0) : 0)) + 6} y={rowY(index) + barHeight / 2} dominantBaseline="middle">{show(stacked ? ends[index] : data.values[index][0])}</text>
-        </g>)}
+        {el.grid.minorV && minorTicks(ticks).map((value) => <line key={`minor-${value}`} className="viz-grid viz-grid-minor" x1={x(value)} x2={x(value)} y1={pad.top} y2={height - pad.bottom} />)}
+        {el.grid.majorH && Array.from({ length: rows + 1 }, (_, index) => <line key={`major-h-${index}`} className="viz-grid" x1={pad.left} x2={pad.left + plotWidth} y1={pad.top + index * rowHeight} y2={pad.top + index * rowHeight} />)}
+        {el.grid.minorH && Array.from({ length: rows }, (_, index) => <line key={`minor-h-${index}`} className="viz-grid viz-grid-minor" x1={pad.left} x2={pad.left + plotWidth} y1={pad.top + (index + 0.5) * rowHeight} y2={pad.top + (index + 0.5) * rowHeight} />)}
+        {ticks.map((value) => <g key={value}>{el.grid.majorV && <line className="viz-grid" x1={x(value)} x2={x(value)} y1={pad.top} y2={height - pad.bottom} />}{el.axisX && <text className="viz-tick" x={x(value)} y={height - pad.bottom + 16} textAnchor="middle">{ticked(value)}</text>}</g>)}
+        {data.categories.map((cat, index) => {
+          const single = custom && !stacked ? along(texts[index][0], x(0), x(data.values[index][0] ?? 0), (data.values[index][0] ?? 0) >= 0 ? width - x(data.values[index][0] ?? 0) : x(data.values[index][0] ?? 0) - pad.left) : null
+          return <g key={cat.key} onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(index, null) : undefined}>
+            <rect className={index === hover ? 'viz-row-active' : 'viz-row-hit'} x={0} y={pad.top + index * rowHeight} width={width} height={rowHeight} rx={4} />
+            {el.axisY && <WrappedLabel className="viz-row-label" text={cat.label} x={pad.left - 8} y={rowY(index) + barHeight / 2} anchor="end" middle chars={chars} lines={rowHeight >= 28 ? 2 : 1} lineHeight={12} />}
+            {stacks[index].map((part, at) => {
+              const left = x(Math.min(part.start, part.end)), w = Math.abs(x(part.end) - x(part.start))
+              const last = at === stacks[index].length - 1 || stacks[index].slice(at + 1).every((next) => next.value === 0)
+              const segment = custom && stacked && part.value !== 0 ? along(texts[index][at], x(part.start), x(part.end), 0) : null
+              return <g key={data.series[at].key} onClick={onDrill && stacked ? (event) => { event.stopPropagation(); onDrill(index, at) } : undefined}>
+                <path className="viz-bar viz-bar-active" d={last && part.value > 0 ? barPath(left, rowY(index), w, barHeight) : w > 0 ? `M${left},${rowY(index)}h${w}v${barHeight}h${-w}Z` : ''} fill={palette[at]} />
+                {labels[0] && el.plain && stacked && w > 34 && part.value !== 0 && <text className="viz-slice-label" x={left + w / 2} y={rowY(index) + barHeight / 2} textAnchor="middle" dominantBaseline="middle">{ticked(part.value)}</text>}
+                {segment && <text className="viz-slice-label" x={segment.at} y={rowY(index) + barHeight / 2} textAnchor="middle" dominantBaseline="middle">{segment.text}</text>}
+              </g>
+            })}
+            {/* The value at the bar's end, as before — replaced by the owner's data label on a single bar (CHT-28). */}
+            {!(custom && !stacked) && <text className="viz-end-label" x={x(Math.max(0, ends[index] > 0 ? stacks[index].reduce((all, part) => Math.max(all, part.end), 0) : 0)) + 6} y={rowY(index) + barHeight / 2} dominantBaseline="middle">{el.plain ? show(stacked ? ends[index] : data.values[index][0]) : valueFormat(el, data)(stacked ? ends[index] : data.values[index][0])}</text>}
+            {single && <text className={el.position === 'outsideEnd' ? 'viz-end-label' : 'viz-slice-label'} x={single.at} y={rowY(index) + barHeight / 2} textAnchor="middle" dominantBaseline="middle">{single.text}</text>}
+          </g>
+        })}
         {low < 0 && <line className="viz-reference" x1={x(0)} x2={x(0)} y1={pad.top} y2={height - pad.bottom} />}
+        {trends.map((line) => <line key={`trend-${line.col}`} className="viz-trendline" x1={x(line.from)} x2={x(line.to)} y1={rowY(0) + barHeight / 2} y2={rowY(rows - 1) + barHeight / 2} stroke={palette[line.col]}><title>{trendName(names[line.col] ?? '')}</title></line>)}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={x(target.value)} x2={x(target.value)} y1={pad.top - 4} y2={height - pad.bottom} /><text className="viz-reference-label" x={x(target.value)} y={pad.top - 8} textAnchor={x(target.value) > width - 90 ? 'end' : 'middle'}>{target.label || 'Target'} {show(target.value)}</text></g>}
-        <AxisTitles x={insight.options?.xTitle || valueText(page, insight, data.currency)} y={insight.options?.yTitle || name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} />
+        <AxisTitles x={insight.options?.xTitle || valueText(page, insight, data.currency)} y={insight.options?.yTitle || name(page, insight.category)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + data.categories.length * rowHeight} showX={el.titleX} showY={el.titleY} />
       </svg>
       {hover != null && <Tooltip left={x(Math.max(0, ends[hover]))} top={rowY(hover) + rowHeight} width={width}><strong>{data.categories[hover].label}</strong>
         {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={show(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={show(data.values[hover][0])} label={valueText(page, insight, data.currency)} />}
         {stacked && <small>Total (each row once): {show(data.categoryTotals[hover])}</small>}</Tooltip>}
     </div>}
-  </div></ChartFrame>
+    {!table && el.dataTable && <DataTableOf {...props} palette={palette} />}
+  </div></LegendAround></ChartFrame>
 }
 
 // CHT-01, CHT-12 Vertical columns (stacked by the second field) — and the Pareto: columns largest first, the
 // cumulative share as a line on a 0–100% axis on the right, a dashed 80% line.
-function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
+function ColumnChart(props: ChartProps) {
+  const { page, insight, data, pins, onDrill, el } = props
   const [wrap, width] = useElementWidth<HTMLDivElement>()
   const [table, setTable] = useState(false)
   const [hover, setHover] = useState<number | null>(null)
-  const labels = useDataLabels(`ondemand-${insight.id}`)
+  const labels = useDataLabels(`ondemand-${insight.id}`, el.labels)
   const id = useId()
   const pareto = insight.type === 'pareto' && data.cumulative ? data.cumulative : null
   const stacked = Boolean(insight.second)
@@ -192,12 +256,20 @@ function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const target = insight.options?.target
   const stacks = data.values.map((row) => { let pos = 0, neg = 0; return row.map((value) => { const v = value ?? 0; const start = v >= 0 ? pos : neg; if (v >= 0) pos += v; else neg += v; return { start, end: start + v, value: v } }) })
   const ends = stacks.map((row) => row.reduce((all, part) => all + part.value, 0))
-  const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end))), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)))
-  const height = Math.round(320 * useHeightFactor()), pad = { top: 24, right: pareto ? 52 : 20, bottom: 72, left: 62 }
+  const trends = el.trendline && !pareto ? trendLines(data.values, data.series.length) : []
+  const reach = trends.flatMap((line) => [line.from, line.to])
+  const min = Math.min(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.min(part.start, part.end)), ...reach), max = Math.max(0, target ? target.value : 0, ...stacks.flat().map((part) => Math.max(part.start, part.end)), ...reach)
+  const count = data.categories.length
+  const custom = labels[0] && !el.plain
+  const label = labelMaker(props, ticked)
+  const texts = custom ? data.values.map((row, index) => row.map((value, col) => label(index, col, value ?? 0))) : []
+  // Outside End labels take up to two lines of their column's width: the plot starts lower to keep them in the chart.
+  const roughBand = Math.max(1, width - 82) / Math.max(1, count)
+  const twoLines = custom && !stacked && el.position === 'outsideEnd' && texts.some((row) => (fitText(row[0], roughBand - 4, 1) == null))
+  const height = Math.round(320 * useHeightFactor()), pad = { top: twoLines ? 36 : 24, right: pareto && el.axisY ? 52 : 20, bottom: el.axisX ? el.titleX ? 72 : 56 : el.titleX ? 26 : 10, left: el.axisY ? 62 : el.titleY ? 28 : 10 }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const ticks = scale(min, max, 4)
   const low = ticks[0], high = ticks[ticks.length - 1]
-  const count = data.categories.length
   const band = plotWidth / Math.max(1, count)
   const barWidth = Math.max(4, Math.min(56, band * 0.66))
   const cx = (index: number) => pad.left + band * (index + 0.5)
@@ -210,79 +282,113 @@ function ColumnChart({ page, insight, data, pins, onDrill }: ChartProps) {
     else if (event.key === 'Enter' && hover != null && onDrill) { event.preventDefault(); onDrill(hover, null) }
     else if (event.key === 'Escape') setHover(null)
   }
+  // A label along a column from `base` to `end` (px): one line inside the column (it may pass the column's edges but stays
+  // within its own category), up to two lines outside it; else nothing.
+  const along = (text: string, base: number, end: number, room: number, outsideEnd: boolean) => {
+    const lines = outsideEnd ? fitText(text, band - 4, 2) : fitText(text, Math.max(barWidth, band - 6) - 4, 1)
+    if (!lines) return null
+    const at = barLabelAt(el.position, base, end, lines.length * 12, room)
+    return at == null ? null : { at, lines }
+  }
+  const names = seriesNames(page, insight, data)
   const legend = <>
     {stacked ? <Legend series={data.series} palette={palette} /> : <LegendBar color={palette[0]} label={valueText(page, insight, data.currency)} />}
     {pareto && <LegendLine color="var(--viz-series-2)" label="Cumulative share (%)" />}
     {pareto && <li><i className="viz-key-target" aria-hidden="true" />80%</li>}
     <TargetLegend insight={insight} unit={data.unit} />
+    <TrendLegend trends={trends} names={names} palette={palette} />
   </>
   const linePath = pareto ? pareto.map((share, index) => `${index ? 'L' : 'M'}${cx(index).toFixed(1)},${yShare(share).toFixed(1)}`).join('') : ''
-  return <ChartFrame legend={legend} table={table} setTable={setTable} labels={labels}><div ref={wrap}>
+  const total = (value: number) => el.decimals == null && !el.code ? ticked(value) : valueFormat(el, data)(value)
+  return <ChartFrame legend={legend} legendAt={el.legend} table={table} setTable={setTable} labels={labels}><LegendAround at={el.legend} legend={legend}><div ref={wrap}>
     {table ? <PivotTable page={page} insight={insight} data={data} /> : <div className="viz-plot">
       <svg className={`viz-fixed${onDrill ? ' viz-drill' : ''}`} width={width} height={height} style={{ width, height }} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`} aria-describedby={onDrill ? `${id}-desc` : undefined} tabIndex={0} onKeyDown={keyDown} onPointerLeave={() => setHover(null)}>
         <title id={`${id}-title`}>{`${insight.title}: ${data.categories.map((cat, index) => `${cat.label} ${show(ends[index])}${pareto ? ` (cumulative ${pareto[index].toFixed(0)}%)` : ''}`).join(', ')}`}</title>
         {onDrill && <desc id={`${id}-desc`}>{drillHint}</desc>}
-        {ticks.map((value) => <g key={value}><line className="viz-grid" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} /><text className="viz-tick" x={pad.left - 8} y={y(value)} textAnchor="end" dominantBaseline="middle">{ticked(value)}</text></g>)}
-        {pareto && [0, 20, 40, 60, 80, 100].map((share) => <text key={share} className="viz-tick" x={pad.left + plotWidth + 6} y={yShare(share)} dominantBaseline="middle">{share}%</text>)}
-        {data.categories.map((cat, index) => <g key={cat.key} onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(index, null) : undefined}>
-          <rect className={index === hover ? 'viz-row-active' : 'viz-row-hit'} x={pad.left + band * index} y={pad.top} width={band} height={plotHeight} rx={4} />
-          {stacks[index].map((part, at) => {
-            const top = y(Math.max(part.start, part.end)), h = Math.abs(y(part.end) - y(part.start))
-            const last = at === stacks[index].length - 1 || stacks[index].slice(at + 1).every((next) => next.value === 0)
-            const left = cx(index) - barWidth / 2
-            return <g key={data.series[at].key} onClick={onDrill && stacked ? (event) => { event.stopPropagation(); onDrill(index, at) } : undefined}>
-              <path className="viz-bar viz-bar-active" d={last && part.value > 0 ? columnPath(left, top, barWidth, h) : h > 0 ? `M${left},${top}h${barWidth}v${h}h${-barWidth}Z` : ''} fill={palette[at]} />
-              {labels[0] && stacked && h > 16 && barWidth > 30 && part.value !== 0 && <text className="viz-slice-label" x={cx(index)} y={top + h / 2} textAnchor="middle" dominantBaseline="middle">{ticked(part.value)}</text>}
-            </g>
-          })}
-          {labels[0] && band >= 26 && <text className="viz-data-label" x={cx(index)} y={y(Math.max(0, ...stacks[index].map((part) => part.end))) - 6} textAnchor="middle">{ticked(stacked ? ends[index] : data.values[index][0] ?? 0)}</text>}
-          {index % step === 0 && <WrappedLabel text={cat.label} x={cx(index)} y={height - pad.bottom + 16} chars={chars} />}
-        </g>)}
+        {el.grid.minorH && minorTicks(ticks).map((value) => <line key={`minor-${value}`} className="viz-grid viz-grid-minor" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} />)}
+        {el.grid.majorV && Array.from({ length: count + 1 }, (_, index) => <line key={`major-v-${index}`} className="viz-grid" x1={pad.left + band * index} x2={pad.left + band * index} y1={pad.top} y2={pad.top + plotHeight} />)}
+        {el.grid.minorV && Array.from({ length: count }, (_, index) => <line key={`minor-v-${index}`} className="viz-grid viz-grid-minor" x1={cx(index)} x2={cx(index)} y1={pad.top} y2={pad.top + plotHeight} />)}
+        {ticks.map((value) => <g key={value}>{el.grid.majorH && <line className="viz-grid" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} />}{el.axisY && <text className="viz-tick" x={pad.left - 8} y={y(value)} textAnchor="end" dominantBaseline="middle">{ticked(value)}</text>}</g>)}
+        {pareto && el.axisY && [0, 20, 40, 60, 80, 100].map((share) => <text key={share} className="viz-tick" x={pad.left + plotWidth + 6} y={yShare(share)} dominantBaseline="middle">{share}%</text>)}
+        {data.categories.map((cat, index) => {
+          const value = data.values[index][0] ?? 0
+          const single = custom && !stacked ? along(texts[index][0], y(0), y(value), value >= 0 ? y(value) - 2 : pad.top + plotHeight - y(value), el.position === 'outsideEnd') : null
+          return <g key={cat.key} onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(index, null) : undefined}>
+            <rect className={index === hover ? 'viz-row-active' : 'viz-row-hit'} x={pad.left + band * index} y={pad.top} width={band} height={plotHeight} rx={4} />
+            {stacks[index].map((part, at) => {
+              const top = y(Math.max(part.start, part.end)), h = Math.abs(y(part.end) - y(part.start))
+              const last = at === stacks[index].length - 1 || stacks[index].slice(at + 1).every((next) => next.value === 0)
+              const left = cx(index) - barWidth / 2
+              const segment = custom && stacked && part.value !== 0 ? along(texts[index][at], y(part.start), y(part.end), 0, false) : null
+              return <g key={data.series[at].key} onClick={onDrill && stacked ? (event) => { event.stopPropagation(); onDrill(index, at) } : undefined}>
+                <path className="viz-bar viz-bar-active" d={last && part.value > 0 ? columnPath(left, top, barWidth, h) : h > 0 ? `M${left},${top}h${barWidth}v${h}h${-barWidth}Z` : ''} fill={palette[at]} />
+                {labels[0] && el.plain && stacked && h > 16 && barWidth > 30 && part.value !== 0 && <text className="viz-slice-label" x={cx(index)} y={top + h / 2} textAnchor="middle" dominantBaseline="middle">{ticked(part.value)}</text>}
+                {segment && <ChartLabel className="viz-slice-label" lines={segment.lines} x={cx(index)} y={segment.at} />}
+              </g>
+            })}
+            {labels[0] && (el.plain || stacked) && band >= 26 && <text className="viz-data-label" x={cx(index)} y={y(Math.max(0, ...stacks[index].map((part) => part.end))) - 6} textAnchor="middle">{el.plain ? ticked(stacked ? ends[index] : data.values[index][0] ?? 0) : total(ends[index])}</text>}
+            {single && <ChartLabel className={el.position === 'outsideEnd' ? 'viz-data-label' : 'viz-slice-label'} lines={single.lines} x={cx(index)} y={single.at} />}
+            {el.axisX && index % step === 0 && <WrappedLabel text={cat.label} x={cx(index)} y={height - pad.bottom + 16} chars={chars} />}
+          </g>
+        })}
         {low < 0 && <line className="viz-reference" x1={pad.left} x2={pad.left + plotWidth} y1={y(0)} y2={y(0)} />}
         {pareto && <g className="viz-pareto">
           <line className="viz-reference viz-target" x1={pad.left} x2={pad.left + plotWidth} y1={yShare(80)} y2={yShare(80)} />
           <path d={linePath} fill="none" stroke="var(--viz-series-2)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           {pareto.map((share, index) => <circle key={index} className="viz-marker" cx={cx(index)} cy={yShare(share)} r={index === hover ? 5 : 3.5} fill="var(--viz-series-2)" />)}
         </g>}
+        {trends.map((line) => <line key={`trend-${line.col}`} className="viz-trendline" x1={cx(0)} x2={cx(count - 1)} y1={y(line.from)} y2={y(line.to)} stroke={palette[line.col]}><title>{trendName(names[line.col] ?? '')}</title></line>)}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={pad.left} x2={pad.left + plotWidth} y1={y(target.value)} y2={y(target.value)} /><text className="viz-reference-label" x={pad.left + plotWidth - 4} y={y(target.value) - 5} textAnchor="end">{target.label || 'Target'} {show(target.value)}</text></g>}
-        <AxisTitles x={insight.options?.xTitle || name(page, insight.category)} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
+        <AxisTitles x={insight.options?.xTitle || name(page, insight.category)} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} showX={el.titleX} showY={el.titleY} />
       </svg>
       {hover != null && <Tooltip left={cx(hover)} width={width}><strong>{data.categories[hover].label}</strong>
         {stacked ? data.series.map((ser, at) => <TooltipRow key={ser.key} color={palette[at]} value={show(data.values[hover][at])} label={ser.label} />) : <TooltipRow color={palette[0]} value={show(data.values[hover][0])} label={valueText(page, insight, data.currency)} />}
         {stacked && <small>Total (each row once): {show(data.categoryTotals[hover])}</small>}
         {pareto && data.shares && <small>Share {data.shares[hover].toFixed(1)}% · cumulative {pareto[hover].toFixed(1)}%</small>}</Tooltip>}
     </div>}
-  </div></ChartFrame>
+    {!table && el.dataTable && <DataTableOf {...props} palette={palette} />}
+  </div></LegendAround></ChartFrame>
 }
 
 // One line per series over every period (month, or the chosen grouping, CHT-03) from the first to the last.
-function LineChart({ page, insight, data, pins, onDrill }: ChartProps) {
+function LineChart(props: ChartProps) {
+  const { page, insight, data, pins, onDrill, el } = props
   const [wrap, width] = useElementWidth<HTMLDivElement>()
   const [table, setTable] = useState(false)
   const [hover, setHover] = useState<number | null>(null)
-  const labels = useDataLabels(`ondemand-${insight.id}`)
+  const labels = useDataLabels(`ondemand-${insight.id}`, el.labels)
   const id = useId()
   const split = Boolean(insight.second)
   const palette = split ? colors(data.series, pins) : ['var(--viz-series-1)']
   const show = (value: number | null | undefined) => formatShown(value, data.unit)
   const ticked = tickOf(data.unit)
   const target = insight.options?.target
-  const all = data.values.flat().filter((value): value is number => value != null)
+  const trends = el.trendline ? trendLines(data.values, data.series.length) : []
+  const all = [...data.values.flat().filter((value): value is number => value != null), ...trends.flatMap((line) => [line.from, line.to])]
   const min = Math.min(0, target ? target.value : 0, ...all), max = Math.max(0, target ? target.value : 0, ...all)
-  const height = Math.round(300 * useHeightFactor()), pad = { top: 24, right: 20, bottom: 54, left: 62 }
+  const count = data.categories.length
+  const custom = labels[0] && !el.plain
+  const label = labelMaker(props, ticked)
+  const texts = custom ? data.values.map((row, index) => row.map((value, col) => value == null ? '' : label(index, col, value))) : []
+  // Left / Right labels of the first and last points need room beside the plot.
+  const widest = custom ? Math.max(0, ...texts.flat().map((text) => textWidth(text))) : 0
+  const side = Math.max(0, widest + 10 - (Math.max(1, width - 82) / Math.max(1, count)) / 2)
+  const height = Math.round(300 * useHeightFactor()), pad = { top: 24, right: 20 + (custom && el.position === 'right' ? side : 0), bottom: el.axisX ? el.titleX ? 54 : 34 : el.titleX ? 26 : 10, left: (el.axisY ? 62 : el.titleY ? 28 : 10) + (custom && el.position === 'left' ? side : 0) }
   const plotWidth = Math.max(10, width - pad.left - pad.right), plotHeight = height - pad.top - pad.bottom
   const ticks = scale(min, max, 4)
   const low = ticks[0], high = ticks[ticks.length - 1]
-  const count = data.categories.length
   const band = plotWidth / Math.max(1, count)
   const x = (index: number) => pad.left + band * (index + 0.5)
   const y = (value: number) => pad.top + plotHeight - (value - low) / (high - low || 1) * plotHeight
   const step = Math.max(1, Math.ceil(46 / band))
   const path = (col: number) => { let d = '', open = false; data.values.forEach((row, index) => { const value = row[col]; if (value == null) { open = false; return } d += `${open ? 'L' : 'M'}${x(index).toFixed(1)},${y(value).toFixed(1)}`; open = true }); return d }
-  const legend = <>{split ? data.series.map((ser, index) => <LegendLine key={ser.key} color={palette[index]} label={ser.label} />) : <LegendLine color={palette[0]} label={valueText(page, insight, data.currency)} />}<TargetLegend insight={insight} unit={data.unit} /></>
+  // CHT-28, CHT-29: the owner's labels beside each point — those that would leave the chart or overlap another left out.
+  const placed = custom ? keepApart(data.series.flatMap((_ser, col) => data.values.map((row, index) => row[col] == null ? null : { ...lineLabelAt(el.position, x(index), y(row[col]!), textWidth(texts[index][col]), 12), key: `${col}-${index}`, text: texts[index][col] })).filter((box): box is NonNullable<typeof box> => box != null && inside(box, width, height))) : []
+  const names = seriesNames(page, insight, data)
+  const legend = <>{split ? data.series.map((ser, index) => <LegendLine key={ser.key} color={palette[index]} label={ser.label} />) : <LegendLine color={palette[0]} label={valueText(page, insight, data.currency)} />}<TargetLegend insight={insight} unit={data.unit} /><TrendLegend trends={trends} names={names} palette={palette} /></>
   const pick = (clientX: number, rect: DOMRect) => Math.min(count - 1, Math.max(0, Math.floor((clientX - rect.left - pad.left) / band)))
   const unit = dateGroupLabels[grainOf(insight)].label.replace(/ \(.*$/, '')
-  return <ChartFrame legend={legend} table={table} setTable={setTable} labels={labels}><div ref={wrap}>
+  return <ChartFrame legend={legend} legendAt={el.legend} table={table} setTable={setTable} labels={labels}><LegendAround at={el.legend} legend={legend}><div ref={wrap}>
     {table ? <PivotTable page={page} insight={insight} data={data} /> : <div className="viz-plot">
       <svg className={`viz-fixed${onDrill ? ' viz-drill' : ''}`} width={width} height={height} style={{ width, height }} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`} aria-describedby={onDrill ? `${id}-desc` : undefined} tabIndex={0}
         onPointerMove={(event) => setHover(pick(event.clientX, event.currentTarget.getBoundingClientRect()))} onPointerLeave={() => setHover(null)}
@@ -290,28 +396,37 @@ function LineChart({ page, insight, data, pins, onDrill }: ChartProps) {
         onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setHover((value) => Math.min(count - 1, Math.max(0, (value ?? -1) + (event.key === 'ArrowLeft' ? -1 : 1)))) } else if (event.key === 'Enter' && hover != null && onDrill) { event.preventDefault(); onDrill(hover, null) } else if (event.key === 'Escape') setHover(null) }}>
         <title id={`${id}-title`}>{`${insight.title}: ${data.categories.map((cat, index) => `${cat.label} ${show(data.categoryTotals[index])}`).join(', ')}`}</title>
         {onDrill && <desc id={`${id}-desc`}>{drillHint}</desc>}
-        {ticks.map((value) => <g key={value}><line className="viz-grid" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} /><text className="viz-tick" x={pad.left - 8} y={y(value)} textAnchor="end" dominantBaseline="middle">{ticked(value)}</text></g>)}
+        {el.grid.minorH && minorTicks(ticks).map((value) => <line key={`minor-${value}`} className="viz-grid viz-grid-minor" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} />)}
+        {el.grid.majorV && Array.from({ length: count + 1 }, (_, index) => <line key={`major-v-${index}`} className="viz-grid" x1={pad.left + band * index} x2={pad.left + band * index} y1={pad.top} y2={pad.top + plotHeight} />)}
+        {el.grid.minorV && Array.from({ length: count }, (_, index) => <line key={`minor-v-${index}`} className="viz-grid viz-grid-minor" x1={x(index)} x2={x(index)} y1={pad.top} y2={pad.top + plotHeight} />)}
+        {ticks.map((value) => <g key={value}>{el.grid.majorH && <line className="viz-grid" x1={pad.left} x2={pad.left + plotWidth} y1={y(value)} y2={y(value)} />}{el.axisY && <text className="viz-tick" x={pad.left - 8} y={y(value)} textAnchor="end" dominantBaseline="middle">{ticked(value)}</text>}</g>)}
         {hover != null && <rect className="viz-selected-band" x={x(hover) - band / 2} y={pad.top} width={band} height={plotHeight} rx={4} />}
         {data.series.map((ser, col) => <g key={ser.key}>
           <path d={path(col)} fill="none" stroke={palette[col]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           {data.values.map((row, index) => row[col] != null && <circle key={index} className="viz-marker" cx={x(index)} cy={y(row[col]!)} r={index === hover ? 5 : count > 24 ? 2.5 : 4} fill={palette[col]} />)}
-          {labels[0] && count <= 24 && data.values.map((row, index) => row[col] != null && <text key={index} className="viz-data-label" x={x(index)} y={y(row[col]!) - 9} textAnchor="middle">{ticked(row[col]!)}</text>)}
+          {labels[0] && el.plain && count <= 24 && data.values.map((row, index) => row[col] != null && <text key={index} className="viz-data-label" x={x(index)} y={y(row[col]!) - 9} textAnchor="middle">{ticked(row[col]!)}</text>)}
         </g>)}
+        {placed.length > 0 && <g className="viz-data-labels">{placed.map((box) => <text key={box.key} className="viz-data-label" x={box.x + box.width / 2} y={box.y + box.height / 2} textAnchor="middle" dominantBaseline="middle">{box.text}</text>)}</g>}
+        {trends.map((line) => <line key={`trend-${line.col}`} className="viz-trendline" x1={x(0)} x2={x(count - 1)} y1={y(line.from)} y2={y(line.to)} stroke={palette[line.col]}><title>{trendName(names[line.col] ?? '')}</title></line>)}
         {target && <g className="viz-target-group"><line className="viz-reference viz-target" x1={pad.left} x2={pad.left + plotWidth} y1={y(target.value)} y2={y(target.value)} /><text className="viz-reference-label" x={pad.left + plotWidth - 4} y={y(target.value) - 5} textAnchor="end">{target.label || 'Target'} {show(target.value)}</text></g>}
-        {data.categories.map((cat, index) => index % step === 0 && <text key={cat.key} className="viz-tick" x={x(index)} y={height - pad.bottom + 16} textAnchor="middle">{cat.label.replace(/ (\d{2})(\d{2})$/, ' ’$2')}</text>)}
-        <AxisTitles x={insight.options?.xTitle || `${unit} of ${name(page, insight.category)}`} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} />
+        {el.axisX && data.categories.map((cat, index) => index % step === 0 && <text key={cat.key} className="viz-tick" x={x(index)} y={height - pad.bottom + 16} textAnchor="middle">{cat.label.replace(/ (\d{2})(\d{2})$/, ' ’$2')}</text>)}
+        <AxisTitles x={insight.options?.xTitle || `${unit} of ${name(page, insight.category)}`} y={insight.options?.yTitle || valueText(page, insight, data.currency)} left={pad.left} right={pad.left + plotWidth} bottom={height - 4} height={pad.top * 2 + plotHeight} showX={el.titleX} showY={el.titleY} />
       </svg>
       {hover != null && <Tooltip left={x(hover)} width={width}><strong>{data.categories[hover].label}</strong>
         {data.series.map((ser, col) => <TooltipRow key={ser.key} color={palette[col]} value={show(data.values[hover][col])} label={split ? ser.label : valueText(page, insight, data.currency)} />)}</Tooltip>}
     </div>}
-  </div></ChartFrame>
+    {!table && el.dataTable && <DataTableOf {...props} palette={palette} />}
+  </div></LegendAround></ChartFrame>
 }
 
 // A donut: each category's share of the sum of the slices; the centre shows that sum, or the slice pointed at.
-function PieChart({ page, insight, data, pins, onDrill }: ChartProps) {
+// CHT-28, CHT-32: the owner's labels (Center, Inside End, Outside End, Best Fit — outside ones with leader lines, the
+// drawing grown to hold them) and the legend's place (beside it on the right as before, left, top, bottom or none).
+function PieChart(props: ChartProps) {
+  const { page, insight, data, pins, onDrill, el } = props
   const [table, setTable] = useState(false)
   const [hover, setHover] = useState<number | null>(null)
-  const labels = useDataLabels(`ondemand-${insight.id}`)
+  const labels = useDataLabels(`ondemand-${insight.id}`, el.labels)
   const id = useId()
   const palette = colors(data.categories, pins)
   const slices = data.categories.map((cat, index) => ({ ...cat, index, value: Math.max(0, data.values[index][0] ?? 0), color: palette[index] })).filter((slice) => slice.value > 0)
@@ -320,17 +435,31 @@ function PieChart({ page, insight, data, pins, onDrill }: ChartProps) {
   const arcs = slices.map((slice, index) => { const before = slices.slice(0, index).reduce((all, entry) => all + entry.value, 0); const start = -Math.PI / 2 + before / total * Math.PI * 2; return { ...slice, start, end: start + slice.value / total * Math.PI * 2, share: slice.value / total * 100 } })
   const active = hover == null ? undefined : arcs[hover]
   const negative = data.values.some((row) => (row[0] ?? 0) < 0)
+  const custom = labels[0] && !el.plain
+  const label = labelMaker(props, formatValue)
+  const texts = custom ? arcs.map((arc) => { const text = label(arc.index, 0, arc.value, arc.share); return fitText(text, 150, 2) ?? fitText(text, 150, 3) ?? [text] }) : []
+  const layout = custom ? pieLabels(arcs.map((arc, index) => ({ start: arc.start, end: arc.end, width: Math.max(...texts[index].map((line) => textWidth(line))), lines: texts[index].length })), el.position, inner, outer) : null
+  // The drawing: the donut's square as before, grown to hold the outside labels.
+  const box = layout ? { left: Math.min(-center, layout.bounds.left - 4), right: Math.max(center, layout.bounds.right + 4), top: Math.min(-center, layout.bounds.top - 2), bottom: Math.max(center, layout.bounds.bottom + 2) } : { left: -center, right: center, top: -center, bottom: center }
+  const svgWidth = Math.round(box.right - box.left), svgHeight = Math.round(box.bottom - box.top), cx = -box.left, cy = -box.top
+  const at = el.legend
+  const list = at === 'none' ? null : <ul className="viz-donut-legend" aria-label={`${insight.title} legend`}>{arcs.map((arc, index) => <li key={arc.key} className={hover === index ? 'active' : ''} onPointerEnter={() => setHover(index)} onPointerLeave={() => setHover(null)}><i style={{ background: arc.color }} aria-hidden="true" /><span>{arc.label}</span><b>{formatValue(arc.value)}</b><small>{arc.share.toFixed(0)}%</small></li>)}</ul>
   return <ChartFrame legend={null} table={table} setTable={setTable} labels={labels}>
-    {table || !total ? <PivotTable page={page} insight={insight} data={data} share /> : <div className="viz-donut">
-      <svg className={onDrill ? 'viz-drill' : undefined} width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-labelledby={`${id}-title`} aria-describedby={onDrill ? `${id}-desc` : undefined} tabIndex={0} onPointerLeave={() => setHover(null)} onKeyDown={(event) => { if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) { event.preventDefault(); const by = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1; setHover((value) => ((value ?? (by > 0 ? -1 : 0)) + by + arcs.length) % arcs.length) } else if (event.key === 'Enter' && active && onDrill) { event.preventDefault(); onDrill(active.index, null) } else if (event.key === 'Escape') setHover(null) }}>
+    {table || !total ? <PivotTable page={page} insight={insight} data={data} share /> : <div className={at === 'right' ? 'viz-donut' : `viz-donut viz-donut-legend-${at}`}>
+      {(at === 'left' || at === 'top') && list}
+      <svg className={onDrill ? 'viz-drill' : undefined} width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} role="img" aria-labelledby={`${id}-title`} aria-describedby={onDrill ? `${id}-desc` : undefined} tabIndex={0} onPointerLeave={() => setHover(null)} onKeyDown={(event) => { if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) { event.preventDefault(); const by = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1; setHover((value) => ((value ?? (by > 0 ? -1 : 0)) + by + arcs.length) % arcs.length) } else if (event.key === 'Enter' && active && onDrill) { event.preventDefault(); onDrill(active.index, null) } else if (event.key === 'Escape') setHover(null) }}>
         <title id={`${id}-title`}>{`${insight.title}: ${arcs.map((arc) => `${arc.label} ${formatValue(arc.value)} (${arc.share.toFixed(0)}%)`).join(', ')}`}</title>
         {onDrill && <desc id={`${id}-desc`}>{drillHint}</desc>}
-        {arcs.map((arc, index) => <path key={arc.key} className={hover == null || hover === index ? 'viz-slice' : 'viz-slice viz-slice-dim'} d={arcPath(center, center, inner, hover === index ? outer + 3 : outer, arc.start, arc.end)} fill={arc.color} fillRule="evenodd" onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(arc.index, null) : undefined} />)}
-        {labels[0] && arcs.map((arc) => { const angle = (arc.start + arc.end) / 2, radius = (inner + outer) / 2; return arc.share >= 6 && <text key={arc.key} className="viz-slice-label" x={center + radius * Math.cos(angle)} y={center + radius * Math.sin(angle)} textAnchor="middle" dominantBaseline="middle">{arc.share.toFixed(0)}%</text> })}
-        <text className="viz-donut-value" x={center} y={center - 2} textAnchor="middle">{formatValue(active ? active.value : total)}</text>
-        <text className="viz-donut-label" x={center} y={center + 16} textAnchor="middle">{active ? `${active.label.slice(0, 18)} · ${active.share.toFixed(0)}%` : 'Total'}</text>
+        {arcs.map((arc, index) => <path key={arc.key} className={hover == null || hover === index ? 'viz-slice' : 'viz-slice viz-slice-dim'} d={arcPath(cx, cy, inner, hover === index ? outer + 3 : outer, arc.start, arc.end)} fill={arc.color} fillRule="evenodd" onPointerEnter={() => setHover(index)} onClick={onDrill ? () => onDrill(arc.index, null) : undefined} />)}
+        {labels[0] && el.plain && arcs.map((arc) => { const angle = (arc.start + arc.end) / 2, radius = (inner + outer) / 2; return arc.share >= 6 && <text key={arc.key} className="viz-slice-label" x={cx + radius * Math.cos(angle)} y={cy + radius * Math.sin(angle)} textAnchor="middle" dominantBaseline="middle">{arc.share.toFixed(0)}%</text> })}
+        {layout && <g className="viz-data-labels">{layout.labels.map((spot, index) => spot.hidden ? null : <g key={arcs[index].key}>
+          {spot.leader && <polyline className="viz-leader" fill="none" points={`${cx + spot.leader[0]},${cy + spot.leader[1]} ${cx + spot.leader[2]},${cy + spot.leader[3]} ${cx + spot.leader[4]},${cy + spot.leader[5]}`} />}
+          <ChartLabel className={spot.outside ? 'viz-data-label' : 'viz-slice-label'} lines={texts[index]} x={cx + spot.x} y={cy + spot.y} anchor={spot.anchor} />
+        </g>)}</g>}
+        <text className="viz-donut-value" x={cx} y={cy - 2} textAnchor="middle">{formatValue(active ? active.value : total)}</text>
+        <text className="viz-donut-label" x={cx} y={cy + 16} textAnchor="middle">{active ? `${active.label.slice(0, 18)} · ${active.share.toFixed(0)}%` : 'Total'}</text>
       </svg>
-      <ul className="viz-donut-legend" aria-label={`${insight.title} legend`}>{arcs.map((arc, index) => <li key={arc.key} className={hover === index ? 'active' : ''} onPointerEnter={() => setHover(index)} onPointerLeave={() => setHover(null)}><i style={{ background: arc.color }} aria-hidden="true" /><span>{arc.label}</span><b>{formatValue(arc.value)}</b><small>{arc.share.toFixed(0)}%</small></li>)}</ul>
+      {(at === 'right' || at === 'bottom') && list}
       {negative && <p className="muted">Categories below zero are left out of the pie; the Table view lists them.</p>}
     </div>}
   </ChartFrame>
@@ -352,6 +481,27 @@ function DrillDialog({ page, insight, data, category, series, onClose }: { page:
     <DataTable id={`drill:${page.id}`} columns={columns} rows={rows} rowKey={(row) => row.id} exportName={`${insight.title || 'Rows'} – ${where}`} status={`${rows.length} row${rows.length === 1 ? '' : 's'}`} />
     <div className="modal-actions"><button type="button" className="primary" onClick={onClose}>Close</button></div>
   </Modal>
+}
+
+// CHT-36…CHT-38 A KPI (one number) as a compact card in the Insights tab's card row — the look of the Dashboard's KPI
+// tiles (the shared metric tiles, UI-STANDARDS §9): the title with ⓘ (and the owners' ⋯), the number, the measure as
+// a caption of at most two lines (KB-84: the full text as its tooltip), "Filtered" when narrowed. The number is never
+// cut: it wraps before its currency code and, as a last resort, between digits; its full text is the tooltip.
+export function KpiCard({ page, insight, currency: preferred = '', info, action }: { page: OnDemandPage; insight: Insight; currency?: string; info?: ReactNode; action?: ReactNode }) {
+  const [pick, setPick] = useState({ base: preferred, code: '' })
+  const currency = (pick.base === preferred ? pick.code : '') || preferred
+  const problems = insightProblems(page, insight)
+  const data = problems.length ? null : chartData(page, insight, currency)
+  const value = data?.total == null ? '—' : formatValue(data.total)
+  const unit = data?.currency ?? ''
+  const caption = problems.length ? `Cannot be shown: ${problems.join(' ')}` : measureText(page, insight, unit)
+  const title = insight.title || 'Untitled'
+  return <article className="od-insight od-kpi-card">
+    <div className="od-kpi-card-head"><h2>{title}{info && <> <Info>{info}</Info></>}</h2>{action}</div>
+    <div className="od-kpi"><strong title={`${value}${unit ? ` ${unit}` : ''}`}>{value}{unit && <span className="od-kpi-unit"> {unit}</span>}</strong></div>
+    <small className={problems.length ? 'od-kpi-caption dsh-problem' : 'od-kpi-caption'} title={caption}>{caption}</small>
+    {data && data.currencies.length > 1 && <label className="od-currency-pick">Currency<select aria-label={`Currency of ${title}`} value={data.currency} onChange={(event) => setPick({ base: preferred, code: event.target.value })}>{data.currencies.map((entry) => <option key={entry.code} value={entry.code}>{entry.code} ({entry.rows} row{entry.rows === 1 ? '' : 's'})</option>)}</select></label>}
+  </article>
 }
 
 // CHT-25: the "rows counted" lines of a chart as items of its ⓘ list — computed only when the ⓘ opens.

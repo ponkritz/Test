@@ -6,12 +6,14 @@ export function DataLabelsToggle({ on, set }: { on: boolean; set: (on: boolean) 
 }
 // The X axis name centred under the plot, the Y axis name turned along the left edge. CHT-23 (KB-83): a name longer
 // than its side of the plot ends in "…" with the full name as its tooltip, instead of running out of the chart.
-export function AxisTitles({ x, y, left, right, bottom, height }: { x: string; y: string; left: number; right: number; bottom: number; height: number }) {
+// CHT-27: showX / showY false leaves an axis title out (Chart elements → Axis names).
+export function AxisTitles({ x, y, left, right, bottom, height, showX = true, showY = true }: { x: string; y: string; left: number; right: number; bottom: number; height: number; showX?: boolean; showY?: boolean }) {
   const middle = (height) / 2
   const fitX = fitLabel(x, charsIn(Math.max(40, right - left)), 1), fitY = fitLabel(y, charsIn(Math.max(40, height - 8)), 1)
+  if (!showX && !showY) return null
   return <g className="viz-axis-titles">
-    <text className="viz-axis-title" x={(left + right) / 2} y={bottom} textAnchor="middle">{fitX.cut && <title>{x}</title>}{fitX.lines[0]}</text>
-    <text className="viz-axis-title" x={0} y={0} textAnchor="middle" transform={`translate(12 ${middle}) rotate(-90)`}>{fitY.cut && <title>{y}</title>}{fitY.lines[0]}</text>
+    {showX && <text className="viz-axis-title" x={(left + right) / 2} y={bottom} textAnchor="middle">{fitX.cut && <title>{x}</title>}{fitX.lines[0]}</text>}
+    {showY && <text className="viz-axis-title" x={0} y={0} textAnchor="middle" transform={`translate(12 ${middle}) rotate(-90)`}>{fitY.cut && <title>{y}</title>}{fitY.lines[0]}</text>}
   </g>
 }
 

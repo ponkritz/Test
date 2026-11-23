@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { utcToday } from '../businessTime'
 import { ChartOptionsFields } from '../components/ChartOptionsFields'
+import { PreviewHeading } from '../components/ChartElements'
 import { ChartPanel, SizeDialog } from '../components/ChartSize'
 import { ViewActions } from '../components/ViewActions'
 import { insightChartId, needsGrid, pairFactory, sizeFromOptions, sizeText, withSizeOptions, type ChartSize } from '../chartSize'
 import { useChartSizes } from '../useChartSize'
-import { ChartCountInfo, InsightView } from '../components/InsightCharts'
+import { ChartCountInfo, InsightView, KpiCard } from '../components/InsightCharts'
 import { MultiSelect } from '../components/MultiSelect'
 import { EmptyState, Info, Modal, Notice, Panel, Pill, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodQuarters, periodYears, type Period } from '../dashboard'
@@ -13,6 +14,9 @@ import { amountProblem, anyCurrency, chartCurrency, cleanSetup, currenciesOf, fi
 import { cleanOptions, hasOptions, newId, type Insight, type InsightFilter, type InsightFilterSetup, type InsightMeasure, type OnDemandColumn, type OnDemandPage } from '../onDemand'
 import type { PersonalViewsStore } from '../usePersonalViews'
 import { blankInsight, categoryColumns, filterColumns, filterText, insightError, insightRules, insightSubject, insightTypeLabel, insightTypes, measureColumns, measuresFor, noneKey, noneLabel, secondColumns, secondLabel, withType } from '../onDemandInsights'
+
+// CHT-36: a KPI (one number) is a card in the row above the charts unless its owners show it as a panel.
+const isCard = (insight: Insight) => insight.type === 'kpi' && insight.options?.view !== 'panel'
 
 // OND-11, OND-15 The Insights tab of an On-Demand page: the page's charts and summary tables, one panel each (title,
 // what it shows and its filters under the title, ⓘ how it counts), in the order the team set. ＋ Add chart / table,
@@ -47,7 +51,28 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
   const arrange = arranging && canSetup
   const sizeOf = (insight: Insight) => { const resolved = sizes.resolve(insightChartId(page.id, insight.id), pairFactory, sizeFromOptions(insight.options)); return arrange ? { ...resolved, size: resolved.base, source: 'owner' as const } : resolved }
   const ownerSize = (insight: Insight, size: ChartSize) => onChange({ ...page, insights: page.insights.map((entry) => entry.id === insight.id ? withInsightSize(entry, size) : entry) }, `${page.name}: size of the chart ${insight.title} (${sizeText(size)})`)
-  const sized = needsGrid(page.insights.map((insight) => sizeOf(insight).size.width))
+  // CHT-36: KPI charts are cards (unless shown as a panel); the rest are chart panels. Move up / down moves a card among
+  // the cards and a panel among the panels.
+  const cards = page.insights.filter(isCard), panels = page.insights.filter((insight) => !isCard(insight))
+  const sized = needsGrid(panels.map((insight) => sizeOf(insight).size.width))
+  const moveAmong = (list: Insight[], insight: Insight, by: number) => { const other = list[list.indexOf(insight) + by]; if (other) move(page.insights.indexOf(insight), page.insights.indexOf(other) - page.insights.indexOf(insight)) }
+  // CHT-25, CHT-39: what a chart's or card's header holds — its title, no type eyebrow (the type is the first line of ⓘ) — ⓘ (what it measures, its filters, the filter row, the rows counted,
+  // the currency) and "Filtered" with the owners' ⋯ menu.
+  const partsOf = (insight: Insight) => {
+    const currency = narrowed.active ? chartCurrency(insight, narrowed) : ''
+    const subject = insightSubject(page, insight), filters = filterText(page, insight)
+    const rowFiltered = narrowed.active && narrowed.shown < narrowed.all
+    const filteredBy = [insight.filters.length ? `its own filters: ${filters}` : '', rowFiltered ? 'the filter row above' : ''].filter(Boolean).join('; ').replace(/^./, (first) => `Filtered by ${first}`)
+    const info = <ul className="od-rules"><li>Type: {insightTypeLabel(insight.type)}.</li><li>{subject}.</li><li>Its own filters: {filters}.</li>{narrowed.active && <li>The filter row above: {scopeText(setup, choice, narrowed, currentYear)}</li>}<ChartCountInfo page={shown} insight={insight} currency={currency} />{insightRules(page, insight).map((line) => <li key={line}>{line}</li>)}{currency && <li>The filter row’s currency for {page.columns.find((column) => column.id === insight.value)?.name}, {currency}, is shown to match; choose another currency above the chart to see its rows.</li>}</ul>
+    const action = (list: Insight[], sizable: boolean) => (filteredBy || canSetup) ? <span className="button-row nowrap">{filteredBy && <span className="chart-filtered" title={filteredBy} aria-label={filteredBy}><Pill>Filtered</Pill></span>}{canSetup && <ViewActions label={insight.title} items={[
+      { key: 'up', label: 'Move up', disabled: list.indexOf(insight) === 0, onClick: () => moveAmong(list, insight, -1) },
+      { key: 'down', label: 'Move down', disabled: list.indexOf(insight) === list.length - 1, onClick: () => moveAmong(list, insight, 1) },
+      { key: 'edit', label: 'Edit…', onClick: () => setEditing({ insight, isNew: false }) },
+      ...(sizable ? [{ key: 'size', label: 'Size…', onClick: () => setSizing(insight) }] : []),
+      { key: 'remove', label: 'Remove…', danger: true, onClick: () => setRemoving(insight) },
+    ]} />}</span> : undefined
+    return { currency, info, action, rowFiltered }
+  }
   return <>
     {/* OND-61: the heading in one line — the explanation behind ⓘ, Filters… and ＋ Add chart / table beside the title. */}
     <Panel className="od-insights-head" eyebrow={eyebrow} title="Insights"
@@ -68,25 +93,17 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
       <FilterRow page={page} setup={setup} choice={choice} currentYear={currentYear} onChange={update} />
       <p className="muted dsh-scope ins-scope" role="status">{scopeText(setup, choice, narrowed, currentYear)}</p>
     </div>}
+    {/* CHT-36: the KPI cards in one row above the charts, in the charts' order (Show as: Panel keeps a KPI among them). */}
+    {cards.length > 0 && <div className="metric-grid compact od-kpi-cards">
+      {cards.map((insight) => { const parts = partsOf(insight); return <KpiCard key={insight.id} page={shown} insight={insight} currency={parts.currency} info={parts.info} action={parts.action(cards, false)} /> })}
+    </div>}
     <div className={`od-insights${sized ? ' chart-grid' : ''}`}>
-      {page.insights.map((insight, index) => {
-        const currency = narrowed.active ? chartCurrency(insight, narrowed) : ''
+      {panels.map((insight) => {
+        const { currency, info, action, rowFiltered } = partsOf(insight)
         const { size, source, base } = sizeOf(insight)
         const id = insightChartId(page.id, insight.id)
-        const subject = insightSubject(page, insight), filters = filterText(page, insight)
-        const rowFiltered = narrowed.active && narrowed.shown < narrowed.all
-        const filteredBy = [insight.filters.length ? `its own filters: ${filters}` : '', rowFiltered ? 'the filter row above' : ''].filter(Boolean).join('; ').replace(/^./, (first) => `Filtered by ${first}`)
-        return <ChartPanel key={insight.id} className="od-insight" legacyFull size={size} source={source} arranging={arrange} eyebrow={insightTypeLabel(insight.type).toUpperCase()} title={insight.title}
-          // CHT-25: the header shows the title and ⓘ only — what it measures, its filters, the filter row's effect and the
-          // rows counted are in ⓘ; a neutral "Filtered" when its own filters or the filter row narrow it.
-          info={<ul className="od-rules"><li>{subject}.</li><li>Its own filters: {filters}.</li>{narrowed.active && <li>The filter row above: {scopeText(setup, choice, narrowed, currentYear)}</li>}<ChartCountInfo page={shown} insight={insight} currency={currency} />{insightRules(page, insight).map((line) => <li key={line}>{line}</li>)}{currency && <li>The filter row’s currency for {page.columns.find((column) => column.id === insight.value)?.name}, {currency}, is shown to match; choose another currency above the chart to see its rows.</li>}</ul>}
-          action={(filteredBy || canSetup) ? <span className="button-row nowrap">{filteredBy && <span className="chart-filtered" title={filteredBy} aria-label={filteredBy}><Pill>Filtered</Pill></span>}{canSetup && <ViewActions label={insight.title} items={[
-            { key: 'up', label: 'Move up', disabled: index === 0, onClick: () => move(index, -1) },
-            { key: 'down', label: 'Move down', disabled: index === page.insights.length - 1, onClick: () => move(index, 1) },
-            { key: 'edit', label: 'Edit…', onClick: () => setEditing({ insight, isNew: false }) },
-            { key: 'size', label: 'Size…', onClick: () => setSizing(insight) },
-            { key: 'remove', label: 'Remove…', danger: true, onClick: () => setRemoving(insight) },
-          ]} />}</span> : undefined}
+        return <ChartPanel key={insight.id} className="od-insight" legacyFull size={size} source={source} arranging={arrange} title={insight.title} titleHidden={insight.options?.elements?.title === false}
+          info={info} action={action(panels, true)}
           onResize={(next) => arrange ? ownerSize(insight, next) : sizes.setOwn(id, next, base)} onReset={arrange ? undefined : () => sizes.setOwn(id, undefined)}>
           <InsightView quiet page={shown} insight={insight} colors={page.colors} narrowed={rowFiltered} currency={currency} />
         </ChartPanel>
@@ -137,6 +154,7 @@ function InsightDialog({ page, insight, isNew, onCancel, onSave }: { page: OnDem
     onSave({ ...draft, title: draft.title.trim().replace(/\s+/g, ' ') }, pins)
   }
   const measureNeedsNumber = draft.measure !== 'count'
+  const preview = { ...draft, filters: draft.filters.filter((filter) => filter.values?.length || filter.from || filter.to) }
   return <Modal eyebrow={`ON-DEMAND · ${page.name.toUpperCase()}`} title={isNew ? 'Add a chart or table' : 'Edit the chart or table'} wide onClose={onCancel}>
     <form onSubmit={submit} className="od-insight-form" noValidate>
       <div className="od-insight-editor">
@@ -205,9 +223,10 @@ function InsightDialog({ page, insight, isNew, onCancel, onSave }: { page: OnDem
         </div>
         <section className="od-insight-preview" aria-label="Preview">
           <p className="eyebrow">PREVIEW</p>
-          <h3>{draft.title.trim() || 'Untitled'}</h3>
-          <p className="muted">{insightSubject(page, draft)} · Filters: {filterText(page, draft)}</p>
-          <InsightView page={page} colors={pins} drill={false} insight={{ ...draft, filters: draft.filters.filter((filter) => filter.values?.length || filter.from || filter.to) }} />
+          {/* KB-86: the preview shows the chart as its panel (or card) does — title, ⓘ and "Filtered", no long subtitle. */}
+          {isCard(draft) ? <div className="metric-grid compact od-kpi-cards"><KpiCard page={page} insight={{ ...preview, title: draft.title.trim() || 'Untitled' }} info={<>{insightSubject(page, draft)}. Its own filters: {filterText(page, draft)}.</>} action={preview.filters.length ? <Pill>Filtered</Pill> : undefined} /></div>
+            : <><PreviewHeading title={draft.title.trim() || 'Untitled'} hidden={draft.options?.elements?.title === false} info={<>{insightSubject(page, draft)}. Its own filters: {filterText(page, draft)}.</>} filtered={preview.filters.length > 0} />
+              <InsightView quiet page={page} colors={pins} drill={false} insight={preview} /></>}
         </section>
       </div>
       {error && <Notice tone="error">{error}</Notice>}

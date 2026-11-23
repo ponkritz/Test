@@ -305,3 +305,38 @@ test('TC-OND-34: an editor hides a row — it leaves the table and the chart for
   await owner.page.getByRole('dialog', { name: 'CONQ-0003' }).waitFor()
   for (const who of [b, owner]) { assert.deepEqual(who.errors, []); await who.context.close() }
 })
+
+test('TC-OND-50: a large page in one file — the Tool Owner is offered Convert to row files on the page and can dismiss it for that page; others see nothing', async () => {
+  const big = JSON.parse(conq())
+  big.rows = Array.from({ length: 501 }, (_, index) => ({ id: `r${index + 1}`, key: `CONQ-261120-${String(index + 1).padStart(4, '0').replace(/0/g, 'Z')}`, seq: index + 1, cells: { c1: 'Scrap', c2: `${index} EUR` } }))
+  const gh = fakeGitHub({ files: { 'access.json': policy(), 'menu-layout.json': layout(), 'on-demand/conq.json': JSON.stringify(big), 'on-demand/supplier-issues.json': supplier() } })
+  const owner = await person(gh, tool)
+  await openConq(owner.page)
+  const hint = owner.page.locator('.od-convert-hint')
+  await hint.waitFor()
+  assert.equal(await text(hint), 'This page has 501 rows; converting it to row files keeps it fast and lets several people edit at once. Convert to row files… Dismiss')
+  // The button opens the existing pop-up (OND-32); Cancel leaves the page as it is.
+  await hint.getByRole('button', { name: 'Convert to row files…' }).click()
+  const convert = owner.page.getByRole('dialog', { name: 'Convert to row files' })
+  await convert.getByRole('button', { name: 'Convert 501 rows' }).waitFor()
+  await convert.getByRole('button', { name: 'Cancel' }).click()
+  await convert.waitFor({ state: 'detached' })
+  assert.equal(JSON.parse(gh.read('on-demand/conq.json')).rows.length, 501, 'nothing converted')
+  // A small page: no suggestion.
+  await navigate(owner.page, 'Supplier issues')
+  await owner.page.locator('.od-panel table tbody tr', { hasText: 'Late delivery' }).waitFor()
+  assert.equal(await owner.page.locator('.od-convert-hint').count(), 0)
+  // Dismissed for CoNQ: gone, also after a reload.
+  await openConq(owner.page)
+  await hint.getByRole('button', { name: 'Dismiss' }).click()
+  await hint.waitFor({ state: 'detached' })
+  await owner.page.reload()
+  await openConq(owner.page)
+  assert.equal(await hint.count(), 0, 'dismissed per page and person')
+  // Anna (Admin: sets pages up, but cannot convert) sees nothing.
+  const a = await person(gh, anna)
+  await openConq(a.page)
+  assert.equal(await a.page.locator('.od-convert-hint').count(), 0)
+  for (const { errors } of [owner, a]) assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await owner.context.close(); await a.context.close()
+})

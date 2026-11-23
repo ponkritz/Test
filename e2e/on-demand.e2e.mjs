@@ -99,7 +99,7 @@ test('TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column
   assert.deepEqual(file.rows.map((entry) => entry.cells), [{ [file.columns[0].id]: 'Rework', [file.columns[1].id]: ['Berlin', 'Lyon'] }])
   assert.equal(file.rows[0].key, key, 'the key shown is the key saved')
   assert.equal(file.keyPrefix, 'CONQ')
-  assert.match(saved[1].message, /^CoNQ: add row CONQ-0001 \(CONQ-.+\) \[saved \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]$/, 'a queued save carries its time (GIT-17)')
+  assert.match(saved[1].message, /^CoNQ: add row CONQ-0001 \(CONQ-.+\) \[saved \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]( \[by [^\]]+\])?$/, 'a queued save carries its time (GIT-17)')
   assert.equal(JSON.stringify(writes).includes('test-token'), false, 'no token in the data repository')
   // §8: the result is a Background jobs entry.
   await page.locator('.jobs-button').click()
@@ -188,7 +188,9 @@ test('TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost b
   await dialog.getByLabel('Measure').selectOption('sum')
   await dialog.getByLabel('Of the Number column').selectOption({ label: 'Cost (EUR)' })
   const preview = dialog.getByRole('region', { name: 'Preview' })
-  assert.match(await text(preview), /Sum of Cost \(EUR\) by Category · Filters: All rows/)
+  // CHT-38 (KB-86): the preview's header is the chart's own — its title and ⓘ, no subtitle repeating what ⓘ says.
+  assert.match(await text(preview.locator('.od-preview-title')), /^Cost by category ⓘ/)
+  assert.doesNotMatch(await text(preview), /Filters: All rows|rows counted/)
   await preview.locator('svg[role="img"] title', { hasText: 'Rework 1,650' }).waitFor({ state: 'attached' })
   await dialog.getByRole('button', { name: 'Add chart' }).click()
   await dialog.waitFor({ state: 'detached' })
@@ -203,9 +205,11 @@ test('TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost b
   await dialog.waitFor({ state: 'detached' })
   assert.match(await text(insightsTab(page)), /Insights \(2\)/)
   const bar = page.locator('.od-insight', { hasText: 'Cost by category' })
-  // CHT-25: the heading is the type and the title; what the chart measures and its filters are in its ⓘ.
-  assert.match(await text(bar.locator('.panel-heading')), /^BAR \/ COLUMN Cost by category/)
-  assert.match(await infoText(page, bar), /Sum of Cost \(EUR\) by Category\. Its own filters: All rows\./)
+  // CHT-25, CHT-39: the heading is the title only (no type above it); the type, what the chart measures and its filters
+  // are in its ⓘ.
+  assert.match(await text(bar.locator('.panel-heading')), /^Cost by category/)
+  assert.equal(await bar.locator('.panel-heading .eyebrow').count(), 0)
+  assert.match(await infoText(page, bar), /^Type: Bar \/ column\. Sum of Cost \(EUR\) by Category\. Its own filters: All rows\./)
   const pivot = page.locator('.od-insight', { hasText: 'Rows by category and site' })
   assert.match(await text(pivot.locator('thead')), /^Category Berlin Leeds Lyon Total$/i)
   assert.match(await text(pivot.locator('tbody tr', { hasText: 'Rework' })), /^Rework 2 0 1 2$/)

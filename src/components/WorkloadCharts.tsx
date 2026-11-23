@@ -13,9 +13,10 @@ export function LegendBar({ color, label }: { color: string; label: string }) { 
 export function LegendLine({ color, label }: { color: string; label: string }) { return <li><i style={{ background: color }} aria-hidden="true" />{label}</li> }
 function LegendTick({ label }: { label: string }) { return <li><i className="viz-key-tick" aria-hidden="true" />{label}</li> }
 
-export function ChartFrame({ legend, table, setTable, labels, children }: { legend: ReactNode; table: boolean; setTable: (value: boolean) => void; labels?: [boolean, (on: boolean) => void]; children: ReactNode }) {
+// legendAt (CHT-32): a legend at the top (as before) sits in the toolbar; elsewhere the chart draws it (LegendAround).
+export function ChartFrame({ legend, table, setTable, labels, legendAt = 'top', children }: { legend: ReactNode; table: boolean; setTable: (value: boolean) => void; labels?: [boolean, (on: boolean) => void]; legendAt?: 'none' | 'top' | 'bottom' | 'left' | 'right'; children: ReactNode }) {
   return <div className="viz-root">
-    <div className="viz-toolbar"><ul className="viz-legend" aria-label="Legend">{legend}</ul>{labels && !table && <DataLabelsToggle on={labels[0]} set={labels[1]} />}<button type="button" className="ghost" aria-pressed={table} onClick={() => setTable(!table)}>{table ? 'Chart' : 'Table'}</button></div>
+    <div className={legendAt === 'top' ? 'viz-toolbar' : 'viz-toolbar viz-toolbar-end'}>{legendAt === 'top' && <ul className="viz-legend" aria-label="Legend">{legend}</ul>}{labels && !table && <DataLabelsToggle on={labels[0]} set={labels[1]} />}<button type="button" className="ghost" aria-pressed={table} onClick={() => setTable(!table)}>{table ? 'Chart' : 'Table'}</button></div>
     {children}
   </div>
 }

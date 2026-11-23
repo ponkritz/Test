@@ -4,6 +4,7 @@ import { autoAxisTitles, dateGroupLabels, limitsFor } from '../onDemandInsights'
 import { Info } from './ui'
 import { SizeFields } from './ChartSize'
 import { pairFactory, withSizeOptions } from '../chartSize'
+import { chartKind, contentLabels, contentsFor, defaultContent, defaultGridlines, defaultLegend, defaultPosition, gridlineKeys, gridlineLabels, labelPositions, legendLabels, legendPositions, positionLabels, resolveElements, trendlineFor, withElement, type ChartElements, type ChartKind, type Gridline, type LabelContent, type LabelPosition, type LegendPosition } from '../chartElements'
 
 // CHT-01…CHT-11, CHT-15, CHT-16 The Display options of a chart, the same in the Insights pop-up and the Dashboard block pop-up: only the
 // options the chosen type takes are shown, each change validated as the file is (cleanOptions); an option that does not
@@ -36,6 +37,9 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
     if (text.trim() === '' || !Number.isFinite(value)) { const rest = { ...options }; delete rest.target; onOptions(cleanOptions(type, insight.measure, rest)); return }
     set({ target: { value, label } })
   }
+  const kind = chartKind(type, options.orientation)
+  // The currency code in a label: only for a Sum, Average, Minimum or Maximum of a Currency column.
+  const money = column(insight.value)?.type === 'currency' && insight.measure !== 'count' && insight.measure !== 'distinct'
   // A dashboard's KPI tile sits in the tile row: nothing to choose.
   if (type === 'kpi' && scope === 'dashboard') return null
   return <fieldset className="od-display"><legend>Display <Info label="Display">How the chart is drawn — nothing here changes which rows are counted. Without a choice the chart looks as before: horizontal bars, dates by month, {usual ? `the ${usual} largest categories and “Other”` : 'every category'}, the values as measured, half width and medium height. The width and height set here are everyone’s; each viewer may still resize a chart for themselves.</Info></legend>
@@ -69,9 +73,18 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
       <label>X axis name (optional)<input aria-label="X axis name" maxLength={maxAxisTitle} value={xText} placeholder={axes.x} onChange={(event) => { setXText(event.target.value); set({ xTitle: event.target.value || undefined }) }} /></label>
       <label>Y axis name (optional)<input aria-label="Y axis name" maxLength={maxAxisTitle} value={yText} placeholder={axes.y} onChange={(event) => { setYText(event.target.value); set({ yTitle: event.target.value || undefined }) }} /></label>
     </div>}
+    {/* CHT-36: a KPI as a card in the Insights tab's card row (the default) or as a chart panel. */}
+    {type === 'kpi' && scope === 'page' && <label>Show as
+      <select aria-label="Show as" value={options.view ?? 'card'} onChange={(event) => set({ view: event.target.value === 'panel' ? 'panel' : undefined })}>
+        <option value="card">Card (in the row of KPI cards)</option>
+        <option value="panel">Panel (a chart panel)</option>
+      </select>
+    </label>}
+    {/* CHT-26…CHT-35: Excel's chart elements, only those the chart type takes. */}
+    {kind && <ElementsFields kind={kind} stacked={Boolean(insight.second)} percent={Boolean(options.percent)} money={money} elements={options.elements} onChange={(elements) => set({ elements })} />}
     {/* CHT-15, CHT-16: the owner's size for everyone (each viewer may still resize the chart for themselves). */}
-    <SizeFields size={{ width: options.size ?? 'half', height: options.height ?? 'medium' }} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
-      onChange={(size) => onOptions(cleanOptions(type, insight.measure, withSizeOptions(options, size, pairFactory, Boolean(options.size) || size.height === (options.height ?? 'medium'))))} />
+    {type === 'kpi' && scope === 'page' && options.view !== 'panel' ? <small>A card takes its place in the row of KPI cards: no width or height to set.</small> : <SizeFields size={{ width: options.size ?? 'half', height: options.height ?? 'medium' }} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
+      onChange={(size) => onOptions(cleanOptions(type, insight.measure, withSizeOptions(options, size, pairFactory, Boolean(options.size) || size.height === (options.height ?? 'medium'))))} />}
     {values.length > 0 && <div className="od-colors" role="group" aria-label={`Colours of ${colored!.name}`}>
       <small>Colours of “{colored!.name}” — the same in every chart of this {scope}; “Default” keeps the palette order.</small>
       {values.slice(0, 40).map((value) => { const slot = pins?.[value] ?? 0; return <label key={value} className="od-color"><i style={{ background: slot ? `var(--viz-series-${slot})` : 'transparent' }} aria-hidden="true" /><span>{value}</span>
@@ -81,5 +94,77 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
         </select>
       </label> })}
     </div>}
+  </fieldset>
+}
+
+// CHT-34 The "Chart elements" group of the Display fieldset, modelled on Excel's Chart Elements: chart heading (Excel's
+// Chart Title), axes, axis names (Axis Titles — named so as not to clash with the pop-up's Title field), data labels (on / off for everyone, position, contents, number format), data table, gridlines, legend and
+// trendline — only those the chart type takes; each control shows today's look until the owner changes it.
+function ElementsFields({ kind, stacked, percent, money, elements, onChange }: { kind: ChartKind; stacked: boolean; percent: boolean; money: boolean; elements: ChartElements | undefined; onChange: (elements: ChartElements | undefined) => void }) {
+  const el = resolveElements(kind, elements, { stacked, percent })
+  const type = kind === 'column' || kind === 'bar' ? 'bar' : kind
+  const scope = { orientation: kind === 'column' ? 'vertical' as const : undefined, percent: percent ? true as const : undefined }
+  const put = <K extends keyof ChartElements>(key: K, value: ChartElements[K] | undefined) => onChange(withElement(type, scope, elements, key, value))
+  const axes = kind !== 'pie'
+  const positions = labelPositions(kind, stacked)
+  const contents = contentsFor(kind, percent)
+  const check = (label: string, on: boolean, change: (on: boolean) => void, hint?: string) => <label className="check" title={hint}><input type="checkbox" checked={on} onChange={(event) => change(event.target.checked)} />{label}</label>
+  const toggle = (key: 'title' | 'axisX' | 'axisY' | 'titleX' | 'titleY') => (on: boolean) => put(key, on ? undefined : false)
+  const setContent = (entry: LabelContent, on: boolean) => { const next = contents.filter((item) => item === entry ? on : el.content.includes(item)); put('content', next.length ? next : defaultContent(kind, percent)) }
+  const setGrid = (line: Gridline, on: boolean) => put('gridlines', gridlineKeys.filter((key) => key === line ? on : el.grid[key]))
+  return <fieldset className="od-elements"><legend>Chart elements <Info label="Chart elements">As Excel’s Chart Elements, the same for everyone who sees the chart. Without a change the chart looks as before. Each viewer may still switch Data labels on or off for themselves with the box above the chart; the position, contents and number format are the ones set here. A label that does not fit is left out (its value is in the tooltip, the Table view and the data table).</Info></legend>
+    {check('Chart heading', el.title, toggle('title'), 'Excel’s Chart Title: the chart’s name above it (still read out by screen readers when hidden)')}
+    {axes && <div className="od-elements-row" role="group" aria-label="Axes"><span>Axes</span>
+      {check('Horizontal axis', el.axisX, toggle('axisX'))}
+      {check('Vertical axis', el.axisY, toggle('axisY'))}
+    </div>}
+    {axes && <div className="od-elements-row" role="group" aria-label="Axis names"><span>Axis names (Excel’s axis titles)</span>
+      {check('Horizontal axis name', el.titleX, toggle('titleX'))}
+      {check('Vertical axis name', el.titleY, toggle('titleY'))}
+    </div>}
+    <label>Data labels
+      <select aria-label="Data labels" value={el.labels == null ? '' : el.labels ? 'on' : 'off'} onChange={(event) => put('labels', event.target.value === '' ? undefined : event.target.value === 'on')}>
+        <option value="">As each viewer chooses (off unless they turn them on)</option>
+        <option value="on">On for everyone</option>
+        <option value="off">Off for everyone</option>
+      </select>
+      <small>Each viewer can still switch them on or off for themselves.</small>
+    </label>
+    <div className="form-row">
+      <label>Label position
+        <select aria-label="Label position" value={el.position} onChange={(event) => put('position', event.target.value === defaultPosition(kind, stacked) ? undefined : event.target.value as LabelPosition)}>
+          {positions.map((position) => <option key={position} value={position}>{positionLabels[position]}{position === defaultPosition(kind, stacked) ? ' (as before)' : ''}</option>)}
+        </select>
+      </label>
+      <label>Number format
+        <select aria-label="Number format" value={el.decimals == null ? '' : String(el.decimals)} onChange={(event) => put('decimals', event.target.value === '' ? undefined : Number(event.target.value) as 0 | 1 | 2)}>
+          <option value="">Automatic (as before)</option>
+          <option value="0">1,235 (no decimals)</option>
+          <option value="1">1,234.6 (1 decimal)</option>
+          <option value="2">1,234.56 (2 decimals)</option>
+        </select>
+      </label>
+    </div>
+    <div className="od-elements-row" role="group" aria-label="Label contains"><span>Label contains</span>
+      {contents.map((entry) => <label key={entry} className="check"><input type="checkbox" checked={el.content.includes(entry)} disabled={el.content.length === 1 && el.content[0] === entry} title={el.content.length === 1 && el.content[0] === entry ? 'A label shows at least one thing.' : undefined} onChange={(event) => setContent(entry, event.target.checked)} />{contentLabels[entry]}</label>)}
+      {money && check('Currency code', el.code, (on) => put('code', on || undefined))}
+    </div>
+    {axes && check('Data table (the numbers under the chart)', el.dataTable, (on) => put('dataTable', on || undefined))}
+    {axes && <div className="od-elements-row" role="group" aria-label="Gridlines"><span>Gridlines</span>
+      {gridlineKeys.map((line) => <label key={line} className="check"><input type="checkbox" checked={el.grid[line]} onChange={(event) => setGrid(line, event.target.checked)} />{gridlineLabels[line]}{defaultGridlines(kind).includes(line) ? ' (as before)' : ''}</label>)}
+    </div>}
+    <div className="form-row">
+      <label>Legend
+        <select aria-label="Legend" value={el.legend} onChange={(event) => put('legend', event.target.value === defaultLegend(kind) ? undefined : event.target.value as LegendPosition)}>
+          {legendPositions.map((position) => <option key={position} value={position}>{legendLabels[position]}{position === defaultLegend(kind) ? ' (as before)' : ''}</option>)}
+        </select>
+      </label>
+      {trendlineFor(kind) && <label>Trendline
+        <select aria-label="Trendline" value={el.trendline ? 'linear' : ''} onChange={(event) => put('trendline', event.target.value === 'linear' ? 'linear' : undefined)}>
+          <option value="">None</option>
+          <option value="linear">Linear (one per series)</option>
+        </select>
+      </label>}
+    </div>
   </fieldset>
 }

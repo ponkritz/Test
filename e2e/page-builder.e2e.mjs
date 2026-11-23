@@ -110,7 +110,7 @@ test('TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supp
   let layout = lastWrite(writes, 'menu-layout.json').data
   assert.deepEqual(layout.groups['g-quality'], { name: 'Quality', order: 1, acceptsPages: true, owners: [] })
   assert.deepEqual(layout.pages['supplier-issues'], { type: 'table', group: 'g-quality', order: 1, icon: '⚑', owners: [] })
-  assert.match(lastWrite(writes, 'menu-layout.json').message, /\[saved \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]$/, 'a queued save (GIT-17)')
+  assert.match(lastWrite(writes, 'menu-layout.json').message, /\[saved \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]( \[by [^\]]+\])?$/, 'a queued save (GIT-17)')
 
   // Admin → Pages & menu: Edit the group Quality — a co-owner.
   await navigate(page, 'Pages & menu')
@@ -306,6 +306,54 @@ test('TC-PGB-13: two pages with the same name in Git (saved at the same time) ar
   await list.getByLabel('Filter Page co-owners (optional)').fill('auditor')
   assert.deepEqual(await list.getByRole('checkbox').count(), 1, 'type to filter')
   await edit.getByRole('button', { name: 'Cancel' }).click()
+  assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await context.close()
+})
+
+test('TC-PGB-16: the co-owner list offers the Azure DevOps team members read at start — without opening People & roles, once per session', async () => {
+  const profile = { id: 'tw-team', url: 'https://dev.azure.com/example/Project/_backlogs/backlog/Team%20A/Features', reason: 'Time Writing', token: 'x'.repeat(52), role: 'time-tracking', creatorEmail: 'tool.owner@example.com' }
+  const { page, context, errors } = await openPage(app, { init: ([email, connection]) => {
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+    localStorage.setItem('demand-planning-work-email-v1', email)
+    localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify([connection]))
+  }, initArg: ['tool.owner@example.com', profile] })
+  await mockGitHub(context, qualityFiles(), 'Tool Owner')
+  // Azure DevOps: the team's members (one is a group); the start fetch finds no work, so nobody is Assigned To.
+  let teamReads = 0, teamRead = () => undefined
+  const read = new Promise((resolve) => { teamRead = resolve })
+  await context.route('https://dev.azure.com/**', (route) => {
+    const url = route.request().url(), json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    if (/\/teams\/[^/]+\/members/.test(url)) { teamReads += 1; teamRead(); return json({ value: [{ identity: { displayName: 'Rita Gomez', uniqueName: 'Rita.Gomez@Example.com' } }, { identity: { displayName: 'Omar Haddad', uniqueName: 'omar.haddad@example.com' } }, { identity: { displayName: 'QA Group', uniqueName: 'group', isContainer: true } }] }) }
+    if (/\/_apis\/wit\/wiql/.test(url)) return json({ workItems: [] })
+    return json({ value: [] })
+  })
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await read
+  const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
+  if (await guide.count()) await guide.getByRole('button', { name: 'Close', exact: true }).last().click()
+  await navigate(page, 'Pages & menu')
+  const pick = async () => {
+    await page.locator('.pgb-pages').getByRole('button', { name: 'Edit page Supplier issues', exact: true }).click()
+    const edit = page.getByRole('dialog', { name: 'Edit the page' })
+    await edit.getByRole('button', { name: /^Page co-owners \(optional\):/ }).click()
+    return edit
+  }
+  const edit = await pick()
+  const list = edit.getByRole('listbox', { name: 'Page co-owners (optional)' })
+  await list.getByRole('checkbox', { name: 'Rita Gomez (rita.gomez@example.com)' }).waitFor()
+  assert.equal(await list.getByRole('checkbox', { name: 'Omar Haddad (omar.haddad@example.com)' }).count(), 1, 'a team member without fetched work is offered')
+  assert.equal(await list.getByRole('checkbox', { name: /QA Group/ }).count(), 0, 'groups are not people')
+  assert.equal(await list.getByRole('checkbox', { name: lead }).count(), 1, 'the people with app roles stay offered')
+  await edit.getByRole('button', { name: 'Cancel' }).click()
+  await edit.waitFor({ state: 'detached' })
+  await navigate(page, 'Home')
+  await navigate(page, 'Pages & menu')
+  const again = await pick()
+  await again.getByRole('listbox', { name: 'Page co-owners (optional)' }).getByRole('checkbox', { name: 'Rita Gomez (rita.gomez@example.com)' }).waitFor()
+  assert.equal(teamReads, 1, 'read once for the session')
+  await again.getByRole('button', { name: 'Cancel' }).click()
   assert.deepEqual(errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await context.close()
 })
