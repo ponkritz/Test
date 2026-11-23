@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v7.59.0 — 2026-11-23
+
+**Changed** (owner decision 10)
+- **One list of finished states** — Closed, Resolved, Completed and Done count as finished on every page (Pulse Check, the Monthly pack, Planning Overview, Insights, My Tasks, query views); Removed and Cut are not finished (FET-23, KB-70).
+- **The close date from the item's history** — a finished item without a Closed Date now counts in the month it was finished: its State Change Date, else its Resolved Date, else its history (read once and kept), and only then its last change (FET-24; DSK-04 adds the read-only history request; CR-PB-08).
+
+DF-138; SM-92; TC-FET-11.
+
+PR #352.
+
 ## v7.58.0 — 2026-11-23
 
 **Changed** (owner decisions on the design defaults review)
