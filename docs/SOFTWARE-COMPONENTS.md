@@ -116,7 +116,7 @@ This document lists every software component of the system: the in-house source 
 | chartLabels (component) | `src/components/chartLabels.tsx` | The Data labels box and the X / Y axis names of a chart (UI-17). | UI |
 | chartLabels | `src/chartLabels.ts` | Chart data labels: each chart's own choice kept per computer, else the shared default (UI-17). | UI |
 | useStreamEpics | `src/useStreamEpics.ts` | The shared release-source settings in a React context and the hook giving a stream's Epics for the board match (QV-57). | QV |
-| useCan | `src/useCan.ts` | The viewer's permissions in a React context, for the controls deep in the page tree (bulk create, QE Mapping, Monthly pack text, shared Feature setup, export) (CON-94). | CON |
+| useCan | `src/useCan.ts` | The viewer's permissions in a React context, for the controls deep in the page tree (bulk create, QE Mapping, Monthly pack text, shared Feature setup, export) (CON-94); nothing allowed without a provider (CON-101). | CON |
 | myViews | `src/myViews.ts` | My views: the servers with a PAT, a new view checked (no stream names, no duplicates), and the app data without My views' data for backups (SET-17). | SET |
 | epicSetup | `src/epicSetup.ts` | The Epic setup file (fields, value lists, title pattern), the Title and Description of a new Feature from its fields, Block / Warn, bulk creation and Copy to Epics (EPS-01…05). | EPS |
 | useEpicSetup | `src/useEpicSetup.ts` | The shared Epic setup from Git (epic-setup.json), its cached copy and draft, and the context for New Feature and bulk creation (EPS-01). | EPS |
@@ -259,7 +259,7 @@ This document lists every software component of the system: the in-house source 
 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
-| useAccess | `src/useAccess.ts` | Access policy from Git, cached in this browser, and the viewer's rights. | CON |
+| useAccess | `src/useAccess.ts` | Access policy from Git, cached in this browser, and the viewer's rights; read-only until a policy is loaded, Manage access alone when Git storage has no access.json (CON-101). | CON |
 | useAzureWorkspace | `src/useAzureWorkspace.ts` | Azure connections state: fetch, save, preview, sample data, Git-backed on-prem data and fetch listeners. | CON, FET, SMP |
 | useDpBoardColumn | `src/useDpBoardColumn.tsx` | DP table "QMS-0025 match" column with search/export text and Create Feature. | QV |
 | useFeatureSetup | `src/useFeatureSetup.ts` | Shared and personal Feature setup from Git, cached locally, saved with a writable token. | CON |
@@ -308,7 +308,7 @@ This document lists every software component of the system: the in-house source 
 | release-changes.test | `tests/release-changes.test.mjs` | Change notes are valid; the next version from the highest bump; the entry with PR numbers at the top; the release-commit job installs nothing and every build uses its commit. | CI |
 | e2e-slow.test | `tests/e2e-slow.test.mjs` | The slow-machine E2E job: 4x CPU throttling, read-only token, the release commit; the helper throttles every page (TC-CI-08). | CI |
 | validation-package.test | `tests/validation-package.test.mjs` | Validation Package documents: required sections, unique IDs, mitigations and DFMEA controls traced to existing requirements. | DOC |
-| access.test | `tests/access.test.mjs` | Access policy: no-policy defaults, role union, file round trip, refusing writes for roles without Azure changes. | CON |
+| access.test | `tests/access.test.mjs` | Access policy: no policy = read-only and the first-file bootstrap (CON-101), role union, file round trip, refusing writes for roles without Azure changes. | CON |
 | app-update.test | `tests/app-update.test.mjs` | Build metadata validation, cache-busting URLs, update checks and reload blocking, release version check. | UPD, CI |
 | azure-devops.test | `tests/azure-devops.test.mjs` | PAT persistence/profiles, work-item mapping, tree, backlog view, constrained writes and Feature DoD templates. | CON, FET, ATM, MON |
 | pptx-template.test | `tests/pptx-template.test.mjs` | Filling a synthetic template (labels, KPI rows, status, footer kept, file properties), template checks, shrink to fit, the pack's fill. | PCK |
@@ -409,7 +409,7 @@ The end-to-end suite (`pnpm test:e2e`, after `pnpm build:web`) drives the built 
 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
-| helpers | `e2e/helpers.mjs` | Starts `vite preview` on a free port, opens Chromium pages with clean storage, records page errors, throttles the CPU when `E2E_CPU_SLOWDOWN` is set (CI-12), shared actions (navigate — waiting for the page's code —, load sample, reload with the sample kept). | CI |
+| helpers | `e2e/helpers.mjs` | Starts `vite preview` on a free port, opens Chromium pages with clean storage, records page errors, throttles the CPU when `E2E_CPU_SLOWDOWN` is set (CI-12), shared actions (navigate — waiting for the page's code —, load sample, reload with the sample kept), a cached roles file for scenarios that change something (CON-101). | CI |
 | shell.e2e | `e2e/shell.e2e.mjs` | Sidebar groups and footer, header and month picker, Get started pop-up, synthetic sample, theme toggle, phone width, Force Update dialog, Git storage form defaults, refresh while open (TC-GIT-08), KPI tracker hidden from the menu (TC-KPT-01), typed formula (TC-CAP-27), release naming patterns (TC-QV-37), desktop zoom (TC-UI-07), manager not on the board (TC-GIT-06, TC-SET-05, TC-NAV-01, 03, 31, 33, TC-UI-01, TC-SMP-01, TC-UPD-02); Removed connections restored from the Git history (TC-CON-61); the sample reset asks first and is recorded (TC-SMP-02). | NAV, UI, SMP, UPD |
 | documents-and-data.e2e | `e2e/documents-and-data.e2e.mjs` | Documentation tabs, links and download; Windchill export releases from names and from Location with the locations CSV; "＋ ECP" import named after the stream with the ECP CSV, Project No / Project Name columns, an ECP setup at the 3rd folder with the type-2 CSV (TC-CON-53, 54, 55); the table default on the Windchill raw data — move, hide, density, Excel export with dates, Settings → Table defaults (TC-UI-04, 05); My Work tree, Backlog Health and Baselines on the default (TC-UI-06); neutralised CSV; JSON backup without credentials (TC-DOC-01, 02, TC-CON-39, 40, 37, TC-STO-04, TC-INS-01); Windchill releases' QMS-0025 match column (TC-QV-23); auto-fit tables and Wrap text (TC-CON-42); the DP Supported Releases list in Pulse Check folded until Show list (TC-QV-17). | DOC, CON, STO, NFR, QV |
 | backlog.e2e | `e2e/backlog.e2e.mjs` | New User Story form from a Feature row of the Backlogs (TC-BKL-10); the Edit form from Feature, User Story and Task rows (TC-BKL-11); New Feature sections, Start date and the Time Writing months with hours per month (TC-BKL-19, TC-BKL-21); DoD and User Stories per Release Classification value (TC-DPF-06); User Story templates (TC-STT-01). | CI, BKL |

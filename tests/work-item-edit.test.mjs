@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { editAssignee, editLocks, editPatch, editProblem, editableText, joinDoD, splitDoD, statesFor } from '../src/workItemEdit.ts'
-import { addComment, editWorkItem, readComments, readWorkItemForEdit, requestAzure } from '../src/azureDevOps.ts'
+import { guardAzureWrites, addComment, editWorkItem, readComments, readWorkItemForEdit, requestAzure } from '../src/azureDevOps.ts'
+// CON-101: the write guard starts closed (as before the app loads the roles); these tests check the requests, so allow them.
+guardAzureWrites(() => true)
 
 const config = { organization: 'org', project: 'Quality', team: 'T' }
 const open = { planningLocked: () => false, actualsLocked: () => false }

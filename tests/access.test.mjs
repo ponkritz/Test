@@ -6,10 +6,11 @@ import { cellOf, setCell, explainAccess } from '../src/access.ts'
 import { settingsPagesFor } from '../src/settingsTabs.ts'
 import { canViewAs, viewAsRights } from '../src/viewAs.ts'
 
-test('access: no policy means no restrictions; members get the union of their roles, others the default role', () => {
-  const open = rightsFor(null, 'anyone@example.com')
-  assert.equal(open.restricted, false)
-  assert.ok(open.areas.has('health') && open.actions.has('access.manage'))
+test('access: no policy means read-only (CON-101); members get the union of their roles, others the default role', () => {
+  const none = rightsFor(null, 'anyone@example.com')
+  assert.equal(none.restricted, false)
+  assert.ok(none.areas.has('health') && none.areas.has('snapshots'), 'every menu area stays visible')
+  assert.equal(none.actions.size, 0, 'no action without a policy (fail closed)')
 
   const policy = defaultPolicy('Lead@Example.com')
   policy.members['sm@example.com'] = ['Scrum Master']
@@ -84,7 +85,8 @@ test('CON-93: the Tool Owner role alone changes the stream mapping; while none e
   const policy = defaultPolicy('admin@example.com')
   assert.equal(policy.roles['Tool Owner'].actions.includes('streams.manage'), true)
   assert.equal(policy.roles.Admin.actions.includes('streams.manage'), false, 'Admins no longer change the stream mapping')
-  assert.equal(canManageStreams(null, { actions: new Set() }), true, 'no access file: no restrictions, as before')
+  assert.equal(canManageStreams(null, { actions: new Set() }), false, 'no access file: nobody changes the stream mapping (CON-101, fail closed)')
+  assert.equal(canManageStreams(null, rightsFor(null, 'a@b.com', true)), false, 'not even the person setting up the first roles file')
   assert.equal(toolOwnerExists(policy), false)
   assert.equal(canManageStreams(policy, rightsFor(policy, 'admin@example.com')), true, 'no Tool Owner yet: the access manager may, so nobody is locked out')
   const owned = { ...policy, members: { ...policy.members, 'owner@example.com': ['Tool Owner'] } }
@@ -141,7 +143,8 @@ test('CON-94: every permission is Allow, Deny or Not set per role; a denial wins
   assert.ok(explainAccess(policy, 'pm@example.com', 'data.export').allowed, 'Not set: another role may allow it')
   setCell(policy.roles['Team Member'], 'snapshots', 'unset')
   assert.equal(policy.roles['Team Member'].deny, undefined, 'no empty deny list is kept')
-  assert.equal(explainAccess(null, 'a@b.com', 'access.manage').allowed, true, 'no policy: everything allowed')
+  assert.equal(explainAccess(null, 'a@b.com', 'access.manage').allowed, false, 'no policy: no action allowed (CON-101)')
+  assert.equal(explainAccess(null, 'a@b.com', 'health').allowed, true, 'no policy: every menu area is shown')
   // Denying Manage access to yourself is refused like removing it.
   setCell(policy.roles.Admin, 'access.manage', 'deny')
   assert.ok(!keepsManager(policy, 'lead@example.com'))
@@ -199,4 +202,43 @@ test('EPS-04: Edit Epic setup and its value lists — Tool Owner, Admin (and Scr
   const old = parseAccess(JSON.stringify({ schema: 1, defaultRole: null, roles: { Admin: { areas: [], actions: ['settings.manage'] }, 'Scrum Master': { areas: [], actions: [] } }, members: {} }))
   assert.ok(old.roles.Admin.actions.includes('setup.epic') && old.roles.Admin.actions.includes('setup.values'))
   assert.ok(!old.roles['Scrum Master'].actions.includes('setup.epic'))
+})
+
+test('CON-101: until a roles file is loaded the app is read-only (every menu area, no action, Azure writes refused); only the confirmed absence of access.json lets the viewer set up the first one (TC-CON-63)', async () => {
+  const { actions, areas, toolOwnerChange, keepsManager: keeps } = await import('../src/access.ts')
+  const none = rightsFor(null, 'lead@example.com')
+  assert.equal(none.areas.size, areas.length, 'every menu area stays visible')
+  for (const { key } of actions) assert.equal(none.actions.has(key), false, `${key} is denied without a policy`)
+  assert.deepEqual(settingsPagesFor((key) => none.actions.has(key)).map((page) => page.key), ['home', 'connections', 'options', 'epics', 'resources', 'storage'], 'Data & sharing (to connect Git storage) and People & roles stay open')
+  assert.equal(canViewAs(none), false)
+  // Bootstrap: Git storage read that no access.json exists — Manage access only, nothing else.
+  const first = rightsFor(null, 'lead@example.com', true)
+  assert.deepEqual([...first.actions], ['access.manage'])
+  assert.equal(first.areas.size, areas.length)
+  assert.equal(canViewAs(first), false, 'no View as while setting up')
+  // The first file: the creator keeps Manage access; no Tool Owner rule blocks it.
+  const policy = defaultPolicy('lead@example.com')
+  assert.equal(toolOwnerChange(null, policy, 'lead@example.com'), '')
+  assert.ok(keeps(policy, 'lead@example.com'))
+  // The Azure write guard starts closed and, set from no policy, refuses every change with the reason.
+  const original = globalThis.fetch
+  let called = 0
+  globalThis.window = {}; globalThis.fetch = async () => { called++; return new Response('{}', { status: 200 }) }
+  try {
+    const request = { operation: 'add-comment', organization: 'org', project: 'P', team: 'T', pat: 'x', workItemId: 1, comment: 'Hi' }
+    guardAzureWrites((permission) => none.actions.has(permission), 'The app is read-only until the access roles (access.json) are loaded.')
+    await assert.rejects(() => requestAzure(request), /read-only until the access roles/)
+    guardAzureWrites((permission) => first.actions.has(permission))
+    await assert.rejects(() => requestAzure({ ...request, operation: 'edit-work-item', rev: 1, edit: { title: 'x' } }), /does not allow/, 'bootstrap allows no Azure DevOps change')
+    assert.equal(called, 0, 'nothing was sent')
+  } finally { guardAzureWrites(() => true); delete globalThis.window; globalThis.fetch = original }
+})
+
+test('CON-101: the Azure write guard is closed before the app sets it', async () => {
+  const fresh = await import(`../src/azureClient.ts?fresh=${Date.now()}`)
+  const original = globalThis.fetch
+  globalThis.window = {}; globalThis.fetch = async () => { throw new Error('nothing may be sent') }
+  try {
+    await assert.rejects(() => fresh.requestAzure({ operation: 'add-comment', organization: 'org', project: 'P', team: 'T', pat: 'x', workItemId: 1, comment: 'Hi' }), /access roles are not loaded yet/)
+  } finally { delete globalThis.window; globalThis.fetch = original }
 })

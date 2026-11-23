@@ -143,8 +143,10 @@ export const isApiVersionError = (text: string) => /api[- ]?version|version of t
 
 // Set by the app from the viewer's access roles; while it returns false, nothing is changed in Azure DevOps.
 // CON-94: each change needs its own permission (a request that changes the state and the iteration needs both).
-let writesAllowed: (permission: AzureWritePermission) => boolean = () => true
-export function guardAzureWrites(check: (permission: AzureWritePermission) => boolean) { writesAllowed = check }
+// CON-101 (fail closed): nothing is allowed until the app sets the guard; refused tells why (no roles file loaded).
+let writesAllowed: (permission: AzureWritePermission) => boolean = () => false
+let refusedBecause = 'The access roles are not loaded yet, so the app is read-only. Nothing was changed.'
+export function guardAzureWrites(check: (permission: AzureWritePermission) => boolean, refused = 'Your role does not allow this change in Azure DevOps. An Admin can change this in Admin → People & roles → Role rights.') { writesAllowed = check; refusedBecause = refused }
 // OI-10: with the synthetic sample loaded nothing is written to Azure DevOps, from any page (set by the workspace).
 let sampleLoaded = () => false
 export function guardSampleWrites(isSample: () => boolean) { sampleLoaded = isSample }
@@ -169,7 +171,7 @@ export function assertWritableBase(config: Pick<AzureConfig, 'organization' | 'b
 export async function requestAzure(request: AzureRequest): Promise<unknown> {
   if (changesAzure(request.operation)) assertNotViewingAs()
   if (changesAzure(request.operation) && sampleLoaded()) throw new Error('Synthetic sample data is loaded: nothing is written to Azure DevOps. Fetch your data first.')
-  if (changesAzure(request.operation) && !writePermissions(request).every((permission) => writesAllowed(permission))) throw new Error('Your role does not allow this change in Azure DevOps. An Admin can change this in Admin → People & roles → Role rights.')
+  if (changesAzure(request.operation) && !writePermissions(request).every((permission) => writesAllowed(permission))) throw new Error(refusedBecause)
   assertWritableBase(request, request.operation)
   if ((request.operation === 'create-feature' || request.operation === 'create-child') && !isAssignee(request.feature?.assignedTo)) throw new Error('A new work item must be assigned to someone (an email). Nothing was created.')
   const storyProblem = storyFieldsProblem(request.feature, request.operation === 'create-child' && request.workItemType === 'User Story')

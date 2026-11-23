@@ -401,7 +401,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-24 Load everything from Git; roles by the connection email; QE Mapping** — Req CON-55, CON-41, NAV-19 — browser check with GitHub mocked: Settings → Storage → Load everything from Git reads planning-data.json, azure-views.json, azure-data, windchill-data, access.json and feature-setup.json once each and lists what was loaded; Settings → Access says "You are me@x.com (the email on your Time Writing connection)"; QE Mapping appears under Data & governance (its content: TC-QEM-04). **UAT**
 
-**TC-ACC-01 Roles and access** — Req CON-41, CON-42, CON-43, CON-44 — L1 `access.test.mjs` (no policy = no restrictions; union of roles; default role for unknown or unlisted email; no default role = nothing; Backlog Health only for its roles; unknown roles, areas, actions and invalid emails dropped; broken file refused; the editor cannot remove their own "manage access"; a role without "change work items" is refused before anything is sent while reads still work); browser check with mocked GitHub and Azure DevOps: email shown from the connection's email field, Set up roles → add a member, tick Scrum Master → Save to Git commits access.json once; with a cached Team Member policy the menu has no Backlog Health, Bulk actions, Release Details, Baselines or Snapshots and Settings shows only Azure DevOps, Storage and Access. **UAT**
+**TC-ACC-01 Roles and access** — Req CON-41, CON-42, CON-43, CON-44 — L1 `access.test.mjs` (no policy = read-only, CON-101; union of roles; default role for unknown or unlisted email; no default role = nothing; Backlog Health only for its roles; unknown roles, areas, actions and invalid emails dropped; broken file refused; the editor cannot remove their own "manage access"; a role without "change work items" is refused before anything is sent while reads still work); browser check with mocked GitHub and Azure DevOps: email shown from the connection's email field, Set up roles → add a member, tick Scrum Master → Save to Git commits access.json once; with a cached Team Member policy the menu has no Backlog Health, Bulk actions, Release Details, Baselines or Snapshots and Settings shows only Azure DevOps, Storage and Access. **UAT**
 
 **TC-ACC-03 Add members by name** — Req CON-74 — browser check with the Time Writing backlog loaded: Settings → Access → Choose a person lists the people Assigned To an item in QMS-0025 by name (members already listed left out; two people with the same name show their email); pick one and Add member adds their email with the everyone-else role; the table shows the name with the email under it, sorted by name; Other (enter an email)… shows the email field and adds a person not in the backlog; without the backlog loaded only the email field and the hint are shown.
 
@@ -845,6 +845,8 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-CON-61 Shared connections merged, removed ones restored** — Req CON-98, CON-99 — **UAT** — L1 `removed-connections.test.mjs` ("CON-98: sharing merges with the setup in Git — a connection only in Git stays; only named ones are removed (TC-CON-61)", "CON-99: connections in older versions of the shared setup that are gone now are found once, newest version first (TC-CON-61)", "CON-99: the history of the shared setup is read from GitHub — commits of the file, then the file at a commit; nothing is written"); E2E `shell.e2e.mjs` ("TC-CON-61: Streams → Removed connections finds a connection dropped from the shared setup in Git and restores it, for everyone"); UAT: on the computer that lost the second CP query, Settings → Streams → Removed connections → Look in Git history, Restore it, Fetch, and check it is back in the menu and on a second computer after its next start.
 
 **TC-CON-62 A connection without a role is read-only** — Req CON-100 — L1 `azure-devops.test.mjs` ("CON-100: a connection without a role is read-only, except the one older Time Writing setup"; "ADS configurations retain URL, reason and PAT as one selectable browser-local set"); `app-frame.test.mjs` ("FET-22: Refresh fetches the Time Writing connection first, then the read-only ones; a duplicate Time Writing connection is left out").
+
+**TC-CON-63 Read-only until the roles file is loaded (fail closed)** — Req CON-101, CON-43, CON-44 — **UAT** — L1 `access.test.mjs` ("CON-101: until a roles file is loaded the app is read-only (every menu area, no action, Azure writes refused); only the confirmed absence of access.json lets the viewer set up the first one (TC-CON-63)"; "CON-101: the Azure write guard is closed before the app sets it"; "access: no policy means read-only (CON-101); …"); E2E `shell.e2e.mjs` ("TC-CON-63: without a roles file the app is read-only — a notice says why on every page, every menu area is shown, write actions are disabled"); UAT: in a new browser without Git storage, every page is in the menu, the top says "Read-only" with Connect Git storage, and a change (New Feature, an hours cell, Role rights) cannot be saved; connect Git storage to a repository with access.json — the notice goes and the roles apply; connect a test repository without access.json — the notice offers Set up roles, Role rights → Set up roles → Save to Git writes access.json with you as Admin, and the app then follows it.
 
 
 **TC-CON-44 DP and DHFI defaults** — Req CON-76 — L1 `connections.test.mjs` ("pre-filled connections from the shared setup …": DP reads the Release work items of DHP with DDTDate, SourceProgram, PsName and Release; DHFI [Approved] reads the DHP.Vault documents, hidden from the menu); browser check in a fresh browser with only the on-prem PAT: Settings → Azure DevOps → Stream mapping → Set up DP, Pedestal and DHFI from their defaults; Release Details → DP lists Release items for the DDT month; Get started shows the release streams step done.
@@ -1741,6 +1743,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-98 | TC-CON-61 |
 | CON-99 | TC-CON-61 |
 | CON-100 | TC-CON-62 |
+| CON-101 | TC-CON-63 |
 | QV-20 | TC-QV-06 |
 | QV-21 | TC-QV-07 |
 | CON-21, CON-22 | TC-CON-08 |
@@ -2161,7 +2164,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |

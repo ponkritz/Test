@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { isMine, isPending, matchesWork, mentions, myPendingWork, monthTaskCandidates, moveCandidates, assignablePeople, byFeatureNumber } from '../src/myWork.ts'
-import { ensureMonthTask, updateAzureWorkItem, workItemUpdatePatch, addChildWorkItem, requestAzure, createUserStory } from '../src/azureDevOps.ts'
+import { guardAzureWrites, ensureMonthTask, updateAzureWorkItem, workItemUpdatePatch, addChildWorkItem, requestAzure, createUserStory } from '../src/azureDevOps.ts'
+// CON-101: the write guard starts closed (as before the app loads the roles); these tests check the requests, so allow them.
+guardAzureWrites(() => true)
 import { createRequire } from 'node:module'
 
 const base = { organization: 'org', project: 'Quality', state: 'Active', assignedTo: '', areaPath: 'Quality\\A', iterationPath: 'Quality\\PI 2026.4\\Sprint 1', tags: '', url: '', syncedAt: '' }

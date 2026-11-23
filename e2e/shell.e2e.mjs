@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { loadSample, navigate, openPage, profileItem, startApp, text } from './helpers.mjs'
+import { cachedRoles, loadSample, navigate, openPage, profileItem, rolesFile, startApp, text } from './helpers.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
 // TC-UPD-02, TC-GIT-06, TC-SET-05), automated against the built web app.
@@ -23,7 +23,7 @@ test('TC-NAV-01 / TC-NAV-17: the sidebar shows the groups in order, with Documen
 })
 
 test('TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: 'People Manager' })
   await loadSample(page)
   await page.setViewportSize({ width: 1280, height: 720 })
   // NAV-48: the profile menu.
@@ -273,7 +273,7 @@ test('TC-GIT-06: Connect Git storage starts with the team repository prefilled; 
 })
 
 test('TC-SET-05: Reports to accepts a manager who is not on the board, shown at the top of the reporting lines', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'People & roles')
   const select = page.getByLabel('Chen Wei reports to')
@@ -291,7 +291,7 @@ test('TC-SET-05: Reports to accepts a manager who is not on the board, shown at 
 })
 
 test('TC-CAP-09: Resources shows who counts in the month\'s capacity; Remove takes a person out of capacity, Restore brings them back', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'People & roles')
   const summary = page.locator('.notice', { hasText: /^Capacity in / })
@@ -364,7 +364,7 @@ test('TC-CAP-14: Team overview shows the utilization split in Workload by person
 })
 
 test('TC-CAP-16: Settings → Calculation profiles — built-ins, a copied profile edited and made the default for every page', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   page.on('dialog', (dialog) => dialog.accept())
   await loadSample(page)
   await navigate(page, 'Capacity & time')
@@ -457,7 +457,7 @@ test('TC-CAP-18: an Admin views Team overview and Pulse Check with another calcu
 })
 
 test('TC-CAP-20: Settings → Bucket rules — built-in words shown, a draft checked against the month, saved and reset', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Capacity & time')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Bucket rules' }).click()
@@ -480,7 +480,7 @@ test('TC-CAP-20: Settings → Bucket rules — built-in words shown, a draft che
 })
 
 test('TC-CAP-21: Settings → Insight thresholds — edited, checked, shown in Team overview Definitions, reset', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Capacity & time')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Insight thresholds' }).click()
@@ -509,7 +509,7 @@ test('TC-CAP-21: Settings → Insight thresholds — edited, checked, shown in T
 })
 
 test('TC-CAP-22: People & access — one page; names and emails from Azure DevOps (nothing typed); Remove asks left or not in the team; capacity roles', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'People & roles')
   const sections = page.getByRole('tablist', { name: 'Sections' })
@@ -540,7 +540,7 @@ test('TC-CAP-22: People & access — one page; names and emails from Azure DevOp
 })
 
 test('TC-CAP-25: a built-in calculation profile can be edited, shows as changed, drives the cards, and resets to the built-in one', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   page.on('dialog', (dialog) => void dialog.accept())
   await loadSample(page)
   await navigate(page, 'Capacity & time')
@@ -587,7 +587,7 @@ test('TC-CAP-23: People & access lists the Azure DevOps team members with the na
 })
 
 test('TC-HIS-01: Settings → Historical hours explains the import and needs Git storage to upload', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Capacity & time')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Historical hours' }).click()
   assert.equal(await text(page.locator('header.topbar h1')), 'Capacity & time', 'Historical hours is a section of Capacity & time (SET-15)')
@@ -620,7 +620,7 @@ test('TC-ACC-04: an Admin views the app as a role, read only, and exits', async 
 })
 
 test('TC-MON-09: Period control shows each month\'s own plan and actuals lock dates and locks a month early', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Capacity & time')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Period control' }).click()
   const panel = page.locator('.panel', { has: page.locator('h2, h3', { hasText: /^Locks of / }) }).first()
@@ -641,7 +641,7 @@ test('TC-MON-09: Period control shows each month\'s own plan and actuals lock da
 })
 
 test('TC-SET-06: Admin lists the shared setup pages, My settings opens from your name; sections show one at a time with their scope, and the last one is remembered', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, /Streams$/)
   assert.equal(await text(page.locator('header.topbar h1')), 'Streams', 'the header names the Admin page')
   assert.equal(await page.getByRole('tablist', { name: 'Sections' }).count(), 0, 'Streams holds the stream mapping only')
@@ -677,7 +677,7 @@ test('TC-SET-06: Admin lists the shared setup pages, My settings opens from your
 })
 
 test('TC-CON-56: Storage → Shared setup in Git offers Back up and clean up; removing all needs Git storage that can save', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Data & sharing')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Shared setup in Git' }).click()
   const panel = page.locator('.panel', { has: page.locator('h2, h3', { hasText: /^Back up and clean up/ }) }).first()
@@ -743,7 +743,7 @@ test('TC-MYD-04: a person hides and moves the sections of My dashboard and pins 
 })
 
 test('TC-MYD-05: Team overview shows six headline tiles; each opens its analysis, with a trail back; Delivery opens Pulse Check', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Team overview')
   const content = page.locator('.content')
@@ -1151,7 +1151,7 @@ test('TC-KPT-01: the KPI tracker page is hidden from the menu (kept in the build
 })
 
 test('TC-CAP-27: a calculation profile with a typed formula (fx) — starts from the ticks, is checked as typed, is saved and drives the figures', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   page.on('dialog', (dialog) => dialog.accept())
   await loadSample(page)
   await navigate(page, 'Capacity & time')
@@ -1185,7 +1185,7 @@ test('TC-CAP-27: a calculation profile with a typed formula (fx) — starts from
 })
 
 test('TC-QV-37: Stream mapping → Release naming patterns — built-in Content and IOCC patterns, a Title tried, a pattern edited, applied and reset', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, /Streams$/)
   const panel = page.locator('.naming-patterns')
   await panel.waitFor()
@@ -1281,7 +1281,7 @@ test('TC-UI-10: charts name their axes and show values when Data labels is ticke
 })
 
 test('TC-QV-38: Stream mapping → Epics to match Features in — per stream, chosen from the board, cleared back to the whole board', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Stream options')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Epics to match Features in' }).click()
@@ -1299,7 +1299,7 @@ test('TC-QV-38: Stream mapping → Epics to match Features in — per stream, ch
 })
 
 test('TC-QV-39: an Admin enters CP release counts for a month without data; My dashboard shows them as entered, the others as placeholders', async () => {
-  const { page, context, errors } = await openPage(app, { init: () => { localStorage.setItem('demand-planning-my-name-v1', 'Ana Costa') } })
+  const { page, context, errors } = await openPage(app, { roles: 'Admin', init: () => { localStorage.setItem('demand-planning-my-name-v1', 'Ana Costa') } })
   await loadSample(page)
   await navigate(page, 'Stream options')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Release counts' }).click()
@@ -1321,7 +1321,7 @@ test('TC-QV-39: an Admin enters CP release counts for a month without data; My d
 })
 
 test('TC-QV-40: Stream mapping → Bulk creation Epics — shared and my own Epic per stream, mine used', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Stream options')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Bulk creation Epics' }).click()
@@ -1452,6 +1452,7 @@ test('TC-CON-61: Streams → Removed connections finds a connection dropped from
     if (!match) return json({ message: 'Not Found' }, 404)
     const path = decodeURIComponent(match[1])
     if (request.method() === 'PUT') { if (path === '.demand-planning-write-check') return json({ message: 'Invalid request' }, 422); writes.push([path, JSON.parse(Buffer.from(JSON.parse(request.postData()).content, 'base64').toString())]); return json({ content: { sha: 'new' }, commit: { html_url: 'https://github.com/example/storage/commit/new' } }) }
+    if (path === 'access.json') return json(rolesFile())
     if (path === 'azure-views.json') { const text = JSON.stringify(url.searchParams.get('ref') === sha ? older : { schema: 1, kind: 'azure-devops-views', views: [] }); return json({ type: 'file', encoding: 'base64', content: Buffer.from(text).toString('base64'), sha: 'v1' }) }
     return json({ message: 'Not Found' }, 404)
   })
@@ -1472,8 +1473,66 @@ test('TC-CON-61: Streams → Removed connections finds a connection dropped from
   await context.close()
 })
 
-test('TC-SMP-02: Reset synthetic MVP data asks first and is recorded in History', async () => {
+test('TC-CON-63: without a roles file the app is read-only — a notice says why on every page, every menu area is shown, write actions are disabled', async () => {
+  // A new browser without Git storage: no roles file and no cached copy.
   const { page, context, errors } = await openPage(app)
+  await loadSample(page)
+  const notice = page.locator('.access-read-only')
+  assert.equal(await text(notice), 'Read-only: the access roles (access.json) are not loaded, so no changes can be made. Connect Git storage →')
+  const menu = await text(page.locator('.sidebar nav'))
+  for (const label of ['Team overview', 'Pulse Check', 'Time Writing', 'Sprint check', 'Backlog Health', 'Baselines', 'QE Mapping', 'Snapshots', 'Documentation']) assert.ok(menu.includes(label), `every menu area is shown: ${label}`)
+  for (const label of ['Capacity & time', 'Reports', 'History']) assert.equal(await page.locator('.sidebar nav button', { hasText: new RegExp(`^.${label}$`) }).count(), 0, `no Admin page that needs a permission: ${label}`)
+  await navigate(page, 'Pulse Check')
+  await notice.waitFor()
+  await page.getByRole('tab', { name: /^Monthly pack/ }).click()
+  await page.locator('.pack-panel').waitFor()
+  assert.match(await text(page.locator('.pack-panel')), /View only: .*“Monthly pack: edit the text”/, 'the Monthly pack text cannot be edited')
+  await navigate(page, 'People & roles')
+  assert.equal(await page.getByRole('tablist', { name: 'Sections' }).count(), 0, 'only Role rights: People and Capacity roles need their permissions')
+  assert.match(await text(page.locator('.content')), /Until they are loaded, the app is read-only: everyone sees every page, nobody can make changes\./)
+  assert.equal(await page.getByRole('button', { name: /Set up roles/ }).count(), 0, 'nobody sets up roles without Git storage')
+  await notice.getByRole('button', { name: 'Connect Git storage →' }).click()
+  assert.equal(await text(page.locator('header.topbar h1')), 'Data & sharing')
+  assert.deepEqual(errors, [])
+  await context.close()
+
+  // Git storage connected and no access.json in it (read, not found): only the first roles file may be set up.
+  const writes = []
+  const second = await openPage(app, { init: () => {
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+    localStorage.setItem('demand-planning-work-email-v1', 'lead@example.com')
+  } })
+  await second.context.route('https://dev.azure.com/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  await second.context.route('https://api.github.com/**', (route) => {
+    const request = route.request(), url = new URL(request.url())
+    const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (url.pathname === '/repos/example/storage') return json({ permissions: { push: true } })
+    const match = /^\/repos\/example\/storage\/contents\/(.*)$/.exec(url.pathname)
+    if (match && request.method() === 'PUT') { const path = decodeURIComponent(match[1]); if (path === '.demand-planning-write-check') return json({ message: 'Invalid request' }, 422); writes.push([path, JSON.parse(Buffer.from(JSON.parse(request.postData()).content, 'base64').toString())]); return json({ content: { sha: 'new' }, commit: { html_url: 'https://github.com/example/storage/commit/new' } }) }
+    return json({ message: 'Not Found' }, 404)
+  })
+  await second.page.reload()
+  await second.page.locator('.sidebar nav').waitFor()
+  const first = second.page.locator('.access-read-only')
+  await first.getByRole('button', { name: 'Set up roles →' }).waitFor()
+  assert.match(await text(first), /^Read-only: there are no access roles yet \(no access\.json in Git storage\), so no changes can be made\./)
+  await first.getByRole('button', { name: 'Set up roles →' }).click()
+  const panel = second.page.locator('.content')
+  await panel.getByText(/No access roles yet: the app is read-only/).waitFor()
+  await panel.getByRole('button', { name: 'Set up roles →' }).click()
+  await panel.getByRole('button', { name: 'Save to Git' }).click()
+  // Saved: the roles apply at once, so the notice goes (and People & roles shows the Admin's sections).
+  await first.waitFor({ state: 'detached' })
+  const saved = writes.filter(([path]) => path === 'access.json').pop()
+  assert.deepEqual(saved[1].members, { 'lead@example.com': ['Admin'] }, 'the person setting up keeps Manage access as Admin')
+  assert.match(await text(panel), /You are lead@example\.com .*· Admin\./)
+  assert.deepEqual(second.errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
+  await second.context.close()
+})
+
+test('TC-SMP-02: Reset synthetic MVP data asks first and is recorded in History', async () => {
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, /History$/)
   const reset = page.getByRole('button', { name: 'Reset synthetic MVP data' })
   page.once('dialog', (dialog) => dialog.dismiss())
@@ -1512,7 +1571,7 @@ test('TC-ADM-02: Admin → Overview lists what to set up with links (and the bul
   assert.equal(await text(page.locator('header.topbar h1')), 'Overview')
   const health = page.locator('.admin-overview')
   assert.match(await text(health), /Connect Git storage/, 'the open Get started steps are listed')
-  assert.match(await text(health), /No access roles yet/)
+  assert.match(await text(health), /No access roles yet.*read-only/, 'CON-101: without access.json the app is read-only')
   assert.match(await text(health), /DP bulk creation Epic #13946 has no Feature setup/, 'ADM-05: the built-in DP bulk Epic has no shared Feature setup yet')
   await health.locator('li', { hasText: 'IOCC bulk creation Epic not chosen' }).getByRole('button').click()
   assert.equal(await text(page.locator('header.topbar h1')), 'Stream options')
@@ -1524,6 +1583,10 @@ test('TC-ADM-02: Admin → Overview lists what to set up with links (and the bul
   await search.getByLabel('Search settings').press('Enter')
   assert.equal(await text(page.locator('header.topbar h1')), 'My settings')
   assert.equal(await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Servers and PATs' }).getAttribute('aria-selected'), 'true')
+  // History needs its permission (CON-101): the roles file read earlier, kept in this browser.
+  await page.evaluate((roles) => localStorage.setItem('demand-planning-access-v1', roles), cachedRoles())
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
   await loadSample(page)
   await navigate(page, /History$/)
   const before = await page.locator('.audit-row').count()
@@ -1616,7 +1679,7 @@ test('TC-ACT-17: the top-bar Person list opens over the sticky Time Writing card
 })
 
 test('TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded', async () => {
-  const { page, context, errors } = await openPage(app, { width: 1440, height: 900 })
+  const { page, context, errors } = await openPage(app, { roles: true, width: 1440, height: 900 })
   await loadSample(page)
   await navigate(page, 'Team overview')
   const box = () => page.evaluate(() => { const main = document.querySelector('.app-shell > main').getBoundingClientRect(); const content = document.querySelector('.app-shell > main > .content'); const r = content.getBoundingClientRect(); const style = getComputedStyle(content); return { gapLeft: Math.round(r.left - main.left), gapRight: Math.round(main.right - r.right), width: Math.round(r.width), main: Math.round(main.width), border: style.borderTopWidth, top: style.marginTop } })

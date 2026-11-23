@@ -51,7 +51,7 @@ test('TC-DOC-02: a link to another document opens it at the linked section, and 
 })
 
 test('TC-CON-39 / TC-CON-37 / TC-QV-27: a Windchill export lists its unique releases, clubbed names included, its raw rows on their own tab, and exports a neutralised CSV', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
@@ -103,7 +103,7 @@ test('TC-STO-04 / TC-INS-01: a JSON backup contains the app state but no PAT, co
 })
 
 test('TC-CON-40: an export with a Location column reads its releases from Location, lists the unique locations and exports them', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-locations.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
@@ -133,7 +133,7 @@ test('TC-CON-40: an export with a Location column reads its releases from Locati
 })
 
 test('TC-CON-41: the export page follows the header month, sorts by any column and has draggable column widths', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
@@ -161,7 +161,7 @@ test('TC-CON-41: the export page follows the header month, sorts by any column a
 })
 
 test('TC-QV-23: the export\'s releases have a QMS-0025 match column with Create Feature, sortable, as on the DP table', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
@@ -184,7 +184,7 @@ test('TC-QV-23: the export\'s releases have a QMS-0025 match column with Create 
 })
 
 test('TC-CON-53 / TC-CON-54: "＋ ECP" imports the export as the ECP page whatever the file is called, read by project, with Project No / Project Name columns', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await page.locator('nav button', { hasText: /^＋\s*ECP$/ }).click()
   assert.equal(await page.getByLabel(/^Name/).first().inputValue(), 'ECP', 'the import is named after the stream')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-ecp.csv'))
@@ -205,7 +205,7 @@ test('TC-CON-53 / TC-CON-54: "＋ ECP" imports the export as the ECP page whatev
 })
 
 test('TC-CON-55 / TC-QV-28: an ECP setup named "ECP - Type 2" reads projects from the 3rd Location folder, is listed on its own, with compact page actions', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await page.locator('nav button', { hasText: /^＋\s*ECP$/ }).click()
   assert.equal(await page.getByLabel('Logic').inputValue(), 'ecp', 'opened from ＋ ECP: the ECP setup')
   await page.getByLabel('Project details at').selectOption('3')
@@ -236,7 +236,7 @@ test('TC-CON-55 / TC-QV-28: an ECP setup named "ECP - Type 2" reads projects fro
 })
 
 test('TC-UI-04 / TC-UI-05: every table follows the table default — move, hide, density, one Export with Excel dates; Settings → Table defaults changes them all', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   await page.getByRole('tab', { name: /^Raw data/ }).click()
@@ -271,7 +271,7 @@ test('TC-UI-04 / TC-UI-05: every table follows the table default — move, hide,
 })
 
 test('TC-UI-06: the page tables follow the table default too — My Work keeps its tree, Backlog Health its lists, each with Columns and one Export', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await page.getByRole('button', { name: 'Load synthetic sample' }).click()
   await navigate(page, 'My Tasks [Board]')
   const pick = page.locator('input[placeholder^="Choose a person"]').first()
@@ -291,7 +291,7 @@ test('TC-UI-06: the page tables follow the table default too — My Work keeps i
 })
 
 test('TC-QV-18: Pulse Check shows the Supported summary next to Releases, with the S&S IT export\'s releases of the month', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await navigate(page, 'Import Windchill export')
   // The export page names the import after the stream so that Pulse Check finds it.
   await page.getByLabel(/name/i).first().fill('S&S IT').catch(() => {})
@@ -338,7 +338,7 @@ test('TC-QV-17: Pulse Check folds the DP Supported Releases list; Show list open
 })
 
 test('TC-CON-42: tables fit their columns — widening a column widens the table — and Wrap text wraps long cells', async () => {
-  const { page, context, errors } = await openPage(app, { width: 1300 })
+  const { page, context, errors } = await openPage(app, { roles: true, width: 1300 })
   await navigate(page, 'Import Windchill export')
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()

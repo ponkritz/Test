@@ -74,7 +74,7 @@ Recorded here as given; each is built as its own change (with its requirement ro
 | # | Decision | Answer |
 |---|---|---|
 | 1 | Business time zone | **UTC throughout** — months, new month Tasks, the current Sprint and the lock moment. **Done** (NAV-51, KB-72). |
-| 2 | Access fail open or closed | **Allow nothing** until a policy is loaded (fail closed). |
+| 2 | Access fail open or closed | **Allow nothing** until a policy is loaded (fail closed). **Done** (CON-101, KB-71). |
 | 3 | Monthly pack status with no choice | **Not set** (no green). |
 | 4 | Edit form assignee when the item has none | **Stays unassigned**: Assigned to starts **blank**; the person may choose someone. **Done** (BKL-44, KB-66). |
 | 5 | Default Joined on | "Joined on" is really **the date time tracking started** (not the real joining date): it is **renamed "Time tracking started"**; "Left the team on" stays as it is. |

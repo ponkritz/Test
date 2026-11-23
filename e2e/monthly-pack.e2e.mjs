@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { loadSample, navigate, openPage, startApp, text } from './helpers.mjs'
+import { loadSample, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // Monthly pack scenarios of the UAT (TC-PCK-04), automated against the built web app with the synthetic sample.
 let app
@@ -12,7 +12,7 @@ const previousMonthName = () => { const now = new Date(); return new Date(now.ge
 const previousMonthKey = () => { const now = new Date(); const at = new Date(now.getFullYear(), now.getMonth() - 1, 1); return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}` }
 
 test('TC-PCK-04: Pulse Check → Monthly pack shows both slides for the month before the header month, with the generated lines, and downloads them as .pptx', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'Pulse Check')
   const tab = page.getByRole('tab', { name: /^Monthly pack/ })
@@ -52,12 +52,12 @@ test('TC-PCK-04: Pulse Check → Monthly pack shows both slides for the month be
 })
 
 test('TC-PCK-08: every Monthly pack box adds bullets with + (below a bullet) and + Add bullet (at the end); Enter adds one below, ✕ removes; Save to Git turns on', async () => {
-  // Git storage connected with a token (no sample): the text can be typed. Git answers 404 (nothing saved yet), so nothing is written.
-  const { page, context, errors } = await openPage(app, { init: () => {
+  // Git storage connected with a token (no sample): the text can be typed. Git answers 404 (nothing saved yet) except for the roles file (CON-101), so nothing is written.
+  const { page, context, errors } = await openPage(app, { roles: true, init: () => {
     localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
     localStorage.setItem('demand-planning-git-token-v1', 'test-token')
   } })
-  await context.route('https://api.github.com/**', (route) => route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"Not Found"}' }))
+  await context.route('https://api.github.com/**', (route) => /\/contents\/access\.json/.test(route.request().url()) ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rolesFile()) }) : route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"Not Found"}' }))
   await page.reload()
   await navigate(page, 'Pulse Check')
   await page.getByRole('tab', { name: /^Monthly pack/ }).click()

@@ -450,7 +450,7 @@ test('TC-BKL-29: Edit without a saved PAT keeps the PAT field while it is typed 
 })
 
 test('TC-BKL-34: QMS-0025 has one scroll bar — the board fills the screen — and Source details is its own tab', async () => {
-  const { page, context, errors } = await openPage(app, { width: 1440, height: 900 })
+  const { page, context, errors } = await openPage(app, { width: 1440, height: 900, roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   const tabs = page.getByRole('tablist', { name: 'Result' })
