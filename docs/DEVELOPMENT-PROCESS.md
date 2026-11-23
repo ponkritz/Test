@@ -67,7 +67,7 @@ Every change — feature, fix, dependency update, document correction — follow
 8. **Merge and release.** Squash-merge to `main`; CI's release commit sets the version, writes the release-notes entry and regenerates the generated documents (CI-11), then CI tags and releases it, publishes the desktop installers (`desktop-latest`, with SHA-256 sums and `latest.json`) and deploys the web app; the deployment is checked (build number and revision).
 9. **Record.** KNOWN-ISSUES.md entries opened or closed by the change carry the pull request number.
 
-**Agent team.** When the change is built with Claude Code, the steps above are split between seven agents defined in `.claude/agents/`, each owning its documents or code so that no two agents edit the same file:
+**Agent team.** When the change is built with Claude Code, the steps above are split between eight agents defined in `.claude/agents/`, each owning its documents or code so that no two agents edit the same file:
 
 | Agent | Steps | Owns |
 |---|---|---|
@@ -78,6 +78,7 @@ Every change — feature, fix, dependency update, document correction — follow
 | `automation-testing` | 4 (tests), 6 | tests/*.test.mjs, e2e/*.e2e.mjs, their SOFTWARE-COMPONENTS rows |
 | `dfmea` | 2 (design risk) | DFMEA.md |
 | `security` | 2 (threats), review | SECURITY-ASSESSMENT.md |
+| `ui-uniformity` | 3 for the look and feel | Brings pages and components in line with [UI-STANDARDS.md](UI-STANDARDS.md), one area at a time (markup, shared blocks, CSS), without changing behaviour |
 
 **Independent review team.** Apart from the change team, seven read-only agents review the code itself, independently and without trusting its comments or documents: `review-lead` plans module slices and merges the findings, and six reviewers each take one role — `review-developer` (correctness of every function), `review-tester` (what no test proves), `review-peer` (maintainability), `review-code` (standards, security, performance), `review-uiux` (accessibility, usability, UI defaults and uniformity against [UI-STANDARDS.md](UI-STANDARDS.md)) and `review-defaults` (every default value and behaviour). They edit nothing; the lead writes the report to `docs/reviews/<date>-independent-review.md`, with every finding categorised as Bug, Open Item, Future Item, Improvement or Weak Design. Method, finding format and rules: [reviews/README.md](reviews/README.md). Findings that are accepted become KNOWN-ISSUES.md entries or backlog items through the change team.
 

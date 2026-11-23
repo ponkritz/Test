@@ -67,6 +67,25 @@ These are defaults where the code works as written but the right value is a prod
 11. **Snapshot content**: what an LTE snapshot must hold (OI-04). (DEF-27)
 12. **Missing connection role**: fall back to read-only `reference` instead of the write role. (DEF-33)
 
+### The owner's answers (2026-11-23)
+
+Recorded here as given; each is built as its own change (with its requirement rows), one at a time.
+
+| # | Decision | Answer |
+|---|---|---|
+| 1 | Business time zone | **UTC throughout** — months, new month Tasks, the current Sprint and the lock moment. |
+| 2 | Access fail open or closed | **Allow nothing** until a policy is loaded (fail closed). |
+| 3 | Monthly pack status with no choice | **Not set** (no green). |
+| 4 | Edit form assignee when the item has none | **Stays unassigned**: Assigned to starts **blank**; the person may choose someone. |
+| 5 | Default Joined on | "Joined on" is really **the date time tracking started** (not the real joining date); "Left the team on" stays as it is. *Open: confirm the rename and what it means for imported history months.* |
+| 6 | Baseline rules with nothing saved | **Backlog** — to be decided later. |
+| 7 | Ambiguous text dates | *Open — question re-asked (day/month or month/day).* |
+| 8 | Shared Git files written last-writer-wins | **Queue the saves and save both, in order of their timestamp (to the second).** |
+| 9 | Overloaded | **Strictly above** the limit. |
+| 10 | Finished states; Changed Date for Closed Date | *Open — question re-asked.* |
+| 11 | LTE snapshot content | **All data present at the moment**, including the hours data and the release data. |
+| 12 | Missing connection role | **Read-only.** |
+
 ## 3. Findings
 
 Rows are sorted by severity, then by reach. **Sources** lists every slice finding merged into the row (D1-01 =
