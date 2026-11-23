@@ -2,6 +2,25 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.13.0 — 2026-11-23
+
+**Added**
+- **On-Demand Dashboard pages** — a third page type of the page builder: ＋ Add page… → **On-Demand Dashboard** in any group that accepts added pages. A read-only page of **KPI tiles**, **bar, line and pie charts** and **summary tables** over the rows of any table page (On-Demand, Table, Table + Insights, as saved in Git), with Count, Sum or Average (one currency at a time) (DSH-01…DSH-05).
+- **Filter row** — Year / Quarter / Month as on Team overview (the current year when nothing is ticked), filters the owners add and Reset filters; tiles open their tab; charts with data labels and Table view, summary tables largest first with the first 10 rows, Show all and Export; "No data for this selection." when empty. Your tab, period and filters are remembered for you (DSH-06, DSH-07, DSH-10, DSH-11).
+- **Building an On-Demand Dashboard** — whoever may set the page up (Tool Owner, page and group co-owners, “Set up On-Demand pages”) adds, edits, reorders and removes blocks, tabs and filters, each saved to Git at once as `dashboards/<page>.json`, merged block by block with a change saved at the same time, the result in Background jobs; for everyone else the buttons are disabled with the reason (DSH-08, DSH-09, DSH-12).
+
+DF-160, DF-161, DF-162, SM-101, LIM-22; TC-DSH-01…11.
+
+**Backlog**
+- Six follow-ups for custom streams are recorded as OI-17 (parked by the product owner).
+
+PR #372.
+
+**Changed**
+- **Space between charts** — the charts and tables on an On-Demand page's Insights tab, and the blocks of an On-Demand Dashboard, now have the same 18 px gap above and below as beside each other, instead of touching (OND-11).
+
+PR #372.
+
 ## v9.12.0 — 2026-11-23
 
 **Added**
