@@ -2,6 +2,31 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.0.0 — 2026-11-23
+
+**Added**
+- **Currency filters in the Insights filter row** — the owners of a Table + Insights page can now add a Currency column to the Insights filter row with Filters…. Each viewer chooses **one currency** (those found in the column's rows, the one of most rows first; Any currency when there are several) and an amount from / to in it: only the rows in that currency within the range are counted — amounts are never converted, added or compared across currencies — and the line under the row names it ("Cost: EUR 100–500"). From above To is shown as an error and not applied. The charts summing, averaging or taking the minimum / maximum of that column show the chosen currency to match (another can still be chosen above a chart). Remembered per viewer like the other filters (OND-57…OND-60; LIM-35 narrowed).
+
+DF-193, DF-194, DF-195, SM-111, LIM-35; TC-OND-46…48.
+
+PR #376.
+
+**What to do:** update the app on every computer (web and desktop) first; then a Tool Owner converts each table page that several people fill at the same time with **Convert to row files…** (on the page, or **Convert…** in Admin → Pages & menu). App versions before this one cannot open a converted page.
+
+**Added**
+- **Row files** — a Tool Owner converts a table page from its single file to one file per row (`on-demand/<page>/page.json`, `rows/<key>.json`, `counter.json`) in one commit; keys, IDs, values, History, columns and charts stay as they are. Two people can then add rows at the same time (each gets its own ID from a version-checked counter) and edit different rows without merging the whole page; a page opens by reading only the rows that changed, in batches (OND-31…OND-34).
+- **Row locks** — on a converted page Edit takes the row's lock: others see ✎ and who is editing in the table and "Being edited by … since …" in the drawer, with Edit disabled and the reason; adding rows, viewing, charts and dashboards never wait. A Tool Owner or the page's co-owners release a stuck lock. Locks are kept on a branch `locks` of the data repository (or its folder `locks/` where the branch is refused) and never raise "Newer data in Git" (OND-35, OND-38).
+- **Inactivity timeout and drafts** — an edit holding a lock closes after 15 minutes without activity (Admin → Pages & menu → Row locks, set by an Admin or the Tool Owner), with a warning and **Keep editing** 2 minutes before; the unsaved values are kept as a draft in that browser for one day and offered on the next Edit of the row, naming what changed meanwhile (OND-36, OND-37).
+- **New pages appear on their own** — when someone else adds or deletes a page, it appears in (or leaves) the menu and Home at the next check, without ↻ Reload from Git (GIT-21).
+
+**Changed**
+- **Hide instead of remove** — rows are hidden (**Hide row** / **Show row**, logged in their History; left out of the table, charts, exports and dashboards; **Show hidden rows (n)** lists them) and pages are hidden (**Hide page** / **Show page**, shared for everyone, their data kept). Only the Tool Owner deletes a hidden row (its ID is never given again) or a page (OND-39, OND-40, PGB-19, PGB-20; OND-03, OND-07, OND-10, OND-27, OND-28, PGB-07, PGB-09, PGB-10, PGB-12 changed).
+- Two edits of the same row on a converted page are merged field by field; the later save wins only for the same field when a lock expired (LIM-24 narrowed; GIT-17).
+
+DF-178…DF-183, SM-106…SM-109, LIM-24, LIM-25, LIM-27, LIM-28, LIM-29; TC-OND-26…TC-OND-34, TC-PGB-15, TC-GIT-13.
+
+PR #376.
+
 ## v9.16.0 — 2026-11-23
 
 **Added**
