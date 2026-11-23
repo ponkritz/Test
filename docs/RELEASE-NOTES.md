@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.10.1 — 2026-11-23
+
+**Changed**
+- **Hours and moving greyed out inside the forms** — in the Edit form the Task hours need "Enter planned and actual hours" and moving a Feature's open User Stories needs "Move to another Sprint or PI"; in ＋ Time Writing Task the hours fields need "Enter planned and actual hours" (the Tasks can still be created, without hours). Without the right they are disabled with the reason, instead of being refused only when saving (CON-105).
+
+TC-CON-66.
+
+PR #369.
+
 ## v9.10.0 — 2026-11-23
 
 **Added**
