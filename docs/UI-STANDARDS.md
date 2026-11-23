@@ -15,6 +15,8 @@ section ends with **Today** — the main differences found in the inventory of 2
 
 - Every page is wrapped in `Page` (`components/ui.tsx`). The page title is shown once, in the top bar; a page never
   repeats it as its own heading.
+- The page **fills the width** beside the menu (no maximum width; it widens when the menu is folded) inside a thin
+  border, with the margins of **Look & feel → Page layout** (default 10 / 20 / 10 / 20 px, NAV-50).
 - Optional, in this order under the top bar: one **intro sentence** (`Page intro`), then the **page actions**
   (`Page actions`, right-aligned) for actions on the whole page (Export, Refresh, ＋ New …).
 - Then **KPI tiles** (§9) when the page has them, then **panels** (§2) top to bottom by importance.

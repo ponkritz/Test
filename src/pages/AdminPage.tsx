@@ -18,6 +18,8 @@ import { fetchTeamMembers } from '../azureDevOps'
 import { HistoryPanel } from '../components/HistoryPanel'
 import type { HistoryStore } from '../useHistory'
 import { TableDefaultsPanel } from '../components/TableDefaultsPanel'
+import { PageLayoutPanel, StartViewPanel, ThemePanel } from '../components/LookAndFeel'
+import type { StartView } from '../homeTiles'
 import { EmptyState, Info, Modal, Notice, Page, Panel, Pill, SettingsSummary } from '../components/ui'
 import { formatDate, formatDateTime, formatHours, monthName } from '../format'
 import { azureResources, capacityContext, capacityModel, type CapacityRoles, normalizeCapacitySettings, normalizeProfiles, regions, resourceRoles, resourceRows, type CapacitySettings, type MonthLock, type ResourceProfile, type SharedTimeRule } from '../capacity'
@@ -48,7 +50,7 @@ const shortMonthName = (month: string) => new Intl.DateTimeFormat('en', { month:
 
 // The Windchill host and views setup is hidden (Windchill exports are imported under Release Details instead).
 // Everyone sets up their own connections and tokens here; the shared sections need the role right to manage them.
-export function AdminPage({ store, month, azure, git, access, featureSetup, epicSetup, setupSteps = [], onSearch = () => undefined, qeColumnNames = [], monthlyPack, history, loadEverything, onOpenBoard, tab: requested, onOpenTab }: PageProps & { tab: SettingsTab; onOpenTab: (tab: SettingsTab, section?: string) => void; azure: AzureWorkspace; git: GitStorage; access: Access; featureSetup: FeatureSetup; epicSetup: EpicSetupStore; setupSteps?: SetupStep[]; onSearch?: () => void; qeColumnNames?: string[]; monthlyPack: MonthlyPackStore; history: HistoryStore; loadEverything: () => Promise<{ loaded: string[]; failed: string[] }>; onOpenBoard: () => void }) {
+export function AdminPage({ store, month, azure, git, access, featureSetup, epicSetup, setupSteps = [], onSearch = () => undefined, qeColumnNames = [], monthlyPack, history, loadEverything, onOpenBoard, tab: requested, onOpenTab, look }: PageProps & { look?: { startView: StartView; onStartView: (view: StartView) => void; onCustomizeMenu: () => void }; tab: SettingsTab; onOpenTab: (tab: SettingsTab, section?: string) => void; azure: AzureWorkspace; git: GitStorage; access: Access; featureSetup: FeatureSetup; epicSetup: EpicSetupStore; setupSteps?: SetupStep[]; onSearch?: () => void; qeColumnNames?: string[]; monthlyPack: MonthlyPackStore; history: HistoryStore; loadEverything: () => Promise<{ loaded: string[]; failed: string[] }>; onOpenBoard: () => void }) {
   const [everything, setEverything] = useState<{ busy: boolean; loaded?: string[]; failed?: string[] }>({ busy: false })
   // CON-94: each shared section needs its own permission.
   const can = access.can
@@ -234,7 +236,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
   // One Settings page at a time (chosen in the menu, SET-14); the shared pages only for roles that manage shared settings.
   // SET-15: My settings for everyone; an older page key opens the page it moved to.
   const asked = resolveSettings(requested).tab
-  const tab = asked === 'my' || settingsPagesFor(can).some((page) => page.key === asked) ? asked : 'connections'
+  const tab = asked === 'my' || asked === 'look' || settingsPagesFor(can).some((page) => page.key === asked) ? asked : 'connections'
   // ADM-01: the Overview's shared-setup checks.
   const ioccBulk = useBulkEpic('IOCC').epicId, dpBulk = useBulkEpic('DP').epicId
   const facts = { policy: Boolean(access.policy), toolOwner: toolOwnerExists(access.policy), epicSetups: epicSetup.file?.epics.filter((entry) => entry.fields.length).length ?? 0, sharedFeatureSetups: featureSetup.shared?.epics.length ?? 0, ioccBulkEpic: Boolean(ioccBulk), unsaved: git.dirty, gitConnected: git.connected, gitReadOnly: git.readOnly,
@@ -272,9 +274,14 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
       ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> }] : []),
       { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
     ]} />}
+    {tab === 'look' && <SectionTabs page="look" sections={[
+      { key: 'layout', label: 'Page layout', scope: 'you', node: <PageLayoutPanel /> },
+      { key: 'theme', label: 'Theme and zoom', scope: 'you', node: <ThemePanel desktop={Boolean(window.desktopZoom)} /> },
+      ...(look ? [{ key: 'start', label: 'Start view and menu', scope: 'you' as const, node: <StartViewPanel startView={look.startView} onStartView={look.onStartView} onCustomizeMenu={look.onCustomizeMenu} /> }] : []),
+      ...(can('layout.defaults') ? [{ key: 'tables', label: 'Table and chart defaults', scope: 'everyone' as const, node: <TableDefaultsPanel store={store} git={git} canEdit={can('layout.defaults')} /> }] : []),
+    ]} />}
     {tab === 'pack' && <SectionTabs page="pack" sections={[
       ...(can('pack.setup') ? [{ key: 'pack', label: 'Monthly pack', scope: 'everyone' as const, node: <MonthlyPackSetupPanel pack={monthlyPack} git={git} items={azure.items} /> }] : []),
-      ...(can('layout.defaults') ? [{ key: 'tables', label: 'Table and chart defaults', scope: 'everyone' as const, node: <TableDefaultsPanel store={store} git={git} canEdit={can('layout.defaults')} /> }] : []),
     ]} />}
     {!peopleShared && tab === 'resources' && <Notice tone="info">People and capacity roles are edited by roles allowed “Edit people” or “Capacity roles” (Role rights).</Notice>}
     {tab === 'capacity' && <SectionTabs page="capacity" sections={[

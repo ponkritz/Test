@@ -58,6 +58,7 @@ This document lists every software component of the system: the in-house source 
 | BulkEpicsPanel | `src/components/BulkEpicsPanel.tsx` | Settings → Stream mapping → Bulk creation Epics: shared and personal Epic per stream (QV-59). | QV, SET |
 | IoccBulkCreate | `src/components/IoccBulkCreate.tsx` | Create Features for the selected IOCC releases by the DP rules (QV-59). | QV |
 | ZoomControl | `src/components/ZoomControl.tsx` | The desktop app's zoom control: − / % / +, Auto, Ctrl keys. | UI |
+| LookAndFeel | `src/components/LookAndFeel.tsx` | Look & feel tabs: Page layout (margins and border), Theme and zoom, Start view and menu. | SET, NAV |
 | SnapshotsPage | `src/pages/SnapshotsPage.tsx` | Snapshots: LTE / PI Review snapshots saved to Git and their history, browser storage and backup recovery, legacy snapshot records. | SNP, STO |
 
 ### 1.2 UI components
@@ -198,6 +199,7 @@ This document lists every software component of the system: the in-house source 
 | contentBulk | `src/contentBulk.ts` | Content bulk Features: Epic, DoD, classification and estimate; plan per release; people on the board and the chosen email. | CNB |
 | namingPatterns | `src/namingPatterns.ts` | Release naming patterns: compile a wildcard pattern safely, match a Title, built-in Content and IOCC patterns, read from the shared settings. | QV |
 | desktopZoom | `src/desktopZoom.ts` | Desktop zoom: Auto fit, steps and limits, the setting kept per computer. | UI |
+| pageLayout | `src/pageLayout.ts` | Page margins (top, right, bottom, left) and border: defaults, limits, kept per computer, applied as CSS variables (NAV-50). | NAV |
 | queryView | `src/queryView.ts` | Query-view layout from WIQL SELECT/ORDER BY (flat and tree / links queries), field resolution, cell formatting, sorting, summary, CSV, column order. | QV |
 | releaseOverview | `src/releaseOverview.ts` | Releases with documents approved in the month per stream (CP from QA/QE signatures, cpReporting), with counts and totals. | OVR, QV |
 | releasePath | `src/releasePath.ts` | Reads release name and number from Area/Iteration Paths; DP, IOCC and Tool Validations (one entry per tool) stream rules. | QV |
@@ -375,6 +377,7 @@ This document lists every software component of the system: the in-house source 
 | my-signatures.test | `tests/my-signatures.test.mjs` | Signed by me: signature fields, name matching, signature dates, per-stream counts in a period, Windchill exports (TC-MYD-06). | MYD |
 | close-feature.test | `tests/close-feature.test.mjs` | Close Features: only my items, children first, others' open work keeps parents open, failure handling. | ACT |
 | table-defaults.test | `tests/table-defaults.test.mjs` | The table design default: shared setting check, column layout and moves, and dates in Excel / CSV exports read back (TC-UI-04, TC-UI-05). | UI |
+| page-layout.test | `tests/page-layout.test.mjs` | Page margins: defaults, limits, saved and applied (TC-NAV-50). | NAV |
 | chart-labels.test | `tests/chart-labels.test.mjs` | Chart data labels: shared default, per-chart choice, stored values checked (TC-UI-10). | UI |
 | query-view.test | `tests/query-view.test.mjs` | Query layout, field resolution, sorting, summary, CSV and column order. | QV |
 | release-overview.test | `tests/release-overview.test.mjs` | Releases per stream approved in the month for Overview and Pulse Check. | OVR |

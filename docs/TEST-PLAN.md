@@ -335,6 +335,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-NAV-48 Profile menu and footer** — Req NAV-48, NAV-49, NAV-15 — E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages"); browser check: the profile button at the top right opens My settings, Classic / Tile view, View as… (Admin), Search settings, Customize menu; the footer shows only the desktop app download, “v{x.y.z} (Build n)” and Force Update, whose window shows the build ID, build time and where data is saved; scrolled to the end, the last row of a long table is fully visible above it; in Admin → Epic & Feature setup the Unsaved changes bar sits above the footer; every My settings section has the same width and starts under the tabs (KB-61).
 
+**TC-NAV-50 Pages fill the width inside a border, with set margins** — Req NAV-50 — L1 `page-layout.test.mjs` ("NAV-50: the page margins default to 10 / 20 / 10 / 20 px with a border"; "NAV-50: each side is kept between 0 and 64 px; anything else falls back to its default"; "NAV-50: a saved layout is read back; a broken saved value gives the defaults"; "NAV-50: applying sets one CSS variable per side and turns the border off only when asked"); E2E `shell.e2e.mjs` ("TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded"); browser check in the desktop app: fold the menu — the page widens; set Left to 40 — the gap grows at once.
+
 **TC-NAV-45 My page usage** — Req NAV-45 — L1 `usage-counts.test.mjs` ("NAV-45: page usage is off until turned on; nothing is counted or stored while off (TC-NAV-45)"; "NAV-45: on, each opening of a page counts; off deletes the counts; most used first (TC-NAV-45)"; "NAV-45: a tampered or broken entry is read safely (TC-NAV-45)"); E2E `shell.e2e.mjs` ("TC-NAV-45: My page usage is off by default; turned on, it counts the pages opened in this browser; off deletes the counts"); inspection: an exported JSON backup and a Git snapshot contain no usage counts.
 
 **TC-NAV-36 Background jobs** — Req NAV-36 — L1 `background-jobs.test.mjs` ("background jobs: run, report progress and the result; the same job is not started twice"; "… a failed result or a thrown error marks the job; Clear finished keeps the running ones"); browser check (QMS-0025 with a saved PAT): New Feature → Save closes the form at once and the top bar shows “⟳ 1 running” with its progress, then “✓ Jobs done” with “#id … Hierarchy complete”; the menu and other pages stay usable meanwhile; Bulk actions → Create month tasks and Move run the same way and their buttons wait while the job runs; Monthly Time Writing → Save leaves a failed Task staged; reloading while a job runs asks first.
@@ -1221,6 +1223,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-SET-07 My views** — Req SET-17, CON-42 — L1 `my-views.test.mjs` ("My views: on a server with a PAT, never named after a stream, never a stream connection, never in Git, kept when the shared setup is reset (SET-17, TC-SET-07)"); E2E `shell.e2e.mjs` ("TC-SET-07: My views — a view of your own on a server you have a PAT for, under Other views in the menu, never a stream and never in the shared setup"); browser check: My settings → My views offers only servers with a PAT; a view named DP is refused; a view with a name, project and WIQL query is added, fetched and listed under Other views in the menu; it is not in Data & sharing → Other views, not in Shared setup in Git (Save stream mapping to Git leaves it out), not in a JSON backup; Back up and remove all keeps it.
 
+**TC-SET-08 Look & feel** — Req SET-18, UI-12 — L1 `my-views.test.mjs` ("Admin and My settings: the pages, and older links opening where they moved (SET-15, TC-SET-06)"); E2E `shell.e2e.mjs` ("TC-SET-08: Look & feel switches the theme with the top-bar button in step, and the start view"; "TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded" — the four tabs); `documents-and-data.e2e.mjs` (Table and chart defaults opened from Look & feel).
+
 **TC-SET-04 Master data, audit, reset** — Req SET-10…12, OI-06, OI-09
 - Expected:
   - An added value appears with "Active".
@@ -1663,6 +1667,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | NAV-47 | TC-NAV-47 |
 | NAV-48 | TC-NAV-48 |
 | NAV-49 | TC-NAV-48 |
+| NAV-50 | TC-NAV-50 |
 | CON-01…03 | TC-CON-01 |
 | CON-04…08, CON-19 | TC-CON-02 |
 | CON-09 | TC-CON-03 |
@@ -1927,6 +1932,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | SET-15 | TC-SET-06 |
 | SET-16 | TC-SET-06 |
 | SET-17 | TC-SET-07 |
+| SET-18 | TC-SET-08 |
 | SET-10…12 | TC-SET-04 |
 | STO-01, STO-02 | TC-STO-01 |
 | STO-03 | TC-STO-02 |
@@ -2110,7 +2116,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 | Use case | Test cases |
 |---|---|
-| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12 |
+| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33 |

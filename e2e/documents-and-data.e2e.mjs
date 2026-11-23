@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
-import { fixture, navigate, openPage, startApp, text } from './helpers.mjs'
+import { fixture, navigate, openPage, profileItem, startApp, text } from './helpers.mjs'
 
 // UI-10: every table has one Export that offers Excel or CSV.
 const exportFrom = async (page, scope, format = 'CSV (.csv)') => { await scope.getByRole('button', { name: /^Export/ }).first().click(); const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: format }).click()]); return download }
@@ -258,8 +258,8 @@ test('TC-UI-04 / TC-UI-05: every table follows the table default — move, hide,
   const [sheet] = await readXlsx(new Uint8Array(readFileSync(await xlsx.path())))
   assert.deepEqual(sheet.rows[0], ['Name', 'Number', 'Last Modified'], 'the export follows the shown columns and order')
   assert.match(sheet.rows[1][2], /^\d{4}-\d{2}-\d{2}/, 'the date cell is a real date in the workbook (read back as a date)')
-  // Admin → Reports → Table and chart defaults: without CSV, every Export offers Excel only.
-  await navigate(page, 'Reports')
+  // Look & feel → Table and chart defaults (SET-18): without CSV, every Export offers Excel only.
+  await profileItem(page, 'Look & feel')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Table and chart defaults' }).click()
   await page.getByRole('checkbox', { name: 'CSV (.csv)' }).uncheck()
   await navigate(page, 'Import Windchill export')

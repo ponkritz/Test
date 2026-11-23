@@ -41,7 +41,8 @@ test('TC-PCK-04: Pulse Check → Monthly pack shows both slides for the month be
   assert.ok(bytes.toString('utf8').includes('<a:t>Actions/Deliverables Realized</a:t>') && bytes.toString('utf8').includes('<a:t>KPI Pulse</a:t>'), 'the boxes are in the slides')
   // Admin → Reports → Monthly pack lists the default slide lines and KPI rows (read-only with the sample).
   await page.locator('.sidebar nav button', { hasText: /^.Reports$/ }).first().click()
-  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Monthly pack' }).click()
+  // Reports holds only the Monthly pack since Table and chart defaults moved to Look & feel (SET-18): no section row.
+  await page.locator('.admin-section', { hasText: 'Monthly pack setup' }).waitFor()
   const setup = await text(page.locator('.admin-section', { hasText: 'Monthly pack setup' }))
   for (const line of ['Serviceability', 'Digital Platform', 'Clinical Platform', 'IOCC', 'PPU', 'Content', 'Tool validation', 'Utilization (YTD)', 'Overall CAPA Health']) assert.ok(setup.includes(line) || await page.locator(`input[value="${line}"]`).count() === 1, line)
   assert.match(setup, /Capabilities bullet.*unique Features under these Epics that have hours recorded in the month/s, 'PCK-11: the Capabilities bullet and its Epics')

@@ -927,3 +927,12 @@ html{scroll-padding-bottom:calc(var(--app-footer-h) + 8px)}
 .close-other{background:var(--surface-2)}
 .close-hours{margin:10px 0;align-items:flex-start}
 .modal:focus{outline:none}
+/* NAV-50: the page fills the width beside the menu (folded or not), inside a thin border, with the margins of My settings →
+   Look & feel → Page layout (default 10 / 20 / 10 / 20 px). */
+.app-shell>main>.content{max-width:none!important;width:auto!important;align-self:stretch;margin:var(--page-m-top,10px) var(--page-m-right,20px) var(--page-m-bottom,10px) var(--page-m-left,20px)!important;border:1px solid var(--line);border-radius:12px;padding:16px 20px 24px!important;box-sizing:border-box}
+:root[data-page-border="off"] .app-shell>main>.content{border-color:transparent}
+.app-shell>main>.data-notices{max-width:none!important;width:auto!important;align-self:stretch;margin-left:var(--page-m-left,20px)!important;margin-right:var(--page-m-right,20px)!important;box-sizing:border-box}
+@media(max-width:760px){.app-shell>main>.content{padding:12px!important}}
+.look-margins{display:grid;grid-template-columns:repeat(4,minmax(0,120px));gap:12px;margin-bottom:12px}
+.look-margins input{width:100%}
+@media(max-width:560px){.look-margins{grid-template-columns:repeat(2,minmax(0,1fr))}}

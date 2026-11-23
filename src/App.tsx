@@ -18,7 +18,7 @@ import { pages, pageGroups, pageMeta, type Page } from './pages/registry'
 import { MyDashboardPage } from './pages/MyDashboardPage'
 import { HomePage } from './pages/HomePage'
 import { loadStartView, saveStartView, startPageOf, visibleTiles, type HomeLink, type HomeTile, type StartView } from './homeTiles'
-import { mySettingsLabel, readSettingsTab, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, type SettingsTab } from './settingsTabs'
+import { lookLabel, mySettingsLabel, readSettingsTab, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, type SettingsTab } from './settingsTabs'
 import { normalizeReleaseSourceSettings } from './releaseSource'
 import { dataSets, defaultMatchThreshold, defaultStreams, profileForDataSet, profileForStream, windchillStreamExports } from './streams'
 import { connectionPresets } from './connectionPresets'
@@ -49,6 +49,7 @@ import { DesktopDownload } from './components/DesktopDownload'
 import { exportStateJson } from './download'
 import { BuildStatus } from './components/BuildStatus'
 import { ZoomControl } from './components/ZoomControl'
+import { applyPageLayout, loadPageLayout } from './pageLayout'
 import { PersonPicker } from './components/PersonPicker'
 import { ProfileMenu, type ProfileAction } from './components/ProfileMenu'
 import { backlogViews, loadBacklogTab, otherMenuViews, saveBacklogTab, timeWritingView } from './backlogViews'
@@ -204,6 +205,8 @@ export default function App() {
   const assign = { me: azure.creatorEmail.trim().toLowerCase(), canChoose: access.can('azure.createForOthers') }
   // NAV-42, NAV-46: the start page — Home (the tiles) in the tile view, My dashboard in the classic view.
   const [startView, setStartView] = useState<StartView>(() => loadStartView())
+  // NAV-50: the page margins and border of My settings → Look & feel, applied once at start (and at once when changed there).
+  useEffect(() => { applyPageLayout(loadPageLayout()) }, [])
   const [requested, setPage] = useState<Page>(() => startPageOf(loadStartView()))
   const switchView = (next: StartView) => { setStartView(saveStartView(next)); setPage(startPageOf(next)) }
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null)
@@ -350,6 +353,7 @@ export default function App() {
   // NAV-48: the profile menu (top right).
   const profileActions: ProfileAction[] = [
     { key: 'my', label: mySettingsLabel, icon: '⚙', onClick: () => openSettings('my') },
+    { key: 'look', label: lookLabel, icon: '◧', detail: 'Page margins and border, theme, start view and menu, table and chart defaults', onClick: () => openSettings('look') },
     { key: 'view', label: startView === 'tiles' ? 'Classic view' : 'Tile view', icon: startView === 'tiles' ? '☰' : '⌂', detail: startView === 'tiles' ? 'Open on My dashboard, without Home (the classic view)' : 'Open on Home, the tiles of every area', onClick: () => switchView(startView === 'tiles' ? 'classic' : 'tiles') },
     ...(access.canViewAs ? [{ key: 'viewas', label: 'View as…', icon: '👁', onClick: () => setViewAsOpen(true) }] : []),
     { key: 'search', label: 'Search settings', icon: '⌕', detail: 'Ctrl K', onClick: () => setSearchOpen(true) },
@@ -423,7 +427,7 @@ export default function App() {
       {page === 'health' && <BacklogHealthPage azure={azure} store={store} />}
       {page === 'board' && <BoardPage azure={azure} store={store} current={view} month={month} git={git} onOpenConnection={openConnection} assign={assign} featureSetup={featureSetup.setups} qeMapping={qeMapping.file} />}
       {page === 'snapshots' && <SnapshotsPage {...pageProps} git={git} who={my.me.email || my.me.name || 'unknown'} />}
-      {page === 'admin' && <AdminPage key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
+      {page === 'admin' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage />}
       </Suspense>
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>
