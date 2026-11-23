@@ -113,19 +113,25 @@ in three forms; "Reset filters" and "Clear filters"; seven period controls.
 
 ## 8. Messages
 
+**Owner decision (2026-11-23):** messages go to **Notifications** — the top-bar panel that already keeps the running and
+finished background jobs — not into the page.
+
 | Situation | Use | Wording |
 |---|---|---|
-| Result of an action | `Notice` success / error, in the panel where the action was, replaced by the next action | "Saved to Git." / "3 of 4 closed. #123: …" |
-| Warning about the data shown | `Notice` warning | What is affected and what to do |
+| Result of an action (success, error, partly done) | A **notification**: one entry in the top-bar **Notifications** panel, next to the running and finished jobs; the top-bar button shows how many need a look | "Saved to Git." / "3 of 4 closed. #123: …" — the entry names the item and links to it |
+| Long work | A running job in the same panel, turning into its result when it ends | Job label names the item: "Close 2 Features · #123" |
+| Warning about the data shown | `Notice` warning on the page (it describes what is on screen, so it stays with it) | What is affected and what to do |
 | Help or explanation | ⓘ (`info`) | — |
 | No data | `EmptyState` | Title ends with a full stop; the detail says what to do next |
 | Loading | `<p className="muted" role="status">` | "Loading {what}…" |
-| Long work | the background job (top bar Jobs) | Job label names the item: "Close 2 Features · #123" |
 
-- No hand-built `div.notice`; no stacks of old messages that never clear.
+- An error that blocks a form (§3) stays in the form, above its buttons, until it is fixed; it is also kept as a
+  notification once the form is closed.
+- No hand-built `div.notice`; no stacks of old messages on a page.
 
-**Today:** 19 hand-built notices and a private `act-message`; ~6 styles each for loading, success and empty; the
-"Who are you in Azure DevOps?" empty state has four different details.
+**Today:** results are shown in the page — 19 hand-built notices and a private `act-message`, ~6 styles each for
+loading, success and empty; the "Who are you in Azure DevOps?" empty state has four different details. The top-bar
+panel is called "Background jobs" and holds only jobs (New Feature, Bulk actions, Time Writing).
 
 ## 9. KPI tiles and charts
 

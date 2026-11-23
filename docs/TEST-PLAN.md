@@ -754,7 +754,7 @@ Cases marked **UAT** are also run in acceptance testing.
   - (3) The Feature and its open User Stories move; the Time Writing story does not.
   - (4) Original Estimate is locked; the Task is tagged ad-hoc when it had no estimate; the iteration and the month in the title cannot change.
 
-**TC-BKL-12 Backlog filtered to me; ＋ Time Writing Task** — Req BKL-21, BKL-22 — E2E `backlog.e2e.mjs` ("TC-BKL-12: QMS-0025 opens filtered to the person browsing; clearing the filter shows everyone; rows offer ＋ Time Writing Task"); L1 `my-work.test.mjs` ("QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)"); browser check with the QMS-0025 board and your work email: the backlog shows your items with their Epic / Feature above and the work below; Assigned to me ✕ clears to everyone and a restart filters again; ＋ Time Writing Task on a Feature (and on a Story) creates this month's Task for you under your own Time Writing story, or reports that it exists; the same button on My Tasks [Board] rows.
+**TC-BKL-12 Backlog filtered to me; ＋ Time Writing Task** — Req BKL-21, BKL-22 — E2E `backlog.e2e.mjs` ("TC-BKL-12: QMS-0025 opens filtered to the person browsing; clearing the filter shows everyone; rows offer ＋ Time Writing Task"); L1 `my-work.test.mjs` ("QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)"); browser check with the QMS-0025 board and your work email: the backlog shows your items with their Epic / Feature above and the work below; choosing All in Assigned to shows everyone and a restart filters again; ＋ Time Writing Task on a Feature (and on a Story) creates this month's Task for you under your own Time Writing story, or reports that it exists; the same button on My Tasks [Board] rows.
 
 **TC-BKL-13 Parent Epic blank on New Feature** — Req BKL-23 — E2E `backlog.e2e.mjs` ("TC-BKL-13: New Feature opens with the Parent Epic blank; every Epic is offered"); browser check: the same from My Tasks [Board] and from Create Feature on Release Details; Create without an Epic says "Choose the parent Epic."
 
@@ -797,6 +797,8 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-BKL-33 Edit keeps an unassigned item unassigned** — Req BKL-44 — L1 `work-item-edit.test.mjs` ("BKL-44: Assigned to starts blank — an unassigned item stays unassigned unless someone is picked"); browser check with a Time Writing connection: Edit an unassigned Task, change only the title, Save — Assigned to is still empty in Azure DevOps; pick a person — that person is set.
 
 **TC-BKL-34 One scroll bar on the board; Source details is its own tab** — Req BKL-45, BKL-12 — E2E `backlog.e2e.mjs` ("TC-BKL-34: QMS-0025 has one scroll bar — the board fills the screen — and Source details is its own tab"); browser check: at 1440 × 900 and with the menu folded, Expand all leaves the page without a scroll bar and the table scrolls; at 390 px the page scrolls.
+
+**TC-BKL-35 State and Assigned to multi-select filters** — Req BKL-46, BKL-21 — E2E `backlog.e2e.mjs` ("TC-BKL-35: QMS-0025 filters State and Assigned to with multi-select drop-downs; Reset filters goes back to New + Active and me"); L1 `my-work.test.mjs` ("QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)"); browser check with real data: two people chosen show only their work with its Epics and Features; Unassigned shows unassigned items; Closed added to State shows closed items.
 
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
@@ -1832,6 +1834,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-43 | TC-BKL-32 |
 | BKL-44 | TC-BKL-33 |
 | BKL-45 | TC-BKL-34 |
+| BKL-46 | TC-BKL-35 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -2131,7 +2134,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
-| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
+| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61 |
 | UC-09 | TC-OV-11…14, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |

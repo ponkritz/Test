@@ -308,15 +308,18 @@ export function monthsUntilTarget(monthLabel: string, targetDate: string | undef
 
 // The QMS-0025 backlog shows the person browsing by default (BKL-21): the items assigned to them, every item above them
 // (for context: Epic, Feature, Story) and every item below them (the work under their Features and Stories).
-export function mineWithContext(items: AzureWorkItem[], me: Me): AzureWorkItem[] {
+export function mineWithContext(items: AzureWorkItem[], me: Me): AzureWorkItem[] { return withContext(items, (item) => isMine(item, me)) }
+// BKL-46: the items a filter picks, every item above them for context and every item below them — below only for the
+// items for which `below` says so (Unassigned keeps only the context above, or every unassigned Epic would bring all).
+export function withContext(items: AzureWorkItem[], picked: (item: AzureWorkItem) => boolean, below: (item: AzureWorkItem) => boolean = () => true): AzureWorkItem[] {
   const byId = new Map(items.map((item) => [item.id, item]))
   const children = new Map<number, AzureWorkItem[]>()
   for (const item of items) if (item.parentId != null) children.set(item.parentId, [...(children.get(item.parentId) ?? []), item])
   const keep = new Set<number>()
   const down = (item: AzureWorkItem) => { if (keep.has(item.id)) return; keep.add(item.id); for (const child of children.get(item.id) ?? []) down(child) }
   for (const item of items) {
-    if (!isMine(item, me)) continue
-    down(item)
+    if (!picked(item)) continue
+    if (below(item)) down(item); else keep.add(item.id)
     const seen = new Set([item.id]); let up = item.parentId == null ? undefined : byId.get(item.parentId)
     while (up && !seen.has(up.id)) { keep.add(up.id); seen.add(up.id); up = up.parentId == null ? undefined : byId.get(up.parentId) }
   }
