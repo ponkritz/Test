@@ -77,3 +77,15 @@ test('SNP-04: the page saves only with Git connected and a token that can write;
   const store = readFileSync(new URL('../src/store.ts', import.meta.url), 'utf8')
   assert.doesNotMatch(store, /SharePointStateClient|connectSharePoint|initializeSharePoint/, 'the SharePoint central storage is removed (backlog)')
 })
+
+test('SNP-05 (owner decision 11): a snapshot holds all the data present at the moment, hours and release data included (TC-SNP-02)', async () => {
+  const { snapshotDataKeys } = await import('../src/cloudSnapshots.ts')
+  const full = { ...state, azureWorkItems: [{ id: 1, originalEstimate: 8, completedWork: 6 }], capacitySettings: { hoursPerDay: 8 }, resourceProfiles: { Ana: { region: 'India' } }, baselineRules: [{ id: 'r' }], releaseScopes: [{ id: 's' }], releaseSource: { items: [{ id: 9 }] }, releasePlans: [{ id: 'p' }], windchillSources: [{ viewId: 'w', rows: [{ Name: 'x' }] }], azureSources: [{ connectionId: 'c', items: [] }], tableDefaults: { density: 'compact' }, releaseSourceSettings: { matchThreshold: 80 } }
+  const item = freezeSnapshot(full, 'LTE', '2026-10', 'tester@example.test', {})
+  assert.equal(item.formatVersion, 2)
+  for (const key of ['azureWorkItems', 'capacitySettings', 'resourceProfiles', 'baselineRules', 'releaseScopes', 'releaseSource', 'releasePlans', 'windchillSources', 'azureSources', 'tableDefaults', 'releaseSourceSettings', 'efforts', 'periods']) assert.ok(item.data[key] !== undefined, `${key} is in the snapshot`)
+  assert.equal(item.data.azureWorkItems[0].completedWork, 6, 'the hours are there')
+  assert.equal(item.data.snapshots, undefined, 'never earlier snapshots')
+  assert.equal(item.data.pat, undefined, 'nothing outside the app data')
+  assert.ok(!snapshotDataKeys.includes('snapshots'))
+})

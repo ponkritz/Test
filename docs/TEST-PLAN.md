@@ -1173,7 +1173,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-SNP-01 SharePoint central storage** — Req SNP-01…03 — *(Retired with SNP-01…03: SharePoint is in the backlog; nothing to run.)*
 
-**TC-SNP-02 Snapshot saved to Git** — Req SNP-04…07 — L1 `cloud-snapshots.test.mjs` ("SNP-06: snapshots go to lte-snapshots/ beside the planning data in the Git data repository"; "SNP-06: a snapshot is a new file (no version id sent), read back and compared before success, nothing kept in the browser"; "SNP-06: failures, an existing file and a mismatched read-back never report success"; "SNP-04: the page saves only with Git connected and a token that can write; no SharePoint code is left"; "snapshot freezes source data and excludes history/connection secrets").
+**TC-SNP-02 Snapshot saved to Git** — Req SNP-04…07 — L1 `cloud-snapshots.test.mjs` ("SNP-06: snapshots go to lte-snapshots/ beside the planning data in the Git data repository"; "SNP-06: a snapshot is a new file (no version id sent), read back and compared before success, nothing kept in the browser"; "SNP-06: failures, an existing file and a mismatched read-back never report success"; "SNP-04: the page saves only with Git connected and a token that can write; no SharePoint code is left"; "snapshot freezes source data and excludes history/connection secrets"; "SNP-05 (owner decision 11): a snapshot holds all the data present at the moment, hours and release data included").
 - Expected (L3, with TD-04):
   - The buttons are disabled without Git storage, with a read-only token and with the synthetic sample.
   - An LTE snapshot creates "lte-snapshots/{month}-LTE-{id}.json" in the data repository as one commit.

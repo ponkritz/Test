@@ -1,5 +1,6 @@
 import type { AppState, Snapshot } from './domain'
 import { listFolder, readRawFile, siblingConfig, writeTextFile, type GitConfig } from './gitStorage.ts'
+import { withoutMyViews } from './myViews.ts'
 
 // SNP-04…08: LTE, PI Review and Monthly Pack snapshots are JSON files in the Git data repository (the private
 // repository of Git storage, beside the planning data), in the folder lte-snapshots/ — one commit per snapshot. They
@@ -12,13 +13,19 @@ type Fetch = (input: string, init?: RequestInit) => Promise<Response>
 const namePattern = /^(\d{4}-\d{2})-(LTE|PI-Review|Monthly-Pack)-[\da-f-]+\.json$/
 const fileUrl = (config: GitConfig) => `https://github.com/${config.owner}/${config.repo}/blob/${encodeURIComponent(config.branch)}/${config.path.split('/').map(encodeURIComponent).join('/')}`
 
+// SNP-05 (owner decision 11): a snapshot holds all the data present at the moment — the hours (the work items with their
+// Original Estimate and Completed Work), the release data (release source, release views, Windchill exports, plans),
+// capacity, people, baselines and settings. An explicit list keeps out earlier snapshots, anything that is not app data
+// and the data of My views (personal, never shared); credentials are never part of the app data (STO-09).
+export const snapshotDataKeys = ['schemaVersion', 'people', 'activities', 'efforts', 'baselines', 'periods', 'releases', 'audits', 'masters',
+  'azureWorkItems', 'azureBacklogScope', 'setupLinks', 'capacitySettings', 'baselineRules', 'releaseScopes', 'resourceProfiles',
+  'releaseSource', 'tableDefaults', 'releaseSourceSettings', 'releasePlans', 'windchillSources', 'azureSources'] as const satisfies readonly (keyof AppState)[]
 export function freezeSnapshot(state: AppState, type: Snapshot['type'], month: string, createdBy: string, build: unknown) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Choose a valid snapshot month.')
-  // Explicit data whitelist: no connection settings, authentication or recursive snapshot history.
-  const { schemaVersion, people, activities, efforts, baselines, periods, releases, audits, masters, azureWorkItems, azureBacklogScope } = state
-  return structuredClone({ format: 'demand-planning-snapshot', formatVersion: 1, id: crypto.randomUUID(),
-    title: `${type} — ${month}`, type, month, createdAt: new Date().toISOString(), createdBy, build,
-    data: { schemaVersion, people, activities, efforts, baselines, periods, releases, audits, masters, azureWorkItems, azureBacklogScope } })
+  const source = withoutMyViews(state)
+  const data = Object.fromEntries(snapshotDataKeys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]])) as Partial<AppState>
+  return structuredClone({ format: 'demand-planning-snapshot', formatVersion: 2, id: crypto.randomUUID(),
+    title: `${type} — ${month}`, type, month, createdAt: new Date().toISOString(), createdBy, build, data })
 }
 
 export const snapshotFileName = (snapshot: Pick<ReturnType<typeof freezeSnapshot>, 'month' | 'type' | 'id'>) => `${snapshot.month}-${snapshot.type.replaceAll(' ', '-')}-${snapshot.id}.json`
