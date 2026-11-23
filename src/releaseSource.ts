@@ -1,3 +1,4 @@
+import { fillClosedDates } from './closedHistory.ts'
 import { normalizeBulkEpics, type BulkStream } from './bulkEpics.ts'
 import { myPatternsFor } from './myNamingPatterns.ts'
 import { normalizeNamingPatterns, patternsFor, type NamingPattern, type NamingPatterns } from './namingPatterns.ts'
@@ -152,7 +153,7 @@ export async function runWorkItemQuery(config: AzureConfig, pat: string, wiql: s
     const ids = [...new Set(result.workItemRelations.flatMap((link) => [link.source?.id, link.target?.id]).filter((id): id is number => id != null))]
     if (ids.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new Error('Unexpected tree or links query response. Nothing was saved.')
     if (ids.length > limit) throw new Error(`The query returned more than ${limit.toLocaleString()} items. Narrow the query.`)
-    return ids.length ? readWorkItems(request, ids, map) : []
+    return ids.length ? fillClosedDates(await readWorkItems(request, ids, map), request) : []
   }
   const where = releaseQueryWhere(wiql)
   const items: AzureWorkItem[] = []
@@ -167,7 +168,7 @@ export async function runWorkItemQuery(config: AzureConfig, pat: string, wiql: s
     afterId = Math.max(...ids)
     if (items.length > limit) throw new Error(`The query returned more than ${limit.toLocaleString()} items. Narrow the query.`)
   }
-  return items
+  return fillClosedDates(items, request)
 }
 
 type ItemRequest = (operation: AzureRequest['operation'], extra?: Partial<AzureRequest>) => Promise<unknown>

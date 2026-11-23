@@ -1,3 +1,4 @@
+import { finishedStates } from '../workStates'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AzureWorkItem } from '../domain'
 import { syncTitlesAfterSave } from '../monthTaskAction'
@@ -20,7 +21,7 @@ import { formatDateTime } from '../format'
 // reads the item fresh when it opens; Save sends only what changed, refused if the item changed in Azure meanwhile.
 // When a Feature moves to another PI, its open User Stories can be moved to a Sprint of that PI in the same job.
 type Loaded = Awaited<ReturnType<typeof readWorkItemForEdit>>
-const closedStates = ['closed', 'removed', 'resolved', 'done']
+const closedStates: string[] = [...finishedStates, 'removed'] // owner decision 10
 export function WorkItemEditor({ item: opened, items, config, savedPat = '', me, canChoose, onSavePat, onUpdated, onDone, onFailed, onClose }: { item: AzureWorkItem; items: AzureWorkItem[]; config: AzureConfig; savedPat?: string; me: string; canChoose: boolean; onSavePat?: (pat: string) => void; onUpdated?: (items: AzureWorkItem[]) => void; onDone?: (text: string, item: AzureWorkItem) => void; onFailed?: (text: string) => void; onClose: () => void }) {
   const people = useMemo(() => assignablePeople(items), [items])
   const [pat, setPat] = useState(savedPat)

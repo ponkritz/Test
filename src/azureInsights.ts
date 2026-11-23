@@ -1,3 +1,4 @@
+import { isFinishedState } from './workStates.ts'
 import type { AzureWorkItem } from './domain'
 
 const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -102,7 +103,7 @@ export function azureInsights(source: AzureWorkItem[], month: string, today: str
   const plan = total(monthlyTasks, 'originalEstimate'), actual = total(monthlyTasks, 'completedWork')
   const paired = monthlyTasks.filter(item => item.originalEstimate != null && item.completedWork != null)
   const variance = paired.length ? paired.reduce((sum, item) => sum + item.completedWork! - item.originalEstimate!, 0) : null
-  const closed = (item: AzureWorkItem) => ['closed', 'done', 'completed'].includes(item.state.trim().toLowerCase())
+  const closed = (item: AzureWorkItem) => isFinishedState(item.state) // owner decision 10: Resolved counts too
   const overdue = items.filter(item => !closed(item) && item.targetDate && item.targetDate.slice(0, 10) < today)
   const flags = paired.filter(item => item.originalEstimate! > 0 && item.completedWork! > item.originalEstimate! * 1.25)
   const closures = features.filter(item => closed(item) && indiaMonth(item.closedDate) === month)
@@ -148,7 +149,7 @@ export function timeWritingGaps(source: AzureWorkItem[], month: string) {
   const byId = new Map(items.map(item => [item.id, item]))
   const storyIds = timeWritingStoryIds(items), stories = items.filter(item => storyIds.has(item.id))
   const tasks = items.filter(item => item.workItemType === 'Task')
-  const finished = (item: AzureWorkItem) => ['closed', 'done', 'completed', 'resolved'].includes(item.state.trim().toLowerCase())
+  const finished = (item: AzureWorkItem) => isFinishedState(item.state)
   const hasFeature = (item: AzureWorkItem) => { const seen = new Set<number>(); let current = item.parentId == null ? undefined : byId.get(item.parentId); while (current && !seen.has(current.id)) { if (current.workItemType === 'Feature') return true; seen.add(current.id); current = current.parentId == null ? undefined : byId.get(current.parentId) } return false }
   return {
     storiesWithoutTask: stories.filter(story => !finished(story) && !tasks.some(task => task.parentId === story.id && timeWritingMonth(task.title) === month)),

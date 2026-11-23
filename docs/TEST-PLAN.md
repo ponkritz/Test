@@ -488,6 +488,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-FET-10 Fetch Time Writing from the top bar** — Req FET-22 — L1 `app-frame.test.mjs` ("FET-22: Refresh fetches the Time Writing connection first, then the read-only ones; a duplicate Time Writing connection is left out (TC-FET-10)"); browser check with a Time Writing connection and its PAT: ⟳ Time Writing in the top bar fetches it and says it was saved (as Admin → Streams → Fetch does); ↻ Refresh with an on-prem view and no VPN still updates Time Writing first.
 
+**TC-FET-11 Finished states and the close date** — Req FET-23, FET-24, DSK-04 — L1 `closed-history.test.mjs` ("Owner decision 10: finished is Closed, Resolved, Completed or Done — not Removed, Cut, Active"; "Owner decision 10: a finished item without a Closed Date takes its State Change Date, else Resolved Date"; "Owner decision 10: the history gives the change that moved the item into a finished state, the last such one"; "Owner decision 10: history is read only for finished items without a date, at most the limit, and kept per revision"; "Owner decision 10: the desktop proxy reads a work item's history with one GET, nothing else"); browser check with a Time Writing connection: a Resolved Feature with no Closed Date counts in Pulse Check in the month it was resolved, not the month it was last edited.
+
 **TC-FET-08 Cloud fetch at start** — Req FET-20, CON-45 — browser check with Azure DevOps mocked: with a cloud Time Writing connection and an on-prem connection, opening the app sends the cloud fetch once and nothing to the on-prem server; a rejected PAT shows the usual error and keeps the saved data. Settings shows one tab at a time, the shared tabs only with "manage shared settings", and reopens on the last tab; "Fetch work items from Azure DevOps →" opens the Azure DevOps tab. Live check needed: the QMS-0025 data refreshes after Force Update. **UAT**
 
 **TC-FET-07 Query fields and names** — Req FET-18, FET-19, QV-04
@@ -1755,6 +1757,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | FET-20 | TC-FET-08, TC-FET-09 |
 | FET-21 | TC-FET-09 |
 | FET-22 | TC-FET-10 |
+| FET-23, FET-24 | TC-FET-11 |
 | TWN-01…06 | TC-TWN-01 |
 | TWN-07, TWN-08 | TC-TWN-02 |
 | TWN-09 | TC-TWN-03, TC-ATM-05 |
@@ -2120,10 +2123,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | Use case | Test cases |
 |---|---|
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08 |
-| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40 |
+| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33 |
-| UC-05 | TC-MON-07 |
+| UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61 |

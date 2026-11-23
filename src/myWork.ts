@@ -1,9 +1,11 @@
+import { finishedStates } from './workStates.ts'
 import type { AzureWorkItem } from './domain'
 import { isTimeWritingStory, isTrainingWork, planMonthStory, timeWritingMonth, timeWritingStoryIds } from './azureInsights.ts'
 
 // "Me" is matched by Azure email (Assigned To unique name) when known, otherwise by display name.
 export interface Me { email?: string; name?: string }
-const finished = new Set(['closed', 'resolved', 'done', 'completed', 'removed', 'cut'])
+// Not pending: finished (owner decision 10) or gone (Removed, Cut).
+const finished = new Set<string>([...finishedStates, 'removed', 'cut'])
 export const isPending = (item: Pick<AzureWorkItem, 'state'>) => !finished.has(item.state.trim().toLowerCase())
 export function isMine(item: Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>, me: Me) {
   const email = me.email?.trim().toLowerCase(), name = me.name?.trim().toLowerCase()

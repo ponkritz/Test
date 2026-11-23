@@ -1,3 +1,4 @@
+import { isFinishedState } from './workStates.ts'
 import type { PulseFill } from './pptxTemplate.ts'
 import type { AzureWorkItem } from './domain'
 import { approvalMonthOf } from './releaseSource.ts'
@@ -126,9 +127,8 @@ export function serializePackNotes(notes: MonthlyPackNotes) {
 }
 
 // ---- Epic counts ----
-const finished = new Set(['closed', 'done', 'completed', 'resolved'])
 const removed = (item: AzureWorkItem) => item.state.trim().toLowerCase() === 'removed'
-export const isFinished = (item: Pick<AzureWorkItem, 'state'>) => finished.has(item.state.trim().toLowerCase())
+export const isFinished = (item: Pick<AzureWorkItem, 'state'>) => isFinishedState(item.state) // owner decision 10
 // Every item below the Epics (Features, User Stories, Bugs, …; Tasks and the Epics themselves left out).
 export function epicDescendants(items: AzureWorkItem[], epicIds: number[]): AzureWorkItem[] {
   const byParent = new Map<number, AzureWorkItem[]>()

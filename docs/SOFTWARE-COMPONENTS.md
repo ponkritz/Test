@@ -184,6 +184,8 @@ This document lists every software component of the system: the in-house source 
 | markdown | `src/markdown.ts` | Small Markdown parser to plain data (headings with GitHub anchors, lists, tables, inline) and link targets. | DOC |
 | closeChain | `src/closeChain.ts` | After a close: the follow-up question and the staged closing of the related User Stories or Feature, each write read back; Close Features on Time Writing (only the person's own items, children first). | ATM, ACT |
 | closeList | `src/closeList.ts` | The Close pop-up's rows: the open items under a Feature or the last User Story, default ticks, tick rules, children-first closing (BKL-39). | BKL, ACT |
+| closedHistory | `src/closedHistory.ts` | The close date of a finished item without one: from its history (updates), read once per version and kept in this browser (FET-24). | FET |
+| workStates | `src/workStates.ts` | The one list of finished states: Closed, Resolved, Completed, Done (FET-23). | FET |
 | myWork | `src/myWork.ts` | "Me" matching, pending work, month-task and move candidates, state checks and next states, Feature children, the Time Writing order by Feature number (ACT-21). | ATM, ACT |
 | pulseCheck | `src/pulseCheck.ts` | Pulse Check: previous month, release comparison, work flow opened/closed and ongoing work. | OVR |
 | pulsePeriods | `src/pulsePeriods.ts` | Pulse Check over calendar quarters, half-years and years: periods, the period before, releases once per period, work opened and closed. | QV, MYD |
@@ -347,6 +349,7 @@ This document lists every software component of the system: the in-house source 
 | home-tiles.test | `tests/home-tiles.test.mjs` | Home: the tile and link search, the Home page entry (TC-NAV-42). | NAV |
 | app-frame.test | `tests/app-frame.test.mjs` | The app frame: My dashboard always you, the Refresh order (TC-NAV-47, TC-FET-10). | NAV, FET |
 | close-list.test | `tests/close-list.test.mjs` | The Close pop-up's rows, ticks and closing order (TC-BKL-28); Close Tasks and the early-close removal of later months (TC-BKL-31, TC-BKL-32). | BKL |
+| closed-history.test | `tests/closed-history.test.mjs` | Finished states, the close date from State Change Date or history, the desktop history read (TC-FET-11). | FET |
 | hours-active.test | `tests/hours-active.test.mjs` | Hours make the month Time Writing Task and its story Active, reopening Closed ones (TC-BKL-30). | BKL |
 | git-snapshots.test | `tests/git-snapshots.test.mjs` | On-prem view snapshots via Git: no PATs, digests, helpers and validation. | GIT, FET |
 | git-storage.test | `tests/git-storage.test.mjs` | Git config, planning data round trip, read/write/conflict/write-check/delete. | GIT |
