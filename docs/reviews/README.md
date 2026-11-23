@@ -52,3 +52,9 @@ One table row per finding:
 - **Read only.** Reviewers never edit code, documents or settings, never write to Azure DevOps, Git storage or
   SharePoint, and never print secrets; commands are limited to reading (`git`, `grep`, running the existing tests).
 - **No softening.** Severity follows impact, not effort or who wrote it.
+
+## Reports
+
+| Date | Scope | Report |
+|---|---|---|
+| 2026-11-23 | UI/UX role only, all components, pages and styles (4 slices, 106 files) | [2026-11-23-ui-ux-review.md](2026-11-23-ui-ux-review.md) |
