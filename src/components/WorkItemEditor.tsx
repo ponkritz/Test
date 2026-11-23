@@ -6,7 +6,8 @@ import { addComment, editWorkItem, readAzureIterations, readComments, readWorkIt
 import { editAssignee, editLocks, isAdhocTask, joinDoD, splitDoD, statesFor, type WorkItemEdit } from '../workItemEdit'
 import { actualsLockedNow, planningLockedNow } from '../planningLock'
 import { isTimeWritingStory } from '../azureInsights'
-import { Modal } from './ui'
+import { Modal, WriteBlocked } from './ui'
+import { useWriteBlock } from '../useCan'
 import { PersonPicker } from './PersonPicker'
 import { assignablePeople, hasActiveStory } from '../myWork'
 import { activateAfterHours, activateFeatureOf } from '../closeChain'
@@ -187,6 +188,8 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
   }
 
   const kind = type === 'User Story' ? 'story' : type.toLowerCase()
+  // CON-102: Add comment needs its own permission; disabled with the reason when it is missing.
+  const write = useWriteBlock()
   return <Modal title={`${type} #${opened.id}`} eyebrow="EDIT · AZURE DEVOPS WRITE" onClose={onClose}><form onSubmit={save} className="nf-form story-form edit-form">
     {!savedPat && !loaded && <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => setPat(event.target.value)} /><button type="button" className="text-button" disabled={!pat.trim()} onClick={() => void load(pat)}>Load</button><small>Saved in this browser only.</small></label>}
     {!loaded && reading && <p className="muted">Reading #{opened.id} from Azure DevOps…</p>}
@@ -220,7 +223,8 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
       </details>}
       <p className="muted edit-note">Formatting made in Azure DevOps (bold, lists) is kept unless you change that text. The {kind}’s parent and Area Path are not changed here.</p>
       <section className="edit-discussion" aria-label="Discussion"><h4>Discussion{comments ? ` (${comments.length})` : ''}</h4>
-        <div className="edit-comment-add"><textarea aria-label="Add a comment" rows={2} maxLength={100000} value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Add a comment…" /><button type="button" className="ghost" disabled={posting || !newComment.trim()} onClick={() => void post()}>{posting ? 'Adding…' : 'Add comment'}</button></div>
+        <div className="edit-comment-add"><textarea aria-label="Add a comment" rows={2} maxLength={100000} value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Add a comment…" /><button type="button" className="ghost" disabled={posting || !newComment.trim() || Boolean(write.why('work.comment'))} title={write.why('work.comment') || undefined} onClick={() => void post()}>{posting ? 'Adding…' : 'Add comment'}</button></div>
+        <WriteBlocked reason={write.why('work.comment')} />
         {commentsError && <div className="notice error" role="alert">{commentsError}</div>}
         {comments == null && !commentsError && <p className="muted">Loading the Discussion…</p>}
         {comments?.length === 0 && <p className="muted">No comments yet.</p>}

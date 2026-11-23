@@ -9,7 +9,8 @@ import { activateAfterHours } from '../closeChain'
 type CloseSelection = ReturnType<typeof closeSelection>
 import { FeatureEditor } from '../components/FeatureEditor'
 import { SearchSelect } from '../components/SearchSelect'
-import { EmptyState, Metric, Metrics, Modal, Page } from '../components/ui'
+import { EmptyState, Metric, Metrics, Modal, Page, WriteBlocked } from '../components/ui'
+import { useWriteBlock } from '../useCan'
 import { personMonths, totals } from '../dashboard'
 import type { AzureWorkItem } from '../domain'
 import { setupHours, type FeatureSetups } from '../featureSetup'
@@ -119,6 +120,11 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   const changedExisting = existing.filter((row) => (['planned', 'actual'] as const).some((field) => hours[row.key]?.[field] != null && hours[row.key]![field] !== hoursText(field === 'planned' ? row.task!.originalEstimate : row.task!.completedWork)))
   const chosenNew = toAdd.filter(isTicked)
   const pendingCount = changedExisting.length + chosenNew.length
+  // CON-102: buttons that change Azure DevOps are disabled when the viewer lacks the permission; one line says why.
+  // Save adds new Tasks (create) and writes hours; Close sets the State; the add form creates.
+  const write = useWriteBlock()
+  const saveWhy = (chosenNew.length ? write.why('azure.write') : '') || write.why('work.hours')
+  const createWhy = write.why('azure.write'), closeWhy = write.why('work.state')
 
   // Progress: a work or training activity counts as updated once it has actual hours; leave counts once it exists.
   const tracked = [...existing, ...toAdd.filter((row) => row.kind === 'work')]
@@ -381,11 +387,12 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
       <section className="act-card" aria-labelledby="act-copy">
         <div className="act-card-head"><h3 id="act-copy">Your activities for {label}</h3>
           {/* ACT-20: an action of the list, not a heading of the page. */}
-          <button type="button" className="ghost act-add-open" disabled={saving} onClick={() => setAddOpen(true)}>＋ Add a new activity</button>
+          <button type="button" className="ghost act-add-open" disabled={saving || Boolean(createWhy)} title={createWhy || undefined} onClick={() => setAddOpen(true)}>＋ Add a new activity</button>
           <label className="act-close-mode" title="Tick Features in the list to close your open Tasks and User Stories under them (and the Feature when nothing else is open); their month Tasks become read-only"><input type="checkbox" checked={closeMode === 'features'} disabled={saving} onChange={(event) => { setCloseMode(event.target.checked ? 'features' : false); setClosing({}) }} />Close Features</label>
           <label className="act-close-mode" title="Tick this month's Tasks in the list to close them when the work is done; their hours become read-only"><input type="checkbox" checked={closeMode === 'tasks'} disabled={saving} onChange={(event) => { setCloseMode(event.target.checked ? 'tasks' : false); setClosing({}) }} />Close Tasks</label>
-          {closeMode ? <button type="button" className="act-primary act-save-top" disabled={!closingRows.length || saving} onClick={closeMode === 'tasks' ? closeTasks : closeFeatures}>{closingRows.length ? `Close ${closingRows.length} ${closeMode === 'tasks' ? 'Task' : 'Feature'}${closingRows.length === 1 ? '' : 's'}` : `Tick ${closeMode === 'tasks' ? 'Tasks' : 'Features'} to close`}</button>
-            : <button type="button" className="act-primary act-save-top" disabled={!pendingCount || saving} onClick={saveAll}>{saving ? 'Saving…' : pendingCount ? `Save ${pendingCount} activit${pendingCount === 1 ? 'y' : 'ies'}` : 'Nothing to save'}</button>}</div>
+          {closeMode ? <button type="button" className="act-primary act-save-top" disabled={!closingRows.length || saving || Boolean(closeWhy)} title={closeWhy || undefined} onClick={closeMode === 'tasks' ? closeTasks : closeFeatures}>{closingRows.length ? `Close ${closingRows.length} ${closeMode === 'tasks' ? 'Task' : 'Feature'}${closingRows.length === 1 ? '' : 's'}` : `Tick ${closeMode === 'tasks' ? 'Tasks' : 'Features'} to close`}</button>
+            : <button type="button" className="act-primary act-save-top" disabled={!pendingCount || saving || Boolean(saveWhy)} title={saveWhy || undefined} onClick={saveAll}>{saving ? 'Saving…' : pendingCount ? `Save ${pendingCount} activit${pendingCount === 1 ? 'y' : 'ies'}` : 'Nothing to save'}</button>}
+          <WriteBlocked reason={write.note('azure.write', 'work.hours', 'work.state')} /></div>
         <p className="act-sub">Record your activities for {label}: your tasks with their hours. Add one from the suggestions (they appear here until you save) or with ＋ Add a new activity; enter or change hours and save once.</p>
         <table className="act-table">
           <thead><tr><th aria-label="Add" /><th className="act-stream">Epic</th><th>Activity</th><th>Planned</th><th>Actual</th></tr></thead>
@@ -448,15 +455,15 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
               onChange={(id) => { setFeatureId(id); const own = epicOf(features.find((feature) => feature.id === Number(id))!); if (own) setStream(String(own.id)) }} />{chosenFeature && <span className="act-open">{idLink(chosenFeature)} {chosenFeature.title} ↗</span>}</div>}
             {addKind === 'feature' ? <>
               <p className="act-hint">The New Feature form opens with {self ? 'you' : my.me.name} as the assignee and {label} as the Time Writing month. It applies the Epic's Feature setup (title fields, DoD, User Stories, Time Writing story and Task), else the built-in rules.</p>
-              <button type="button" className="act-primary" disabled={Boolean(blocked) || !azure.config} title={blocked || undefined} onClick={() => { setAddOpen(false); setFeatureOpen(true) }}>Open New Feature</button>
+              <button type="button" className="act-primary" disabled={Boolean(blocked) || !azure.config || Boolean(createWhy)} title={blocked || createWhy || undefined} onClick={() => { setAddOpen(false); setFeatureOpen(true) }}>Open New Feature</button>
             </> : addKind === 'story' || addKind === 'work' ? <>
               {addKind === 'work' && <label>User Story<select value={storyId} onChange={(event) => setStoryId(event.target.value)} disabled={!chosenFeature}><option value="">{!chosenFeature ? 'Choose a Feature first' : taskStories.length ? 'Choose a User Story' : 'No open User Story under this Feature'}</option>{taskStories.map((item) => <option key={item.id} value={item.id}>#{item.id} {item.title}</option>)}</select></label>}
               <label>Title<input value={story.title} maxLength={255} placeholder={addKind === 'work' ? 'What needs to be done' : 'What the story is about'} onChange={(event) => setStory((current) => ({ ...current, title: event.target.value }))} /></label>
               <label>Description<textarea value={story.description} rows={4} placeholder="What needs to be done, and why" onChange={(event) => setStory((current) => ({ ...current, description: event.target.value }))} /></label>
               <label>Sprint<select value={sprint} onChange={(event) => setSprint(event.target.value)} disabled={!storyPairs.length}><option value="">{iterations == null ? (blocked ? 'Not available' : 'Loading the schedule…') : storyPairs.length ? 'Choose a Sprint' : 'No current or future Sprint'}</option>{storyPairs.map((pair) => <option key={pair.sprint.path} value={pair.sprint.path}>{pair.pi.name} → {pair.sprint.name}</option>)}</select></label>
               <label>Comment <small className="muted">(optional, added to its Discussion)</small><textarea value={story.comment} rows={3} onChange={(event) => setStory((current) => ({ ...current, comment: event.target.value }))} /></label>
-              {addKind === 'work' ? <button type="button" className="act-primary" disabled={!chosenStory || !story.title.trim() || !sprint || saving} onClick={saveWorkTask}>Add Task</button>
-                : <button type="button" className="act-primary" disabled={!chosenFeature || !story.title.trim() || !sprint || saving} onClick={saveStory}>Add User Story</button>}
+              {addKind === 'work' ? <button type="button" className="act-primary" disabled={!chosenStory || !story.title.trim() || !sprint || saving || Boolean(createWhy)} title={createWhy || undefined} onClick={saveWorkTask}>Add Task</button>
+                : <button type="button" className="act-primary" disabled={!chosenFeature || !story.title.trim() || !sprint || saving || Boolean(createWhy)} title={createWhy || undefined} onClick={saveStory}>Add User Story</button>}
             </> : <>
             <label>Reporting period<input value={label} readOnly /></label>
             <div className="act-pair">
@@ -465,7 +472,7 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
             </div>
             {existingTask && <p className="act-hint">You already have this task for {label} (#{existingTask.id}). Its hours are shown above; what you save replaces them — nothing is added up, and no second task is created.</p>}
             {planLocked && <p className="act-hint">Planning for {label} is locked: a new task is tagged ad-hoc and takes actual hours only.</p>}
-            <button type="button" className="act-primary" disabled={!chosenFeature || saving} onClick={saveNew}>Save activity</button>
+            <button type="button" className="act-primary" disabled={!chosenFeature || saving || Boolean(createWhy)} title={createWhy || undefined} onClick={saveNew}>Save activity</button>
             </>}
             {addKind !== 'feature' && <p className="act-sub">Feature not listed? <button type="button" className="act-link" onClick={() => setAddKind('feature')}>Create a new Feature</button></p>}
           </div>

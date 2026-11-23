@@ -32,7 +32,7 @@ import { viewAsLabel, viewAsPeople, type ViewAs } from './viewAs'
 import { ViewAsDialog } from './components/ViewAsDialog'
 import { useHistory } from './useHistory'
 import { withHistory } from './history'
-import { CanContext } from './useCan'
+import { CanContext, ReadOnlyContext } from './useCan'
 import { SettingsSearch } from './components/SettingsSearch'
 import { EpicSetupContext, useEpicSetup } from './useEpicSetup'
 import { OnPremContext } from './onPremValues'
@@ -363,7 +363,7 @@ export default function App() {
   if (!store.ready) return <main className="content"><h1>I&amp;D Quality Demand Planning</h1>{store.loadError ? <Notice tone="error"><p>{store.loadError}</p><p>Do not clear browser data. If you still have an older tab open with unsaved changes, export its JSON backup first.</p><button className="primary" onClick={store.retryLoad}>Retry loading saved data</button></Notice> : <p role="status">Loading saved browser data…</p>}{buildStatus}</main>
 
   // UI-12: every table follows the shared design default.
-  return <TableDefaultsContext.Provider value={tableDesign}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><CanContext.Provider value={access.can}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><HeaderSlot.Provider value={headerSlot}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
+  return <TableDefaultsContext.Provider value={tableDesign}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><CanContext.Provider value={access.can}><ReadOnlyContext.Provider value={access.readOnly}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><HeaderSlot.Provider value={headerSlot}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
     {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
     <aside className="sidebar" id="primary-navigation">
       <div className="brand" title="I&amp;D Quality Demand Planning"><div className="brand-mark"><BrandMark /></div><div><strong>I&amp;D Quality</strong><span>Demand Planning</span></div><button type="button" className="nav-mini-toggle" aria-pressed={menuMini} aria-label={menuMini ? 'Expand the menu' : 'Collapse the menu'} title={menuMini ? 'Show the menu with names' : 'Fold the menu to icons'} onClick={toggleMenuMini}>{menuMini ? '»' : '«'}</button></div>
@@ -435,5 +435,5 @@ export default function App() {
       </Suspense>
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>
     </main>
-  </div></HeaderSlot.Provider></OnPremContext.Provider></EpicSetupContext.Provider></CanContext.Provider></ReleaseSettingsContext.Provider></TableDefaultsContext.Provider>
+  </div></HeaderSlot.Provider></OnPremContext.Provider></EpicSetupContext.Provider></ReadOnlyContext.Provider></CanContext.Provider></ReleaseSettingsContext.Provider></TableDefaultsContext.Provider>
 }

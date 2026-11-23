@@ -1068,7 +1068,7 @@ test('TC-ACT-10: Time Writing can show another person, chosen at the top right',
 })
 
 test('TC-BKL-28: Close on a Feature lists what would close with tick boxes and #ID links — yours ticked, others’ not; ticking the Feature ticks all; hours are confirmed first', async () => {
-  const { page, context, errors } = await openPage(app, { init: (name) => { localStorage.setItem('demand-planning-my-name-v1', name) }, initArg: 'Ana Costa' })
+  const { page, context, errors } = await openPage(app, { roles: true, init: (name) => { localStorage.setItem('demand-planning-my-name-v1', name) }, initArg: 'Ana Costa' })
   await loadSample(page)
   await navigate(page, 'My Tasks [Board]')
   await page.locator('.content button', { hasText: /^Close/ }).first().click()
@@ -1539,6 +1539,46 @@ test('TC-CON-63: without a roles file the app is read-only — a notice says why
   assert.match(await text(panel), /You are lead@example\.com .*· Admin\./)
   assert.deepEqual(second.errors.filter((entry) => !/401|Unauthorized/.test(entry)), [])
   await second.context.close()
+})
+
+test('TC-CON-64: before the roles load, the buttons that write to Azure DevOps are disabled and say why; with roles they are enabled', async () => {
+  // No roles file: on the QMS-0025 board ＋ New Feature and the rows' create and Edit buttons are disabled, and one
+  // visible line above the board says why (CON-102); nothing opens.
+  const { page, context, errors } = await openPage(app)
+  await loadSample(page)
+  await navigate(page, 'QMS-0025')
+  await page.getByRole('button', { name: 'Expand all backlog items' }).click()
+  const newFeature = page.getByRole('button', { name: '＋ New Feature' })
+  await newFeature.waitFor()
+  assert.equal(await newFeature.isDisabled(), true, '＋ New Feature is disabled')
+  const reason = 'Read only: the access roles are not loaded yet, so nothing can be changed in Azure DevOps.'
+  assert.equal(await text(page.locator('.backlog-heading .write-blocked')), reason, 'the reason is a visible line, not only a tooltip')
+  assert.equal(await newFeature.getAttribute('title'), reason)
+  const story = page.locator('.backlog-table tbody tr').filter({ has: page.getByRole('button', { name: '＋ User Story' }) }).first()
+  assert.equal(await story.getByRole('button', { name: '＋ User Story' }).isDisabled(), true, 'a row’s ＋ User Story is disabled')
+  assert.equal(await story.getByRole('button', { name: 'Edit', exact: true }).isDisabled(), true, 'a row’s Edit is disabled')
+  const task = page.locator('.backlog-table tbody tr').filter({ has: page.getByRole('button', { name: '＋ Task' }) }).first()
+  assert.equal(await task.getByRole('button', { name: '＋ Task' }).isDisabled(), true, 'a row’s ＋ Task is disabled')
+  assert.equal(await page.locator('form.nf-form, form.edit-form').count(), 0, 'no form is open')
+  assert.deepEqual(errors, [])
+  await context.close()
+
+  // With roles (Tool Owner): the same buttons are enabled and no reason is shown.
+  const allowed = await openPage(app, { roles: true })
+  await loadSample(allowed.page)
+  await navigate(allowed.page, 'QMS-0025')
+  await allowed.page.getByRole('button', { name: 'Expand all backlog items' }).click()
+  const open = allowed.page.getByRole('button', { name: '＋ New Feature' })
+  await open.waitFor()
+  assert.equal(await open.isDisabled(), false, '＋ New Feature is enabled')
+  assert.equal(await allowed.page.locator('.write-blocked').count(), 0, 'no reason line')
+  const row = allowed.page.locator('.backlog-table tbody tr').filter({ has: allowed.page.getByRole('button', { name: '＋ User Story' }) }).first()
+  assert.equal(await row.getByRole('button', { name: '＋ User Story' }).isDisabled(), false)
+  assert.equal(await row.getByRole('button', { name: 'Edit', exact: true }).isDisabled(), false)
+  await row.getByRole('button', { name: 'Edit', exact: true }).click()
+  await allowed.page.locator('form.edit-form').waitFor()
+  assert.deepEqual(allowed.errors, [])
+  await allowed.context.close()
 })
 
 test('TC-SMP-02: Reset synthetic MVP data asks first and is recorded in History', async () => {

@@ -51,6 +51,10 @@ a Notice as intro); the Windchill pages (S&S IT, ECP) have no `Page` wrapper.
   **Add …**, **Create N Features**, **Close N items**, **Remove …**. Not: Apply, OK, Done, Confirm.
 - **Errors**: one `Notice tone="error"` above the buttons, saying what is wrong and what to do. A disabled main button
   always says why — a line of text next to it (not only a tooltip).
+- **Missing permission** (CON-102): a button that would change Azure DevOps is disabled, not hidden, when the viewer
+  lacks its action; the reason comes from `useWriteBlock()` (`src/useCan.ts`) and is shown with `WriteBlocked`
+  (`src/components/ui.tsx`) next to the button — for a table of row buttons once above the table, each row button
+  carrying the same reason as its tooltip.
 
 **Today:** most settings edit inline; three save on every change; five places put the primary first; more than eight
 verbs for the main action; ~9 hand-built error boxes; 154 of 174 disabled buttons do not say why.

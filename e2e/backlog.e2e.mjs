@@ -9,7 +9,7 @@ before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
 
 test('TC-BKL-10: ＋ User Story on a Feature opens the New User Story form with the Feature as parent and the story fields', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: 'Expand all backlog items' }).click()
@@ -34,7 +34,7 @@ test('TC-BKL-10: ＋ User Story on a Feature opens the New User Story form with 
 })
 
 test('TC-BKL-11: Edit on a Feature, User Story and Task row opens the Edit form, which reads the item fresh from Azure DevOps first', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: 'Expand all backlog items' }).click()
@@ -53,7 +53,7 @@ test('TC-BKL-11: Edit on a Feature, User Story and Task row opens the Edit form,
 })
 
 test('TC-BKL-12: QMS-0025 opens filtered to the person browsing; clearing the filter shows everyone; rows offer ＋ Time Writing Task', async () => {
-  const { page, context, errors } = await openPage(app, { init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
+  const { page, context, errors } = await openPage(app, { roles: true, init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   const assigned = page.getByRole('button', { name: /^Assigned to:/ })
@@ -72,7 +72,7 @@ test('TC-BKL-12: QMS-0025 opens filtered to the person browsing; clearing the fi
 })
 
 test('TC-BKL-13: New Feature opens with the Parent Epic blank; every Epic is offered', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: '＋ New Feature' }).first().click()
@@ -110,7 +110,7 @@ async function fillFeatureStep(form) {
 }
 
 test('TC-BKL-15: New Feature offers your own User Story (title and description) under the new Feature', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await scheduleServed(context)
   await loadSample(page)
   await navigate(page, 'QMS-0025')
@@ -131,7 +131,7 @@ test('TC-BKL-15: New Feature offers your own User Story (title and description) 
 })
 
 test('TC-BKL-19: New Feature shows its sections one after another: Feature, then the DoD, then the User Stories, then the month estimates', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await scheduleServed(context)
   await loadSample(page)
   await navigate(page, 'QMS-0025')
@@ -187,7 +187,7 @@ test('TC-BKL-19: New Feature shows its sections one after another: Feature, then
 })
 
 test('TC-BKL-21: New Feature with a Start Date and a Target date asks for the hours of every month from the start to the target', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await scheduleServed(context)
   await loadSample(page)
   await navigate(page, 'QMS-0025')
@@ -228,7 +228,7 @@ test('TC-BKL-21: New Feature with a Start Date and a Target date asks for the ho
 })
 
 test('TC-DPF-06: a DoD and User Stories per Release Classification value — set up per Epic, picked by the value chosen in New Feature', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await scheduleServed(context)
   await loadSample(page)
   await navigate(page, 'QMS-0025')
@@ -283,7 +283,7 @@ test('TC-DPF-06: a DoD and User Stories per Release Classification value — set
 })
 
 test('TC-STT-01: a User Story template, linked in an Epic’s setup, gives New Feature its current title, ticked; Admin lists it with its tags', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await scheduleServed(context)
   await loadSample(page)
   await navigate(page, 'QMS-0025')
@@ -332,7 +332,7 @@ test('TC-STT-01: a User Story template, linked in an Epic’s setup, gives New F
 })
 
 test('TC-BKL-23: ＋ Time Writing Task asks for the months — the header month first, ＋ Add month, any month changeable — and the hours of each; Assigned to is the person creating (TC-BKL-24); Add runs as a background job (TC-BKL-26)', async () => {
-  const { page, context, errors } = await openPage(app, { init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
+  const { page, context, errors } = await openPage(app, { roles: true, init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: /^Assigned to:/ }).click()
@@ -378,7 +378,7 @@ test('TC-BKL-23: ＋ Time Writing Task asks for the months — the header month 
 })
 
 test('TC-EPS-01: Epic setup — its fields appear in New Feature (a value list, required and warning fields), the title follows its pattern, and Admin → Epic setup shows them', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: '＋ New Feature' }).first().click()
@@ -431,7 +431,7 @@ test('TC-EPS-01: Epic setup — its fields appear in New Feature (a value list, 
 })
 
 test('TC-BKL-29: Edit without a saved PAT keeps the PAT field while it is typed in; nothing is read until Load', async () => {
-  const { page, context, errors } = await openPage(app)
+  const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   await page.getByRole('button', { name: 'Expand all backlog items' }).click()
@@ -473,7 +473,7 @@ test('TC-BKL-34: QMS-0025 has one scroll bar — the board fills the screen — 
 })
 
 test('TC-BKL-35: QMS-0025 filters State and Assigned to with multi-select drop-downs; Reset filters goes back to New + Active and me', async () => {
-  const { page, context, errors } = await openPage(app, { init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
+  const { page, context, errors } = await openPage(app, { roles: true, init: () => { localStorage.setItem('demand-planning-work-email-v1', 'nobody@example.com') } })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   const stateButton = page.getByRole('button', { name: /^State:/ }), assigned = page.getByRole('button', { name: /^Assigned to:/ })
@@ -508,7 +508,7 @@ test('TC-BKL-35: QMS-0025 filters State and Assigned to with multi-select drop-d
 
 test('TC-BKL-36: QMS-0025 starts on the column order saved for everyone; Apply keeps my own; Reset to the team default goes back', async () => {
   const shared = { schema: 1, kind: 'personal-views', sections: {}, menu: { pinned: [], hidden: [] }, filters: { 'backlog-columns': ['id', 'title', 'state', 'assignedTo'] } }
-  const { page, context, errors } = await openPage(app, { init: (text) => { localStorage.setItem('demand-planning-views-v1:defaults', text) }, initArg: JSON.stringify(shared) })
+  const { page, context, errors } = await openPage(app, { roles: true, init: (text) => { localStorage.setItem('demand-planning-views-v1:defaults', text) }, initArg: JSON.stringify(shared) })
   await loadSample(page)
   await navigate(page, 'QMS-0025')
   const headers = async () => (await page.locator('.backlog-table thead th').allInnerTexts()).map((entry) => entry.trim()).filter((entry) => entry && entry !== '＋−')

@@ -61,6 +61,12 @@ export function Metric({ label, value, hint, tone }: { label: string; value: Rea
   return <article><span>{label}</span><strong className={tone ?? ''}>{value}</strong>{hint && <small>{hint}</small>}</article>
 }
 
+// CON-102, UI-STANDARDS §3: the visible line next to (or above) buttons disabled because the viewer lacks a permission
+// — one line for a toolbar or a table of row buttons; nothing when reason is empty.
+export function WriteBlocked({ reason }: { reason: string }) {
+  return reason ? <small className="muted write-blocked" role="note">{reason}</small> : null
+}
+
 export function Notice({ children, tone = 'info', className = '' }: { children: ReactNode; tone?: 'info' | 'success' | 'warning' | 'error'; className?: string }) {
   return <div className={`notice ${tone === 'info' ? '' : tone} ${className}`} role={tone === 'error' ? 'alert' : 'status'}>{children}</div>
 }

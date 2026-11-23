@@ -848,6 +848,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-63 Read-only until the roles file is loaded (fail closed)** — Req CON-101, CON-43, CON-44 — **UAT** — L1 `access.test.mjs` ("CON-101: until a roles file is loaded the app is read-only (every menu area, no action, Azure writes refused); only the confirmed absence of access.json lets the viewer set up the first one (TC-CON-63)"; "CON-101: the Azure write guard is closed before the app sets it"; "access: no policy means read-only (CON-101); …"); E2E `shell.e2e.mjs` ("TC-CON-63: without a roles file the app is read-only — a notice says why on every page, every menu area is shown, write actions are disabled"); UAT: in a new browser without Git storage, every page is in the menu, the top says "Read-only" with Connect Git storage, and a change (New Feature, an hours cell, Role rights) cannot be saved; connect Git storage to a repository with access.json — the notice goes and the roles apply; connect a test repository without access.json — the notice offers Set up roles, Role rights → Set up roles → Save to Git writes access.json with you as Admin, and the app then follows it.
 
+**TC-CON-64 Write buttons disabled with the reason when the action is missing** — Req CON-102, CON-101 — L1 `access.test.mjs` ("CON-102: why a button that writes to Azure DevOps is disabled — read-only before the roles load, else the missing permissions (TC-CON-64)"); E2E `shell.e2e.mjs` ("TC-CON-64: before the roles load, the buttons that write to Azure DevOps are disabled and say why; with roles they are enabled"); browser check: without roles, ＋ New Feature on the QMS-0025 board, Edit / ＋ User Story / ＋ Task on its rows, ＋ New Feature / Edit / Close on My Tasks [Board], Save / Close / ＋ Add a new activity on Time Writing, Move and the state buttons on Sprint check, Create Feature and Create Features on the release pages are disabled and a line says why; with a role that lacks one action (e.g. Deny *Edit the fields of a work item*) only its buttons are disabled and the line names it; with every action nothing changes.
+
 
 **TC-CON-44 DP and DHFI defaults** — Req CON-76 — L1 `connections.test.mjs` ("pre-filled connections from the shared setup …": DP reads the Release work items of DHP with DDTDate, SourceProgram, PsName and Release; DHFI [Approved] reads the DHP.Vault documents, hidden from the menu); browser check in a fresh browser with only the on-prem PAT: Settings → Azure DevOps → Stream mapping → Set up DP, Pedestal and DHFI from their defaults; Release Details → DP lists Release items for the DDT month; Get started shows the release streams step done.
 
@@ -1743,7 +1745,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-98 | TC-CON-61 |
 | CON-99 | TC-CON-61 |
 | CON-100 | TC-CON-62 |
-| CON-101 | TC-CON-63 |
+| CON-101 | TC-CON-63, TC-CON-64 |
+| CON-102 | TC-CON-64 |
 | QV-20 | TC-QV-06 |
 | QV-21 | TC-QV-07 |
 | CON-21, CON-22 | TC-CON-08 |
@@ -2165,7 +2168,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |

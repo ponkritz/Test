@@ -172,6 +172,16 @@ export function rightsFor(policy: AccessPolicy | null, email: string, bootstrap 
   }
 }
 
+// CON-102: why a button that starts a change in Azure DevOps is disabled — '' when nothing is missing. Read-only (no
+// roles file loaded, CON-101) says so; otherwise it names the missing permissions and where an Admin changes them.
+export const readOnlyReason = 'Read only: the access roles are not loaded yet, so nothing can be changed in Azure DevOps.'
+export function writeBlockedReason(readOnly: boolean, missing: Action[]) {
+  if (!missing.length) return ''
+  if (readOnly) return readOnlyReason
+  const labels = [...new Set(missing)].map((key) => `“${actions.find((entry) => entry.key === key)?.label ?? key}”`)
+  return `Your role does not allow ${labels.join(', ')}. An Admin can change this in Admin → People & roles → Role rights.`
+}
+
 // CON-94: one cell of the matrix — Allow, Deny or Not set — and changing it (an allow and a deny never coexist).
 export type Cell = 'allow' | 'deny' | 'unset'
 export const isArea = (key: Permission): key is Area => (allAreas as string[]).includes(key)

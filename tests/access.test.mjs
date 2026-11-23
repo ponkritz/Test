@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultPolicy, parseAccess, serializeAccess, rightsFor, keepsManager } from '../src/access.ts'
+import { defaultPolicy, parseAccess, serializeAccess, rightsFor, keepsManager, writeBlockedReason } from '../src/access.ts'
 import { requestAzure, guardAzureWrites, writePermissions } from '../src/azureDevOps.ts'
 import { cellOf, setCell, explainAccess } from '../src/access.ts'
 import { settingsPagesFor } from '../src/settingsTabs.ts'
@@ -241,4 +241,15 @@ test('CON-101: the Azure write guard is closed before the app sets it', async ()
   try {
     await assert.rejects(() => fresh.requestAzure({ operation: 'add-comment', organization: 'org', project: 'P', team: 'T', pat: 'x', workItemId: 1, comment: 'Hi' }), /access roles are not loaded yet/)
   } finally { delete globalThis.window; globalThis.fetch = original }
+})
+
+test('CON-102: why a button that writes to Azure DevOps is disabled — read-only before the roles load, else the missing permissions (TC-CON-64)', () => {
+  assert.equal(writeBlockedReason(true, []), '', 'nothing missing: no reason, the button stays enabled')
+  assert.equal(writeBlockedReason(false, []), '')
+  assert.equal(writeBlockedReason(true, ['azure.write', 'work.edit']), 'Read only: the access roles are not loaded yet, so nothing can be changed in Azure DevOps.')
+  assert.equal(writeBlockedReason(false, ['work.edit']), 'Your role does not allow “Edit the fields of a work item”. An Admin can change this in Admin → People & roles → Role rights.')
+  assert.match(writeBlockedReason(false, ['azure.write', 'work.state', 'azure.write']), /^Your role does not allow “Create Features, User Stories and Tasks”, “Change the state \(Active, Closed\), Close Features”\. /, 'each missing permission named once')
+  // What the reason is shown for: no roles file gives no action (CON-101), so every write button is disabled.
+  const none = rightsFor(null, 'anyone@example.com')
+  for (const action of ['azure.write', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk']) assert.equal(none.actions.has(action), false, action)
 })
