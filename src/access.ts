@@ -219,6 +219,15 @@ export function explainAccess(policy: AccessPolicy | null, email: string, key: P
   return { allowed: allowedBy.length > 0 && deniedBy.length === 0, roles: assigned, allowedBy, deniedBy, noPolicy: false }
 }
 
+// CON-104: a person's roles set as a whole — any number of them, kept in the matrix's order; none removes the person
+// (the default role then applies). Never one role in place of the others.
+export function withMemberRoles(policy: AccessPolicy, email: string, chosen: readonly Role[]): AccessPolicy {
+  const next = structuredClone(policy)
+  const ordered = roles.filter((role) => chosen.includes(role))
+  if (ordered.length) next.members[normalEmail(email)] = ordered; else delete next.members[normalEmail(email)]
+  return next
+}
+
 // A policy may not lock its editor out: the person saving it must keep a role that can manage access.
 export function keepsManager(policy: AccessPolicy, email: string) {
   return Boolean(email) && rightsFor(policy, email).actions.has('access.manage')

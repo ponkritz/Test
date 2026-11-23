@@ -254,3 +254,18 @@ test('CON-102: why a button that writes to Azure DevOps is disabled — read-onl
   const none = rightsFor(null, 'anyone@example.com')
   for (const action of ['azure.write', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment', 'work.bulk']) assert.equal(none.actions.has(action), false, action)
 })
+
+test('CON-104: a person can hold several roles — the People section sets them all, in the matrix order; none removes the person; their rights are the union (TC-CON-65)', async () => {
+  const { withMemberRoles } = await import('../src/access.ts')
+  const start = defaultPolicy('lead@example.com')
+  const two = withMemberRoles(start, 'Ana@Example.com', ['Scrum Master', 'Product Owner'])
+  assert.deepEqual(two.members['ana@example.com'], ['Product Owner', 'Scrum Master'], 'both kept, matrix order, email normalised')
+  assert.equal(start.members['ana@example.com'], undefined, 'the policy passed in is not changed')
+  const rights = rightsFor(two, 'ana@example.com')
+  assert.deepEqual(rights.roles, ['Product Owner', 'Scrum Master'])
+  for (const role of ['Product Owner', 'Scrum Master']) for (const area of two.roles[role].areas) assert.ok(rights.areas.has(area), `${area} from ${role}`)
+  const one = withMemberRoles(two, 'ana@example.com', ['Scrum Master'])
+  assert.deepEqual(one.members['ana@example.com'], ['Scrum Master'], 'unticking one keeps the other')
+  assert.equal(withMemberRoles(one, 'ana@example.com', []).members['ana@example.com'], undefined, 'none: the default role applies')
+  assert.deepEqual(parseAccess(serializeAccess(two)).members['ana@example.com'], ['Product Owner', 'Scrum Master'], 'saved and read back')
+})

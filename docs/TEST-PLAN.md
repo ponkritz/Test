@@ -850,6 +850,8 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-64 Write buttons disabled with the reason when the action is missing** — Req CON-102, CON-101 — L1 `access.test.mjs` ("CON-102: why a button that writes to Azure DevOps is disabled — read-only before the roles load, else the missing permissions (TC-CON-64)"); E2E `shell.e2e.mjs` ("TC-CON-64: before the roles load, the buttons that write to Azure DevOps are disabled and say why; with roles they are enabled"); browser check: without roles, ＋ New Feature on the QMS-0025 board, Edit / ＋ User Story / ＋ Task on its rows, ＋ New Feature / Edit / Close on My Tasks [Board], Save / Close / ＋ Add a new activity on Time Writing, Move and the state buttons on Sprint check, Create Feature and Create Features on the release pages are disabled and a line says why; with a role that lacks one action (e.g. Deny *Edit the fields of a work item*) only its buttons are disabled and the line names it; with every action nothing changes.
 
+**TC-CON-65 Several roles per person** — Req CON-104, CON-94 — L1 `access.test.mjs` ("CON-104: a person can hold several roles — the People section sets them all, in the matrix order; none removes the person; their rights are the union (TC-CON-65)"); browser check with Git storage and Manage access: in People & roles → People tick Scrum Master and Product Owner for a person — both are saved in access.json and the person sees both roles' menu areas; unticking one keeps the other; Role rights → Check access names both roles.
+
 
 **TC-CON-44 DP and DHFI defaults** — Req CON-76 — L1 `connections.test.mjs` ("pre-filled connections from the shared setup …": DP reads the Release work items of DHP with DDTDate, SourceProgram, PsName and Release; DHFI [Approved] reads the DHP.Vault documents, hidden from the menu); browser check in a fresh browser with only the on-prem PAT: Settings → Azure DevOps → Stream mapping → Set up DP, Pedestal and DHFI from their defaults; Release Details → DP lists Release items for the DDT month; Get started shows the release streams step done.
 
@@ -2200,6 +2202,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-17 | TC-OND-12 |
 | OND-18 | TC-OND-15 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
+| CON-104 | TC-CON-65 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2235,7 +2238,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
