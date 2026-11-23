@@ -73,7 +73,7 @@ Every change — feature, fix, dependency update, document correction — follow
 |---|---|---|
 | `requirement-gathering` (lead) | 1, 5 (README), 6, 9; the hand-off brief and the final checklist | REQUIREMENTS-SPECIFICATION.md, README.md, KNOWN-ISSUES.md |
 | `settings` | 3 for the Settings area | connections, presets, PAT handling, Git setup, access roles, periods, Feature setup, streams |
-| `export` | 3 for exports | CSV, backups, Git / SharePoint snapshots, Windchill exports, Monthly pack .pptx |
+| `export` | 3 for exports | CSV, backups, Git snapshots, Windchill exports, Monthly pack .pptx |
 | `test-protocol` | 4 (cases) | TEST-PLAN.md (§6, §7, use cases), UAT-PLAN.md, VERIFICATION-PLAN.md |
 | `automation-testing` | 4 (tests), 6 | tests/*.test.mjs, e2e/*.e2e.mjs, their SOFTWARE-COMPONENTS rows |
 | `dfmea` | 2 (design risk) | DFMEA.md |

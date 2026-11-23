@@ -52,7 +52,7 @@ For every L3 test, start from a clean browser profile unless the case says other
 | TD-01 | Synthetic sample | "Load synthetic sample" (deterministic): 6 people, 9 Epics, 14 Features, absence Epic 37778, holidays for India, Netherlands and US, DHFI release documents, 5 release scopes |
 | TD-02 | Azure DevOps test project | A project with a team backlog containing the fixture items in TD-02a. Use a PAT with Work Items Read & Write. |
 | TD-03 | Git test repository | A private repository with an empty branch `main`, plus a fine-grained token with Contents: Read and write |
-| TD-04 | SharePoint test site | A test site and an SPA app registration, where available. Otherwise mark SNP cases "Not run — no environment". |
+| TD-04 | Git data repository for snapshots | A private test repository with a fine-grained token (Contents: Read and write) for the snapshot cases; a read-only token for the disabled case. *(The SharePoint test site is no longer needed: SharePoint is in the backlog.)* |
 | TD-05 | Backup files | (a) a valid export; (b) `[]`; (c) schemaVersion 2; (d) `people` not an array; (e) an Azure item without `title`; (f) a file over 200 MB |
 | TD-06 | Desktop releases | Two consecutive `desktop-latest` builds (N installed, N+1 published) |
 
@@ -339,7 +339,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-NAV-36 Background jobs** — Req NAV-36 — L1 `background-jobs.test.mjs` ("background jobs: run, report progress and the result; the same job is not started twice"; "… a failed result or a thrown error marks the job; Clear finished keeps the running ones"); browser check (QMS-0025 with a saved PAT): New Feature → Save closes the form at once and the top bar shows “⟳ 1 running” with its progress, then “✓ Jobs done” with “#id … Hierarchy complete”; the menu and other pages stay usable meanwhile; Bulk actions → Create month tasks and Move run the same way and their buttons wait while the job runs; Monthly Time Writing → Save leaves a failed Task staged; reloading while a job runs asks first.
 
-**TC-NAV-34 Settings editors as pop-ups** — Req NAV-34 — browser check: Settings → Storage shows the Git storage and SharePoint summaries; "Connect Git storage…" and "Connect to SharePoint…" open pop-ups, a click beside them keeps them open, Cancel closes them; Settings → Azure DevOps: Edit on the Time Writing row and "＋ Add server" open pop-ups; Settings → Capacity & periods: "Edit capacity settings…" opens the form in a pop-up; "＋ Map an Epic or Feature…" maps #424242 and closes, the mapping's Edit opens "Change the mapping of #424242"; Settings → Feature setup: Go to Epic #13946 → the summary and "View setup…" (no Git) open "Shared Feature setup · Epic #13946", Close closes it; every pop-up form is one column (title, input, explanation per field) with Cancel then the main action at the bottom right; at 390 × 844 the connection pop-up fits without horizontal scrolling; no page errors. **UAT**
+**TC-NAV-34 Settings editors as pop-ups** — Req NAV-34 — browser check: Data & sharing shows the Git storage summary; "Connect Git storage…" opens a pop-up, a click beside them keeps them open, Cancel closes them; Settings → Azure DevOps: Edit on the Time Writing row and "＋ Add server" open pop-ups; Settings → Capacity & periods: "Edit capacity settings…" opens the form in a pop-up; "＋ Map an Epic or Feature…" maps #424242 and closes, the mapping's Edit opens "Change the mapping of #424242"; Settings → Feature setup: Go to Epic #13946 → the summary and "View setup…" (no Git) open "Shared Feature setup · Epic #13946", Close closes it; every pop-up form is one column (title, input, explanation per field) with Cancel then the main action at the bottom right; at 390 × 844 the connection pop-up fits without horizontal scrolling; no page errors. **UAT**
 
 **TC-CON-28 Work email required for Time Writing** — Req CON-60, CON-02 — browser check: a saved Time Writing connection without an email shows "Work email missing: Edit to add it" in the Stream mapping; Edit → Save without the email is blocked ("Please fill out this field"); with me@company.com it saves, the pop-up closes, the connection stores the email and the hint disappears; in the form at 1300px the PAT and email titles are one line and the inputs of each row line up. **UAT**
 
@@ -1161,25 +1161,20 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - With TD-01 loaded, Save to Git is refused with the sample message.
   - Disconnect removes both localStorage keys, and the repository is unchanged.
 
-### 6.12 SharePoint and snapshots (requires TD-04)
+### 6.12 Snapshots (requires TD-04)
 
-**TC-SNP-01 Connect and central save** — Req SNP-01…03
-- Expected:
-  - Saving without a client ID gives "Application (client) ID is required."
-  - Connecting to an empty site offers "Initialize central data".
-  - A change is saved after about 900 ms, with "Saved to SharePoint at …".
-  - A save after a concurrent change gives the SNP-03 message.
+**TC-SNP-01 SharePoint central storage** — Req SNP-01…03 — *(Retired with SNP-01…03: SharePoint is in the backlog; nothing to run.)*
 
-**TC-SNP-02 Snapshot upload** — Req SNP-04…07 — L1 `cloud-snapshots.test.mjs`.
-- Expected (L3):
-  - The buttons are disabled when disconnected.
-  - An LTE snapshot creates "{month}-LTE-{id}.json" in "…/Snapshots".
+**TC-SNP-02 Snapshot saved to Git** — Req SNP-04…07 — L1 `cloud-snapshots.test.mjs` ("SNP-06: snapshots go to lte-snapshots/ beside the planning data in the Git data repository"; "SNP-06: a snapshot is a new file (no version id sent), read back and compared before success, nothing kept in the browser"; "SNP-06: failures, an existing file and a mismatched read-back never report success"; "SNP-04: the page saves only with Git connected and a token that can write; no SharePoint code is left"; "snapshot freezes source data and excludes history/connection secrets").
+- Expected (L3, with TD-04):
+  - The buttons are disabled without Git storage, with a read-only token and with the synthetic sample.
+  - An LTE snapshot creates "lte-snapshots/{month}-LTE-{id}.json" in the data repository as one commit.
   - Success is reported only after the read-back.
   - The file contains exactly the SNP-05 data fields.
 
-**TC-SNP-03 History** — Req SNP-08
+**TC-SNP-03 History** — Req SNP-08 — L1 `cloud-snapshots.test.mjs` ("SNP-08: history lists only snapshot files, newest month first; a missing folder is empty; errors are reported").
 - Expected:
-  - Only matching files are listed, newest first.
+  - Only matching files are listed, newest month first, each linked to GitHub.
   - A non-matching file placed in the folder is not listed.
 
 **TC-SNP-04 Exports** — Req SNP-09, STO-06
@@ -1252,7 +1247,6 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 - Expected:
   - (a) restores after the checkbox is ticked.
   - (b)–(f) are each rejected with the message of STO-07, and the data is unchanged.
-  - Restore is refused while SharePoint is connected.
 
 ### 6.15 Web update
 

@@ -67,7 +67,6 @@ export const settingsIndex: SettingsEntry[] = [
   { tab: 'pack', section: 'tables', page: 'Reports', label: 'Table and chart defaults', words: 'export csv excel columns data labels' },
   { tab: 'storage', section: 'git', page: 'Data & sharing', label: 'Git storage', words: 'github token repository' },
   { tab: 'storage', section: 'shared', page: 'Data & sharing', label: 'Shared setup in Git', words: 'backup clean up connections' },
-  { tab: 'storage', section: 'sharepoint', page: 'Data & sharing', label: 'SharePoint', words: 'microsoft graph snapshot' },
   { tab: 'storage', section: 'views', page: 'Data & sharing', label: 'Other views', words: 'connections queries backlog' },
   { tab: 'storage', section: 'sample', page: 'Data & sharing', label: 'Synthetic sample', words: 'demo test data' },
   { tab: 'audit', page: 'History', label: 'History', words: 'audit changes who when' },

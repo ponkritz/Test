@@ -657,7 +657,7 @@ test('TC-SET-06: Admin lists the shared setup pages, My settings opens from your
   await navigate(page, 'Data & sharing')
   assert.equal(await text(page.locator('header.topbar h1')), 'Data & sharing')
   const sections = page.getByRole('tablist', { name: 'Sections' })
-  assert.deepEqual((await sections.getByRole('tab').allInnerTexts()).map((label) => label.trim()), ['Git storage', 'Shared setup in Git', 'SharePoint', 'Other views', 'Synthetic sample'])
+  assert.deepEqual((await sections.getByRole('tab').allInnerTexts()).map((label) => label.trim()), ['Git storage', 'Shared setup in Git', 'Other views', 'Synthetic sample'])
   await sections.getByRole('tab', { name: 'Other views' }).click()
   assert.match(await text(page.locator('.scope-line')), /Yours or everyone’s/)
   // Another page and back: the section shown last is remembered.

@@ -12,8 +12,8 @@ export type AzureConnectionRole = 'time-tracking' | 'release-source' | 'document
 export const azureConnectionRoles: AzureConnectionRole[] = ['time-tracking', 'backlog-view', 'release-source', 'documents', 'reference']
 export interface AzureConnectionProfile { id: string; url: string; reason: string; creatorEmail?: string; role?: AzureConnectionRole; query?: string; baseUrl?: string; apiVersion?: string; viewName?: string; showInMenu?: boolean; mine?: boolean; token: string }
 // shared: the connection is part of the shared connection setup in Git (read here, never written to Git).
-// mine (SET-17): one of My views — a person's own read-only view, kept on this computer only: never written to Git,
-// backups or SharePoint, never a stream's connection, and kept when the shared setup is reset.
+// mine (SET-17): one of My views — a person's own read-only view, kept on this computer only: never written to Git
+// or backups, never a stream's connection, and kept when the shared setup is reset.
 export interface AzureConnectionProfileSummary { id: string; url: string; reason: string; creatorEmail?: string; role: AzureConnectionRole; query?: string; baseUrl?: string; apiVersion?: string; viewName?: string; showInMenu?: boolean; shared?: boolean; mine?: boolean }
 const connectionProfilesKey = 'demand-planning-azure-connection-profiles-v1'
 const valid = (profile: unknown): profile is AzurePatProfile => Boolean(profile && typeof profile === 'object' && typeof (profile as AzurePatProfile).id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test((profile as AzurePatProfile).id) && typeof (profile as AzurePatProfile).purpose === 'string' && (profile as AzurePatProfile).purpose.trim().length > 0 && typeof (profile as AzurePatProfile).token === 'string' && (profile as AzurePatProfile).token.trim().length > 0)

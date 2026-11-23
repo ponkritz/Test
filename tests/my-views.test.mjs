@@ -38,7 +38,7 @@ test('My views: on a server with a PAT, never named after a stream, never a stre
   assert.deepEqual(removeAllConnections(storage).map((entry) => entry.id), ['tw'])
   assert.deepEqual(listAzureConnectionProfiles(storage).map((entry) => entry.id), ['my-1'])
 
-  // Their data is left out of what goes to SharePoint and backups.
+  // Their data is left out of what goes to backups.
   const state = { azureSources: [{ connectionId: 'my-1', items: [] }, { connectionId: 'dp', items: [] }] }
   assert.deepEqual(withoutMyViews(state, new Set(['my-1'])).azureSources.map((source) => source.connectionId), ['dp'])
   assert.equal(withoutMyViews(state, new Set()), state, 'unchanged without My views')

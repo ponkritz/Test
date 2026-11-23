@@ -18,7 +18,6 @@ import { fetchTeamMembers } from '../azureDevOps'
 import { HistoryPanel } from '../components/HistoryPanel'
 import type { HistoryStore } from '../useHistory'
 import { TableDefaultsPanel } from '../components/TableDefaultsPanel'
-import type { SharePointConfig } from '../sharepoint'
 import { EmptyState, Info, Modal, Notice, Page, Panel, Pill, SettingsSummary } from '../components/ui'
 import { formatDate, formatDateTime, formatHours, monthName } from '../format'
 import { azureResources, capacityContext, capacityModel, type CapacityRoles, normalizeCapacitySettings, normalizeProfiles, regions, resourceRoles, resourceRows, type CapacitySettings, type MonthLock, type ResourceProfile, type SharedTimeRule } from '../capacity'
@@ -57,8 +56,6 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
   const capacityNeeds: Record<string, Action> = { history: 'capacity.history', capacity: 'capacity.settings', profiles: 'capacity.settings', rules: 'capacity.rules', insights: 'capacity.rules', time: 'capacity.time', period: 'capacity.periods' }
   const [reason, setReason] = useState('Approved operational extension')
   const [capacityMessage, setCapacityMessage] = useState('')
-  const [sharePointConfig, setSharePointConfig] = useState<SharePointConfig>(() => store.getSavedSharePointConfig())
-  const [sharePointOpen, setSharePointOpen] = useState(false)
   const [capacityOpen, setCapacityOpen] = useState(false)
   const capacity = capacityContext(store.state)
   const lockNow = useNow(60000)
@@ -234,12 +231,6 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
     setCapacityMessage(`${detail}. Save to Git (bar above) so everyone gets it.`)
   }
 
-  async function connectSharePoint(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    try { await store.connectSharePoint(sharePointConfig) } catch { /* Connection state displays the actionable error. */ }
-  }
-
-  const connectionFailed = store.connection.status === 'error' || store.connection.status === 'conflict'
   // One Settings page at a time (chosen in the menu, SET-14); the shared pages only for roles that manage shared settings.
   // SET-15: My settings for everyone; an older page key opens the page it moved to.
   const asked = resolveSettings(requested).tab
@@ -277,12 +268,6 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
         {everything.loaded && <Notice tone={everything.failed?.length ? 'warning' : 'success'}>Loaded: {everything.loaded.join('; ') || 'nothing'}.{everything.failed?.length ? ` Not loaded — ${everything.failed.join(' · ')}` : ''}</Notice>}
       </Panel> }] : []),
       ...(can('storage.shared') ? [{ key: 'shared', label: 'Shared setup in Git', scope: 'tool-owner' as const, node: <AzureViewsGitPanel git={git} azure={azure} /> }] : []),
-      { key: 'sharepoint', label: 'SharePoint', scope: 'computer', node: <Panel className="connection-panel" eyebrow="CENTRAL DATA" title="SharePoint connection" info="Uses Microsoft sign-in and stores one versioned JSON data file in the I&D Quality document library. No client secret is stored in the browser." action={<Pill tone={store.connection.mode === 'sharepoint' ? 'open' : connectionFailed ? 'danger' : 'neutral'}>{store.connection.status}</Pill>}>
-        <SettingsSummary rows={[['Host', sharePointConfig.hostname], ['Site', sharePointConfig.sitePath], ['Data file', sharePointConfig.stateFilePath], ['Application ID', sharePointConfig.clientId ? 'Set' : '']]} />
-        <div className="button-row"><button type="button" className={store.connection.mode === 'sharepoint' ? 'ghost' : 'primary'} onClick={() => setSharePointOpen(true)}>{store.connection.mode === 'sharepoint' ? 'Change connection…' : 'Connect to SharePoint…'}</button>{store.connection.mode === 'empty' && <button type="button" className="primary" onClick={() => void store.initializeSharePoint()}>Initialize central data</button>}{store.connection.mode === 'sharepoint' && <><button type="button" className="ghost" onClick={() => void store.pullSharePoint()}>Pull latest</button><button type="button" className="ghost" onClick={store.disconnectSharePoint}>Disconnect</button></>}</div>
-        {sharePointOpen && <Modal title="SharePoint connection" eyebrow="SETTINGS · STORAGE" wide form onClose={() => setSharePointOpen(false)}><form className="connection-form" onSubmit={(event) => { setSharePointOpen(false); void connectSharePoint(event) }}><label>Tenant ID (optional)<input value={sharePointConfig.tenantId} onChange={(event) => setSharePointConfig({ ...sharePointConfig, tenantId: event.target.value })} placeholder="Auto-detect from work sign-in" /></label><label>Application (client) ID<input required value={sharePointConfig.clientId} onChange={(event) => setSharePointConfig({ ...sharePointConfig, clientId: event.target.value })} placeholder="Registered SPA client ID" /></label><label>SharePoint host<input required value={sharePointConfig.hostname} onChange={(event) => setSharePointConfig({ ...sharePointConfig, hostname: event.target.value })} /></label><label>Site path<input required value={sharePointConfig.sitePath} onChange={(event) => setSharePointConfig({ ...sharePointConfig, sitePath: event.target.value })} /></label><label className="wide-field">Central data file<input required value={sharePointConfig.stateFilePath} onChange={(event) => setSharePointConfig({ ...sharePointConfig, stateFilePath: event.target.value })} /></label><div className="connection-actions"><button className="primary" disabled={store.connection.status === 'connecting'}>{store.connection.status === 'connecting' ? 'Connecting…' : 'Connect to SharePoint'}</button><button type="button" className="ghost" onClick={() => setSharePointOpen(false)}>Cancel</button></div></form></Modal>}
-        {store.connection.message && <Notice tone={connectionFailed ? 'error' : 'info'}>{store.connection.message}{store.connection.account ? ` Signed in as ${store.connection.account}.` : ''}</Notice>}
-      </Panel> },
       { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
       ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> }] : []),
       { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
@@ -389,9 +374,8 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
       <div className="query-toolbar"><select aria-label="Area" value={auditFilter.entity} onChange={(event) => setAuditFilter({ ...auditFilter, entity: event.target.value })}><option value="">All areas</option>{auditEntities.map((entity) => <option key={entity}>{entity}</option>)}</select><input className="search" aria-label="Search changes" placeholder="Search changes" value={auditFilter.text} onChange={(event) => setAuditFilter({ ...auditFilter, text: event.target.value })} /><small className="muted">{auditShown.length} of {store.state.audits.length}</small></div>
       {auditShown.slice(0, 200).map((item) => <div className="audit-row" key={item.id}><span>{item.action}</span><div><strong>{item.entity}</strong><small>{item.detail}</small></div><time>{formatDateTime(item.timestamp)}</time></div>)}
       {!store.state.audits.length && <EmptyState title="No changes recorded yet." detail="Changes made in the app will appear here." />}
-      {/* OI-09: confirmed first, recorded in History, and not offered while the data lives in SharePoint. */}
-      {store.connection.mode === 'sharepoint' ? <p className="muted">Reset synthetic MVP data is not available while the planning data is stored in SharePoint.</p>
-        : <button className="danger-button" onClick={() => { if (window.confirm('Reset the planning data in this browser to the synthetic MVP data? Your periods, capacity, resources, baselines and History here are replaced, and the fetched Azure DevOps data is cleared until the next fetch (connections and PATs are kept). If Git storage is connected, the change is only shared when someone saves it to Git.')) store.reset() }}>Reset synthetic MVP data</button>}
+      {/* OI-09: confirmed first and recorded in History. */}
+      {<button className="danger-button" onClick={() => { if (window.confirm('Reset the planning data in this browser to the synthetic MVP data? Your periods, capacity, resources, baselines and History here are replaced, and the fetched Azure DevOps data is cleared until the next fetch (connections and PATs are kept). If Git storage is connected, the change is only shared when someone saves it to Git.')) store.reset() }}>Reset synthetic MVP data</button>}
     </Panel>}
   </Page>
 }

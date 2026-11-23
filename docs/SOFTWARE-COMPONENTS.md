@@ -28,7 +28,7 @@ This document lists every software component of the system: the in-house source 
 | index | `src/docs/index.ts` | Bundles docs/*.md at build time into the list of project documents shown on the Documentation page. | DOC |
 | registry | `src/pages/registry.ts` | Single source of page ids, labels, icons, sidebar groups, header text and month-picker use. | NAV |
 | types | `src/pages/types.ts` | `PageProps` shared by pages: the app store, the selected month and its setter. | — |
-| AdminPage | `src/pages/AdminPage.tsx` | Settings pages (one per menu entry, SET-14), with sections for Azure DevOps connections, Git and SharePoint storage, Access, Feature setup, capacity/absence, periods, resources, master data and audit. | SET, CON, GIT, SNP, CAP |
+| AdminPage | `src/pages/AdminPage.tsx` | Settings pages (one per menu entry, SET-14), with sections for Azure DevOps connections, Git storage, Access, Feature setup, capacity/absence, periods, resources, master data and audit. | SET, CON, GIT, SNP, CAP |
 | BacklogHealthPage | `src/pages/BacklogHealthPage.tsx` | Backlog Health: open work in ended Sprints, Features without DoD and unassigned work, with person filter, chosen columns, sorting and CSV. | CON |
 | BaselinesPage | `src/pages/BaselinesPage.tsx` | Baselines: estimation rules editor, release baselines vs booked hours, and the monthly Time Writing task plan check. | BAS, GIT |
 | BoardPage | `src/pages/BoardPage.tsx` | Backlogs / Release Details: editable Time Writing tree, read-only query views, release views, the CP release report and the DP table with DDT month filter and board match. | CON, FET, QV, ATM |
@@ -58,7 +58,7 @@ This document lists every software component of the system: the in-house source 
 | BulkEpicsPanel | `src/components/BulkEpicsPanel.tsx` | Settings → Stream mapping → Bulk creation Epics: shared and personal Epic per stream (QV-59). | QV, SET |
 | IoccBulkCreate | `src/components/IoccBulkCreate.tsx` | Create Features for the selected IOCC releases by the DP rules (QV-59). | QV |
 | ZoomControl | `src/components/ZoomControl.tsx` | The desktop app's zoom control: − / % / +, Auto, Ctrl keys. | UI |
-| SnapshotsPage | `src/pages/SnapshotsPage.tsx` | Snapshots: SharePoint snapshot history, browser storage and backup recovery, legacy snapshot records. | SNP, STO |
+| SnapshotsPage | `src/pages/SnapshotsPage.tsx` | Snapshots: LTE / PI Review snapshots saved to Git and their history, browser storage and backup recovery, legacy snapshot records. | SNP, STO |
 
 ### 1.2 UI components
 
@@ -116,7 +116,7 @@ This document lists every software component of the system: the in-house source 
 | chartLabels | `src/chartLabels.ts` | Chart data labels: each chart's own choice kept per computer, else the shared default (UI-17). | UI |
 | useStreamEpics | `src/useStreamEpics.ts` | The shared release-source settings in a React context and the hook giving a stream's Epics for the board match (QV-57). | QV |
 | useCan | `src/useCan.ts` | The viewer's permissions in a React context, for the controls deep in the page tree (bulk create, QE Mapping, Monthly pack text, shared Feature setup, export) (CON-94). | CON |
-| myViews | `src/myViews.ts` | My views: the servers with a PAT, a new view checked (no stream names, no duplicates), and the app data without My views' data for SharePoint and backups (SET-17). | SET |
+| myViews | `src/myViews.ts` | My views: the servers with a PAT, a new view checked (no stream names, no duplicates), and the app data without My views' data for backups (SET-17). | SET |
 | epicSetup | `src/epicSetup.ts` | The Epic setup file (fields, value lists, title pattern), the Title and Description of a new Feature from its fields, Block / Warn, bulk creation and Copy to Epics (EPS-01…05). | EPS |
 | useEpicSetup | `src/useEpicSetup.ts` | The shared Epic setup from Git (epic-setup.json), its cached copy and draft, and the context for New Feature and bulk creation (EPS-01). | EPS |
 | EpicSetupPanel | `src/components/EpicSetupPanel.tsx` | Admin → Epic setup: Feature fields per Epic, title pattern and preview, Copy to Epics, and the value lists (EPS-01, EPS-05). | EPS |
@@ -215,13 +215,12 @@ This document lists every software component of the system: the in-house source 
 
 | Component | Path | Purpose | Requirement areas |
 |---|---|---|---|
-| store | `src/store.ts` | `useAppStore`: app state with IndexedDB persistence, SharePoint connection/sync, snapshots and audit. | STO, SNP |
+| store | `src/store.ts` | `useAppStore`: app state with IndexedDB persistence and audit. | STO |
 | browserState | `src/browserState.ts` | IndexedDB state repository: validation, legacy migration, backup validation and ordered serialized writes. | STO |
 | gitStorage | `src/gitStorage.ts` | GitHub-repo planning data file: config/token, serialise/parse, read/write/delete with conflict detection, folder listing. | GIT |
 | gitWatch | `src/gitWatch.ts` | Refresh while open: versions of the shared files read or saved, folders to list, the files changed in Git and their names for the banner. | GIT |
 | gitSnapshots | `src/gitSnapshots.ts` | On-prem read-only view fetches saved to Git (azure-data/) without PATs; parse, digest, apply. | GIT, FET |
-| sharepoint | `src/sharepoint.ts` | SharePoint client via MSAL and Microsoft Graph for remote app state. | SNP |
-| cloudSnapshots | `src/cloudSnapshots.ts` | Frozen whitelisted snapshot files uploaded to SharePoint with read-back verification; listing history. | SNP |
+| cloudSnapshots | `src/cloudSnapshots.ts` | Frozen whitelisted snapshot files saved to the Git data repository (lte-snapshots/) as new files with read-back verification; listing history. | SNP |
 | viewDefinitions | `src/viewDefinitions.ts` | Azure connection definitions file in Git: serialise/parse, restore with PAT rules, sync (the stream mapping enforced), pending admin changes, duplicates. | CON, GIT |
 | download | `src/download.ts` | File downloads: effort CSV, state JSON backup, CSV, JSON, Markdown, XLSX and PPTX. | STO, CON, PCK |
 | seed | `src/seed.ts` | Initial synthetic AppState (people, activities, efforts, baselines, periods). | SMP |
@@ -414,7 +413,6 @@ Direct dependencies from `package.json`, with the exact version resolved by `pnp
 |---|---|---|---|---|---|
 | react | 19.3.1 | MIT | runtime | UI rendering library. | The app does not render; caught by the ErrorBoundary and by every L3 test. |
 | react-dom | 19.3.1 | MIT | runtime | React DOM renderer. | As react. |
-| @azure/msal-browser | 5.27.0 | MIT | runtime (SharePoint only) | Microsoft Entra ID sign-in for the optional SharePoint storage (SNP). | SharePoint sign-in fails; local and Git storage are unaffected. |
 | electron | 44.10.1 | MIT | runtime (desktop) | Desktop shell: Chromium and Node.js runtime, IPC, window. Bundles its own Chromium and Node versions. | Desktop app fails to start or a sandbox weakness; web app unaffected. |
 | vite | 8.3.5 | MIT | build | Bundler and dev server; emits `build-info.json`. | Build fails in CI (no release). |
 | @vitejs/plugin-react | 6.1.2 | MIT | build | React fast-refresh and JSX transform for Vite. | Build fails in CI. |
@@ -440,7 +438,7 @@ The app has **no other runtime dependency**: CSV, Markdown and .xlsx handling (`
 | Browsers | Latest Chrome / Edge (Windows), Chrome / Safari (macOS) per TEST-PLAN.md §3 | Web app runtime; IndexedDB and localStorage. |
 | Azure DevOps Services / Server | REST API 7.1 (fallback 6.0, 5.0 on-premises) | Work items source; writes to Services only. |
 | GitHub repository contents API | v3 | Private data repository (planning data, setup, exports). |
-| Microsoft Graph | v1.0 | Optional SharePoint storage. |
+| Microsoft Graph | — | *(Not used: the SharePoint storage is in the backlog.)* |
 
 ## 4. Known vulnerabilities in third-party components
 
