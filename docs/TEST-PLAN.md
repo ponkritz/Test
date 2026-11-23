@@ -717,7 +717,7 @@ Cases marked **UAT** are also run in acceptance testing.
   - An Epic → Feature → Story → Task tree with the heading "QMS-0025" (or the View name).
   - Removed items are absent.
   - A changed column preference survives a reload.
-  - "Source details and dates" lists at most 100 rows and searches by ID, title, type and state.
+  - The "Source details (n)" tab lists at most 100 rows and searches by ID, title, type and state (see TC-BKL-34).
 
 **TC-BKL-02 Create Feature hierarchy** — Req BKL-04…09, BKL-11 — **UAT**
 - Steps:
@@ -795,6 +795,8 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-BKL-32 Early close removes later months' Time Writing Tasks** — Req BKL-43 — L1 `close-list.test.mjs` ("BKL-43: closing a Feature early lists its later months’ Time Writing Tasks to remove (everyone’s, ticked; not those with Completed Work)"; "BKL-43: a later month that cannot be removed keeps its story and the Feature open"); browser check with a Feature whose Time Writing runs to next year: Close Feature — the later months are listed "→ Removed, 0 h", ticked; after Close they are Removed with 0 h Original Estimate.
 
 **TC-BKL-33 Edit keeps an unassigned item unassigned** — Req BKL-44 — L1 `work-item-edit.test.mjs` ("BKL-44: Assigned to starts blank — an unassigned item stays unassigned unless someone is picked"); browser check with a Time Writing connection: Edit an unassigned Task, change only the title, Save — Assigned to is still empty in Azure DevOps; pick a person — that person is set.
+
+**TC-BKL-34 One scroll bar on the board; Source details is its own tab** — Req BKL-45, BKL-12 — E2E `backlog.e2e.mjs` ("TC-BKL-34: QMS-0025 has one scroll bar — the board fills the screen — and Source details is its own tab"); browser check: at 1440 × 900 and with the menu folded, Expand all leaves the page without a scroll bar and the table scrolls; at 390 px the page scrolls.
 
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
@@ -1794,7 +1796,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | ATM-28 | TC-ATM-21 |
 | ATM-29 | TC-ATM-22 |
 | ATM-30 | TC-ATM-23 |
-| BKL-01…03, BKL-12 | TC-BKL-01 |
+| BKL-01…03, BKL-12 | TC-BKL-01, TC-BKL-34 |
 | BKL-04…09, BKL-11 | TC-BKL-02 |
 | BKL-10 | TC-BKL-03, TC-ATM-11 |
 | BKL-13 | TC-BKL-04 |
@@ -1829,6 +1831,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-42 | TC-BKL-31 |
 | BKL-43 | TC-BKL-32 |
 | BKL-44 | TC-BKL-33 |
+| BKL-45 | TC-BKL-34 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -2128,7 +2131,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
-| UC-07 | TC-BKL-01…09, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
+| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61 |
 | UC-09 | TC-OV-11…14, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
