@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v9.0.0 — 2026-11-23
+
+**Changed**
+- **Read-only until the access roles are loaded** — access now fails closed: until a roles file (`access.json` from Git storage, or the copy kept in this browser from an earlier read) is loaded, everyone is read-only: every page is in the menu, but nothing can be changed and changes to Azure DevOps are refused before they are sent. A notice at the top of every page says so and what to do (connect Git storage). Before, without `access.json` (or while it was loading, or when it could not be read) everyone could do everything. When Git storage is connected and has no `access.json` yet, the viewer may only set up the first roles file (Set up roles), keeping Manage access for themselves (CON-101, CON-43; design defaults review, decision 2).
+
+**Fixed**
+- Access no longer fails open on a new browser while `access.json` loads or when it cannot be read; the Azure DevOps write guard starts closed (KB-71).
+
+DF-139, SM-93; TC-CON-63.
+
+PR #357.
+
 ## v8.0.0 — 2026-11-23
 
 **Added**
