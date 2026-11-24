@@ -444,7 +444,14 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     assert.equal(await bar.locator('.view-actions .primary', { hasText: '↻' }).count(), 1, `${name}: ↻`)
     assert.equal(await bar.getByRole('button', { name: `More actions: ${name}` }).count(), 1, `${name}: ⋯`)
     // (2) Counts: every stream, with the tiles it has a rule for; the numbers in the one KPI size (24px, §9).
-    assert.deepEqual((await page.locator('.release-counts .metric-grid article > span').allInnerTexts()).map((label) => label.trim().toLowerCase()), [`releases in ${monthLabel.toLowerCase()}`, ...counts], `${name}: the counts`)
+    // TVL-23: Tool Validations shows them on its Master list tab only, as Validations.
+    const tool = name === 'Tool Validations'
+    if (tool) {
+      assert.equal(await page.locator('.release-counts').count(), 0, `${name}: no counts above the tabs or on the Expiry list`)
+      await page.getByRole('tablist', { name: 'Result' }).getByRole('tab', { name: 'Master list' }).click()
+      await page.locator('.release-counts').waitFor()
+    }
+    assert.deepEqual((await page.locator('.release-counts .metric-grid article > span').allInnerTexts()).map((label) => label.trim().toLowerCase()), [`${tool ? 'validations' : 'releases'} in ${monthLabel.toLowerCase()}`, ...counts], `${name}: the counts`)
     assert.equal(await page.locator('.release-counts').getByRole('button', { name: /What was counted/ }).count(), 1, `${name}: ⓘ What was counted`)
     for (const size of await page.locator('.release-counts .metric-grid article > strong').evaluateAll((numbers) => numbers.map((number) => getComputedStyle(number).fontSize))) assert.equal(size, '24px', `${name}: KPI numbers 24px`)
     // (3) Tabs: Releases | Source data (n), with every month shown.
@@ -492,7 +499,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   // QV-64: Content counts its releases of the month (no Completed or Supported rule); Tool Validations its tools,
   // Supported as Pulse Check counts them (no Completed rule).
   await open('Tool Validations')
-  await parts('Tool Validations', { counts: ['supported'] })
+  await parts('Tool Validations', { counts: ['supported validations'] })
   assert.deepEqual((await headers()).slice(-4), commonEnd, 'Tool Validations: the common end')
 
   await open('Content')

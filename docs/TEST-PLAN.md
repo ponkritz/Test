@@ -2105,6 +2105,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-TVL-13 The owners' tabs read only without the right** — Req TVL-17, TVL-11, CON-102 — E2E `tool-validations.e2e.mjs` ("TC-TVL-13: a Team Member reads the owners’ tabs — the Table and the dashboard shown, every change disabled with the reason; Setup → Tabs read only": the tabs read Expiry list, Master list, Azure, Tool dashboard, Open actions, Setup; neither page in the menu; the dashboard tab draws its chart of the master list with no ＋ Add block… and the reason "Build On-Demand Dashboards"; the Table tab shows its row with ＋ Add row and Set up columns… disabled and the reason; Setup → Tabs: ＋ Add tab…, ←, Rename… and Remove… disabled with the list's reason; nothing written); browser check: a co-owner named in Setup → Team settings adds rows and blocks on the tabs and removes a tab — the delete choice is disabled with "Only a Tool Owner … can delete a page"; in View as and with the sample everything is disabled with the reason.
 
+**TC-TVL-14 Completed by the completion date (Changed Date by default, or a chosen field)** — Req TVL-21, TVL-20 — L1 `tool-queries.test.mjs` ("TVL-21: Completed by the default completion date, Changed Date (last updated date), in UTC (TC-TVL-14)", "TVL-20, TVL-21: Completed by a chosen completion field; a tool without it is never Completed (TC-TVL-14)"); browser check: with two queries, edit a tool's work item in Azure DevOps and refresh — with Changed Date it moves to this month's Completed; with a date column chosen it stays in its month.
+
+**TC-TVL-15 Supported via Parent and a qualifying Quality signature; documents not linked to a tool** — Req TVL-21 — L1 `tool-queries.test.mjs` ("TVL-21: Supported via Parent and a qualifying Quality signature — roles trimmed and case ignored, empty slots and other months not counted (TC-TVL-15)", "TVL-21: documents whose Parent is no tool are “Not linked to a tool”: listed, never counted (TC-TVL-15)", "TVL-21: 20,000 documents are read once into maps — linear, a month is a lookup (TC-TVL-15)"); browser check: a signed document whose Parent is no tool appears under **Not linked to a tool** on the Azure tab and in ⓘ What was counted, and Supported does not change.
+
+**TC-TVL-16 Two connections told apart; the same counts on the page, in Pulse Check, the Monthly pack and the cumulative chart; one connection as before** — Req TVL-19, TVL-22, QV-64, TVL-13 — L1 `tool-queries.test.mjs` ("TVL-19: the two connections — Signed documents by the setting, by its name or by its columns; with one connection none (TC-TVL-16)", "TVL-22: Pulse Check, the Release page, the Monthly pack and the cumulative chart count the same with two queries (TC-TVL-16)", "TVL-19, QV-64: with one connection Tool Validations counts as before — each tool with a document in the month (TC-TVL-16)"); browser check: Signed documents query set to **None — one query** gives the counts of one query again.
+
+**TC-TVL-17 The Tool Validations queries setting: saved for everyone, validated when read** — Req TVL-20, GIT-14 — L1 `tool-queries.test.mjs` ("TVL-20: the setting is kept in the shared settings and survives the Git round trip; bad values are dropped (TC-TVL-17)"); E2E `tool-validation-queries.e2e.mjs` ("TC-TVL-18: …": the completion field chosen is saved in `planning-data.json` as `releaseSourceSettings.toolValidations`); browser check: as a Team Member the panel's two pickers are disabled with "Set by the Tool Owner (Stream mapping); read only for you."
+
+**TC-TVL-18 The Tool Owner counts Tool Validations from two queries** — Req TVL-19, TVL-20, TVL-21, TVL-22, TVL-14 — **UAT** — E2E `tool-validation-queries.e2e.mjs` ("TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queries, picks the completion date and sees Completed and Supported on the Tool Validations page and in Pulse Check": Add query on the Tool Validations row and on its Signed documents row; the Tool Validations queries panel shows Tools and Signed documents, "found by its name", Changed Date by default with its note and the query's date column offered; October: Releases 2, Completed 2 (Changed Date), Supported 1 (QA signature; an author's signature does not count), both queries' Source data with 3 rows and one document Not linked to a tool; Validation Completed chosen and saved: Completed 1; Pulse Check → Current month releases: "1 completed 1 supported", the Supported line names the supported tool; Azure DevOps only read); UAT: with the team's real Tools and Signed documents queries, set up the second connection with **Add query**, check the roles in **Tool Validations queries**, compare a month's Completed and Supported with the tools you know were validated and signed by Quality in it, choose another completion date if the query has one, and check that Pulse Check and the Monthly pack show the same numbers.
+
+**TC-TVL-19 The Tool Validations counts on the Master list tab only, as Validations** — Req TVL-23 — E2E `documents-and-data.e2e.mjs` ("TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Expiry list | Master list | Azure | Setup) and the common columns in order": no counts above the tabs or on the Expiry list; on Master list Validations in {Month} and Supported validations) ; E2E `tool-validation-queries.e2e.mjs` ("TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queries, picks the completion date and sees Completed and Supported on the Tool Validations page and in Pulse Check": Validations in October 2026, Completed validations, Supported validations on Master list; none on the Azure tab) ; browser check: open Tool Validations — Expiry list, Azure and Setup show no count tiles; Master list shows them with What was counted.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2351,7 +2363,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QV-61 | TC-QV-42 |
 | QV-62 | TC-QV-43 |
 | QV-63 | TC-QV-44 |
-| QV-64 | TC-QV-45, TC-QV-43, TC-TVL-08 |
+| QV-64 | TC-QV-45, TC-QV-43, TC-TVL-08, TC-TVL-16, TC-TVL-18 |
 | QV-65 | TC-QV-46, TC-QV-43 |
 | QV-66 | TC-QV-47, TC-QV-49 |
 | QV-67 | TC-QV-48 |
@@ -2845,6 +2857,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | TVL-15, TVL-16 | TC-TVL-10, TC-TVL-11 |
 | TVL-17 | TC-TVL-11, TC-TVL-13 |
 | TVL-18 | TC-TVL-12, TC-TVL-11 |
+| TVL-19 | TC-TVL-16, TC-TVL-18 |
+| TVL-20 | TC-TVL-14, TC-TVL-17, TC-TVL-18 |
+| TVL-21 | TC-TVL-14, TC-TVL-15, TC-TVL-18 |
+| TVL-22 | TC-TVL-16, TC-TVL-18 |
+| TVL-23 | TC-TVL-19 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2866,7 +2883,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
@@ -2897,7 +2914,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…97, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12 |
-| UC-39 | TC-TVL-01…13 |
+| UC-39 | TC-TVL-01…19 |
 
 ## 8. Result record
 

@@ -3,7 +3,8 @@ import { myPatternsVersion } from './myNamingPatterns.ts'
 import type { AppState, AzureWorkItem } from './domain'
 import type { AzureConnectionProfileSummary } from './azureCredentials.ts'
 import { releaseFor, releaseOf } from './releasePath.ts'
-import { allStreams, defaultStreams, profileForStream, profilesForStream, streamArea, streamOfProfile, streamsVersion, type ReleaseRule } from './streams.ts'
+import { allStreams, defaultStreams, profileForStream, profilesForStream, streamArea, streamOfProfile, streamsVersion, toolQueries, type ReleaseRule } from './streams.ts'
+import { toolMonthReport, toolQueryIndex } from './toolQueries.ts'
 import { cpMonthReport, cpNameIndex, cpSignatures, fieldReader } from './cpReporting.ts'
 import { countStreams, normalizeReleaseSourceSettings, releaseRegister, streamPatterns, viewMonthOf, type EnteredCounts } from './releaseSource.ts'
 import { viewSource } from './viewSources.ts'
@@ -104,6 +105,45 @@ function cpStream(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Part
   }
 }
 
+// TVL-19…TVL-22: Tool Validations from its two queries (toolQueries): Completed = the tools whose completion date
+// (the chosen field, default Changed Date) is in the month; Supported = the tools with a qualifying Quality signature
+// in the month on a document whose Parent is the tool (CP's logic). Undefined with one query (counted as before).
+// The index is read once per fetched data set and settings (KB-27).
+const toolIndexCache = new WeakMap<object, WeakMap<object, Map<string, ReturnType<typeof toolQueryIndex>>>>()
+const noDocuments: AzureWorkItem[] = []
+export function toolReportFor(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string) {
+  const stream = defaultStreams.find((entry) => entry.rule === 'tool')!
+  const queries = toolQueries(stream, profiles)
+  if (!queries.tools || !queries.documents) return undefined
+  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
+  const tools = viewSource(state, queries.tools.id, queries.tools.role, queries.tools.query, releaseConnections)
+  const documents = viewSource(state, queries.documents.id, queries.documents.role, queries.documents.query, releaseConnections)
+  const settings = normalizeReleaseSourceSettings(state.releaseSourceSettings).toolValidations
+  const patterns = streamPatterns(state.releaseSourceSettings, stream.name)
+  const toolItems = tools?.items ?? noDocuments, documentItems = documents?.items ?? noDocuments
+  const toolColumns = tools && 'columns' in tools ? tools.columns : undefined, documentColumns = documents && 'columns' in documents ? documents.columns : undefined
+  let byDocuments = toolIndexCache.get(toolItems)
+  if (!byDocuments) { byDocuments = new WeakMap(); toolIndexCache.set(toolItems, byDocuments) }
+  let byKey = byDocuments.get(documentItems)
+  if (!byKey) { byKey = new Map(); byDocuments.set(documentItems, byKey) }
+  const key = JSON.stringify([settings?.completionField ?? '', timeZone ?? '', patterns, toolColumns ?? null, documentColumns ?? null])
+  let index = byKey.get(key)
+  if (!index) { index = toolQueryIndex(toolItems, toolColumns, documentItems, documentColumns, { completionField: settings?.completionField, patterns, timeZone }); byKey.set(key, index) }
+  return { tools: queries.tools, documents: queries.documents, how: queries.how, toolSource: tools, documentSource: documents, report: toolMonthReport(index, month) }
+}
+function toolStream(found: NonNullable<ReturnType<typeof toolReportFor>>, name: string): ReleaseStream {
+  const { report } = found
+  const completed = new Set(report.completed.map((row) => row.id))
+  const supported = new Map(report.supported.map((entry) => [entry.tool.id, entry]))
+  return {
+    id: found.tools.id, name, fetchedAt: found.toolSource?.fetchedAt ?? '',
+    releases: report.completed.map((row) => ({ name: row.label, release: '', documents: supported.get(row.id)?.documents ?? 0, ...(row.completionDate ? { approvalDate: row.completionDate } : {}) })),
+    documents: report.signedDocuments,
+    titles: report.listed.map((row) => { const entry = supported.get(row.id); return { id: row.id, title: row.label, url: row.url, release: [completed.has(row.id) ? 'Completed' : '', entry ? `Supported · ${entry.documents} signed document${entry.documents === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), ...(entry?.date ?? row.completionDate ? { approvalDate: entry?.date ?? row.completionDate } : {}) } }),
+    supported: report.supported.length, supportedEntries: report.supported.map((entry) => ({ key: `tool:${entry.tool.id}`, label: entry.tool.label })),
+  }
+}
+
 // Pulse Check: the default Azure streams in their order (DP, CP, IOCC, Content, Tool Validations), each from the
 // connection named like it, also before it is fetched; a stream without a connection is listed as not set up.
 // The streams of a month are worked out once per data set (KB-27): the store replaces its arrays on every change, so
@@ -150,6 +190,7 @@ function computeStreamsOnly(state: Pick<AppState, 'azureSources' | 'releaseSourc
     if (stream.rule === 'dp' && profile && !stream.custom) return { ...dpStream(state, profile, releaseConnections, month, timeZone), name: stream.name }
     if (stream.rule === 'iocc' && profile) return { ...ioccStream(state, profile, releaseConnections, month, timeZone, stream.name, streamArea(stream)), name: stream.name }
     if (stream.rule === 'cp' && profile) return cpStream(state, profiles, month, timeZone)
+    if (stream.rule === 'tool' && !stream.custom && profile) { const two = toolReportFor(state, profiles, month, timeZone); if (two) return toolStream(two, stream.name) }
     return profile ? { ...streamOf(state, profile, releaseConnections, month, timeZone, stream.rule, streamPatterns(state.releaseSourceSettings, stream.name), streamArea(stream)), name: stream.name } : { id: `stream:${stream.name}`, name: stream.name, fetchedAt: '', releases: [], documents: 0, titles: [], notSetUp: true }
   })
 }

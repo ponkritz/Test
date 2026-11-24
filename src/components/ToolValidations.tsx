@@ -32,11 +32,12 @@ function Missing() { return <Panel><EmptyState title="The Tool Validations maste
 
 // ---- TVL-14, TVL-15: the tabs — Expiry list first, Master list, Azure (this query), one per other source in the order
 // added, the owners' tabs in their order, Setup last ----
-export function ToolValidationsTabs({ id, azure }: { id: string; azure: ReactNode }) {
+// TVL-23: `masterTop` (the month's Validations, Completed and Supported counts) shows on the Master list tab only.
+export function ToolValidationsTabs({ id, azure, masterTop }: { id: string; azure: ReactNode; masterTop?: ReactNode }) {
   const env = useToolValidationsEnv()
   const file = env?.store.shown ?? { sources: [], tabs: [] }
   const extra = toolTabs(file, customToolTabs(file)).filter((tab) => tab.key !== toolTabExpiry)
-    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <ToolMasterList /> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : env && tab.custom ? <CustomTabView env={env} tab={tab.custom} /> : <Missing /> }))
+    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <>{masterTop}<ToolMasterList /></> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : env && tab.custom ? <CustomTabView env={env} tab={tab.custom} /> : <Missing /> }))
   return <ResultTabs id={id} mainKey={toolTabExpiry} mainLabel="Expiry list" main={<ToolExpiryTab />} extra={extra} open={openToolTab} />
 }
 

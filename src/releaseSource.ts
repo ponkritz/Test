@@ -18,7 +18,10 @@ import { isMonthTask, timeWritingStoryIds } from './azureInsights.ts'
 // countOverrides (QV-58): Completed / Supported release counts entered by an Admin for CP, DP and IOCC per month, used
 // only while the stream has no data for the month (not set up or not fetched).
 export interface EnteredCounts { completed?: number; supported?: number }
-export interface ReleaseSourceSettings { approvalDateField?: string; matchThreshold?: number; namingPatterns?: NamingPatterns; featureEpics?: Record<string, number[]>; countOverrides?: Record<string, Record<string, EnteredCounts>>; bulkEpics?: Partial<Record<BulkStream, number>> }
+// toolValidations (TVL-19, TVL-20): Tool Validations' two queries — which connection is the Signed documents query
+// (its view name or name; "@none": none) and the field whose date makes a tool Completed (default System.ChangedDate).
+export interface ToolValidationsSettings { documentsQuery?: string; completionField?: string }
+export interface ReleaseSourceSettings { approvalDateField?: string; matchThreshold?: number; namingPatterns?: NamingPatterns; featureEpics?: Record<string, number[]>; countOverrides?: Record<string, Record<string, EnteredCounts>>; bulkEpics?: Partial<Record<BulkStream, number>>; toolValidations?: ToolValidationsSettings }
 export const defaultReleaseSourceSettings: ReleaseSourceSettings = {}
 export interface ReleaseSourceSnapshot { organization: string; project: string; query: string; fetchedAt: string; items: AzureWorkItem[]; columns?: { ref: string; name: string }[]; orderBy?: { ref: string; desc: boolean }[] }
 export interface ReleaseEntry { key: string; group?: string; match?: { feature: AzureWorkItem; score: number }; name: string; release: string; documents: number; items: AzureWorkItem[]; tracked: boolean; trackedBy: AzureWorkItem[]; features: AzureWorkItem[]; planned: number; booked: number; hourTasks: number; approvalDate?: string; approvalMonth?: string }
@@ -47,7 +50,20 @@ export function normalizeReleaseSourceSettings(value: unknown): ReleaseSourceSet
   const featureEpics = normalizeFeatureEpics((input as Record<string, unknown>).featureEpics)
   const countOverrides = normalizeCountOverrides((input as Record<string, unknown>).countOverrides)
   const bulkEpics = normalizeBulkEpics((input as Record<string, unknown>).bulkEpics)
-  return { ...(approvalDateField ? { approvalDateField } : {}), ...(Number.isInteger(threshold) && threshold >= 1 && threshold <= 100 ? { matchThreshold: threshold } : {}), ...(namingPatterns ? { namingPatterns } : {}), ...(featureEpics ? { featureEpics } : {}), ...(countOverrides ? { countOverrides } : {}), ...(bulkEpics ? { bulkEpics } : {}) }
+  const toolValidations = normalizeToolValidationsSettings((input as Record<string, unknown>).toolValidations)
+  return { ...(approvalDateField ? { approvalDateField } : {}), ...(Number.isInteger(threshold) && threshold >= 1 && threshold <= 100 ? { matchThreshold: threshold } : {}), ...(namingPatterns ? { namingPatterns } : {}), ...(featureEpics ? { featureEpics } : {}), ...(countOverrides ? { countOverrides } : {}), ...(bulkEpics ? { bulkEpics } : {}), ...(toolValidations ? { toolValidations } : {}) }
+}
+// TVL-20: read from the shared settings — a field reference name (letters, digits, _ and ., up to 120) and a connection
+// name of up to 120 characters (control characters dropped); anything else is left out (the defaults apply).
+export const defaultCompletionField = 'System.ChangedDate'
+export function normalizeToolValidationsSettings(value: unknown): ToolValidationsSettings | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  const field = typeof raw.completionField === 'string' ? raw.completionField.trim() : ''
+  // eslint-disable-next-line no-control-regex
+  const documents = typeof raw.documentsQuery === 'string' ? raw.documentsQuery.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim() : ''
+  const result: ToolValidationsSettings = { ...(documents && documents.length <= 120 ? { documentsQuery: documents } : {}), ...(/^[A-Za-z][\w.]{0,119}$/.test(field) ? { completionField: field } : {}) }
+  return Object.keys(result).length ? result : undefined
 }
 // QV-58: the streams whose release counts can be entered, and the entered counts read from the shared settings:
 // those streams only, months YYYY-MM, whole numbers 0–10,000; a month with neither count is dropped.

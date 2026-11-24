@@ -40,13 +40,15 @@ export function ReleaseSourceBar({ name, source, fetched, about, period, primary
 // Supported (as the stream counts them, QV-58, QV-64), with ⓘ "What was counted". A stream without a sound rule for
 // a count leaves its tile out (Content: no Completed or Supported; Tool Validations, S&S IT, ECP: no Completed).
 export interface CountValue { value: number | string; hint?: ReactNode }
-export function ReleaseCounts({ month, releases, completed, supported, counted, children }: { month: string; releases: CountValue; completed?: CountValue; supported?: CountValue; counted: ReactNode; children?: ReactNode }) {
+// `noun` names what is counted (TVL-23: Tool Validations counts Validations, not Releases).
+export function ReleaseCounts({ month, releases, completed, supported, counted, noun, children }: { month: string; releases: CountValue; completed?: CountValue; supported?: CountValue; counted: ReactNode; noun?: 'validations'; children?: ReactNode }) {
   const label = monthName(month)
+  const tool = noun === 'validations'
   return <div className="release-counts">
     <Metrics>
-      <Metric label={`Releases in ${label}`} value={releases.value} hint={releases.hint} />
-      {completed && <Metric label="Completed" value={completed.value} hint={completed.hint} />}
-      {supported && <Metric label="Supported" value={supported.value} hint={supported.hint} />}
+      <Metric label={`${tool ? 'Validations' : 'Releases'} in ${label}`} value={releases.value} hint={releases.hint} />
+      {completed && <Metric label={tool ? 'Completed validations' : 'Completed'} value={completed.value} hint={completed.hint} />}
+      {supported && <Metric label={tool ? 'Supported validations' : 'Supported'} value={supported.value} hint={supported.hint} />}
     </Metrics>
     <p className="release-counts-info"><Info label="What was counted">{counted}</Info></p>
     {children}

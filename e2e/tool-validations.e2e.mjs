@@ -117,7 +117,8 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   // Stream mapping → Tool Validations → Add query: the connection, fetched at once.
   await navigate(page, /Streams$/)
   const mapping = page.locator('.connection-panel', { hasText: 'STEP 2' })
-  const row = mapping.locator('tbody tr', { hasText: 'Tool Validations' })
+  // The stream's own row (TVL-19 adds a "Tool Validations · Signed documents" row below it).
+  const row = mapping.locator('tbody tr').filter({ has: page.locator('td:first-child strong', { hasText: /^Tool Validations$/ }) })
   await row.getByRole('button', { name: 'Add query' }).click()
   const form = page.getByRole('dialog', { name: 'New connection' })
   assert.equal(await form.getByLabel('Name', { exact: true }).inputValue(), 'Tool Validations')

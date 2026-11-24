@@ -189,6 +189,8 @@ order; a stream leaves out a part it cannot have, and adds its own columns only 
    counted" for the counting rules. **At most three tiles**: a stream's extra count (CP "QA/QE-signed documents") goes in
    the Releases table's count line, not in a fourth tile. A list behind a count stays a folded table under the tiles
    (DP "Supported releases counted"). A tile the stream has no rule for is left out, and ⓘ says why.
+   Tool Validations (TVL-23) shows its counts on its **Master list** tab only, named **Validations in the month**,
+   **Completed validations** and **Supported validations**.
 3. **Tabs** — **Releases** | **Source data (n)** (the raw query or export rows).
 4. **Releases table** (`DataTable`), columns in this order:
 
@@ -262,6 +264,7 @@ wrong for a real case as an Improvement to the standard.
 
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-24 | §10 (2) Counts: Tool Validations shows them on its Master list tab only, as Validations ("Keep the Supported Validations and Completed Validation Card only in Master List", TVL-23). | Product owner, 2026-11-24 |
 | 2026-11-24 | §10 (1) Source bar: the name · source · fetched text and ⓘ Info removed from the bar ("It's duplicating info"), on every Release page; Show, ↻ and ⋯ stay, right-aligned; source · fetched is the first line of ⋯ and the details are behind ⋯ → About this source… (QV-62, QV-70). | Product owner, 2026-11-24 |
 | 2026-11-23 | §4a Drawers added: one record of a table viewed and edited in a drawer from the right (the On-Demand row drawer, OND-27…OND-29). | Product owner, 2026-11-23 |
 | 2026-11-23 | v10.1 chart resizing: §9 chart **Size** and the **Resize handle** control; §2 the **chart header**; §3 the per-object ⋯ menu exception to CON-102 (CHT-15…CHT-25, OND-61, DSH-13). | Product owner, 2026-11-23 |

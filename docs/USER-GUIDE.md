@@ -502,6 +502,17 @@ These tabs are pages of their own in Git, but they are not in the menu, on Home 
 
 Everyone else sees every tab read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
 
+**Count tool validations from two queries (Tool Owner)**
+
+Tool Validations can read two Azure DevOps queries: the **Tools** query (one row per tool) and the **Signed documents** query (one row per document, with a **Parent** column holding the tool's work item ID and the approver slots, as CP's documents have).
+
+1. Open **Admin → Streams → Stream mapping**. The **Tool Validations** row is the Tools query; on the row **Tool Validations · Signed documents** choose **Add query**, enter the server, project and the documents query, and **Save and refresh data**.
+2. Under **Tool Validations queries** check that one connection shows **Tools** and the other **Signed documents**. If the app took the wrong one, choose the Signed documents query yourself; **None — one query** counts as before.
+3. Choose the **Completion date (Completed)**: **Changed Date** (the last updated date) is the default, but it moves whenever someone edits the tool, so pick a date column of the Tools query that is set once, if there is one. Save the change to Git with the bar above.
+4. Open **Release Details → Tool Validations → Master list** for the month's cards (**Validations in {Month}**, **Completed validations**, **Supported validations**; they are on the Master list tab only), and **Azure** for the Releases table: **Completed** counts the tools whose completion date is in the header month, **Supported** the tools with a document signed by a Quality role (QA, QE, QAQE for Software, …) in the month. The **Releases** table lists them with the signatures; **Source data** shows both queries; **Not linked to a tool** lists documents whose Parent is not a tool of the Tools query — they are not counted. **↻** fetches both queries.
+
+Pulse Check, the Monthly pack and the cumulative chart show the same numbers. With only one Tool Validations connection nothing changes.
+
 ## On-Demand pages
 
 On-Demand pages are tables the team sets up itself, without a new release of the app. **CoNQ** (Cost of Non-Quality) is there from the start; the Tool Owner and the pages' co-owners add more (see [Pages & menu](#pages--menu)). Each page has a **Data** tab (the table) and, for *Table + Insights* pages, an **Insights** tab (charts).

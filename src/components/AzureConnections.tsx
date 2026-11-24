@@ -2,7 +2,8 @@ import { utcMonthKey } from '../businessTime'
 import { useState } from 'react'
 import { EmptyState, Modal, Notice, Panel, Pill, type Tone, Info } from './ui'
 import { formatDateTime } from '../format'
-import { allStreams, dataSetOfProfile, dataSets, defaultMatchThreshold, namesStream, profileForDataSet, profileForStream, streamOfProfile } from '../streams'
+import { allStreams, dataSetOfProfile, dataSets, defaultMatchThreshold, namesStream, profileForDataSet, profileForStream, streamOfProfile, toolQueries } from '../streams'
+import { ToolQueriesPanel } from './ToolQueriesPanel'
 import { ruleOf } from '../customStreams'
 import { CustomStreamsPanel } from './CustomStreamsPanel'
 import { normalizeReleaseSourceSettings } from '../releaseSource'
@@ -77,14 +78,19 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
   const whereOf = (place: { url: string; baseUrl?: string }) => { const parts = splitAzureUrl(place.url, place.baseUrl); return `${hostLabel(parts.baseUrl)} · ${parts.project}${parts.team ? ` · team ${parts.team}` : ''}` }
   const timeWritingPreset = connectionPresets.find((preset) => preset.role === 'time-tracking')
   const activeTimeWriting = connectionProfiles.find((profile) => profile.id === activeConnectionProfileId && profile.role === 'time-tracking') ?? connectionProfiles.find((profile) => profile.role === 'time-tracking')
-  const ruleLabel = { dp: 'DP: name from Area Path, number from Iteration Path; fuzzy match', iocc: 'IOCC: Type of Release from Area Path, name from Title; fuzzy match', path: '“Release x.y.z” path segment; exact match', title: 'Content: one release per document, named by its Title', tool: 'Tool Validations: one entry per tool (its Area Path folder, else the Title); exact match', cp: 'CP: Release containers of the release-folder tree query; Supported / Completed from QA/QE signatures; names from another CP connection (CP Releases)' } as const
+  const ruleLabel = { dp: 'DP: name from Area Path, number from Iteration Path; fuzzy match', iocc: 'IOCC: Type of Release from Area Path, name from Title; fuzzy match', path: '“Release x.y.z” path segment; exact match', title: 'Content: one release per document, named by its Title', tool: 'Tool Validations: one entry per tool (its Area Path folder, else the Title); exact match. With a Signed documents query (row below) this is the Tools query: one row per tool, Completed by its completion date', cp: 'CP: Release containers of the release-folder tree query; Supported / Completed from QA/QE signatures; names from another CP connection (CP Releases)' } as const
   // DP's data sets (Pedestal release register, DHFI documents) sit with the streams: mapped like them, hidden from the menu.
   const dataSetRule = { Pedestal: 'DP releases: every Release work item; Title names the release and version', DHFI: 'DP dates: documents whose Title names a Pedestal Release; Author Approval (else Closed) Date gives the month' } as Record<string, string>
   const mapping = [
     { name: 'Time Writing', timeWriting: true, windchill: false, profile: activeTimeWriting, preset: timeWritingPreset, rule: 'Team backlog (read & write)', where: activeTimeWriting ? whereOf(activeTimeWriting) : timeWritingPreset ? whereOf(placeOf(timeWritingPreset)) : '', query: activeTimeWriting?.query ?? '' },
     ...dataSets.map((set) => { const profile = profileForDataSet(set.name, connectionProfiles), preset = set.presetKey ? connectionPresets.find((entry) => entry.key === set.presetKey) : undefined; return { name: set.name, dataSet: true, timeWriting: false, windchill: false, profile, preset, rule: dataSetRule[set.name] ?? '', where: profile ? whereOf(profile) : preset ? whereOf(placeOf(preset)) : '', query: profile?.query ?? preset?.query ?? '' } }),
     // STR-02: the built-in streams, then the custom ones (their rule by the built-in stream it is like).
-    ...allStreams().map((stream) => { const profile = profileForStream(stream, connectionProfiles), preset = stream.source === 'azure' && !stream.custom ? presetFor(stream.name) : undefined; return { name: stream.name, custom: Boolean(stream.custom), timeWriting: false, windchill: stream.source === 'windchill', profile, preset, rule: stream.custom ? ruleOf(stream)?.label ?? stream.rule : stream.source === 'windchill' ? 'Windchill export' : ruleLabel[stream.rule], where: profile ? whereOf(profile) : preset ? whereOf(placeOf(preset)) : '', query: profile?.query ?? preset?.query ?? '' } }),
+    ...allStreams().flatMap((stream) => { const profile = profileForStream(stream, connectionProfiles), preset = stream.source === 'azure' && !stream.custom ? presetFor(stream.name) : undefined; const row = { name: stream.name, custom: Boolean(stream.custom), timeWriting: false, windchill: stream.source === 'windchill', profile, preset, rule: stream.custom ? ruleOf(stream)?.label ?? stream.rule : stream.source === 'windchill' ? 'Windchill export' : ruleLabel[stream.rule], where: profile ? whereOf(profile) : preset ? whereOf(placeOf(preset)) : '', query: profile?.query ?? preset?.query ?? '' }
+      // TVL-19: Tool Validations' second query, the Signed documents (its own row; Add query names it so it is found).
+      if (stream.rule !== 'tool' || stream.custom) return [row]
+      const documents = toolQueries(stream, connectionProfiles).documents
+      return [row, { name: `${stream.name} · Signed documents`, toolDocuments: true, timeWriting: false, windchill: false, profile: documents, preset: undefined, rule: 'Tool Validations Signed documents: one row per document, Parent = the tool’s work item ID, with the approver slots; Supported = a tool with a document signed by a Quality role in the month (as CP)', where: documents ? whereOf(documents) : '', query: documents?.query ?? '' }]
+    }),
   ]
   const mapped = new Set(mapping.flatMap((row) => row.profile ? [row.profile.id] : []))
   // My views (SET-17) are listed in My settings only.
@@ -241,13 +247,14 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
           <td>{row.windchill ? <small className="muted">Import on the Windchill page</small> : <><Pill tone={tone}>{label}</Pill>{status?.message && <small>{status.message}</small>}</>}</td>
           <td><div className="button-row nowrap">
             {!row.windchill && !row.profile && row.preset && <button type="button" className="primary" onClick={() => setUpStream(row.preset!)}>Set up</button>}
-            {!row.windchill && !row.profile && !row.preset && canManageStreams && <button type="button" className="primary" onClick={() => { setFormError(''); setForm('dataSet' in row && row.dataSet ? { ...empty('reference'), name: row.name, viewName: row.name, showInMenu: false } : { ...empty('release-source'), name: row.name, viewName: row.name, showInMenu: true }) }}>Add query</button>}
+            {!row.windchill && !row.profile && !row.preset && canManageStreams && <button type="button" className="primary" onClick={() => { setFormError(''); setForm('dataSet' in row && row.dataSet ? { ...empty('reference'), name: row.name, viewName: row.name, showInMenu: false } : 'toolDocuments' in row && row.toolDocuments ? { ...empty('release-source'), name: 'Tool Validations Signed documents', viewName: 'Tool Validations Signed documents', showInMenu: false } : { ...empty('release-source'), name: row.name, viewName: row.name, showInMenu: true }) }}>Add query</button>}
             {row.profile && <button type="button" className="ghost" disabled={status?.state === 'busy' || fetchingAll} onClick={() => void azure.fetchConnection(row.profile!.id)}>Fetch</button>}
             {row.profile && (canManageStreams || row.timeWriting) && <button type="button" className="ghost" onClick={() => edit(row.profile!)}>Edit</button>}
           </div></td>
         </tr> })}
       </tbody></table></div>
     </Panel>}
+    {show('mapping') && <ToolQueriesPanel store={store} profiles={connectionProfiles} canManage={canManageStreams} />}
     {show('mapping') && git && <RemovedConnections git={git} azure={azure} canShare={canManageStreams} />}
     {show('mapping') && <NamingPatternsPanel store={store} canManage={canManageStreams} />}
     {show('epics') && <FeatureEpicsPanel store={store} items={azure.items} canManage={canManage} />}

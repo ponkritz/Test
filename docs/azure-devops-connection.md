@@ -54,6 +54,10 @@ With Git storage connected (Settings → Storage), **Settings → Views in Git �
 
 Every fresh fetch of an on-prem view is saved automatically to `azure-data/<connection>.json` (also when the data is unchanged — the fetch time is new; needs a Git token that can write). The web app loads it at start; each on-prem view has **Load from Git**, and a fetch that fails or has no PAT falls back to it.
 
+## Two connections for one stream
+
+A stream can have more than one connection named like it. CP reads its release-folder tree and, for the names, a second connection such as "CP Releases". **Tool Validations** reads a **Tools** query and a **Signed documents** query (TVL-19): the Signed documents connection is the one chosen under Stream mapping → Tool Validations queries, else the one named with "documents", "docs", "signed" or "signatures" ("Tool Validations Signed documents", as its Add query names it), else the one whose query selects `[System.Parent]` and an `ApproverName` column; both are read only.
+
 ## One Time Writing connection
 
 Only the active Time Writing (QMS-0025) connection is used. If there is more than one, Settings → Connections names the duplicates and offers **Keep "…", remove the others**; with a Git token that can save, the connection setup in Git is updated in the same step so they do not come back. Removing a connection does not revoke its PAT in Azure DevOps.

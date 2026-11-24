@@ -83,10 +83,58 @@ export function streamNamedBy(names: (string | undefined)[], source?: StreamDef[
 
 // The connection of an Azure stream: a non-Time-Writing connection whose view name (or name) is the stream's name.
 // CP's is its release-folder tree: the CP connection with a tree / links query (FROM WorkItemLinks), else the first one.
+// Tool Validations' is its Tools query (TVL-19): never the Signed documents query.
 export function profileForStream<P extends AzureConnectionProfileSummary>(stream: StreamDef, profiles: P[]): P | undefined {
-  // The shared setup's connection (from Git) comes before one set up only here, so the admin's mapping is used.
-  const found = profilesForStream(stream, profiles), all = [...found.filter((profile) => profile.shared), ...found.filter((profile) => !profile.shared)]
+  if (stream.rule === 'tool' && !stream.custom) return toolQueries(stream, profiles).tools
+  const all = sharedFirst(profilesForStream(stream, profiles))
   return stream.rule === 'cp' ? all.find((profile) => /\bFROM\s+WorkItemLinks\b/i.test(profile.query ?? '')) ?? all[0] : all[0]
+}
+// The shared setup's connection (from Git) comes before one set up only here, so the admin's mapping is used.
+const sharedFirst = <P extends Pick<AzureConnectionProfileSummary, 'shared'>>(found: P[]) => [...found.filter((profile) => profile.shared), ...found.filter((profile) => !profile.shared)]
+
+// TVL-19: Tool Validations reads two queries, two connections of its stream: the **Tools** query (one row per tool:
+// the master list and Completed) and the **Signed documents** query (one row per document, its Parent the tool's work
+// item ID, with approver slots: Supported). Which connection is the Signed documents query:
+// 1. the one the Tool Owner chose in Stream mapping → Tool Validations queries (releaseSourceSettings.toolValidations.
+//    documentsQuery: the connection's view name or name; "@none" = no Signed documents query, one query as before);
+// 2. else, automatically, a connection whose view name (or name) carries "documents", "docs", "signed" or "signatures"
+//    after the stream's name — "Tool Validations Signed documents", as Stream mapping's Add query names it;
+// 3. else a connection whose query selects [System.Parent] and an ApproverName<n> column.
+// The Tools query is the first other connection. With one connection (or none found) the stream counts as before
+// (QV-64, single query). The choice is set by the app (setToolDocumentsQuery, from the shared settings) for the plain
+// functions that look streams up; tests pass it.
+export const noToolDocumentsQuery = '@none'
+let toolDocumentsSetting: string | undefined
+export const toolDocumentsQuery = () => toolDocumentsSetting
+// Changes the version (caches) but tells no listener: it is called while the app renders, before its pages read it.
+export function setToolDocumentsQuery(name: string | undefined) {
+  const next = name?.trim() || undefined
+  if (next === toolDocumentsSetting) return
+  toolDocumentsSetting = next
+  version += 1
+}
+const documentWords = new Set(['document', 'documents', 'docs', 'doc', 'signed', 'signature', 'signatures'])
+export type ToolQueryHow = 'single' | 'setting' | 'name' | 'columns' | 'none' | 'off'
+export const toolQueryHowLabel: Record<ToolQueryHow, string> = {
+  single: 'one query: the stream counts as before',
+  setting: 'chosen in Stream mapping → Tool Validations queries',
+  name: 'found by its name (documents, signed)',
+  columns: 'found by its columns (Parent and approver slots)',
+  none: 'no Signed documents query found: one query, counted as before',
+  off: 'set to none: one query, counted as before',
+}
+export function toolQueries<P extends AzureConnectionProfileSummary>(stream: StreamDef, profiles: P[], setting: string | undefined = toolDocumentsSetting): { tools?: P; documents?: P; how: ToolQueryHow; all: P[] } {
+  const all = sharedFirst(profilesForStream(stream, profiles))
+  if (all.length < 2) return { tools: all[0], how: 'single', all }
+  if (setting === noToolDocumentsQuery) return { tools: all[0], how: 'off', all }
+  const names = (profile: P) => [profile.viewName, profile.reason]
+  const own = new Set(tokens(stream.name))
+  const chosen = setting ? all.find((profile) => names(profile).some((name) => sameStream(name, setting))) : undefined
+  const byName = chosen ? undefined : all.find((profile) => names(profile).some((name) => tokens(name).some((word) => !own.has(word) && documentWords.has(word))))
+  const byColumns = chosen || byName ? undefined : all.find((profile) => /\bSystem\.Parent\b/i.test(profile.query ?? '') && /approver\s*_?name\s*_?\d+/i.test(profile.query ?? ''))
+  const documents = chosen ?? byName ?? byColumns
+  if (!documents) return { tools: all[0], how: 'none', all }
+  return { tools: all.find((profile) => profile !== documents), documents, how: chosen ? 'setting' : byName ? 'name' : 'columns', all }
 }
 // Every connection of an Azure stream, in the connections' order; CP's others (e.g. "CP Releases") can enrich the
 // release names (cpReporting).

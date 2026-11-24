@@ -25,7 +25,7 @@ import { normalizeReleaseSourceSettings, streamPatterns } from './releaseSource'
 import { viewSource } from './viewSources'
 import { cleanDays, ownersReason as toolOwnersReason } from './toolValidations'
 import { ToolValidationsContext, useToolValidations, type SourceData, type ToolValidationsEnv } from './useToolValidations'
-import { allStreams, dataSets, defaultMatchThreshold, defaultStreams, profileForDataSet, profileForStream, releaseMenuEntries, windchillStreamExports } from './streams'
+import { allStreams, dataSets, defaultMatchThreshold, defaultStreams, profileForDataSet, profileForStream, releaseMenuEntries, setToolDocumentsQuery, windchillStreamExports } from './streams'
 import { CustomStreamsContext, useCustomStreams, useStreamsVersion } from './useCustomStreams'
 import { connectionPresets } from './connectionPresets'
 import { gitSyncedIds, markViewsSynced, removeDuplicateConnections } from './viewDefinitions'
@@ -118,6 +118,9 @@ export default function App() {
   // The Task creation paths check the planning lock of Settings' periods (ad-hoc tag after the lock).
   // Month locks (MON-21): the lock dates kept with the capacity settings in Git apply on every page.
   setLockSettings(capacityContext(store.state))
+  // TVL-19: which Tool Validations connection is the Signed documents query (the shared settings), for every lookup of
+  // the stream's connections (streams.ts toolQueries) on this render.
+  setToolDocumentsQuery(normalizeReleaseSourceSettings(store.state.releaseSourceSettings).toolValidations?.documentsQuery)
   const onFetched = useRef<FetchListener | undefined>(undefined)
   const gitData = useRef<GitDataSource | undefined>(undefined)
   const azure = useAzureWorkspace(store, onFetched, gitData)
