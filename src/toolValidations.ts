@@ -1,6 +1,6 @@
 import { normalEmail } from './access.ts'
 import { merge3, mergeKeyed, type Merge } from './gitSaveQueue.ts'
-import { ownersOf, type Viewer } from './menuLayout.ts'
+import { isHidden, kindOf, ownersOf, withListOwners, type MenuLayout, type Viewer } from './menuLayout.ts'
 import { releaseFor } from './releasePath.ts'
 import { approvalDateFrom, normalizeVersion } from './releaseSource.ts'
 import { parseExportDate } from './windchillReleases.ts'
@@ -15,7 +15,7 @@ import type { AzureWorkItem } from './domain'
 // Windchill export and a manual list kept as an On-Demand table page (each merged with "Merge into master list", TVL-05).
 // The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version
 // (TVL-03). Each entry has a validation date, a validity period (months) and a due date — the source's own due date when
-// it has one, else the validation date plus the period (TVL-06). Pure: the file, its checks, merges and the expiry list.
+// it has one, else the validation date plus the period, and 24 months when no period is given (TVL-06). Pure: the file, its checks, merges and the expiry list.
 
 export const toolValidationsFile = 'tool-validations.json'
 const kind = 'tool-validations'
@@ -61,7 +61,10 @@ export interface ToolEntry { key: string; name: string; version: string; validat
 // TVL-15, TVL-16: a tab the owners added — an On-Demand page (Table, Table + Insights or On-Demand Dashboard) shown only
 // as a tab of this page, by its page id, with the tab's name and the page type it was created as.
 export interface CustomTab { pageId: string; name: string; kind: PageKind }
-export interface ToolValidationsFile { schema: 1; kind: 'tool-validations'; defaultDays: number; owners: string[]; sources: ToolSource[]; tools: ToolEntry[]; tabs: CustomTab[] }
+// TVL-27: a due date highlight band — tools due within `days` days (0: overdue or due today) are tinted in `colour`.
+export interface HighlightBand { days: number; colour: HighlightColour }
+// `highlights` absent: the default bands (defaultHighlights); an empty list: no highlighting (the owners removed them all).
+export interface ToolValidationsFile { schema: 1; kind: 'tool-validations'; defaultDays: number; owners: string[]; sources: ToolSource[]; tools: ToolEntry[]; tabs: CustomTab[]; highlights?: HighlightBand[] }
 
 // ---- matching (TVL-03) ----
 // The same tool: the same name, ignoring letter case and every run of spaces and punctuation, and the same version
@@ -106,14 +109,25 @@ export function addMonths(day: string, months: number): string {
   const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
   return new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(date, last))).toISOString().slice(0, 10)
 }
-export type DueFrom = 'source' | 'entered' | 'calculated' | 'none'
-// TVL-06: the due date shown — an explicit one (from a source, or entered by hand) wins; else validation date + period.
+export type DueFrom = 'source' | 'entered' | 'calculated' | 'default' | 'none'
+// TVL-06: the validity period used when an entry gives none (2 years). Applied when the list is read, never written to
+// tool-validations.json, so a period given later (by a source or by hand) wins and the file format stays the same.
+export const defaultValidityMonths = 24
+// TVL-06: the due date shown — an explicit one (from a source, or entered by hand) wins; else validation date + period;
+// else validation date + the default period (24 months); with no validation date there is no due date.
 export function dueOf(entry: Pick<ToolEntry, 'validationDate' | 'validityMonths' | 'dueDate' | 'manual'>): { due?: string; from: DueFrom } {
   if (entry.dueDate) return { due: entry.dueDate, from: entry.manual.includes('dueDate') ? 'entered' : 'source' }
   if (entry.validationDate && entry.validityMonths) return { due: addMonths(entry.validationDate, entry.validityMonths), from: 'calculated' }
+  if (entry.validationDate) return { due: addMonths(entry.validationDate, defaultValidityMonths), from: 'default' }
   return { from: 'none' }
 }
-export const dueFromLabel: Record<DueFrom, string> = { source: 'from the source', entered: 'entered by hand', calculated: 'validation date + validity period', none: 'no due date' }
+// TVL-06: the validity period an entry's due date is worked out with — its own; else the default (marked as such) when
+// the default gives the due date (a validation date, no due date); else none (an explicit due date needs no period).
+export function validityOf(entry: Pick<ToolEntry, 'validationDate' | 'validityMonths' | 'dueDate'>): { months?: number; defaulted: boolean } {
+  if (entry.validityMonths) return { months: entry.validityMonths, defaulted: false }
+  return entry.validationDate && !entry.dueDate ? { months: defaultValidityMonths, defaulted: true } : { defaulted: false }
+}
+export const dueFromLabel: Record<DueFrom, string> = { source: 'from the source', entered: 'entered by hand', calculated: 'validation date + validity period', default: `validation date + ${defaultValidityMonths} months (default)`, none: 'no due date' }
 const dayMs = 86_400_000
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / dayMs)
 
@@ -139,6 +153,66 @@ export function cleanDays(value: unknown): number | undefined {
   const number = typeof value === 'string' && value.trim() ? Number(value) : value
   return typeof number === 'number' && Number.isInteger(number) && number >= 1 && number <= maxExpiryDays ? number : undefined
 }
+
+// ---- TVL-27, TVL-28: due date highlights ----
+// The team's bands, set on Setup by those who may change the list (TVL-11) and kept in tool-validations.json. A band
+// holds the tools whose due date is within its number of days from today (days left ≤ days); an overdue tool (days left
+// below 0) is in every band's reach, so it falls in the narrowest — the band with the fewest days. Days are 0 to 3650
+// (0: overdue or due today); there are no negative days, so "overdue" is simply the narrowest band. The narrowest band
+// that holds a tool wins; a tool without a due date is never highlighted. Colours are a fixed palette of named tints
+// (tokens of index.css for light and dark), stored by their key.
+export type HighlightColour = 'red' | 'orange' | 'amber' | 'yellow' | 'green' | 'blue' | 'purple' | 'grey'
+export const highlightColours: { key: HighlightColour; label: string }[] = [
+  { key: 'red', label: 'Red' }, { key: 'orange', label: 'Orange' }, { key: 'amber', label: 'Amber' }, { key: 'yellow', label: 'Yellow' },
+  { key: 'green', label: 'Green' }, { key: 'blue', label: 'Blue' }, { key: 'purple', label: 'Purple' }, { key: 'grey', label: 'Grey' },
+]
+export const colourLabel = (key: HighlightColour) => highlightColours.find((entry) => entry.key === key)?.label ?? key
+export const maxHighlights = 10, maxHighlightDays = 3650
+// No `highlights` in the file (a new file, or one from before v10.19): overdue or due today red, within 30 days amber,
+// within 90 days yellow.
+export const defaultHighlights: HighlightBand[] = [{ days: 0, colour: 'red' }, { days: 30, colour: 'amber' }, { days: 90, colour: 'yellow' }]
+export const bandsOf = (file: Pick<ToolValidationsFile, 'highlights'>): HighlightBand[] => sortBands(file.highlights ?? defaultHighlights)
+export const sortBands = (bands: HighlightBand[]) => [...bands].sort((a, b) => a.days - b.days)
+// The band of a due date on the UTC day `today` (undefined: no due date, or due later than every band).
+export function bandFor(bands: HighlightBand[], due: string | undefined, today: string): HighlightBand | undefined {
+  if (!due) return undefined
+  const left = daysBetween(today, due)
+  return sortBands(bands).find((band) => left <= band.days)
+}
+export const bandLabel = (band: Pick<HighlightBand, 'days'>) => band.days === 0 ? 'Overdue or due today' : `Due within ${band.days} day${band.days === 1 ? '' : 's'}`
+// The short text of the marker in the Due date cell, so the band is not shown by colour alone.
+export const bandShort = (band: Pick<HighlightBand, 'days'>) => band.days === 0 ? 'Overdue / today' : `≤ ${band.days} day${band.days === 1 ? '' : 's'}`
+// How many tools fall in each band (the preview on Setup), in band order.
+export const bandCounts = (bands: HighlightBand[], tools: ToolEntry[], today: string) => {
+  const sorted = sortBands(bands)
+  const counts = sorted.map(() => 0)
+  for (const entry of tools) { const band = bandFor(sorted, dueOf(entry).due, today); if (band) counts[sorted.indexOf(band)]++ }
+  return sorted.map((band, index) => ({ band, count: counts[index] }))
+}
+function cleanBand(value: unknown): HighlightBand | string {
+  const raw = record(value)
+  if (!raw) return 'not an object'
+  const days = raw.days
+  if (!(typeof days === 'number' && Number.isInteger(days) && days >= 0 && days <= maxHighlightDays)) return `days “${String(days)}” is not a whole number from 0 to ${maxHighlightDays}`
+  const colour = highlightColours.find((entry) => entry.key === raw.colour)?.key
+  if (!colour) return `unknown colour “${String(raw.colour)}”`
+  return { days, colour }
+}
+// Why a list of bands cannot be saved ('' when it can): each a whole number of days from 0 to 3650, a colour of the
+// palette, no number of days twice, at most 10.
+export function highlightsProblem(bands: { days: string | number; colour: string }[]): string {
+  if (bands.length > maxHighlights) return `At most ${maxHighlights} bands.`
+  const seen = new Set<number>()
+  for (const band of bands) {
+    const days = typeof band.days === 'string' ? (band.days.trim() ? Number(band.days) : NaN) : band.days
+    if (!Number.isInteger(days) || days < 0 || days > maxHighlightDays) return `Enter the days of each band as a whole number from 0 to ${maxHighlightDays} (0: overdue or due today).`
+    if (!highlightColours.some((entry) => entry.key === band.colour)) return 'Choose a colour for each band.'
+    if (seen.has(days)) return `Two bands have ${days} days: each band needs its own number of days.`
+    seen.add(days)
+  }
+  return ''
+}
+export const setHighlights = (file: ToolValidationsFile, bands: HighlightBand[]): ToolValidationsFile => ({ ...file, highlights: sortBands(bands.map((band) => ({ days: band.days, colour: band.colour }))) })
 
 // ---- the status of an entry (TVL-04) ----
 export type EntryState = 'in-source' | 'gone' | 'manual'
@@ -257,8 +331,24 @@ export function parseToolValidations(input: string | null | undefined): Parsed {
     if (tabs.length >= maxCustomTabs) { refused.push({ name: label, reason: `more than ${maxCustomTabs} tabs` }); continue }
     tabs.push(tab)
   }
+  // TVL-27: the bands — absent: the defaults; present: the good ones (a bad band, the same days twice or more than 10
+  // refused with the reason), an empty list meaning no highlighting.
+  let highlights: HighlightBand[] | undefined
+  if (top.highlights !== undefined) {
+    highlights = []
+    if (!Array.isArray(top.highlights)) refused.push({ name: 'Due date highlights', reason: 'not a list of bands' })
+    for (const value of Array.isArray(top.highlights) ? top.highlights : []) {
+      const band = cleanBand(value)
+      const label = `Highlight “${String(record(value)?.days ?? '?')} days”`
+      if (typeof band === 'string') { refused.push({ name: label, reason: band }); continue }
+      if (highlights.some((entry) => entry.days === band.days)) { refused.push({ name: label, reason: `${band.days} days is a band twice` }); continue }
+      if (highlights.length >= maxHighlights) { refused.push({ name: label, reason: `more than ${maxHighlights} bands` }); continue }
+      highlights.push(band)
+    }
+    highlights = sortBands(highlights)
+  }
   const days = cleanDays(top.defaultDays)
-  return { file: { schema: 1, kind, defaultDays: days ?? defaultExpiryDays, owners: ownersOf(top.owners), sources, tools: sortTools(tools), tabs }, refused }
+  return { file: { schema: 1, kind, defaultDays: days ?? defaultExpiryDays, owners: ownersOf(top.owners), sources, tools: sortTools(tools), tabs, ...(highlights ? { highlights } : {}) }, refused }
 }
 const sortTools = (tools: ToolEntry[]) => [...tools].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.version.localeCompare(b.version) || a.key.localeCompare(b.key))
 // The key is worked out from the name and version, never stored; fields in a fixed order so a change is a small diff.
@@ -269,8 +359,9 @@ function sourceJson(source: ToolSource) {
   const mapping = { ...Object.fromEntries(mappingFields.filter((field) => source.mapping[field.key]).map((field) => [field.key, source.mapping[field.key]])), periodUnit: source.mapping.periodUnit, confirmed: source.mapping.confirmed }
   return { id: source.id, kind: source.kind, name: source.name, ...(source.ref ? { ref: source.ref } : {}), mapping, ...(source.mergedAt ? { mergedAt: source.mergedAt } : {}), ...(source.mergedBy ? { mergedBy: source.mergedBy } : {}) }
 }
-// The tabs are written only when there are some (in their order), so a file without tabs stays as it was.
-export const serializeToolValidations = (file: ToolValidationsFile) => `${JSON.stringify({ schema: 1, kind, defaultDays: file.defaultDays, owners: file.owners, sources: file.sources.map(sourceJson), ...(file.tabs?.length ? { tabs: file.tabs.map((tab) => ({ pageId: tab.pageId, name: tab.name, kind: tab.kind })) } : {}), tools: sortTools(file.tools).map(toolJson) }, null, 2)}\n`
+// The tabs are written only when there are some (in their order), so a file without tabs stays as it was; the highlight
+// bands (TVL-27) only once the owners saved them — an empty list too, which means "no highlighting".
+export const serializeToolValidations = (file: ToolValidationsFile) => `${JSON.stringify({ schema: 1, kind, defaultDays: file.defaultDays, owners: file.owners, ...(file.highlights ? { highlights: sortBands(file.highlights).map((band) => ({ days: band.days, colour: band.colour })) } : {}), sources: file.sources.map(sourceJson), ...(file.tabs?.length ? { tabs: file.tabs.map((tab) => ({ pageId: tab.pageId, name: tab.name, kind: tab.kind })) } : {}), tools: sortTools(file.tools).map(toolJson) }, null, 2)}\n`
 
 // ---- reading a source (TVL-07) ----
 export interface ToolInput { name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string }
@@ -471,6 +562,35 @@ export function moveTab(file: ToolValidationsFile, pageId: string, by: -1 | 1): 
 }
 export const removeTab = (file: ToolValidationsFile, pageId: string): ToolValidationsFile => ({ ...file, tabs: file.tabs.filter((tab) => tab.pageId !== pageId) })
 
+// ---- TVL-24: an existing hidden page made a tab again ----
+// The On-Demand pages (Table, Table + Insights, On-Demand Dashboard) that are hidden from the menu and not a tab yet — a
+// page left behind when its tab was removed with "Kept in Git, hidden", or when an app version before the tabs dropped
+// them from tool-validations.json (LIM-70). The sample pages are never offered. By name.
+export interface PageChoice { id: string; name: string; kind: PageKind; rows: number }
+export function hiddenPageChoices(pages: { id: string; name: string; rows: unknown[]; sample?: boolean }[], layout: MenuLayout, file: Pick<ToolValidationsFile, 'tabs'>): PageChoice[] {
+  return pages.filter((page) => !page.sample && isHidden(layout, page.id) && !file.tabs.some((tab) => tab.pageId === page.id))
+    .map((page) => ({ id: page.id, name: page.name, kind: kindOf(layout, page.id), rows: page.rows.length }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+}
+
+// ---- TVL-25: the list's co-owners written as co-owners of each tab's page (menu-layout.json, PGB-08) ----
+// Each tab's page gets the list's co-owners as its co-owners, merged with those added to the page by hand (never
+// removed); the owners this sync wrote are remembered in the page's ownersFromList, so that only those are removed when
+// they leave the list (withListOwners). A tab whose page has no place in the menu layout (deleted) is skipped.
+export function tabOwnersLayout(layout: MenuLayout, file: Pick<ToolValidationsFile, 'tabs' | 'owners'>, only?: string[]): MenuLayout {
+  return file.tabs.filter((tab) => !only || only.includes(tab.pageId)).reduce((next, tab) => withListOwners(next, tab.pageId, file.owners), layout)
+}
+// The tabs whose page does not hold the list's co-owners as this sync would write them (none: []).
+export function tabOwnersBehind(layout: MenuLayout, file: Pick<ToolValidationsFile, 'tabs' | 'owners'>): CustomTab[] {
+  return file.tabs.filter((tab) => { const page = layout.pages[tab.pageId]; if (!page) return false; const next = withListOwners(layout, tab.pageId, file.owners).pages[tab.pageId]; return JSON.stringify(next.owners) !== JSON.stringify(page.owners) || JSON.stringify(next.ownersFromList ?? []) !== JSON.stringify(page.ownersFromList ?? []) })
+}
+// The page's co-owners as the Tabs panel shows them: from the list, and added by hand.
+export function tabOwnerCounts(layout: MenuLayout, pageId: string) {
+  const page = layout.pages[pageId]
+  const fromList = page?.ownersFromList ?? []
+  return { fromList: fromList.length, byHand: (page?.owners ?? []).filter((email) => !fromList.includes(email)).length }
+}
+
 export const setTeam = (file: ToolValidationsFile, days: number, owners: string[]): ToolValidationsFile => ({ ...file, defaultDays: cleanDays(days) ?? file.defaultDays, owners: ownersOf(owners) })
 export const sourceProblem = (file: ToolValidationsFile, kindKey: ToolSourceKind, ref: string, name: string) => !name.trim() || name.trim().length > 80 ? 'Enter a name of up to 80 characters.' : !ref ? 'Choose what to read.' : file.sources.length >= maxSources ? `At most ${maxSources} sources.` : file.sources.some((source) => source.kind === kindKey && source.ref === ref) ? 'This one is already a source.' : ''
 
@@ -487,7 +607,8 @@ export const ownersReason = (viewer: Pick<Viewer, 'readOnly' | 'manager'>) => vi
 
 // ---- merging two saves (GIT-17) ----
 // Tools by tool (name + version), sources by id, tabs by page id (TVL-16); an entry both saves changed takes the later save's. The co-owners are
-// merged as sets (an email either save added stays, one either removed goes); the team default as one value.
+// merged as sets (an email either save added stays, one either removed goes); the team default and the highlight bands
+// (TVL-27) each as one value (both saves changed it: the later save's).
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : []
 const parse = (input: string | null) => { if (!input) return null; try { return record(JSON.parse(input)) } catch { return null } }
 const keyedTools = (value: unknown) => Object.fromEntries(list(value).flatMap((tool) => { const raw = record(tool); return raw && typeof raw.name === 'string' ? [[toolKey(raw.name, typeof raw.version === 'string' ? raw.version : ''), raw]] : [] }))
@@ -512,7 +633,8 @@ export const mergeToolValidationsText: Merge = (baseText, mineText, theirsText, 
   const owners = [...new Set([...theirOwners.filter((email) => mineOwners.includes(email) || !baseOwners.includes(email)), ...mineOwners.filter((email) => !baseOwners.includes(email))])]
   const defaultDays = merge3(base?.defaultDays, mine.defaultDays, theirs.defaultDays, mineLater) ?? mine.defaultDays
   const tabs = mergeTabs(base, mine, theirs, mineLater)
+  const highlights = merge3(base?.highlights, mine.highlights, theirs.highlights, mineLater)
   // Written through the parser, so the merged file is as valid as the ones it came from.
-  const merged = JSON.stringify({ schema: 1, kind, defaultDays, owners, sources, tools, tabs })
+  const merged = JSON.stringify({ schema: 1, kind, defaultDays, owners, sources, tools, tabs, ...(highlights !== undefined ? { highlights } : {}) })
   try { return serializeToolValidations(parseToolValidations(merged).file) } catch { return mineText }
 }

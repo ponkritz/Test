@@ -12,7 +12,7 @@ import { useChartSizes } from '../useChartSize'
 import { EmptyState, Metrics, Modal, Notice, Page, Panel, SaveQueueStatus, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, type Period } from '../dashboard'
 import { utcToday } from '../businessTime'
-import { noData, blankBlock, blockTypeLabel, copyBlock, dashId, dataSources, filterColumns, hoursSource, maxBlocks, maxTabs, maxViewerFilters, missingDataset, moveBlock, narrowRows, pageOfSource, removeBlock, setTabsAndFilters, sourceName, tabsError, upsertBlock, viewerKey, type DashboardBlock, type DashboardTab, type Dataset, type ViewerFilter } from '../dashboardPages'
+import { noData, blankBlock, blockDataset, blockTypeLabel, copyBlock, dashId, dataSources, filterColumns, hoursSource, maxBlocks, maxTabs, maxViewerFilters, missingDataset, moveBlock, narrowRows, pageOfSource, removeBlock, setTabsAndFilters, sourceName, tabsError, upsertBlock, viewerKey, type DashboardBlock, type DashboardTab, type Dataset, type ViewerFilter } from '../dashboardPages'
 import { hoursFor, hoursLinesCached } from '../dashboardHours'
 import { timeWritingMonth } from '../azureInsights'
 import type { CapacitySettings } from '../capacity'
@@ -153,7 +153,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     const card = entry.type === 'kpi', size = sizeOf(entry).size
     const tab = card || !tabs.length ? undefined : (tabs.find((candidate) => candidate.id === entry.tab) ?? tabs[0]).name
     return { id: entry.id, title: entry.title, card, size, group: tab, render: (filters: boolean) => {
-      const dataset = datasetOf(entry.source)
+      const dataset = blockDataset(datasetOf(entry.source), entry)
       const narrowed = dataset.problem ? null : filters ? narrow(dataset, entry) : narrowRows(dataset, entry, periodMonths(defaultPeriod(), currentYear), dashboard.filters, {})
       return card ? <KpiTile dataset={dataset} block={entry} narrowed={narrowed} /> : <BlockPanel dataset={dataset} block={entry} narrowed={narrowed} colors={dashboard.colors} size={size} />
     } }
@@ -272,14 +272,14 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     {!dashboard.blocks.length ? <Panel eyebrow={(group?.name ?? 'On-Demand').toUpperCase()} title={page.name} info={<DashboardInfo path={dash.path} history={dash.history} owners={owners} />}>
       <EmptyState title="No blocks yet." detail={buildReason ? 'The dashboard’s owners add KPI tiles, charts and summary tables.' : 'Add the first one with ＋ Add block…: a KPI tile, a bar, line or pie chart, or a summary table over a table page.'} />
     </Panel> : <>
-      {tiles.length > 0 && <Metrics>{tiles.map((entry) => { const dataset = datasetOf(entry.source); const target = tabs.length ? tabs.find((tab) => tab.id === entry.tab) ?? tabs[0] : undefined; return <KpiTile key={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} tabName={target?.name} onOpenTab={target ? () => update({ tab: target.id }) : undefined} /> })}</Metrics>}
+      {tiles.length > 0 && <Metrics>{tiles.map((entry) => { const dataset = blockDataset(datasetOf(entry.source), entry); const target = tabs.length ? tabs.find((tab) => tab.id === entry.tab) ?? tabs[0] : undefined; return <KpiTile key={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} tabName={target?.name} onOpenTab={target ? () => update({ tab: target.id }) : undefined} /> })}</Metrics>}
       {tabs.length > 0 && <div className="overview-tabs dsh-tabs" role="tablist" aria-label="Dashboard tabs">{tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={tab.id === activeTab?.id} className={`backlog-tab ${tab.id === activeTab?.id ? 'backlog-tab-active' : ''}`} onClick={() => update({ tab: tab.id })}>{tab.name}</button>)}</div>}
       {arrange && <p className="muted chart-arrange-note" role="status">Arranging the blocks for everyone on the 12-column grid: drag a block by ⠿ to move it (the others make room) and its bottom-right corner to size it — or focus ⠿ or the corner and use the arrow keys (Shift + arrows on the corner move it), Enter to keep. Each change is saved to Git at once. <button type="button" className="text-button" onClick={() => setArrangingSizes(false)}>Done arranging</button></p>}
       {panels.length > 0 && <ChartGrid className="od-insights dsh-panels" role={tabs.length ? 'tabpanel' : undefined} arranging={arrange} canMove={!buildReason}
         entries={panels.map((entry) => ({ id: entry.id, kind: kindOf(entry.type), size: sizeOf(entry).size, box: parseGridBox(entry.options?.grid, kindOf(entry.type)) }))} titleOf={(id) => dashboard.blocks.find((entry) => entry.id === id)?.title ?? id}
         onResize={(id, next) => { const entry = dashboard.blocks.find((block) => block.id === id); if (entry) sizes.setOwn(blockChartId(pageId, id), next, sizeOf(entry).base, kindOf(entry.type)) }}
         onLayout={(layout, _changed, id, mode) => run(() => saveLayout(layout, id, mode))}>
-        {panels.map((entry) => { const dataset = datasetOf(entry.source); const { size, source, base } = sizeOf(entry); const id = blockChartId(pageId, entry.id); const at = dashboard.blocks.indexOf(entry)
+        {panels.map((entry) => { const dataset = blockDataset(datasetOf(entry.source), entry); const { size, source, base } = sizeOf(entry); const id = blockChartId(pageId, entry.id); const at = dashboard.blocks.indexOf(entry)
           return <BlockPanel key={entry.id} id={entry.id} dataset={dataset} block={entry} narrowed={narrow(dataset, entry)} colors={dashboard.colors} size={size} source={source} arranging={arrange}
             onResize={(next) => arrange ? run(() => saveSize(entry, next)) : sizes.setOwn(id, next, base, kindOf(entry.type))} onReset={arrange ? undefined : () => sizes.setOwn(id, undefined)}
             action={buildReason ? undefined : <ViewActions label={entry.title} items={[

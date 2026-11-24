@@ -89,7 +89,9 @@ export function PagesMenuPage({ git, store, menu, viewer, onOpen, onAddPage, dup
     { id: 'pp-order', label: 'Order', align: 'right', value: (row) => row.position + 1 },
     { id: 'pp-page', label: 'Page', value: (row) => row.page.name, render: (row) => <><span aria-hidden="true">{placementOf(layout, row.page.id).icon}</span> <strong>{row.page.name}</strong>{isHidden(layout, row.page.id) && <> <Pill tone="neutral">Hidden</Pill></>}{toolTabs.some((tab) => tab.pageId === row.page.id) && <> <Pill tone="info">Tab of Tool Validations</Pill></>}{row.page.description && <><br /><small className="muted">{row.page.description}</small></>}</> },
     { id: 'pp-type', label: 'Type', value: (row) => kindLabel(placementOf(layout, row.page.id).type) },
-    { id: 'pp-owners', label: 'Co-owners', value: (row) => placementOf(layout, row.page.id).owners.join(', '), render: (row) => placementOf(layout, row.page.id).owners.join(', ') || <span className="muted">—</span> },
+    { id: 'pp-owners', label: 'Co-owners', value: (row) => placementOf(layout, row.page.id).owners.join(', '), render: (row) => { const placed = placementOf(layout, row.page.id), listed = placed.ownersFromList?.length ?? 0
+      // TVL-25: the co-owners written from the Tool Validations list (a tab's page) are said so.
+      return placed.owners.length ? <>{placed.owners.join(', ')}{listed > 0 && <><br /><small className="muted">{listed} from the Tool Validations list</small></>}</> : <span className="muted">—</span> } },
     { id: 'pp-columns', label: 'Columns', align: 'right', value: (row) => row.page.columns.length },
     { id: 'pp-rows', label: 'Rows', align: 'right', value: (row) => store.full(row.page.id)?.rows.length ?? row.page.rows.length },
     // OND-31: how the page is kept in Git — one file, or one file per row.

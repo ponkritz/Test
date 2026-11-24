@@ -9,11 +9,16 @@ import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 // it holds only the master list; the Azure tab holds the query's releases and rows; the Setup tab, last, holds the
 // sources and the team settings; a tool is added by hand, the team default is changed (Expiry list, then Setup) and a manual list (a Table page) is added as a source (Setup → Sources) — its own tab — merged in from
 // that tab and removed again, with its tab (TC-TVL-07, UAT; TC-TVL-09). A Team Member reads it all, Setup included, with
-// the buttons disabled and the reason shown, and keeps a window of their own (TC-TVL-05, TC-TVL-06).
+// the buttons disabled and the reason shown, and keeps a window of their own (TC-TVL-05, TC-TVL-06); a tool with only a
+// validation date is due 24 months later (default), on both lists (TC-TVL-20).
 // TVL-15…TVL-18: the Tool Owner adds a Table tab and an On-Demand Dashboard tab (Setup → Tabs), renames and reorders
 // them, adds a row on the Table tab and a chart of the master list on the dashboard tab, and removes both — one page
 // deleted, one kept hidden; the pages are never in the menu (TC-TVL-11, UAT). A Team Member reads the tabs with every
 // change disabled and the reason shown (TC-TVL-13).
+// TVL-24…TVL-26: a hidden page made a tab again (TC-TVL-21), the list's co-owners written to the tab pages and taken off
+// again without touching those added by hand (TC-TVL-22), a dashboard block with Show expiry status off (TC-TVL-23).
+// TVL-27, TVL-28: the Tool Owner sets the due date highlights on Setup; the Master list and the Expiry list tint the rows
+// with a pill and a legend; a Team Member sees them read only (TC-TVL-25, UAT).
 // GitHub and Azure DevOps are mocked; nothing leaves the machine.
 let app
 before(async () => { app = await startApp() })
@@ -25,6 +30,10 @@ const shot = async (page, name) => { if (!shots) return; mkdirSync(shots, { recu
 
 const day = (offset) => { const at = new Date(); at.setUTCHours(0, 0, 0, 0); at.setUTCDate(at.getUTCDate() + offset); return at.toISOString().slice(0, 10) }
 const yearsBack = (date, years) => `${Number(date.slice(0, 4)) - years}${date.slice(4)}`
+// TVL-06: a day plus whole calendar months (the last day of a shorter month), and the days from today to a day (UTC).
+const plusMonths = (date, months) => { const [y, m, d] = date.split('-').map(Number); const last = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate(); return new Date(Date.UTC(y, m - 1 + months, Math.min(d, last))).toISOString().slice(0, 10) }
+const daysTo = (date) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${day(0)}T00:00:00Z`)) / 86_400_000)
+const longDate = (page, date) => page.evaluate((value) => new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`)), date)
 const setup = () => {
   localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
   localStorage.setItem('demand-planning-git-token-v1', 'test-token')
@@ -275,7 +284,7 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   const ownRows = await rowsOf(own)
   assert.equal(ownRows.length, 2)
   assert.match(ownRows[0], /^LabVIEW 2020 .*Not merged yet$/)
-  assert.match(ownRows[1], /^Polyspace R2024a .*\d{4} Not merged yet$/, 'its due date read')
+  assert.match(ownRows[1], /^Polyspace R2024a — — .*\d{4} \(from the source\) Not merged yet$/, 'its due date read (no period: none needed, no default)')
   assert.equal(await own.getByRole('button', { name: 'Edit mapping…' }).isDisabled(), false)
   await shot(page, 'source-tab')
   await own.getByRole('button', { name: 'Merge into master list…' }).click()
@@ -307,10 +316,15 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   await context.close()
 })
 
-test('TC-TVL-06: a Team Member reads the master list and the expiry view — every change disabled with the reason — and keeps a window of their own', async () => {
+test('TC-TVL-06: a Team Member reads the master list and the expiry view — every change disabled with the reason — and keeps a window of their own; a tool with only a validation date is due 24 months later (TC-TVL-20)', async () => {
   assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  // TVL-06 (TC-TVL-20): SAS 9.4 and R 4.3 have only a validation date — due 24 months after it (default): SAS overdue,
+  // R due within the window.
+  const sasValidated = day(-800), rValidated = day(-720)
+  const sasDue = plusMonths(sasValidated, 24), rDue = plusMonths(rValidated, 24)
   const list = { schema: 1, kind: 'tool-validations', defaultDays: 45, owners: ['co.owner@example.com'], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: true, name: '@tool-name', version: '@tool-version', dueDate: 'Microsoft.VSTS.Scheduling.DueDate' } }, { id: 'windchill-tools', kind: 'windchill', name: 'Windchill tools', ref: 'wc-tools', mapping: { periodUnit: 'months', confirmed: true, name: 'Name' } }],
-    tools: [{ name: 'LabVIEW', version: '2020', dueDate: day(-3), sources: { stream: { inSource: false } }, addedAt: '2026-01-05T10:00:00Z' }, { name: 'Excel Validator', version: '2.0', dueDate: day(40), manual: ['dueDate'], sources: {}, addedAt: '2026-01-05T10:00:00Z' }] }
+    tools: [{ name: 'LabVIEW', version: '2020', dueDate: day(-3), sources: { stream: { inSource: false } }, addedAt: '2026-01-05T10:00:00Z' }, { name: 'Excel Validator', version: '2.0', dueDate: day(40), manual: ['dueDate'], sources: {}, addedAt: '2026-01-05T10:00:00Z' },
+      { name: 'SAS', version: '9.4', validationDate: sasValidated, sources: { stream: { inSource: true } }, addedAt: '2026-01-05T10:00:00Z' }, { name: 'R', version: '4.3', validationDate: rValidated, sources: {}, addedAt: '2026-01-05T10:00:00Z' }] }
   const files = { 'azure-views.json': sharedViews, 'tool-validations.json': JSON.stringify(list) }
   const { page, context, errors } = await openPage(app, { init: setupReader })
   page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
@@ -331,11 +345,18 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   const expiry = panelTitled(page, 'Validation expiry')
   await expiry.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.equal(await panelTitled(page, 'Master list').count(), 0, 'the master list is on its own tab')
-  assert.match(await text(page.locator('.tool-expiry-counts')), /Overdue 1 .*Due in the next 45 days 1 .*No due date 0/, 'the team default from Git: 45 days')
+  assert.match(await text(page.locator('.tool-expiry-counts')), /Overdue 2 .*Due in the next 45 days 2 .*No due date 0/, 'the team default from Git: 45 days; SAS and R have a due date (default)')
+  // TVL-06, TVL-08: the defaulted due date, the days left and "(default)" on the Expiry list.
+  const defaulted = '24 \\(default\\)'
+  assert.match(await text(expiry.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^Overdue SAS 9\\.4 ${await longDate(page, sasDue)} Overdue / today ${-daysTo(sasDue)} days overdue validation date \\+ 24 months \\(default\\) .* ${defaulted}$`))
+  assert.match(await text(expiry.locator('tbody tr').filter({ has: page.getByRole('cell', { name: 'R', exact: true }) })), new RegExp(`^Due soon R 4\\.3 ${await longDate(page, rDue)} ≤ 30 days ${daysTo(rDue)} days left validation date \\+ 24 months \\(default\\) .* ${defaulted}$`))
+  // TVL-28 with TVL-06: the defaulted due dates are highlighted in the default bands — SAS overdue (red), R within 30 days (amber).
+  const tint = async (row) => /\btvl-hl-(\w+)/.exec((await row.getAttribute('class')) ?? '')?.[1] ?? ''
+  assert.deepEqual([await tint(expiry.locator('tbody tr', { hasText: 'SAS' })), await tint(expiry.locator('tbody tr').filter({ has: page.getByRole('cell', { name: 'R', exact: true }) }))], ['red', 'amber'])
   // TVL-09: anyone keeps a window of their own.
   await page.getByLabel('Days ahead').fill('20')
   await page.locator('.tool-expiry-counts').getByText('Due in the next 20 days').waitFor()
-  assert.equal((await rowsOf(expiry)).length, 1)
+  assert.deepEqual((await rowsOf(expiry)).map((row) => /^(Overdue|Due soon) (\S+)/.exec(row)?.slice(1).join(' ')), ['Overdue SAS', 'Overdue LabVIEW', 'Due soon R'], 'R (due in about 10 days, default) stays; Excel Validator (40 days) drops')
   assert.equal(await page.getByRole('button', { name: 'Use the team default (45)' }).isDisabled(), false)
   const reason = 'Only a Tool Owner (“Manage pages and menu groups”) or a co-owner of the Tool Validations list can change it. A Tool Owner names the co-owners in Team settings.'
   // TVL-09, TVL-11: only the owners set the team default here — disabled with the reason.
@@ -350,6 +371,8 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   const master = panelTitled(page, 'Master list')
   await master.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.match(await text(master.locator('tbody tr', { hasText: 'LabVIEW' })), /Not in source now/)
+  // TVL-06: the Master list shows the period as "24 (default)" and the due date worked out with it.
+  assert.match(await text(master.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^SAS 9\\.4 ${await longDate(page, sasValidated)} 24 \\(default\\) ${await longDate(page, sasDue)} Overdue / today \\(validation date \\+ 24 months \\(default\\)\\) In source`))
   assert.equal(await text(master.locator('.write-blocked')), reason)
   const add = master.getByRole('button', { name: '＋ Add tool…' })
   assert.ok(await add.isDisabled())
@@ -592,6 +615,263 @@ test('TC-TVL-13: a Team Member reads the owners’ tabs — the Table and the da
   assert.equal(await tabsPanel.getByRole('button', { name: '＋ Add tab…' }).getAttribute('title'), reason)
   for (const name of ['Move Open actions left', 'Rename…', 'Remove…']) assert.ok(await tabsPanel.locator('tbody tr', { hasText: 'Open actions' }).getByRole('button', { name }).isDisabled(), name)
   assert.equal(writes.length, 0, 'nothing written')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// TVL-24…TVL-26: a hidden page made a tab again, the list's co-owners written to the tab pages, and a dashboard block
+// without the expiry status.
+const tablePage = (id, name, rows = []) => JSON.stringify({ schema: 1, kind: 'on-demand-page', id, name, description: '', keyPrefix: 'TP', insights: [], columns: [{ id: 'c-action', name: 'Action', type: 'text', options: [], required: false }], rows: rows.map((value, index) => ({ id: `r-${index + 1}`, cells: { 'c-action': value } })) })
+const placed = (type, order, extra = {}) => ({ type, group: 'on-demand', order, icon: '▦', owners: [], ...extra })
+const layoutWith = (pages) => JSON.stringify({ schema: 1, kind: 'menu-layout', groups: {}, pages })
+const openOwners = async (files) => {
+  const { page: browser, context, errors } = await openPage(app, { init: setupOwnTabs, width: 1440, height: 1000 })
+  browser.addLocatorHandler(browser.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const writes = await mock(context, files)
+  await browser.reload()
+  const tabs = await openToolValidations(browser)
+  return { page: browser, context, errors, writes, tabs }
+}
+
+test('TC-TVL-21: the Tool Owner makes a hidden page a tab again with ＋ Add existing page as tab… — it leaves the list of hidden pages, gets the list’s co-owners, and loses them again when its tab is removed', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const files = {
+    'azure-views.json': sharedViews, 'tool-validations.json': listWith({ owners: ['ana@example.com'] }),
+    'on-demand/old-actions.json': tablePage('old-actions', 'Old actions', ['Check the LabVIEW licence']), 'on-demand/team-notes.json': tablePage('team-notes', 'Team notes'),
+    'menu-layout.json': layoutWith({ 'old-actions': placed('table', 1, { owners: ['hand@example.com'], hidden: true }), 'team-notes': placed('table', 2) }),
+  }
+  const { page, context, errors, writes, tabs } = await openOwners(files)
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const tabsPanel = panelTitled(page, 'Tabs')
+  const existing = tabsPanel.getByRole('button', { name: '＋ Add existing page as tab…' })
+  await enabled(existing)
+  await existing.click()
+  const dialog = page.getByRole('dialog', { name: 'Add an existing page as a tab' })
+  assert.deepEqual((await dialog.getByLabel('Page', { exact: true }).locator('option').allInnerTexts()).map((label) => label.trim()), ['Old actions (Table, 1 row)'], 'only the hidden page; the page in the menu is not offered')
+  assert.equal(await dialog.getByLabel('Page name', { exact: true }).inputValue(), 'Old actions', 'named after its page')
+  await shot(page, 'tvl-add-existing-tab')
+  await dialog.getByRole('button', { name: 'Add tab' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const saved = await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.length === 1), 'the tab in tool-validations.json')
+  assert.deepEqual(saved.data.tabs, [{ pageId: 'old-actions', name: 'Old actions', kind: 'table' }])
+  assert.match(saved.message, /^Tool Validations: add the existing page Old actions as the tab Old actions \(Table, page old-actions\)/)
+  // TVL-25: the list's co-owner written to the page, the one added by hand kept; the page stays hidden.
+  const layout = await until(() => lastWrite(writes, 'menu-layout.json', (entry) => entry.data.pages['old-actions'].ownersFromList), 'the co-owners written to the page')
+  assert.deepEqual(layout.data.pages['old-actions'], placed('table', 1, { owners: ['hand@example.com', 'ana@example.com'], hidden: true, ownersFromList: ['ana@example.com'] }))
+  assert.match(layout.message, /^Pages & menu: the co-owners of the Tool Validations list written to the page of Old actions/)
+  await tabs.getByRole('tab', { name: 'Old actions' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Old actions', 'Setup'], 'after the source tabs, before Setup')
+  assert.equal(await selectedTab(tabs), 'Setup', 'Setup stays open')
+  await tabsPanel.locator('tbody tr', { hasText: '1 from the list · 1 added by hand' }).waitFor()
+  // It is a tab now: no other hidden page is left to add.
+  await existing.and(page.locator(':disabled')).waitFor()
+  assert.match(await existing.getAttribute('title'), /^No hidden On-Demand page that is not a tab yet/)
+  await shot(page, 'tvl-tabs-co-owners')
+  await tabs.getByRole('tab', { name: 'Old actions' }).click()
+  await page.locator('.od-panel tbody tr', { hasText: 'Check the LabVIEW licence' }).waitFor()
+  const menu = await text(page.locator('.sidebar nav'))
+  assert.equal(menu.includes('Old actions'), false, 'still not in the menu')
+  // Removed again, page kept: the co-owner the list wrote is taken off, the one added by hand stays; it can be added again.
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  await tabsPanel.locator('tbody tr', { hasText: 'Old actions' }).getByRole('button', { name: 'Remove…' }).click()
+  const remove = page.getByRole('dialog', { name: 'Remove the tab Old actions' })
+  await remove.getByRole('button', { name: 'Remove Old actions', exact: true }).click()
+  await remove.waitFor({ state: 'detached' })
+  const off = await until(() => lastWrite(writes, 'menu-layout.json', (entry) => !entry.data.pages['old-actions'].ownersFromList), 'the list’s co-owners taken off the page')
+  assert.deepEqual(off.data.pages['old-actions'], placed('table', 1, { owners: ['hand@example.com'], hidden: true }))
+  await enabled(existing)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-TVL-22: the list’s co-owners are written as co-owners of the tab pages and taken off when they leave the list — the co-owners added by hand stay', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const files = {
+    'azure-views.json': sharedViews, 'tool-validations.json': listWith({ owners: ['ana@example.com', 'ben@example.com'], tabs: [{ pageId: 'checklist', name: 'Checklist', kind: 'table' }] }),
+    'on-demand/checklist.json': tablePage('checklist', 'Checklist'),
+    'menu-layout.json': layoutWith({ checklist: placed('table', 1, { owners: ['hand@example.com'], hidden: true }) }),
+  }
+  const { page, context, errors, writes, tabs } = await openOwners(files)
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const tabsPanel = panelTitled(page, 'Tabs')
+  // A page not in line with the list (e.g. written by an older version): said so, and written on request.
+  const behind = tabsPanel.locator('.notice', { hasText: 'The co-owners of the list are not yet written to the page of Checklist' })
+  await behind.waitFor()
+  await tabsPanel.locator('tbody tr', { hasText: '0 from the list · 1 added by hand' }).waitFor()
+  const write = behind.getByRole('button', { name: 'Write the co-owners to the tab pages' })
+  await enabled(write)
+  await write.click()
+  let layout = await until(() => lastWrite(writes, 'menu-layout.json'), 'the co-owners written')
+  assert.deepEqual(layout.data.pages.checklist, placed('table', 1, { owners: ['hand@example.com', 'ana@example.com', 'ben@example.com'], hidden: true, ownersFromList: ['ana@example.com', 'ben@example.com'] }))
+  await behind.waitFor({ state: 'detached' })
+  await tabsPanel.locator('tbody tr', { hasText: '2 from the list · 1 added by hand' }).waitFor()
+  // Team settings: Ben leaves the list — and the page; Hand (added by hand) stays.
+  await panelTitled(page, 'Team settings').getByRole('button', { name: 'Edit…' }).click()
+  const team = page.getByRole('dialog', { name: 'Team settings' })
+  assert.match(await text(team), /also written as co-owners of the pages of the 1 tab/)
+  await team.locator('.multi-button').click()
+  // Unticked, Ben is no longer a co-owner (and no longer listed: he is not in Azure DevOps).
+  await team.getByRole('checkbox', { name: /ben@example\.com/ }).click()
+  await team.getByRole('checkbox', { name: /ben@example\.com/ }).waitFor({ state: 'detached' })
+  await team.locator('.multi-button').click()
+  await team.getByRole('button', { name: 'Save to Git' }).click()
+  await team.waitFor({ state: 'detached' })
+  const list = await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.owners.length === 1), 'the co-owners saved')
+  assert.deepEqual(list.data.owners, ['ana@example.com'])
+  layout = await until(() => lastWrite(writes, 'menu-layout.json', (entry) => entry.data.pages.checklist.ownersFromList?.length === 1), 'Ben taken off the page')
+  assert.deepEqual(layout.data.pages.checklist, placed('table', 1, { owners: ['hand@example.com', 'ana@example.com'], hidden: true, ownersFromList: ['ana@example.com'] }))
+  await tabsPanel.locator('tbody tr', { hasText: '1 from the list · 1 added by hand' }).waitFor()
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-TVL-23: a dashboard block on the Tool Validations master list without the expiry status — Show expiry status off, Status and Days left neither offered nor shown', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const blocks = { schema: 1, kind: 'dashboard', id: 'tool-dashboard', tabs: [], filters: [], blocks: [{ id: 'b1', title: 'Tools by status', type: 'bar', source: 'tools:master', category: 'tv-status', second: '', measure: 'count', value: '', filters: [], sort: 'value', period: '' }] }
+  const files = {
+    'azure-views.json': sharedViews, 'tool-validations.json': listWith({ tabs: [{ pageId: 'tool-dashboard', name: 'Tool dashboard', kind: 'dashboard' }] }),
+    'on-demand/tool-dashboard.json': JSON.stringify({ schema: 1, kind: 'on-demand-page', id: 'tool-dashboard', name: 'Tool dashboard', description: '', keyPrefix: 'TD', insights: [], columns: [], rows: [] }),
+    'dashboards/tool-dashboard.json': JSON.stringify(blocks), 'menu-layout.json': layoutWith({ 'tool-dashboard': placed('dashboard', 1, { hidden: true }) }),
+  }
+  const { page, context, errors, writes, tabs } = await openOwners(files)
+  await tabs.getByRole('tab', { name: 'Tool dashboard' }).click()
+  const chart = panelTitled(page, 'Tools by status')
+  await chart.locator('.viz-root').waitFor()
+  const more = page.getByRole('button', { name: 'More actions: Tools by status', exact: true })
+  await enabled(more)
+  await more.click()
+  await page.getByRole('menuitem', { name: 'Edit…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit the block' })
+  const toggle = dialog.getByRole('checkbox', { name: 'Show expiry status' })
+  assert.equal(await toggle.isChecked(), true, 'shown unless switched off')
+  assert.match(await text(dialog.locator('.dsh-status-toggle')), /team default window of 60 days/)
+  const offered = async () => (await dialog.getByLabel('Categories by').locator('option').allInnerTexts()).map((label) => label.trim())
+  assert.ok((await offered()).includes('Status (Dropdown)'))
+  await toggle.uncheck()
+  await dialog.locator('.dsh-status-toggle', { hasText: 'Status and Days left are left out of this block.' }).waitFor()
+  assert.equal((await offered()).some((label) => /^Status|^Days left/.test(label)), false, 'Status and Days left not offered')
+  assert.notEqual(await dialog.getByLabel('Categories by').inputValue(), 'tv-status', 'the category on Status replaced')
+  await dialog.getByLabel('Categories by').selectOption({ label: 'In source now (Dropdown)' })
+  await shot(page, 'tvl-hide-expiry-status')
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const saved = await until(() => lastWrite(writes, 'dashboards/tool-dashboard.json', (entry) => entry.data.blocks[0].hideStatus), 'the block saved without the status')
+  assert.deepEqual([saved.data.blocks[0].hideStatus, saved.data.blocks[0].category], [true, 'tv-state'])
+  await chart.getByRole('button', { name: 'Table', exact: true }).click()
+  await chart.locator('table').waitFor()
+  const shown = await text(chart.locator('table'))
+  assert.match(shown, /In source/)
+  assert.equal(/Overdue|Due soon|Days left/.test(shown), false, 'no status in the block')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// TVL-27, TVL-28: the due date highlights — the default bands until saved, set on Setup by the Tool Owner, saved to Git,
+// shown on the Master list and the Expiry list (row tint, pill, legend), read only for a Team Member (TC-TVL-25, UAT).
+const rowOf = (panel, name) => panel.locator('tbody tr', { hasText: name })
+const tintOf = async (row) => /\btvl-hl-(\w+)/.exec((await row.getAttribute('class')) ?? '')?.[1] ?? ''
+const legendOf = async (panel) => (await panel.locator('.tvl-legend .tvl-legend-item').allInnerTexts()).map((item) => item.trim())
+const pillOf = async (row) => { const pill = row.locator('.tvl-band'); return await pill.count() ? text(pill) : '' }
+
+test('TC-TVL-25: the Tool Owner sets the due date highlights on Setup — saved to Git; the Master list and the Expiry list tint the rows with a pill and a legend; a Team Member sees them read only', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const files = { 'azure-views.json': sharedViews, 'tool-validations.json': listWith() }
+  const { page, context, errors } = await openPage(app, { init: setupOwnTabs, width: 1440, height: 1000 })
+  page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const writes = await mock(context, files)
+  await page.reload()
+  const tabs = await openToolValidations(page)
+
+  // No `highlights` in the file: the default bands — overdue or due today red, within 30 days amber, within 90 days yellow.
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  const master = panelTitled(page, 'Master list')
+  await rowOf(master, 'LabVIEW').waitFor()
+  assert.deepEqual([await tintOf(rowOf(master, 'LabVIEW')), await pillOf(rowOf(master, 'LabVIEW'))], ['red', 'Overdue / today'], 'overdue: the first band')
+  assert.deepEqual([await tintOf(rowOf(master, 'Minitab')), await pillOf(rowOf(master, 'Minitab'))], ['amber', '≤ 30 days'], 'due in 20 days')
+  assert.deepEqual([await tintOf(rowOf(master, 'JMP')), await pillOf(rowOf(master, 'JMP'))], ['', ''], 'due in 400 days: later than every band')
+  assert.deepEqual([await tintOf(rowOf(master, 'Python')), await pillOf(rowOf(master, 'Python'))], ['', ''], 'no due date: never highlighted')
+  assert.deepEqual(await legendOf(master), ['Overdue or due today', 'Due within 30 days', 'Due within 90 days'])
+
+  // Setup → Due date highlights: the bands with their tools now, "not saved in Git yet".
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const panel = panelTitled(page, 'Due date highlights')
+  await panel.locator('tbody tr').first().waitFor()
+  assert.deepEqual(await rowsOf(panel), ['Overdue or due today Red 1', 'Due within 30 days Amber 1', 'Due within 90 days Yellow 0'])
+  assert.match(await text(panel), /The default bands — not saved in Git yet/)
+  assert.equal(await panel.locator('.write-blocked').count(), 0, 'nothing blocked for the Tool Owner')
+  assert.ok((await panelTitled(page, 'Team settings').boundingBox()).y < (await panel.boundingBox()).y, 'under Team settings')
+
+  // Edit…: the 30-day band blue, the 90-day band removed, ＋ Add band — the same days twice refused, then 450 days green.
+  await panel.getByRole('button', { name: 'Edit…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Due date highlights' })
+  await dialog.getByLabel('Colour of band 2').selectOption('blue')
+  await dialog.getByRole('button', { name: 'Remove band 3' }).click()
+  await dialog.getByRole('button', { name: '＋ Add band' }).click()
+  const days = dialog.getByLabel('Days of band 3')
+  assert.equal(await days.inputValue(), '60', 'a new band 30 days after the last')
+  await days.fill('30')
+  await dialog.getByRole('status').getByText('Two bands have 30 days').waitFor()
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.locator('.notice', { hasText: 'Two bands have 30 days: each band needs its own number of days.' }).waitFor()
+  assert.equal(writes.length, 0, 'nothing saved with the error')
+  await days.fill('450')
+  await dialog.getByLabel('Colour of band 3').selectOption('green')
+  await dialog.getByRole('status').getByText(/^Now: Overdue or due today — 1 tool · Due within 30 days — 1 tool · Due within 450 days — 1 tool\.$/).waitFor()
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const saved = await until(() => savedList(writes, (entry) => entry.data.highlights), 'the bands saved to Git')
+  assert.deepEqual(saved.data.highlights, [{ days: 0, colour: 'red' }, { days: 30, colour: 'blue' }, { days: 450, colour: 'green' }])
+  assert.match(saved.message, /^Tool Validations: due date highlights — 0 days red, 30 days blue, 450 days green \[saved /)
+  await panel.getByText('The team\'s bands, saved in tool-validations.json.').waitFor()
+  assert.deepEqual(await rowsOf(panel), ['Overdue or due today Red 1', 'Due within 30 days Blue 1', 'Due within 450 days Green 1'])
+
+  // The Master list and the Expiry list show the new bands.
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  await rowOf(master, 'JMP').locator('.tvl-band').waitFor()
+  assert.deepEqual([await tintOf(rowOf(master, 'LabVIEW')), await tintOf(rowOf(master, 'Minitab')), await tintOf(rowOf(master, 'JMP')), await tintOf(rowOf(master, 'Python'))], ['red', 'blue', 'green', ''])
+  assert.deepEqual([await pillOf(rowOf(master, 'Minitab')), await pillOf(rowOf(master, 'JMP'))], ['≤ 30 days', '≤ 450 days'])
+  assert.deepEqual(await legendOf(master), ['Overdue or due today', 'Due within 30 days', 'Due within 450 days'])
+  await tabs.getByRole('tab', { name: 'Expiry list' }).click()
+  const expiry = panelTitled(page, 'Validation expiry')
+  await rowOf(expiry, 'Minitab').waitFor()
+  assert.deepEqual([await tintOf(rowOf(expiry, 'LabVIEW')), await pillOf(rowOf(expiry, 'LabVIEW')), await tintOf(rowOf(expiry, 'Minitab')), await pillOf(rowOf(expiry, 'Minitab')), await tintOf(rowOf(expiry, 'Python'))], ['red', 'Overdue / today', 'blue', '≤ 30 days', ''])
+  assert.deepEqual(await legendOf(expiry), ['Overdue or due today', 'Due within 30 days', 'Due within 450 days'])
+
+  // A Team Member sees the same bands; Edit… disabled with the reason; nothing written.
+  const reader = await openPage(app, { init: setupOwnTabs })
+  reader.page.addLocatorHandler(reader.page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (box) => { await box.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const readerWrites = await mock(reader.context, files, 'Team Member')
+  await reader.page.reload()
+  const readerTabs = await openToolValidations(reader.page)
+  await readerTabs.getByRole('tab', { name: 'Master list' }).click()
+  const readerMaster = panelTitled(reader.page, 'Master list')
+  await rowOf(readerMaster, 'JMP').locator('.tvl-band').waitFor()
+  assert.deepEqual([await tintOf(rowOf(readerMaster, 'LabVIEW')), await tintOf(rowOf(readerMaster, 'Minitab')), await tintOf(rowOf(readerMaster, 'JMP'))], ['red', 'blue', 'green'])
+  await readerTabs.getByRole('tab', { name: 'Setup' }).click()
+  const readerPanel = panelTitled(reader.page, 'Due date highlights')
+  await readerPanel.locator('tbody tr').first().waitFor()
+  const reason = 'Only a Tool Owner (“Manage pages and menu groups”) or a co-owner of the Tool Validations list can change it. A Tool Owner names the co-owners in Team settings.'
+  assert.ok(await readerPanel.getByRole('button', { name: 'Edit…' }).isDisabled())
+  assert.equal(await readerPanel.getByRole('button', { name: 'Edit…' }).getAttribute('title'), reason)
+  assert.equal(await text(readerPanel.locator('.write-blocked')), reason)
+  assert.equal(readerWrites.length, 0, 'nothing written by the Team Member')
+  assert.deepEqual(reader.errors, [])
+  await reader.context.close()
+
+  // Every band removed: saved as an empty list — no row tinted, no legend.
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  await panel.getByRole('button', { name: 'Edit…' }).click()
+  for (let left = 3; left > 0; left--) await dialog.getByRole('button', { name: `Remove band ${left}` }).click()
+  await dialog.getByText('No bands: nothing is highlighted.').waitFor()
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const cleared = await until(() => savedList(writes, (entry) => Array.isArray(entry.data.highlights) && entry.data.highlights.length === 0), 'no bands saved')
+  assert.match(cleared.message, /^Tool Validations: due date highlights — none/)
+  await panel.getByText('No highlighting: every band was removed.').waitFor()
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  await rowOf(master, 'LabVIEW').waitFor()
+  assert.deepEqual([await master.locator('tbody tr.tvl-hl').count(), await master.locator('.tvl-band').count(), await master.locator('.tvl-legend').count()], [0, 0, 0])
   assert.deepEqual(errors, [])
   await context.close()
 })

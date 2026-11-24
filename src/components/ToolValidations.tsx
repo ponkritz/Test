@@ -1,14 +1,14 @@
 import { lazy, Suspense, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { recordJob } from '../backgroundJobs'
 import { outcomeText } from '../gitSaveQueue'
-import { defaultIcon, deleteReason, gitReasonOf, isHidden, kindLabel as pageKindLabel, kindOf, onDemandGroup, placementOf, removePlacement, setHidden, type MenuLayout, type PageKind } from '../menuLayout'
+import { defaultIcon, deleteReason, gitReasonOf, isHidden, kindLabel as pageKindLabel, kindOf, onDemandGroup, placementOf, removePlacement, serializeMenuLayout, setHidden, withListOwners, type MenuLayout, type PageKind } from '../menuLayout'
 import { onDemandPath, renamePage } from '../onDemand'
 import { createPage, type MenuLayoutStore } from '../useMenuLayout'
 import { usePageNameClash } from '../usePageNames'
 import { utcToday } from '../businessTime'
 import { formatDate, formatDateTime } from '../format'
 import { windchillCell } from '../windchillViews'
-import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, listReason, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
+import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, hiddenPageChoices, listReason, parseToolValidations, tabOwnerCounts, tabOwnersBehind, tabOwnersLayout, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, colourLabel, defaultHighlights, highlightColours, highlightsProblem, maxHighlightDays, maxHighlights, setHighlights, sortBands, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile, type HighlightBand, type HighlightColour } from '../toolValidations'
 import { useToolValidationsEnv, type CustomTabsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
 import { KindField, OwnersField, PageNameField } from './PageDialogs'
@@ -25,7 +25,20 @@ import { EmptyState, Metric, Metrics, Modal, Notice, Panel, Pill, SaveQueueStatu
 const pillTone: Record<ExpiryStatus, 'danger' | 'warning' | 'neutral' | 'info'> = { overdue: 'danger', due: 'warning', none: 'neutral', later: 'info' }
 const stateTone: Record<EntryState, 'open' | 'warning' | 'neutral'> = { 'in-source': 'open', gone: 'warning', manual: 'neutral' }
 const sourceNames = (file: ToolValidationsFile, entry: ToolEntry) => Object.entries(entry.sources).map(([id, link]) => `${file.sources.find((source) => source.id === id)?.name ?? id}${link.inSource ? '' : ' (not in it now)'}`).join(', ')
-const periodText = (months?: number) => months ? `${months}` : ''
+// TVL-06: the validity period shown — the entry's own; "24 (default)" when the default gives its due date; else —.
+type PeriodOf = Parameters<typeof validityOf>[0]
+const periodCell = (entry: PeriodOf) => { const period = validityOf(entry); return period.defaulted ? <>{period.months} <small>(default)</small></> : period.months ? `${period.months}` : '—' }
+const periodExport = (entry: PeriodOf) => { const period = validityOf(entry); return period.defaulted ? `${period.months} (default)` : period.months ?? '' }
+
+// ---- TVL-28: the due date highlights on the Expiry list and the Master list — the row tinted in its band's colour, a
+// marker with the band's text in the Due date cell (not colour alone) and a legend of the bands above the table ----
+const bandClass = (band?: HighlightBand) => band ? `tvl-hl tvl-hl-${band.colour}` : undefined
+const BandPill = ({ band }: { band?: HighlightBand }) => band ? <span className={`pill tvl-band tvl-band-${band.colour}`} title={bandLabel(band)}>{bandShort(band)}</span> : null
+const Swatch = ({ colour }: { colour: HighlightColour }) => <span className={`tvl-swatch tvl-band-${colour}`} aria-hidden="true" />
+function BandLegend({ bands }: { bands: HighlightBand[] }) {
+  if (!bands.length) return null
+  return <p className="tvl-legend" aria-label="Due date highlights"><span className="muted">Highlighted:</span>{bands.map((band) => <span key={band.days} className="tvl-legend-item"><Swatch colour={band.colour} />{bandLabel(band)}</span>)}<span className="muted">(an overdue tool is in the first band; set on Setup)</span></p>
+}
 
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
 function Missing() { return <Panel><EmptyState title="The Tool Validations master list is not available here." /></Panel> }
@@ -63,15 +76,16 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
   const rows = all.filter((row) => (status === 'all' || row.status === status) && (!needle || `${row.entry.name} ${row.entry.version} ${row.entry.notes ?? ''}`.toLowerCase().includes(needle)))
   const typed = draft ?? String(days)
   const typedDays = cleanDays(typed)
+  const bands = bandsOf(file)
   const columns: DataColumn<ExpiryRow>[] = [
     { id: 'status', label: 'Status', value: (row) => statusLabel[row.status], render: (row) => <Pill tone={pillTone[row.status]}>{statusLabel[row.status]}</Pill> },
     { id: 'name', label: 'Tool', value: (row) => row.entry.name },
     { id: 'version', label: 'Version', value: (row) => row.entry.version },
-    { id: 'due', label: 'Due date', value: (row) => row.due ?? '', render: (row) => row.due ? formatDate(row.due) : 'No due date', title: (row) => `Due date: ${dueFromLabel[row.from]}`, firstSortDesc: false },
+    { id: 'due', label: 'Due date', value: (row) => row.due ?? '', render: (row) => row.due ? <>{formatDate(row.due)} <BandPill band={bandFor(bands, row.due, today)} /></> : 'No due date', title: (row) => `Due date: ${dueFromLabel[row.from]}`, firstSortDesc: false },
     { id: 'days', label: 'Days left', align: 'right', value: (row) => row.days ?? '', render: (row) => daysLeftText(row) || '—', exportValue: (row) => row.days ?? '' },
     { id: 'from', label: 'Due date from', value: (row) => row.from === 'none' ? '' : dueFromLabel[row.from] },
     { id: 'validated', label: 'Validation date', value: (row) => row.entry.validationDate ?? '', render: (row) => formatDate(row.entry.validationDate, '—') },
-    { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => row.entry.validityMonths ?? '' },
+    { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => validityOf(row.entry).months ?? '', render: (row) => periodCell(row.entry), exportValue: (row) => periodExport(row.entry) },
     { id: 'sources', label: 'Sources', value: (row) => sourceNames(file, row.entry) || 'Added by hand', defaultHidden: true },
     { id: 'notes', label: 'Notes', value: (row) => row.entry.notes ?? '', defaultHidden: true },
   ]
@@ -81,8 +95,10 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
     const base = env.store.file
     setSaving(true); setSaveError('')
     try {
-      await env.store.save(setTeam(base, days, base.owners), `Tool Validations: team default ${days} days, ${base.owners.length} co-owner${base.owners.length === 1 ? '' : 's'}`, 'Tool Validations · team settings')
+      const saved = await env.store.save(setTeam(base, days, base.owners), `Tool Validations: team default ${days} days, ${base.owners.length} co-owner${base.owners.length === 1 ? '' : 's'}`, 'Tool Validations · team settings')
       setDraft(null); env.setPersonalDays(undefined)
+      // TVL-25: the save writes the co-owners (unchanged): the tab pages are brought in line with them when they are not.
+      if (env.pages && !tabsReason(env)) await writeTabOwners(env.pages, savedFile(saved, base))
     } catch (failure) { setSaveError(failure instanceof Error ? failure.message : String(failure)) } finally { setSaving(false) }
   }
   const sameAsTeam = days === teamDays
@@ -98,15 +114,16 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
     <div className="tool-expiry-counts"><Metrics>
       <Metric label="Overdue" value={count('overdue')} hint="Due date passed" tone={count('overdue') ? 'negative' : undefined} />
       <Metric label={`Due in the next ${days} days`} value={count('due')} hint={`Due by ${formatDate(new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10))}`} />
-      <Metric label="No due date" value={count('none')} hint="No due date and no validation date + validity period" />
+      <Metric label="No due date" value={count('none')} hint="No due date and no validation date" />
     </Metrics></div>
     <TablePanel title="Validation expiry" count={`${rows.length} of ${all.length} tools`}
-      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are on the Master list tab.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months). Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set. The Tool Owner and the list's co-owners make the window shown the team default with <strong>Set … days as team default</strong> (saved to Git, as Setup → Team settings).</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
-      <DataTable id="tool-validations:expiry" rows={rows} rowKey={(row) => row.entry.key} columns={columns} exportName="Tool validation expiry" defaultSort={{ id: 'days' }}
+      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are on the Master list tab.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months) — {defaultValidityMonths} months when the tool has none (shown as “{defaultValidityMonths} (default)”). Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set. The Tool Owner and the list's co-owners make the window shown the team default with <strong>Set … days as team default</strong> (saved to Git, as Setup → Team settings).</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
+      <DataTable id="tool-validations:expiry" rows={rows} rowKey={(row) => row.entry.key} columns={columns} exportName="Tool validation expiry" defaultSort={{ id: 'days' }} rowClassName={(row) => bandClass(bandFor(bands, row.due, today))}
         toolbar={<div className="tool-filter-bar">{windowField}
           <div className="segmented" role="group" aria-label="Status">{([['all', 'All'], ['overdue', `Overdue (${count('overdue')})`], ['due', `Due soon (${count('due')})`], ['none', `No due date (${count('none')})`]] as [StatusFilter, string][]).map(([key, label]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => setStatus(key)}>{label}</button>)}</div>
           <input className="search" type="search" aria-label="Search tools" placeholder="Search tool, version or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className="ghost" disabled={status === 'all' && !search} onClick={reset}>Reset filters</button>
+          <BandLegend bands={bands} />
         </div>}
         empty={<EmptyState title={all.length ? 'No tools match the filters.' : file.tools.length ? `No tool is overdue, due within ${days} days or without a due date.` : 'The master list has no tools yet.'} detail={all.length ? 'Reset filters to see every tool listed here.' : file.tools.length ? 'Widen the window, or see every tool on the Master list tab.' : 'Fetch the Tool Validations query (↻), or add a tool on the Master list tab.'} />} />
     </TablePanel>
@@ -161,12 +178,13 @@ export function ToolMasterList() {
   const needle = search.trim().toLowerCase()
   const rows = file.tools.filter((entry) => (filter === 'all' || entryState(entry) === filter) && (!needle || `${entry.name} ${entry.version} ${entry.notes ?? ''}`.toLowerCase().includes(needle)))
   const countOf = (key: EntryState) => file.tools.filter((entry) => entryState(entry) === key).length
+  const bands = bandsOf(file), today = utcToday()
   const columns: DataColumn<ToolEntry>[] = [
     { id: 'name', label: 'Tool', value: (entry) => entry.name },
     { id: 'version', label: 'Version', value: (entry) => entry.version },
     { id: 'validated', label: 'Validation date', value: (entry) => entry.validationDate ?? '', render: (entry) => <>{formatDate(entry.validationDate, '—')}{entry.manual.includes('validationDate') && <small> (entered)</small>}</> },
-    { id: 'period', label: 'Validity (months)', align: 'right', value: (entry) => entry.validityMonths ?? '', render: (entry) => <>{periodText(entry.validityMonths) || '—'}{entry.manual.includes('validityMonths') && <small> (entered)</small>}</> },
-    { id: 'due', label: 'Due date', value: (entry) => dueOf(entry).due ?? '', render: (entry) => { const due = dueOf(entry); return due.due ? <>{formatDate(due.due)} <small>({dueFromLabel[due.from]})</small></> : 'No due date' } },
+    { id: 'period', label: 'Validity (months)', align: 'right', value: (entry) => validityOf(entry).months ?? '', render: (entry) => <>{periodCell(entry)}{entry.manual.includes('validityMonths') && <small> (entered)</small>}</>, exportValue: (entry) => periodExport(entry) },
+    { id: 'due', label: 'Due date', value: (entry) => dueOf(entry).due ?? '', render: (entry) => { const due = dueOf(entry); return due.due ? <>{formatDate(due.due)} <BandPill band={bandFor(bands, due.due, today)} /> <small>({dueFromLabel[due.from]})</small></> : 'No due date' } },
     { id: 'state', label: 'Status', value: (entry) => entryStateLabel[entryState(entry)], render: (entry) => <Pill tone={stateTone[entryState(entry)]}>{entryStateLabel[entryState(entry)]}</Pill> },
     { id: 'sources', label: 'Sources', value: (entry) => sourceNames(file, entry) || '—' },
     { id: 'notes', label: 'Notes', value: (entry) => entry.notes ?? '' },
@@ -178,14 +196,15 @@ export function ToolMasterList() {
     <StoreNotices env={env} />
     {store.pending && why && <Notice tone="info">{mergeSummary(store.pending)} in the latest fetch of the Tool Validations query — shown here, saved to Git by the next Tool Owner or co-owner who opens the app.</Notice>}
     <TablePanel title="Master list" count={`${rows.length} of ${file.tools.length} tools`}
-      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
+      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
       action={<button type="button" className="primary" disabled={Boolean(why)} title={why || 'Add a tool by hand'} onClick={() => setDialog({ kind: 'tool' })}>＋ Add tool…</button>}>
       <WriteBlocked reason={why} />
-      <DataTable id="tool-validations:master" rows={rows} rowKey={(entry) => entry.key} columns={columns} exportName="Tool validations master list" defaultSort={{ id: 'name' }}
+      <DataTable id="tool-validations:master" rows={rows} rowKey={(entry) => entry.key} columns={columns} exportName="Tool validations master list" defaultSort={{ id: 'name' }} rowClassName={(entry) => bandClass(bandFor(bands, dueOf(entry).due, today))}
         toolbar={<div className="tool-filter-bar">
           <div className="segmented" role="group" aria-label="Status">{([['all', 'All'], ['in-source', `In source (${countOf('in-source')})`], ['gone', `Not in source now (${countOf('gone')})`], ['manual', `Added by hand (${countOf('manual')})`]] as [StateFilter, string][]).map(([key, label]) => <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
           <input className="search" type="search" aria-label="Search the master list" placeholder="Search tool, version or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className="ghost" disabled={filter === 'all' && !search} onClick={() => { setFilter('all'); setSearch('') }}>Reset filters</button>
+          <BandLegend bands={bands} />
         </div>}
         empty={<EmptyState title={file.tools.length ? 'No tools match the filters.' : 'The master list has no tools yet.'} detail={file.tools.length ? 'Reset filters to see every tool.' : 'Fetch the Tool Validations query (↻), merge a source (its tab, or Setup → Sources), or add a tool by hand.'} />} />
     </TablePanel>
@@ -195,7 +214,7 @@ export function ToolMasterList() {
 }
 
 // ---- TVL-01, TVL-07, TVL-09, TVL-11, TVL-14: the Setup tab — the sources and the team settings ----
-type Dialog = { kind: 'team' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource } | { kind: 'add-tab' } | { kind: 'rename-tab'; tab: CustomTab } | { kind: 'remove-tab'; tab: CustomTab }
+type Dialog = { kind: 'team' } | { kind: 'highlights' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource } | { kind: 'add-tab' } | { kind: 'add-existing-tab' } | { kind: 'rename-tab'; tab: CustomTab } | { kind: 'remove-tab'; tab: CustomTab }
 export function ToolSetup() {
   const env = useToolValidationsEnv()
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -211,12 +230,15 @@ export function ToolSetup() {
       <SettingsSummary rows={[['Expiry window (team default)', `${file.defaultDays} days`], ['Co-owners', file.owners.length ? file.owners.join(', ') : 'Nobody yet — only Tool Owners change the list']]} />
       <WriteBlocked reason={why} />
     </Panel>
+    <HighlightsPanel env={env} why={why} open={setDialog} />
     {dialog?.kind === 'team' && <TeamDialog env={env} onClose={close} />}
+    {dialog?.kind === 'highlights' && <HighlightsDialog env={env} onClose={close} />}
     {dialog?.kind === 'add-source' && <AddSourceDialog env={env} onClose={close} />}
     {dialog?.kind === 'mapping' && <MappingDialog env={env} source={dialog.source} onClose={close} />}
     {dialog?.kind === 'merge' && <MergeDialog env={env} source={dialog.source} onClose={close} />}
     {dialog?.kind === 'remove-source' && <RemoveSourceDialog env={env} source={dialog.source} onClose={close} />}
     {dialog?.kind === 'add-tab' && env.pages && <AddTabDialog env={env} pages={env.pages} onClose={close} />}
+    {dialog?.kind === 'add-existing-tab' && env.pages && <AddExistingTabDialog env={env} pages={env.pages} onClose={close} />}
     {dialog?.kind === 'rename-tab' && env.pages && <RenameTabDialog env={env} pages={env.pages} tab={dialog.tab} onClose={close} />}
     {dialog?.kind === 'remove-tab' && env.pages && <RemoveTabDialog env={env} pages={env.pages} tab={dialog.tab} onClose={close} />}
   </>
@@ -267,8 +289,8 @@ function SourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSourc
     { id: 'name', label: 'Tool', value: (row) => row.input.name },
     { id: 'version', label: 'Version', value: (row) => row.input.version },
     { id: 'validated', label: 'Validation date', value: (row) => row.input.validationDate ?? '', render: (row) => formatDate(row.input.validationDate, '—') },
-    { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => row.input.validityMonths ?? '', render: (row) => row.input.validityMonths ?? '—' },
-    { id: 'due', label: 'Due date', value: (row) => row.input.dueDate ?? '', render: (row) => formatDate(row.input.dueDate, '—') },
+    { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => validityOf(row.input).months ?? '', render: (row) => periodCell(row.input), exportValue: (row) => periodExport(row.input) },
+    { id: 'due', label: 'Due date', value: (row) => dueOf({ ...row.input, manual: [] }).due ?? '', render: (row) => { const due = dueOf({ ...row.input, manual: [] }); return due.due ? <>{formatDate(due.due)} <small>({dueFromLabel[due.from]})</small></> : '—' } },
     { id: 'listed', label: 'Master list', value: (row) => row.listed ? 'Merged' : 'Not merged yet', render: (row) => <Pill tone={row.listed ? 'open' : 'neutral'}>{row.listed ? 'Merged' : 'Not merged yet'}</Pill> },
   ]
   const close = () => setDialog(null)
@@ -322,9 +344,9 @@ function ToolDialog({ env, editing, onClose }: { env: ToolValidationsEnv; editin
       <label>Version (optional)<input maxLength={60} disabled={locked} value={form.version} onChange={(event) => set({ version: event.target.value })} /><small>Different versions are separate entries.</small></label>
       <div className="form-row">
         <label>Validation date (optional)<input type="date" value={form.validationDate} onChange={(event) => set({ validationDate: event.target.value })} /><small>Changed here, it is kept when the sources are read again; emptied, the sources fill it.</small></label>
-        <label>Validity period in months (optional)<input type="number" min={1} max={600} step={1} inputMode="numeric" value={form.validityMonths} onChange={(event) => set({ validityMonths: event.target.value })} /><small>E.g. 24 for two years.</small></label>
+        <label>Validity period in months (optional)<input type="number" min={1} max={600} step={1} inputMode="numeric" value={form.validityMonths} onChange={(event) => set({ validityMonths: event.target.value })} /><small>E.g. 24 for two years. Leave empty for {defaultValidityMonths} months (default).</small></label>
       </div>
-      <label>Due date (optional)<input type="date" value={form.dueDate} onChange={(event) => set({ dueDate: event.target.value })} /><small>Leave empty to use validation date + validity period. An explicit due date wins. {preview.due ? `Due ${formatDate(preview.due)} (${dueFromLabel[preview.from === 'source' ? 'entered' : preview.from]}).` : 'No due date yet.'}</small></label>
+      <label>Due date (optional)<input type="date" value={form.dueDate} onChange={(event) => set({ dueDate: event.target.value })} /><small>Leave empty to use validation date + validity period ({defaultValidityMonths} months when none is given). An explicit due date wins. {preview.due ? `Due ${formatDate(preview.due)} (${dueFromLabel[preview.from === 'source' ? 'entered' : preview.from]}).` : 'No due date yet.'}</small></label>
       <label>Notes (optional)<textarea maxLength={2000} rows={3} value={form.notes} onChange={(event) => set({ notes: event.target.value })} /></label>
       {error && <Notice tone="error">{error}</Notice>}
       <Actions busy={busy} onCancel={onClose} label={editing ? 'Save to Git' : 'Add tool'} why={env.store.reason} />
@@ -345,21 +367,105 @@ function RemoveDialog({ env, entry, onClose }: { env: ToolValidationsEnv; entry:
   </Modal>
 }
 
+// TVL-25: the list as saved (merged with saves by others meanwhile, GIT-17), else the list sent.
+function savedFile(result: { text?: string } | undefined, sent: ToolValidationsFile): ToolValidationsFile {
+  try { return result?.text ? parseToolValidations(result.text).file : sent } catch { return sent }
+}
 function TeamDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: () => void }) {
   const file = env.store.file
   const [days, setDays] = useState(String(file.defaultDays))
   const [owners, setOwners] = useState(file.owners)
-  const { busy, error, setError, run } = useSaving(env, onClose)
-  const submit = (event: FormEvent) => {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  // TVL-25: the co-owners are also written to the pages of the tabs — fail closed: a change of the co-owners is not saved
+  // while those pages cannot be changed (the list and its pages would disagree on who may edit them).
+  const chosen = env.ownersReason ? file.owners : owners
+  const ownersChanged = JSON.stringify([...chosen].sort()) !== JSON.stringify([...file.owners].sort())
+  const pagesWhy = ownersChanged && file.tabs.length ? tabsReason(env) : ''
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     const value = cleanDays(days)
     if (!value) { setError(`The team default is a whole number of days from 1 to ${maxExpiryDays}.`); return }
-    void run(setTeam(file, value, env.ownersReason ? file.owners : owners), `Tool Validations: team default ${value} days, ${owners.length} co-owner${owners.length === 1 ? '' : 's'}`, 'Tool Validations · team settings')
+    if (pagesWhy) { setError(`The co-owners are also written to the pages of the ${file.tabs.length} tab${file.tabs.length === 1 ? '' : 's'}, which cannot be changed now: ${pagesWhy}`); return }
+    setBusy(true); setError('')
+    let saved = false
+    try {
+      const next = setTeam(file, value, chosen)
+      const result = await env.store.save(next, `Tool Validations: team default ${value} days, ${chosen.length} co-owner${chosen.length === 1 ? '' : 's'}`, 'Tool Validations · team settings')
+      saved = true
+      if (env.pages && file.tabs.length && !tabsReason(env)) await writeTabOwners(env.pages, savedFile(result, next))
+      onClose()
+    } catch (failure) {
+      const reason = failure instanceof Error ? failure.message : String(failure)
+      setError(saved ? `The team settings are saved, but the co-owners could not be written to the tab pages: ${reason} Write them again with “Write the co-owners to the tab pages” on Setup → Tabs.` : reason)
+      setBusy(false)
+    }
   }
   return <Modal title="Team settings" eyebrow="TOOL VALIDATIONS · SETTINGS" onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={submit}>
       <label>Expiry window, team default (days)<input type="number" required min={1} max={maxExpiryDays} step={1} value={days} onChange={(event) => setDays(event.target.value)} /><small>What everyone sees on the Expiry list until they choose their own window. 60 days unless changed.</small></label>
-      <OwnersField label="Co-owners of the list (optional)" value={owners} onChange={setOwners} disabled={env.ownersReason} help="They may add, correct and remove tools, set the team default and the sources and their mapping — as the Tool Owner does." />
+      <OwnersField label="Co-owners of the list (optional)" value={owners} onChange={setOwners} disabled={env.ownersReason} help={`They may add, correct and remove tools, set the team default and the sources and their mapping — as the Tool Owner does.${file.tabs.length ? ` They are also written as co-owners of the pages of the ${file.tabs.length} tab${file.tabs.length === 1 ? '' : 's'} (menu-layout.json), so they hold the page rights wherever a page is opened; co-owners added to a page by hand stay.` : ''}`} />
+      {error && <Notice tone="error">{error}</Notice>}
+      <Actions busy={busy} onCancel={onClose} label="Save to Git" why={env.store.reason || pagesWhy} />
+    </form>
+  </Modal>
+}
+
+// ---- TVL-27: Setup → Due date highlights — the team's bands (days and colour), shown to everyone, changed by those who
+// may change the list (TVL-11) in a pop-up and saved to Git ----
+const bandsText = (bands: HighlightBand[]) => bands.length ? bands.map((band) => `${band.days} days ${band.colour}`).join(', ') : 'none'
+function HighlightsPanel({ env, why, open }: { env: ToolValidationsEnv; why: string; open: (dialog: Dialog) => void }) {
+  const file = env.store.shown
+  const counts = bandCounts(bandsOf(file), file.tools, utcToday())
+  return <Panel title="Due date highlights" info={<ul><li>The <strong>Master list</strong> and the <strong>Expiry list</strong> tint each tool's row in the colour of its band and name the band in the Due date cell: a tool is in a band when it is due within that many days from today (0: overdue or due today). An <strong>overdue</strong> tool is in the first band (the fewest days); when a tool fits several bands, the one with the fewest days wins. A tool without a due date is not highlighted.</li><li>The bands are the same for everyone, kept in {toolValidationsFile} in Git; the Tool Owner and the list's co-owners change them with <strong>Edit…</strong>.</li><li>Until they are saved the default bands are used: overdue or due today red, within 30 days amber, within 90 days yellow. Removing every band turns the highlighting off.</li></ul>}
+    action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || 'Change the due date highlights'} onClick={() => open({ kind: 'highlights' })}>Edit…</button>}>
+    <WriteBlocked reason={why} />
+    {counts.length ? <div className="azure-table tool-highlights"><table><thead><tr><th>Band</th><th>Colour</th><th className="num">Tools now</th></tr></thead><tbody>
+      {counts.map(({ band, count }) => <tr key={band.days} className={bandClass(band)}><td>{bandLabel(band)}</td><td><span className="tvl-colour"><Swatch colour={band.colour} />{colourLabel(band.colour)}</span></td><td className="num">{count}</td></tr>)}
+    </tbody></table></div> : <EmptyState title="No highlighting: every band was removed." detail={why ? undefined : 'Edit… adds bands again.'} />}
+    <p className="muted tvl-highlights-note">{file.highlights ? `The team's bands, saved in ${toolValidationsFile}.` : 'The default bands — not saved in Git yet; Edit… saves the team’s own.'}</p>
+  </Panel>
+}
+interface BandDraft { id: number; days: string; colour: HighlightColour }
+let nextBandId = 1
+const draftOf = (band: HighlightBand): BandDraft => ({ id: nextBandId++, days: String(band.days), colour: band.colour })
+function HighlightsDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: () => void }) {
+  const file = env.store.file
+  const [bands, setBands] = useState<BandDraft[]>(() => bandsOf(file).map(draftOf))
+  const { busy, error, setError, run } = useSaving(env, onClose)
+  const problem = highlightsProblem(bands)
+  const clean: HighlightBand[] = problem ? [] : bands.map((band) => ({ days: Number(band.days), colour: band.colour }))
+  const counts = problem ? [] : bandCounts(clean, file.tools, utcToday())
+  const change = (id: number, patch: Partial<BandDraft>) => { setError(''); setBands((current) => current.map((band) => band.id === id ? { ...band, ...patch } : band)) }
+  const add = () => {
+    setError('')
+    setBands((current) => {
+      const used = current.map((band) => Number(band.days)).filter((days) => Number.isInteger(days))
+      const days = Math.min(maxHighlightDays, used.length ? Math.max(...used) + 30 : 0)
+      const colour = highlightColours.find((entry) => !current.some((band) => band.colour === entry.key))?.key ?? 'grey'
+      return [...current, { id: nextBandId++, days: String(days), colour }]
+    })
+  }
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    if (problem) { setError(problem); return }
+    void run(setHighlights(file, clean), `Tool Validations: due date highlights — ${bandsText(sortBands(clean))}`, 'Tool Validations · due date highlights')
+  }
+  return <Modal title="Due date highlights" eyebrow="TOOL VALIDATIONS · SETTINGS" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={submit}>
+      <p className="muted">A tool due within a band's days from today (0: overdue or due today) is tinted in its colour on the Master list and the Expiry list, with the band named in its Due date cell. An overdue tool is in the band with the fewest days, and when a tool fits several bands the one with the fewest days wins. Up to {maxHighlights} bands; with none, nothing is highlighted.</p>
+      {bands.length ? <div className="azure-table tool-highlights-edit"><table><thead><tr><th>Due within (days)</th><th>Colour</th><th>Actions</th></tr></thead><tbody>
+        {bands.map((band, index) => <tr key={band.id}>
+          <td><input type="number" required min={0} max={maxHighlightDays} step={1} inputMode="numeric" aria-label={`Days of band ${index + 1}`} value={band.days} onChange={(event) => change(band.id, { days: event.target.value })} /></td>
+          <td><span className="tvl-colour"><Swatch colour={band.colour} /><select aria-label={`Colour of band ${index + 1}`} value={band.colour} onChange={(event) => change(band.id, { colour: event.target.value as HighlightColour })}>{highlightColours.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select></span></td>
+          <td><button type="button" className="text-button danger-text" aria-label={`Remove band ${index + 1}`} onClick={() => { setError(''); setBands((current) => current.filter((entry) => entry.id !== band.id)) }}>Remove</button></td>
+        </tr>)}
+      </tbody></table></div> : <EmptyState title="No bands: nothing is highlighted." detail="＋ Add band adds one." />}
+      <div className="button-row">
+        <button type="button" className="ghost" disabled={bands.length >= maxHighlights} title={bands.length >= maxHighlights ? `At most ${maxHighlights} bands` : 'Add a band'} onClick={add}>＋ Add band</button>
+        <button type="button" className="text-button" onClick={() => { setError(''); setBands(defaultHighlights.map(draftOf)) }}>Use the default bands</button>
+      </div>
+      <p className="muted" role="status">{problem || (counts.length ? `Now: ${counts.map(({ band, count }) => `${bandLabel(band)} — ${count} tool${count === 1 ? '' : 's'}`).join(' · ')}.` : 'No highlighting.')}</p>
       {error && <Notice tone="error">{error}</Notice>}
       <Actions busy={busy} onCancel={onClose} label="Save to Git" why={env.store.reason} />
     </form>
@@ -472,6 +578,7 @@ function tabsReason(env: ToolValidationsEnv) {
   if (!pages.menu.loaded || !pages.onDemand.loaded) return 'The pages are still being read from Git.'
   return ''
 }
+const ownerCountText = ({ fromList, byHand }: { fromList: number; byHand: number }) => `${fromList} from the list · ${byHand} added by hand`
 function TabsPanel({ env, why: listWhy, open }: { env: ToolValidationsEnv; why: string; open: (dialog: Dialog) => void }) {
   const file = env.store.shown
   const why = listWhy || tabsReason(env)
@@ -483,14 +590,32 @@ function TabsPanel({ env, why: listWhy, open }: { env: ToolValidationsEnv; why: 
   }
   const pageOf = (tab: CustomTab) => env.pages?.onDemand.pages.find((page) => page.id === tab.pageId)
   const layout = env.pages?.menu.layout
-  return <Panel title="Tabs" info={<ul><li>The tabs the Tool Owner and the list's co-owners add to this page, between the source tabs and Setup: a <strong>Table</strong>, a <strong>Table + Insights</strong> or an <strong>On-Demand Dashboard</strong> — each an On-Demand page kept in Git like every other, set up and edited as that page type is, but shown only here (not in the menu, on Home or in search).</li><li>A dashboard tab can read the <strong>Tool Validations master list</strong> and <strong>expiry list</strong> as data sources, besides the table pages.</li><li><strong>←</strong> <strong>→</strong> move a tab; <strong>Rename…</strong> renames the tab and its page; <strong>Remove…</strong> asks first: the page is kept in Git, hidden — or, by a Tool Owner, deleted with its data.</li></ul>}
-    action={<button type="button" className="ghost" disabled={Boolean(why || full)} title={why || full || 'Add a tab of your own: a Table, Table + Insights or On-Demand Dashboard page'} onClick={() => open({ kind: 'add-tab' })}>＋ Add tab…</button>}>
+  // TVL-24: the hidden pages that can be made a tab again.
+  const choices = env.pages && layout ? hiddenPageChoices(env.pages.onDemand.pages, layout, file) : []
+  const noChoice = choices.length ? '' : 'No hidden On-Demand page that is not a tab yet: a page becomes one when its tab is removed with “Kept in Git, hidden”, or when it is hidden in Admin → Pages & menu.'
+  // TVL-25: the tab pages whose co-owners are not in line with the list's (a save that failed, or an older app version).
+  const behind = layout && env.pages?.menu.loaded && env.store.loaded ? tabOwnersBehind(layout, file) : []
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
+  const sync = () => {
+    if (!env.pages) return
+    setSyncing(true); setSyncError('')
+    void writeTabOwners(env.pages, env.store.file).catch((failure) => setSyncError(failure instanceof Error ? failure.message : String(failure))).finally(() => setSyncing(false))
+  }
+  return <Panel title="Tabs" info={<ul><li>The tabs the Tool Owner and the list's co-owners add to this page, between the source tabs and Setup: a <strong>Table</strong>, a <strong>Table + Insights</strong> or an <strong>On-Demand Dashboard</strong> — each an On-Demand page kept in Git like every other, set up and edited as that page type is, but shown only here (not in the menu, on Home or in search).</li><li>A dashboard tab can read the <strong>Tool Validations master list</strong> and <strong>expiry list</strong> as data sources, besides the table pages.</li><li><strong>＋ Add existing page as tab…</strong> makes a hidden On-Demand page a tab again — a page kept hidden when its tab was removed, or left behind when an older app version dropped the tabs.</li><li>The list's <strong>co-owners</strong> (Team settings) are written as <strong>co-owners of each tab's page</strong> in menu-layout.json, so they hold the page's rights also when it is opened from Admin → Pages & menu; co-owners added to a page by hand stay, and only the co-owners the list wrote are taken off again when they leave the list or the tab is removed.</li><li><strong>←</strong> <strong>→</strong> move a tab; <strong>Rename…</strong> renames the tab and its page; <strong>Remove…</strong> asks first: the page is kept in Git, hidden — or, by a Tool Owner, deleted with its data.</li></ul>}
+    action={<div className="button-row nowrap">
+      <button type="button" className="ghost" disabled={Boolean(why || full)} title={why || full || 'Add a tab of your own: a Table, Table + Insights or On-Demand Dashboard page'} onClick={() => open({ kind: 'add-tab' })}>＋ Add tab…</button>
+      <button type="button" className="ghost" disabled={Boolean(why || full || noChoice)} title={why || full || noChoice || 'Make a hidden On-Demand page a tab of this page again'} onClick={() => open({ kind: 'add-existing-tab' })}>＋ Add existing page as tab…</button>
+    </div>}>
     <WriteBlocked reason={why} />
-    {file.tabs.length ? <div className="azure-table tool-tabs"><table><thead><tr><th>Tab</th><th>Page type</th><th>Page in Git</th><th>Actions</th></tr></thead><tbody>
+    {behind.length > 0 && <Notice tone="warning">The co-owners of the list are not yet written to the page{behind.length === 1 ? '' : 's'} of {behind.map((tab) => tab.name).join(', ')}: {behind.length === 1 ? 'its' : 'their'} co-owners in Admin → Pages & menu differ from the list's.{' '}<button type="button" className="ghost" disabled={Boolean(why) || syncing} title={why || 'Write the co-owners of the list to the tab pages (menu-layout.json)'} onClick={sync}>{syncing ? 'Saving to Git…' : 'Write the co-owners to the tab pages'}</button></Notice>}
+    {syncError && <Notice tone="error">{syncError}</Notice>}
+    {file.tabs.length ? <div className="azure-table tool-tabs"><table><thead><tr><th>Tab</th><th>Page type</th><th>Page in Git</th><th>Page co-owners</th><th>Actions</th></tr></thead><tbody>
       {file.tabs.map((tab, index) => { const page = pageOf(tab); return <tr key={tab.pageId}>
         <td><strong>{tab.name}</strong></td>
         <td><small className="plain">{pageKindLabel(layout?.pages[tab.pageId] ? kindOf(layout, tab.pageId) : tab.kind)}</small></td>
         <td><small className="plain">{page ? `${onDemandPath(tab.pageId)}${page.rows.length ? ` · ${page.rows.length} row${page.rows.length === 1 ? '' : 's'}` : ''}` : env.pages?.onDemand.loaded ? 'Not in Git (deleted)' : '—'}</small></td>
+        <td><small className="plain">{layout?.pages[tab.pageId] ? ownerCountText(tabOwnerCounts(layout, tab.pageId)) : '—'}</small></td>
         <td><div className="button-row nowrap">
           <button type="button" className="ghost" aria-label={`Move ${tab.name} left`} disabled={Boolean(why) || moving || index === 0} title={why || (index === 0 ? 'Already the first of the added tabs' : `Move ${tab.name} one tab to the left`)} onClick={() => move(tab, -1)}>←</button>
           <button type="button" className="ghost" aria-label={`Move ${tab.name} right`} disabled={Boolean(why) || moving || index === file.tabs.length - 1} title={why || (index === file.tabs.length - 1 ? 'Already the last of the added tabs' : `Move ${tab.name} one tab to the right`)} onClick={() => move(tab, 1)}>→</button>
@@ -519,7 +644,9 @@ function AddTabDialog({ env, pages, onClose }: { env: ToolValidationsEnv; pages:
     setBusy(true); setError('')
     try {
       // The page file, then its hidden place in the menu (createPage, PGB-05), then the tab in tool-validations.json.
-      const id = await createPage(pages.onDemand, pages.menu, { kind, name: clean, description, icon: defaultIcon, group: onDemandGroup, newGroup: null, owners: [], hidden: true })
+      // TVL-25: the list's co-owners are the page's co-owners from the start (remembered as written from the list).
+      const listOwners = env.store.file.owners
+      const id = await createPage(pages.onDemand, pages.menu, { kind, name: clean, description, icon: defaultIcon, group: onDemandGroup, newGroup: null, owners: listOwners, ownersFromList: listOwners, hidden: true })
       await env.store.save(addTab(env.store.file, { pageId: id, name: clean, kind }), `Tool Validations: add the tab ${clean} (${pageKindLabel(kind)}, page ${id})`, `Tool Validations · add the tab ${clean}`)
       onClose()
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
@@ -530,11 +657,73 @@ function AddTabDialog({ env, pages, onClose }: { env: ToolValidationsEnv; pages:
       <PageNameField value={name} clash={clash} onChange={(value) => { setName(value); setError('') }} />
       <small className="muted">The name of the tab and of its page, up to {maxTabName} characters.</small>
       <label>Description (optional)<input maxLength={300} value={description} onChange={(event) => setDescription(event.target.value)} /><small>Shown at the top of the tab.</small></label>
-      <small className="muted">The page is created in Git at once (on-demand/page-id.json{kind === 'dashboard' ? '; its blocks in dashboards/page-id.json when the first one is added' : ''}), placed hidden in menu-layout.json — not in the menu, on Home or in search — and added to {toolValidationsFile} as the last of the added tabs, before Setup. The Tool Owner and the list's co-owners set it up and edit it; everyone else reads it.</small>
+      <small className="muted">The page is created in Git at once (on-demand/page-id.json{kind === 'dashboard' ? '; its blocks in dashboards/page-id.json when the first one is added' : ''}), placed hidden in menu-layout.json — not in the menu, on Home or in search — and added to {toolValidationsFile} as the last of the added tabs, before Setup. The Tool Owner and the list's co-owners set it up and edit it — the co-owners are written as the page's co-owners; everyone else reads it.</small>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions">{why && <WriteBlocked reason={why} />}<button type="button" className="ghost" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || Boolean(clash) || Boolean(why)}>{busy ? 'Saving to Git…' : 'Add tab'}</button></div>
     </form>
   </Modal>
+}
+
+// TVL-24: a hidden On-Demand page made a tab again — chosen from the hidden pages that are not a tab yet, named as the
+// tab (the page renamed with it when the name is changed), added as the last of the owners' tabs; the page stays hidden
+// and gets the list's co-owners (TVL-25). The same rights as ＋ Add tab… (TVL-17).
+function AddExistingTabDialog({ env, pages, onClose }: { env: ToolValidationsEnv; pages: CustomTabsEnv; onClose: () => void }) {
+  const choices = hiddenPageChoices(pages.onDemand.pages, pages.menu.layout, env.store.file)
+  const [pageId, setPageId] = useState(choices[0]?.id ?? '')
+  const chosen = choices.find((choice) => choice.id === pageId)
+  const [name, setName] = useState(chosen?.name.slice(0, maxTabName) ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const clash = usePageNameClash(name, chosen ? `ondemand:${chosen.id}` : undefined)
+  const why = tabsReason(env) || addTabReason(env.store.file) || (choices.length ? '' : 'No hidden On-Demand page that is not a tab yet.')
+  const pick = (id: string) => { setPageId(id); setName(choices.find((choice) => choice.id === id)?.name.slice(0, maxTabName) ?? ''); setError('') }
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!chosen) { setError('Choose a page.'); return }
+    const problem = tabNameProblem(env.store.file, name)
+    if (problem) { setError(problem); return }
+    if (clash) return
+    const clean = name.replace(/\s+/g, ' ').trim()
+    setBusy(true); setError('')
+    try {
+      const next = addTab(env.store.file, { pageId: chosen.id, name: clean, kind: chosen.kind })
+      const saved = await env.store.save(next, `Tool Validations: add the existing page ${chosen.name} as the tab ${clean} (${pageKindLabel(chosen.kind)}, page ${chosen.id})`, `Tool Validations · add the tab ${clean}`)
+      const stored = pages.onDemand.stored(chosen.id)
+      if (stored && stored.name !== clean) { const renamed = await pages.onDemand.save(renamePage(stored, clean, stored.description), `Pages & menu: rename ${stored.name} to ${clean} (a tab of Tool Validations)`); recordJob(`pages:${chosen.id}`, `Rename page · ${stored.name}`, { text: `${outcomeText(renamed)} ${onDemandPath(chosen.id)}` }) }
+      await writeTabOwners(pages, savedFile(saved, next), [chosen.id])
+      onClose()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
+  }
+  return <Modal title="Add an existing page as a tab" eyebrow="TOOL VALIDATIONS · TABS" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={(event) => void submit(event)} className="pgb-form">
+      <label>Page<select aria-label="Page" value={pageId} onChange={(event) => pick(event.target.value)} disabled={!choices.length}>
+        {!choices.length && <option value="">— No hidden page —</option>}
+        {choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name} ({pageKindLabel(choice.kind)}{choice.kind === 'dashboard' ? '' : `, ${choice.rows} row${choice.rows === 1 ? '' : 's'}`})</option>)}
+      </select><small>The On-Demand pages that are hidden from the menu and not a tab of this page — for example one kept hidden when its tab was removed, or left behind when an older app version dropped the tabs.</small></label>
+      <PageNameField value={name} clash={clash} onChange={(value) => { setName(value); setError('') }} />
+      <small className="muted">The name of the tab and of its page, up to {maxTabName} characters; a changed name renames the page too.</small>
+      <small className="muted">The page keeps its data and stays hidden from the menu; it is added to {toolValidationsFile} as the last of the added tabs, before Setup, and the list's co-owners are written as its co-owners (those added by hand stay).</small>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions">{why && <WriteBlocked reason={why} />}<button type="button" className="ghost" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || Boolean(clash) || Boolean(why)}>{busy ? 'Saving to Git…' : 'Add tab'}</button></div>
+    </form>
+  </Modal>
+}
+
+// TVL-25: the list's co-owners written as co-owners of the tab pages (all, or `only` these page ids) in menu-layout.json —
+// one queued, merged save (GIT-17) when anything changes, its result under Background jobs; an error is thrown.
+async function writeTabOwners(pages: CustomTabsEnv, file: ToolValidationsFile, only?: string[]) {
+  const layout = pages.menu.layout
+  const next = tabOwnersLayout(layout, file, only)
+  if (serializeMenuLayout(next) === serializeMenuLayout(layout)) return
+  const changed = tabOwnersBehind(layout, file).filter((tab) => !only || only.includes(tab.pageId))
+  const label = 'Tool Validations · co-owners of the tab pages'
+  try {
+    const result = await pages.menu.save(next, `Pages & menu: the co-owners of the Tool Validations list written to the page${changed.length === 1 ? '' : 's'} of ${changed.map((tab) => tab.name).join(', ') || 'its tabs'}`)
+    recordJob('tool-validations', label, { text: `${outcomeText(result)} ${pages.menu.path}` })
+  } catch (failure) {
+    recordJob('tool-validations', label, { text: failure instanceof Error ? failure.message : String(failure), failed: true })
+    throw failure
+  }
 }
 
 function RenameTabDialog({ env, pages, tab, onClose }: { env: ToolValidationsEnv; pages: CustomTabsEnv; tab: CustomTab; onClose: () => void }) {
@@ -591,8 +780,11 @@ function RemoveTabDialog({ env, pages, tab, onClose }: { env: ToolValidationsEnv
         const removed = dashboard ? await pages.git.removeDashboard(tab.pageId, `Pages & menu: remove the dashboard ${tab.name} (a tab of Tool Validations)`) : false
         if (pages.menu.layout.pages[tab.pageId]) await pages.menu.save(removePlacement(pages.menu.layout, tab.pageId), `Pages & menu: remove the page ${tab.name}`)
         recordJob(`pages:${tab.pageId}`, `Delete page · ${tab.name}`, { text: `Deleted ${onDemandPath(tab.pageId)}${removed ? ` and dashboards/${tab.pageId}.json` : ''}; its history stays in GitHub.` })
-      } else if (page && !isHidden(pages.menu.layout, tab.pageId)) {
-        await pages.menu.save(setHidden(pages.menu.layout, tab.pageId, true, ids), `Pages & menu: hide the page ${tab.name} (its tab removed from Tool Validations)`)
+      } else if (page) {
+        // Kept, hidden; TVL-25: the co-owners the list wrote to the page are taken off (those added by hand stay).
+        const hidden = isHidden(pages.menu.layout, tab.pageId) ? pages.menu.layout : setHidden(pages.menu.layout, tab.pageId, true, ids)
+        const next = withListOwners(hidden, tab.pageId, [])
+        if (serializeMenuLayout(next) !== serializeMenuLayout(pages.menu.layout)) await pages.menu.save(next, `Pages & menu: hide the page ${tab.name} (its tab removed from Tool Validations; the list's co-owners taken off it)`)
       }
       onClose()
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
@@ -601,7 +793,7 @@ function RemoveTabDialog({ env, pages, tab, onClose }: { env: ToolValidationsEnv
     <form onSubmit={(event) => void submit(event)}>
       <p>Remove the tab <strong>{tab.name}</strong> from Tool Validations for everyone? Its page — {dashboard ? 'an On-Demand Dashboard' : `${rows} row${rows === 1 ? '' : 's'}`} — is:</p>
       <fieldset className="pgb-kinds"><legend>The page</legend>
-        <div className="pgb-kind"><label className="check"><input type="radio" name="remove-tab" checked={remove === 'keep'} onChange={() => setRemove('keep')} />Kept in Git, hidden</label><small>Its data stays; it is not in the menu, on Home or in search. A Tool Owner can open, show or delete it in Admin → Pages & menu.</small></div>
+        <div className="pgb-kind"><label className="check"><input type="radio" name="remove-tab" checked={remove === 'keep'} onChange={() => setRemove('keep')} />Kept in Git, hidden</label><small>Its data stays; it is not in the menu, on Home or in search, and the list's co-owners are taken off its co-owners (those added by hand stay). A Tool Owner can open, show or delete it in Admin → Pages & menu, and it can be made a tab again with ＋ Add existing page as tab….</small></div>
         <div className="pgb-kind"><label className="check" title={deleting || undefined}><input type="radio" name="remove-tab" disabled={Boolean(deleting)} checked={remove === 'delete'} onChange={() => setRemove('delete')} />Deleted with its data</label><small>{deleting || `${onDemandPath(tab.pageId)}${dashboard ? ` and dashboards/${tab.pageId}.json are` : ' is'} deleted from Git; the history stays in GitHub. A dashboard that reads the page says it is no longer there.`}</small></div>
       </fieldset>
       {error && <Notice tone="error">{error}</Notice>}
@@ -623,8 +815,16 @@ function ownedMenu(menu: MenuLayoutStore, pageId: string, email: string, fallbac
   if (!email) return menu
   const current = placementOf(menu.layout, pageId)
   const owners = menu.layout.pages[pageId]?.owners ?? []
-  const layout: MenuLayout = { ...menu.layout, pages: { ...menu.layout.pages, [pageId]: { type: menu.layout.pages[pageId]?.type ?? fallback, group: current.group, order: current.order, icon: current.icon, owners: [...owners, email], ...(current.hidden ? { hidden: true } : {}) } } }
-  const save = (next: MenuLayout, message: string) => menu.save(next.pages[pageId] ? { ...next, pages: { ...next.pages, [pageId]: { ...next.pages[pageId], owners: next.pages[pageId].owners.filter((entry) => owners.includes(entry)) } } } : next, message)
+  // TVL-25: the placement's other fields (the owners written from the list among them) are kept as they are.
+  const layout: MenuLayout = { ...menu.layout, pages: { ...menu.layout.pages, [pageId]: { ...menu.layout.pages[pageId], type: menu.layout.pages[pageId]?.type ?? fallback, group: current.group, order: current.order, icon: current.icon, owners: owners.includes(email) ? owners : [...owners, email], ...(current.hidden ? { hidden: true } : {}) } } }
+  const save = (next: MenuLayout, message: string) => {
+    const entry = next.pages[pageId]
+    if (!entry) return menu.save(next, message)
+    const kept = entry.owners.filter((owner) => owners.includes(owner))
+    const out = { ...entry, owners: kept }
+    if (entry.ownersFromList) { const listed = entry.ownersFromList.filter((owner) => kept.includes(owner)); if (listed.length) out.ownersFromList = listed; else delete out.ownersFromList }
+    return menu.save({ ...next, pages: { ...next.pages, [pageId]: out } }, message)
+  }
   return { ...menu, layout, save }
 }
 function CustomTabView({ env, tab }: { env: ToolValidationsEnv; tab: CustomTab }) {

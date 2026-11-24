@@ -27,7 +27,7 @@ import { ChartGrid, GridCell, SizeFields } from '../components/ChartSize'
 import { MultiSelect } from '../components/MultiSelect'
 import { ViewActions } from '../components/ViewActions'
 import { factoryOf, sizeFromOptions, withSizeOptions, type GridSize } from '../chartSize'
-import { blockTypeLabel, dashId, dataSources, narrowRows, type DashboardBlock, type Dataset } from '../dashboardPages'
+import { blockDataset, blockTypeLabel, dashId, dataSources, narrowRows, type DashboardBlock, type Dataset } from '../dashboardPages'
 import { hoursLinesCached } from '../dashboardHours'
 import { defaultStreamReleases } from '../releaseOverview'
 import { pulseStreamsKey, readPulseStreams } from '../pulseStreams'
@@ -261,7 +261,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
       <MultiSelect label="Month" options={offeredMonths(periodQuarters(period, currentYear)).map((entry) => [entry, several ? `${monthNames[Number(entry.slice(5)) - 1]} ${entry.slice(0, 4)}` : monthNames[Number(entry.slice(5)) - 1]])} value={period.months} onChange={(value) => setPeriod({ ...period, months: value })} />
       <button type="button" className="text-button" disabled={!filtered || readOnly} onClick={() => views.clearFilter(myDashboardViewKey)}>Reset filters</button>
     </div><p className="muted dsh-scope" role="status">Your blocks: {months.length === periodYears(period, currentYear).length * 12 ? `${periodYears(period, currentYear).join(', ')} (whole ${several ? 'years' : 'year'})` : months.map((entry) => `${monthNames[Number(entry.slice(5)) - 1]} ${entry.slice(0, 4)}`).join(', ')}. The built-in sections show {label}.</p></div>}
-    {tiles.length > 0 && <Metrics>{tiles.map((block) => { const { dataset } = sourceOf(block.source); return <div key={block.id} className="my-dash-tile" data-block={block.id}><KpiTile dataset={dataset} block={block} narrowed={narrow(dataset, block)} />{loadButton(block.source)}</div> })}</Metrics>}
+    {tiles.length > 0 && <Metrics>{tiles.map((block) => { const dataset = blockDataset(sourceOf(block.source).dataset, block); return <div key={block.id} className="my-dash-tile" data-block={block.id}><KpiTile dataset={dataset} block={block} narrowed={narrow(dataset, block)} />{loadButton(block.source)}</div> })}</Metrics>}
     {panels.length > 0 && <ChartGrid className="od-insights my-dash-grid" entries={panels.map((id) => { const block = mine.blocks.find((entry) => entry.id === id); return block ? { id, kind: kindOf(block.type), size: blockSize(block).size } : { id, kind: 'table' as const, size: sectionSize(id) } })} titleOf={labelOf}
       onResize={(id, size) => { if (!readOnly) resize(id, size) }}>
       {panels.map((id) => {
@@ -269,7 +269,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
         if (!block) return <GridCell key={id} id={id} kind="table" title={labelOf(id)} size={sectionSize(id)} source={mine.sizes[id] ? 'viewer' : 'factory'} onResize={readOnly ? undefined : (size) => resize(id, size)} onReset={readOnly ? undefined : () => resize(id, undefined)}>
           {(cell) => <div className={`layout-section ${cell.className}`} style={{ ...cell.style, minWidth: 0 }} data-section={id}>{sectionNode[id]}{cell.footer}</div>}
         </GridCell>
-        const { dataset } = sourceOf(block.source), sized = blockSize(block)
+        const dataset = blockDataset(sourceOf(block.source).dataset, block), sized = blockSize(block)
         const extra = loadButton(block.source)
         return <BlockPanel key={id} id={id} dataset={dataset} block={block} narrowed={narrow(dataset, block)} colors={mine.colors} size={sized.size} source={sized.own ? 'viewer' : 'factory'}
           onResize={readOnly ? undefined : (size) => resize(id, size)} onReset={readOnly ? undefined : () => resize(id, undefined)} action={extra || blockMenu(block) ? <>{extra}{blockMenu(block)}</> : undefined} />

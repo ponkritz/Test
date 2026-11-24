@@ -467,7 +467,7 @@ The **Tool Validations** page has these tabs:
 - **Azure** — the Tool Validations query: its releases of the month (the Releases table) and, below, the query's rows (**Source data**). Before a fetch it says to fetch the query with **↻**.
 - **One tab per other source** — every source added under **Setup → Sources** (another Azure DevOps query, a Windchill export, a Table page) gets a tab named after it, in the order added: its rows as the app reads them with the source's field mapping, with **Edit mapping…** and **Merge into master list…**. When its data is not in this browser, the tab says how to load it. Removing the source removes its tab.
 - **Your team's own tabs** — tabs the Tool Owner and the list's co-owners add under **Setup → Tabs**: a Table, a Table + Insights or an On-Demand Dashboard, in the order they set.
-- **Setup** — last: **Sources** (**＋ Add source…**, and per source **Edit mapping…**, **Merge into master list…** and **Remove**), **Tabs** (**＋ Add tab…**, and per tab **←**, **→**, **Rename…** and **Remove…**) and **Team settings** (**Edit…**). Everyone sees it; those who may not change it see the buttons greyed out with the reason.
+- **Setup** — last: **Sources** (**＋ Add source…**, and per source **Edit mapping…**, **Merge into master list…** and **Remove**), **Tabs** (**＋ Add tab…**, and per tab **←**, **→**, **Rename…** and **Remove…**), **Team settings** (**Edit…**) and **Due date highlights** (**Edit…**). Everyone sees it; those who may not change it see the buttons greyed out with the reason.
 
 The tiles above the tabs (Releases in {month}, Supported) are the same as before. The page remembers the last tab you chose in this browser tab.
 
@@ -480,7 +480,7 @@ The master list keeps every tool the team has validated in Git; a tool stays lis
 3. Change **Expiring in the next … days** to look further or nearer. The window is yours and is kept for you; **Use the team default** goes back to the team's window (60 days unless changed). The Tool Owner and the list's co-owners can make the window shown the team's with **Set … days as team default** (saved to Git); for everyone else the button is greyed out with the reason.
 4. **Export** writes the list to Excel or CSV.
 
-The due date is the source's own due date (or one entered by hand) when there is one; otherwise the validation date plus the validity period in months.
+The due date is the source's own due date (or one entered by hand) when there is one; otherwise the validation date plus the validity period in months. A tool with a validation date but no validity period is taken as valid for **24 months** (2 years): its period shows as **24 (default)** and its due date as "validation date + 24 months (default)". Enter a period or a due date (Edit, or in the source) to replace the default; only a tool without a validation date has **No due date**.
 
 **Keep the master list (Tool Owner and the list's co-owners)**
 
@@ -491,12 +491,25 @@ The due date is the source's own due date (or one entered by hand) when there is
 5. Open the source's own tab to see its rows as read; **Merge into master list…** (on that tab or under **Setup → Sources**) shows what changes, then saves it to Git.
 6. **Setup → Team settings → Edit…** sets the team's window (also possible on the Expiry list, see above) and names the list's co-owners (a Tool Owner names them).
 
+**Highlight tools by due date**
+
+The **Master list** and the **Expiry list** tint each tool's row by how soon it is due, and name the band in the **Due date** cell (for example **≤ 30 days** or **Overdue / today**); the legend above the table lists the bands. An overdue tool is in the first band; a tool with no due date is not highlighted. Until the team saves its own bands the defaults apply: overdue or due today red, within 30 days amber, within 90 days yellow.
+
+1. Open **Setup**: **Due date highlights** shows the bands and how many tools fall in each now.
+2. Choose **Edit…** (Tool Owner and the list's co-owners). Each band has **Due within (days)** (0 = overdue or due today) and a **Colour**; **Remove** takes a band away and **＋ Add band** adds one (up to 10). When a tool fits several bands, the one with the fewest days wins.
+3. Choose **Save to Git**. Everyone sees the same bands. Removing every band turns the highlighting off.
+
 **Add a tab of your own (Tool Owner and the list's co-owners)**
 
 1. Open **Setup** and, under **Tabs**, choose **＋ Add tab…**.
 2. Choose the **Page type** — **Table** (a table you set up yourself), **Table + Insights** (the table and an Insights tab of charts) or **On-Demand Dashboard** (tiles and charts over table pages, the master list and the expiry list) — give it a name and choose **Add tab**. The tab appears before Setup.
 3. Open the tab: set up the table (**Set up columns…**, **＋ Add row**) or the dashboard (**＋ Add block…**) as on any other On-Demand page. For a chart of the tools, choose the data source **Tool Validations master list** or **Tool Validations expiry list** — for example a bar chart of the tools by **Status** (Overdue, Due soon, No due date, OK; due soon is within the team default window).
 4. Under **Setup → Tabs**, **←** and **→** move a tab, **Rename…** renames it, and **Remove…** asks first: the page is **kept in Git, hidden** — or, for a Tool Owner, **deleted with its data**.
+5. To bring back a page that is hidden — one kept when its tab was removed, or one left behind when an older app version dropped the tabs — choose **＋ Add existing page as tab…** under **Setup → Tabs**, pick the page, keep or change its name and choose **Add tab**. Its rows or blocks are there again.
+
+**Who may edit the tab pages.** The list's co-owners (Setup → Team settings) are written as **co-owners of each tab's page**, so they can set up and edit the page also when it is opened from Admin → Pages & menu. Co-owners someone added to a page by hand stay; the ones that came from the list are taken off again when they leave the list or when the tab is removed. The **Tabs** panel shows per tab how many co-owners came from the list and how many were added by hand; if a page is not in line with the list, it says so with **Write the co-owners to the tab pages**.
+
+**Status on a dashboard.** Status (Overdue, Due soon, No due date, OK) and Days left on a dashboard use the **team default window**, the same for everyone. To leave them out of a block, untick **Show expiry status** in the block's pop-up (under the data source); the block then counts the same tools without them.
 
 These tabs are pages of their own in Git, but they are not in the menu, on Home or in search: they live on the Tool Validations page only (Admin → Pages & menu lists them as hidden, **Tab of Tool Validations**). Everyone else reads them.
 

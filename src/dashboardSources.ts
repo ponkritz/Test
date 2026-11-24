@@ -12,7 +12,7 @@ import type { OnDemandColumn, OnDemandRow, OnDemandType } from './onDemand.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 import { completedCount, supportedCount, type ReleaseStream } from './releaseOverview.ts'
 import { completedRows, monthCounts, windchillLinesOf, type StreamMonthCount, type WindchillInput } from './cumulativeReleases.ts'
-import { daysBetween, dueFromLabel, dueOf, entryState, entryStateLabel, type ToolValidationsFile } from './toolValidations.ts'
+import { daysBetween, dueFromLabel, dueOf, entryState, entryStateLabel, validityOf, type ToolValidationsFile } from './toolValidations.ts'
 
 // MYD-15…MYD-22 The data sources of My dashboard's blocks, as one registry so that more can be added: each kind of
 // source declares its fields (text, category, date, number, currency), the menu area a role needs to see it
@@ -251,7 +251,8 @@ export function historyRows(file: HistoryFile): SourceRow[] {
 // Every tool of the master list (tool-validations.json) with its dates and its status on the UTC day `today`: Overdue
 // (due date passed), Due soon (due within the team default window of N days), No due date, or OK (due later) — the
 // Expiry list's rules (TVL-08) with the team default window, the same for every viewer (a dashboard is the same for
-// everyone). The expiry list is the same rows without OK.
+// everyone). The expiry list is the same rows without OK. Validity (months) is the period the due date is worked out with:
+// the entry's own, else 24 when the default gives the due date (TVL-06), else empty — as the page's column shows it.
 export const toolMasterSource = 'tools:master', toolExpirySource = 'tools:expiry'
 export const toolMasterName = 'Tool Validations master list', toolExpiryName = 'Tool Validations expiry list'
 export const toolStatusLabels = ['Overdue', 'Due soon', 'No due date', 'OK'] as const
@@ -270,7 +271,7 @@ export function toolRows(file: ToolValidationsFile, today: string, expiryOnly = 
     const status = days === undefined ? 'No due date' : days < 0 ? 'Overdue' : days <= file.defaultDays ? 'Due soon' : 'OK'
     if (expiryOnly && status === 'OK') return []
     return [{ key: `${entry.name}${entry.version ? ` ${entry.version}` : ''}`, cells: {
-      'tv-tool': entry.name, 'tv-version': entry.version, 'tv-validated': entry.validationDate ?? '', 'tv-months': entry.validityMonths ? String(entry.validityMonths) : '',
+      'tv-tool': entry.name, 'tv-version': entry.version, 'tv-validated': entry.validationDate ?? '', 'tv-months': String(validityOf(entry).months ?? ''),
       'tv-due': due ?? '', 'tv-from': from === 'none' ? '' : dueFromLabel[from], 'tv-status': status, 'tv-days': days === undefined ? '' : String(days),
       'tv-sources': Object.keys(entry.sources).map(sourceName), 'tv-state': entryStateLabel[entryState(entry)],
     } }]
@@ -288,7 +289,8 @@ export function toolDatasets(tools: ToolSourceInput | undefined, allowed: boolea
     if (!allowed) return blocked(key, name, toolKind, notAvailable)
     if (!tools?.connected) return blocked(key, name, toolKind, 'Connect Git storage (Admin → Data & sharing) to see the Tool Validations master list.')
     const file = tools.file
-    return fieldsDataset(key, name, toolKind, `${note}; the team default window is ${file.defaultDays} days`, toolFields, wanted(key) ? toolRows(file, today, expiryOnly) : [])
+    // TVL-26: the window Status is worked out with, for the block pop-up's "Show expiry status" ⓘ.
+    return { ...fieldsDataset(key, name, toolKind, `${note}; the team default window is ${file.defaultDays} days`, toolFields, wanted(key) ? toolRows(file, today, expiryOnly) : []), statusDays: file.defaultDays }
   })
 }
 
