@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { QePick } from './QePick'
+import { ClassPick, QePick } from './QePick'
 import { boardPeople } from '../contentBulk'
 import { classificationOf, epicFieldsFor, withEpicFields } from '../epicSetup'
 import { useEpicSetupFile } from '../useEpicSetup'
@@ -34,7 +34,7 @@ export function IoccBulkCreate({ releases, azure, featureSetup, qeMapping, featu
   // the DoD and User Stories (DPF-07).
   const classes = classificationOf(epicFile, epicId)
   const [classPicks, setClassPicks] = useState<Record<string, string>>({})
-  const mappedPlan = ioccPlan(releases, { setup, qeMapping, board: azure.items, featureTitle, featureMatch, epicId, classes: classPicks, classValues: classes.values })
+  const mappedPlan = ioccPlan(releases, { setup, qeMapping, board: azure.items, featureTitle, featureMatch, epicId, classes: classPicks, classValues: classes.values, classRules: classes.rules })
   const rawPlan = pickQe(mappedPlan, picks, (line) => line.release.key, people)
   // EPS-03: the Epic setup's fields of the bulk Epic.
   const plan = withEpicFields(rawPlan, epicFieldsFor(epicFile, epicId), (line) => line.release.items, { index: classes.fieldIndex, of: (line) => line.classification })
@@ -83,10 +83,12 @@ export function IoccBulkCreate({ releases, azure, featureSetup, qeMapping, featu
     <div className="dp-bulk">
       <p className="muted">Under Epic #{epicId}{epic ? ` “${epic.title}”` : ''}: each Feature gets {setup ? <>the DoD and User Stories of the {classes.label} chosen on its row (Admin → Epic &amp; Feature setup → Epic #{epicId}; a value without its own set uses the Epic’s default)</> : <>DP's built-in Release / PU sets (Epic #{epicId || '—'} has no Feature setup)</>}, its Time Writing story and month Task, all assigned to the person chosen on its row.</p>
       <div className="azure-table"><table>
-        <thead><tr><th scope="col">Feature title</th>{classes.values.length > 0 && <th scope="col">{classes.label}</th>}<th scope="col">User Stories</th><th scope="col">QE</th><th scope="col">Result</th></tr></thead>
+        <thead><tr><th scope="col">Release name</th><th scope="col">Version</th>{classes.values.length > 0 && <th scope="col">{classes.label}</th>}<th scope="col">Feature title</th><th scope="col">User Stories</th><th scope="col">QE</th><th scope="col">Result</th></tr></thead>
         <tbody>{plan.map((line) => <tr key={line.release.key} className={line.skip ? 'muted' : undefined}>
+          <td>{line.release.name}</td>
+          <td>{line.release.release || '—'}</td>
+          {classes.values.length > 0 && <td><ClassPick label={line.title} field={classes.label} values={classes.values} value={line.classification} detected={line.detected} version={line.release.release} onPick={(value) => setClassPicks((current) => ({ ...current, [line.release.key]: value }))} /></td>}
           <td>{line.title}</td>
-          {classes.values.length > 0 && <td><select aria-label={`${classes.label} of ${line.title}`} value={line.classification} onChange={(event) => setClassPicks((current) => ({ ...current, [line.release.key]: event.target.value }))}><option value="">— the Epic’s default —</option>{[...classes.values, ...(line.classification && !classes.values.includes(line.classification) ? [line.classification] : [])].map((value) => <option key={value} value={value}>{value}</option>)}</select></td>}
           <td>{line.set ? line.set.stories.map((story) => story.title.split(' :')[0]).join(', ') || 'none' : '—'}</td>
           <td>{line.baseSkip ? (line.qe || '—') : <QePick label={line.title} email={line.email} mapped={mappedPlan.find((entry) => entry.release.key === line.release.key)?.qe} people={people} onPick={(email) => setPicks((current) => ({ ...current, [line.release.key]: email }))} />}</td>
           <td>{line.skip ? <span className="warning-text">Skipped: {line.skip}</span> : <>Will be created{line.note && <small className="warning-text"> — {line.note}</small>}{line.warned.length > 0 && <small className="warning-text"> — empty {line.warned.join(', ')}</small>}</>}</td>

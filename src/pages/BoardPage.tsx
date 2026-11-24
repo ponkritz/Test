@@ -31,7 +31,9 @@ import { ddtMonthOf, dpListedIn, dpMilestoneNames, dpMilestones, dpMilestoneText
 import type { DataColumn } from '../components/DataTable'
 import type { QeMappingFile } from '../qeMapping'
 import { chooseSetup } from '../featureSetup'
-import { fullMatch, possibleQes, qeFor } from '../dpBulk'
+import { dpRowName, dpRowVersion, fullMatch, possibleQes, qeFor } from '../dpBulk'
+import { classificationOf, detectClassification } from '../epicSetup'
+import { useEpicSetupFile } from '../useEpicSetup'
 import { dpBoardCandidates, dpBoardMatch } from '../dpBoardMatch'
 import { DpBulkCreate } from '../components/DpBulkCreate'
 import { formatDate, formatDateTime, monthName } from '../format'
@@ -156,6 +158,15 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // QV-65: the hours of the matched Feature's Time Writing Tasks (as IOCC, Content and Tool Validations show them).
   const hoursOf = useMemo(() => timeWritingHours(azure.items), [azure.items])
   const allDp = source?.items ?? noItems
+  // DPF-12: Release name, Version and the Release Classification detected from the version (DPF-11, by the rules of the
+  // DP bulk Epic's Release Classification field) as the first columns; '—' without a bulk Epic or a value found.
+  const epicFile = useEpicSetupFile()
+  const dpClasses = useMemo(() => classificationOf(epicFile, dpBulkEpic), [epicFile, dpBulkEpic])
+  const dpLead: DataColumn<AzureWorkItem>[] = isDp ? [
+    { id: '@dp-name', label: 'Release name', value: (item) => dpRowName(item) },
+    { id: '@dp-version', label: 'Version', value: (item) => dpRowVersion(item), render: (item) => dpRowVersion(item) || '—' },
+    { id: '@dp-class', label: `${dpClasses.label} (detected)`, value: (item) => dpBulkEpic ? detectClassification(dpClasses, dpRowVersion(item)) : '', render: (item) => (dpBulkEpic && detectClassification(dpClasses, dpRowVersion(item))) || '—', title: () => !dpBulkEpic ? 'No DP bulk creation Epic is set (Admin → Stream options → Bulk creation Epics)' : !dpClasses.values.length ? `Epic #${dpBulkEpic} has no ${dpClasses.label} List field (Admin → Epic & Feature setup)` : dpClasses.rules.length ? `Detected from the version by the rules of Epic #${dpBulkEpic} (Admin → Epic & Feature setup)` : `Epic #${dpBulkEpic} has no rules yet: the value named like the release type (Major, Minor, MLD, Platform Update)` },
+  ] : []
   const dpColumns: DataColumn<AzureWorkItem>[] = isDp ? [
     { id: '@dp-pick', label: 'Select', fixed: true, sortable: false, export: false, value: (item) => picked.includes(item.id) ? 'yes' : '', render: (item) => { const full = fullMatch(featureMatch(item)); return <input type="checkbox" aria-label={`Select ${item.title}`} disabled={full} title={full ? `Feature #${featureMatch(item)!.item.id} on QMS-0025 matches this release 100%: nothing to create` : undefined} checked={!full && picked.includes(item.id)} onChange={() => setPicked((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /> } },
     { id: '@dp-qe', label: 'QE', sortable: false, value: (item) => qeFor(item, qeMapping, dpSetup?.qeColumns)?.qe ?? '', title: () => dpSetup?.qeColumns ? `From the QE Mapping: ${dpSetup.qeColumns.matchColumn} → ${dpSetup.qeColumns.qeColumn}` : `Set the QE Mapping columns in Feature setup → Epic ${dpBulkEpic}` },
@@ -237,7 +248,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     : !items.length && source.items.length ? withTools(<TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose Show: All months. The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose Show: All months.`} />}</TablePanel>, source.items)
     : isDp ? <ResultTabs id={`azure:${id}`} rawCount={items.length} main={<TablePanel title="Releases">
         {bulkOpen && <DpBulkCreate rows={(source?.items ?? []).filter((item) => picked.includes(item.id))} azure={azure} featureSetup={featureSetup} qeMapping={qeMapping} featureMatch={featureMatch} onClose={() => { setBulkOpen(false); setPicked([]) }} />}
-        <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose more={dpColumns} extra={boardColumn} actions={dpBulk} />
+        <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose lead={dpLead} more={dpColumns} extra={boardColumn} actions={dpBulk} />
       </TablePanel>} raw={raw(items)} />
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={cp.report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
     : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} layout={toolPage ? toolTabs : undefined} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />

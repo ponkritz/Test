@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { utcToday } from '../businessTime'
 import { formatDate, formatDateTime } from '../format'
 import { windchillCell } from '../windchillViews'
-import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabMaster, toolTabs, toolValidationsFile, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
+import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
 import { useToolValidationsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
 import { OwnersField } from './PageDialogs'
@@ -10,10 +10,10 @@ import { ResultTabs } from './ResultTabs'
 import { EmptyState, Metric, Metrics, Modal, Notice, Panel, Pill, SaveQueueStatus, SettingsSummary, TablePanel, WriteBlocked } from './ui'
 
 // TVL-08…TVL-12, TVL-14: the Tool Validations Release page's tabs — Master list (on top the Validation expiry: what is
-// overdue or due soon in the viewer's own window of N days; then every tool kept in Git, its sources and the team
-// settings), Azure (the Tool Validations query: the month's releases and its rows) and one tab per other source (its
-// rows as mapped, Edit mapping…, Merge into master list…). Everyone reads them; the Tool Owner and the list's co-owners
-// change them (TVL-11), each change saved to Git (GIT-17) with its result under Background jobs (UI-STANDARDS §8).
+// overdue or due soon in the viewer's own window of N days; then every tool kept in Git), Azure (the Tool Validations
+// query: the month's releases and its rows), one tab per other source (its rows as mapped, Edit mapping…, Merge into
+// master list…) and Setup last (the sources and the team settings). Everyone reads them; the Tool Owner and the list's
+// co-owners change them (TVL-11), each change saved to Git (GIT-17) with its result under Background jobs (UI-STANDARDS §8).
 
 
 const pillTone: Record<ExpiryStatus, 'danger' | 'warning' | 'neutral' | 'info'> = { overdue: 'danger', due: 'warning', none: 'neutral', later: 'info' }
@@ -24,11 +24,11 @@ const periodText = (months?: number) => months ? `${months}` : ''
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
 function Missing() { return <Panel><EmptyState title="The Tool Validations master list is not available here." /></Panel> }
 
-// ---- TVL-14: the tabs — Master list first, Azure (this query), then one per other source in the order added ----
+// ---- TVL-14: the tabs — Master list first, Azure (this query), one per other source in the order added, Setup last ----
 export function ToolValidationsTabs({ id, azure }: { id: string; azure: ReactNode }) {
   const env = useToolValidationsEnv()
   const extra = toolTabs(env?.store.shown ?? { sources: [] }).filter((tab) => tab.key !== toolTabMaster)
-    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabAzure ? azure : env && tab.source ? <SourceTab env={env} source={tab.source} /> : <Missing /> }))
+    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : <Missing /> }))
   return <ResultTabs id={id} mainKey={toolTabMaster} mainLabel="Master list" main={<ToolMasterList />} extra={extra} open={openToolTab} />
 }
 
@@ -109,12 +109,22 @@ function readSource(source: Pick<ToolSource, 'kind' | 'ref'>, data: SourceData):
 }
 const choicesFor = (kind: Exclude<ToolSourceKind, 'stream'>, data: SourceData): [string, string][] => kind === 'azure' ? data.azure.map((entry) => [entry.id, entry.name]) : kind === 'windchill' ? data.windchill.map((entry) => [entry.id, entry.name]) : data.pages.map((entry) => [entry.id, entry.name])
 
-// ---- TVL-10…TVL-12: Master list, sources and team settings ----
+// ---- TVL-10, TVL-12: the Master list ----
 type StateFilter = 'all' | EntryState
-type Dialog = { kind: 'tool'; editing?: ToolEntry } | { kind: 'remove'; entry: ToolEntry } | { kind: 'team' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource }
+type ToolDialogState = { kind: 'tool'; editing?: ToolEntry } | { kind: 'remove'; entry: ToolEntry }
+// The notices about the list's file in Git, on the Master list and on Setup: not connected, not readable, its save queue.
+function StoreNotices({ env }: { env: ToolValidationsEnv }) {
+  const { store } = env
+  return <>
+    {!store.connected && <Notice tone="info">Connect Git storage (Admin → Data & sharing) to keep the master list for the team. Until then the tools of the Tool Validations query fetched here are shown, not kept.</Notice>}
+    {store.error && <Notice tone="warning">{toolValidationsFile} could not be read from Git: {store.error} The master list last read here is shown and cannot be changed.</Notice>}
+    {store.refused.length > 0 && <Notice tone="warning">Not used — {toolValidationsFile} in Git: {store.refused.map((entry) => `${entry.name}: ${entry.reason}`).join(' · ')}</Notice>}
+    <SaveQueueStatus state={store.queue} onRetry={() => void store.retry()} />
+  </>
+}
 export function ToolMasterList() {
   const env = useToolValidationsEnv()
-  const [dialog, setDialog] = useState<Dialog | null>(null)
+  const [dialog, setDialog] = useState<ToolDialogState | null>(null)
   const [filter, setFilter] = useState<StateFilter>('all')
   const [search, setSearch] = useState('')
   if (!env) return <Missing />
@@ -136,14 +146,11 @@ export function ToolMasterList() {
   ]
   const close = () => setDialog(null)
   return <>
-    {!store.connected && <Notice tone="info">Connect Git storage (Admin → Data & sharing) to keep the master list for the team. Until then the tools of the Tool Validations query fetched here are shown, not kept.</Notice>}
-    {store.error && <Notice tone="warning">{toolValidationsFile} could not be read from Git: {store.error} The master list last read here is shown and cannot be changed.</Notice>}
-    {store.refused.length > 0 && <Notice tone="warning">Not used — {toolValidationsFile} in Git: {store.refused.map((entry) => `${entry.name}: ${entry.reason}`).join(' · ')}</Notice>}
+    <StoreNotices env={env} />
     {store.pending && why && <Notice tone="info">{mergeSummary(store.pending)} in the latest fetch of the Tool Validations query — shown here, saved to Git by the next Tool Owner or co-owner who opens the app.</Notice>}
-    <SaveQueueStatus state={store.queue} onRetry={() => void store.retry()} />
     <ToolExpiry env={env} />
     <TablePanel title="Master list" count={`${rows.length} of ${file.tools.length} tools`}
-      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (Sources below, or the source's own tab).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
+      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
       action={<button type="button" className="primary" disabled={Boolean(why)} title={why || 'Add a tool by hand'} onClick={() => setDialog({ kind: 'tool' })}>＋ Add tool…</button>}>
       <WriteBlocked reason={why} />
       <DataTable id="tool-validations:master" rows={rows} rowKey={(entry) => entry.key} columns={columns} exportName="Tool validations master list" defaultSort={{ id: 'name' }}
@@ -152,16 +159,29 @@ export function ToolMasterList() {
           <input className="search" type="search" aria-label="Search the master list" placeholder="Search tool, version or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className="ghost" disabled={filter === 'all' && !search} onClick={() => { setFilter('all'); setSearch('') }}>Reset filters</button>
         </div>}
-        empty={<EmptyState title={file.tools.length ? 'No tools match the filters.' : 'The master list has no tools yet.'} detail={file.tools.length ? 'Reset filters to see every tool.' : 'Fetch the Tool Validations query (↻), merge a source below, or add a tool by hand.'} />} />
+        empty={<EmptyState title={file.tools.length ? 'No tools match the filters.' : 'The master list has no tools yet.'} detail={file.tools.length ? 'Reset filters to see every tool.' : 'Fetch the Tool Validations query (↻), merge a source (its tab, or Setup → Sources), or add a tool by hand.'} />} />
     </TablePanel>
+    {dialog?.kind === 'tool' && <ToolDialog env={env} editing={dialog.editing} onClose={close} />}
+    {dialog?.kind === 'remove' && <RemoveDialog env={env} entry={dialog.entry} onClose={close} />}
+  </>
+}
+
+// ---- TVL-01, TVL-07, TVL-09, TVL-11, TVL-14: the Setup tab — the sources and the team settings ----
+type Dialog = { kind: 'team' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource }
+export function ToolSetup() {
+  const env = useToolValidationsEnv()
+  const [dialog, setDialog] = useState<Dialog | null>(null)
+  if (!env) return <Missing />
+  const file = env.store.shown, why = env.store.reason
+  const close = () => setDialog(null)
+  return <>
+    <StoreNotices env={env} />
     <SourcesPanel env={env} why={why} open={setDialog} />
-    <Panel title="Team settings" info="The team default of the expiry window and the co-owners of the list, kept in the master list's file in Git. Each person may look at their own window in Validation expiry at the top of this tab."
+    <Panel title="Team settings" info="The team default of the expiry window and the co-owners of the list, kept in the master list's file in Git. Each person may look at their own window in Validation expiry on the Master list tab."
       action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || 'Change the team default and the co-owners'} onClick={() => setDialog({ kind: 'team' })}>Edit…</button>}>
       <SettingsSummary rows={[['Expiry window (team default)', `${file.defaultDays} days`], ['Co-owners', file.owners.length ? file.owners.join(', ') : 'Nobody yet — only Tool Owners change the list']]} />
       <WriteBlocked reason={why} />
     </Panel>
-    {dialog?.kind === 'tool' && <ToolDialog env={env} editing={dialog.editing} onClose={close} />}
-    {dialog?.kind === 'remove' && <RemoveDialog env={env} entry={dialog.entry} onClose={close} />}
     {dialog?.kind === 'team' && <TeamDialog env={env} onClose={close} />}
     {dialog?.kind === 'add-source' && <AddSourceDialog env={env} onClose={close} />}
     {dialog?.kind === 'mapping' && <MappingDialog env={env} source={dialog.source} onClose={close} />}
@@ -223,7 +243,7 @@ function SourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSourc
   return <>
     {!source.mapping.confirmed && <Notice tone="warning">The field mapping of {source.name} is still the app's guess: check it with Edit mapping… before merging.</Notice>}
     <TablePanel title={source.name} detail={`${kindLabel(source.kind)} · reads ${read.target || '—'}`} count={read.missing ? undefined : `${rows.length} row${rows.length === 1 ? '' : 's'} · ${tools} tool${tools === 1 ? '' : 's'}`}
-      info={<ul><li>The rows of this source as they are read in this browser with its <strong>field mapping</strong> (tool, version, validation date, validity period, due date) — the same rows <strong>Merge into master list…</strong> brings in.</li><li><strong>Master list</strong> says whether the tool is in the master list from this source (merged before). A row without a tool name is not read.</li><li>The source is set up under Master list → Sources; removing it there removes this tab, its tools stay in the list.</li></ul>}
+      info={<ul><li>The rows of this source as they are read in this browser with its <strong>field mapping</strong> (tool, version, validation date, validity period, due date) — the same rows <strong>Merge into master list…</strong> brings in.</li><li><strong>Master list</strong> says whether the tool is in the master list from this source (merged before). A row without a tool name is not read.</li><li>The source is set up under Setup → Sources; removing it there removes this tab, its tools stay in the list.</li></ul>}
       action={<>
         <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Set which fields of ${source.name} are read`} onClick={() => setDialog('mapping')}>Edit mapping…</button>
         <button type="button" className="primary" disabled={Boolean(why || read.missing)} title={why || read.missing || `Merge the tools of ${source.name} into the master list`} onClick={() => setDialog('merge')}>Merge into master list…</button>

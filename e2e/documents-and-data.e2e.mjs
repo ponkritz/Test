@@ -411,7 +411,7 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   await context.close()
 })
 
-test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Master list | Azure) and the common columns in order', async () => {
+test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Master list | Azure | Setup) and the common columns in order', async () => {
   // DP, IOCC and Content read the synthetic sample's release documents (the same query, so each shows them); the
   // Time Writing connection comes first so that the sample loads. Nothing is fetched: Azure DevOps answers 401.
   const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
@@ -446,9 +446,9 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     await tabs.waitFor()
     const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
     // TVL-14 (a named exception to §10 (3)): Tool Validations has Master list | Azure (the query's releases and rows),
-    // then a tab per other source; the Releases table is on its Azure tab.
+    // then a tab per other source and Setup last; the Releases table is on its Azure tab.
     if (name === 'Tool Validations') {
-      assert.deepEqual(labels, ['Master list', 'Azure'], `${name}: Master list | Azure`)
+      assert.deepEqual(labels, ['Master list', 'Azure', 'Setup'], `${name}: Master list | Azure | Setup`)
       await tabs.getByRole('tab', { name: 'Azure' }).click()
       await page.locator('.panel', { has: page.locator('h2', { hasText: /^Source data/ }) }).waitFor()
       return
@@ -465,6 +465,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   // (4) DP: its query's rows are the releases — Select first (bulk Create Features), the QMS-0025 match last.
   let shown = await headers()
   assert.equal(shown[0], 'select', 'DP: Select first')
+  assert.deepEqual(shown.slice(1, 4), ['release name', 'version', 'release classification (detected)'], 'DPF-12: then Release name, Version, Release Classification (detected)')
   assert.deepEqual(shown.slice(-4), commonEnd, 'DP: Time Writing Feature, Planned (h), Booked (h), then QMS-0025 match last')
   for (const label of ['planned (h)', 'booked (h)']) assert.equal(await rightAligned(label), 'right', `DP: ${label} right-aligned`)
   for (const label of ['Select all shown', 'Clear']) assert.equal(await releases().getByRole('button', { name: label, exact: true }).count(), 1, `DP toolbar: ${label}`)

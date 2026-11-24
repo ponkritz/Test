@@ -101,6 +101,8 @@ Approved by the product owner on 2026-11-23.
   (text button, danger colour).
 - **Count**: "{shown} of {total} {items}" (e.g. "12 of 40 releases"); a cut list always says so.
 - Headers stay visible when the table scrolls (sticky) when it can be longer than the screen.
+- Inside a `TablePanel` the table's toolbar (filters, search, Columns, Export), its first column and the read-only
+  reason line up with the panel's title; the table's lines run the full width (one shared rule, KB-93).
 
 **Today:** ~82 hand-built tables in 39 files against 16 `DataTable`s; class `num` has no CSS rule, so numbers are
 left-aligned; six wordings for the row count and seven schemes for cut lists.

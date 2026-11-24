@@ -40,7 +40,7 @@ body{background:var(--bg)}
 .panel,.metric-grid article{background:var(--surface);border:1px solid var(--card-border);border-radius:12px;box-shadow:var(--card-shadow)}
 .panel{padding:22px 24px}
 .table-panel{padding:0}
-.table-panel .panel-heading{padding:20px 24px 14px}
+.table-panel .panel-heading{padding:24px 32px 16px}
 .panel-heading{margin-bottom:16px}
 .panel-heading h2,.section-heading h2{color:var(--text);font-size:16px;font-weight:650;letter-spacing:-.005em;margin:2px 0 4px}
 .panel-heading .muted,.panel-heading p{font-size:13px;line-height:1.55;max-width:90ch}
@@ -135,7 +135,7 @@ td small{color:var(--text-3)}
 
 @media(max-width:1000px){.app-shell{grid-template-columns:72px 1fr}.topbar{padding-inline:20px}.content{padding-inline:20px}}
 @media(max-width:700px){.app-shell{display:block}.sidebar{border-right:0;border-bottom:1px solid var(--sidebar-line)}.settings-nav{position:static}.content{padding:12px}}
-.table-panel+.panel,.panel+.table-panel{margin-top:16px}
+.table-panel+.panel,.panel+.table-panel{margin-top:24px}
 
 /* Page header: title, then the page's own controls (Team / Individual), then data status, month and theme */
 .topbar{gap:16px}
@@ -442,6 +442,20 @@ table.resizable.wrap th,table.resizable.wrap td{white-space:pre-wrap;overflow-wr
 /* The table design default (UI-07…12): one toolbar, one density switch, the same look for every table. */
 .data-table{display:grid;gap:8px;min-width:0}
 .data-table-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* KB-93: in a TablePanel (no padding of its own) the table's toolbar, the first and last column and the read-only reason
+   line up with the panel's title (24px, as .table-panel .panel-heading); the table's lines still run full width. */
+.table-panel .data-table>.data-table-toolbar{padding:0 32px}
+.table-panel .data-table th:first-child,.table-panel .data-table td:first-child{padding-left:32px}
+.table-panel .data-table th:last-child,.table-panel .data-table td:last-child{padding-right:32px}
+.table-panel>.write-blocked{display:block;padding:0 32px 8px}
+/* Product owner: more room in table panels — between the rows of controls (N window, filters, Columns / Export),
+   above the table, and between panels and the tiles above them. */
+.table-panel .data-table{gap:16px}
+.table-panel .data-table-toolbar{row-gap:12px;column-gap:10px}
+.table-panel .data-table-scroll{margin-top:8px}
+.table-panel{margin-bottom:24px}
+.metric-grid+.table-panel,.metric-grid+.panel,div:has(>.metric-grid)+.table-panel{margin-top:4px}
+@media(max-width:700px){.table-panel .panel-heading{padding:16px 24px 12px}.table-panel .data-table>.data-table-toolbar{padding:0 24px}.table-panel .data-table th:first-child,.table-panel .data-table td:first-child{padding-left:24px}.table-panel .data-table th:last-child,.table-panel .data-table td:last-child{padding-right:24px}.table-panel>.write-blocked{padding:0 24px 8px}}
 .data-table-controls{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
 .data-table-button{padding:6px 10px}
 .data-table-density{padding:5px 8px;font-size:12px}
@@ -803,6 +817,9 @@ kbd{font-size:11px;border:1px solid var(--accent-line);border-radius:4px;padding
 .efe-fieldrow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:8px;align-items:end;border:1px solid var(--accent-line);border-radius:10px;padding:10px}
 .efe-fieldrow label{display:flex;flex-direction:column;gap:4px;font-size:12px}.efe-fieldrow input,.efe-fieldrow select{width:100%}
 @media (max-width:900px){.efe-fieldrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.efe-rules{display:flex;flex-direction:column;gap:8px;min-width:0;margin:-4px 0 0 16px;border:1px dashed var(--accent-line);border-radius:10px;padding:10px}
+.efe-rules legend{font-weight:600;font-size:13px;padding:0 4px}
+.efe-rules-table th small{display:block;font-weight:400;text-transform:none;letter-spacing:0}.efe-rules-table td{text-align:center}.efe-rules-table td:first-child{text-align:left}
 .efe-add{align-self:flex-start}
 .efe-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .efe-tabs button{min-height:40px;padding:6px 12px;border-radius:8px;border:1px solid var(--accent-line);background:transparent;color:inherit;cursor:pointer}
@@ -1173,10 +1190,10 @@ div.chart-grid:not(.od-insights){margin-bottom:18px}
 .my-dash-tile{display:grid;gap:6px;align-content:start;min-width:0}.my-dash-tile>.ghost{justify-self:start;padding:3px 9px}
 /* TVL-08…TVL-12: the Tool Validations expiry and master list toolbars — the window of days, the status (segmented),
    the search and Reset filters on one wrapping row; the three expiry tiles side by side, stacked on a phone. */
-.tool-filter-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.tool-expiry-window{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex-basis:100%}
+.tool-filter-bar{display:flex;flex-wrap:wrap;gap:12px 10px;align-items:center}
+.tool-expiry-window{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:center;flex-basis:100%;padding-bottom:6px}
 .tool-expiry-window .inline-field{white-space:nowrap}.tool-expiry-window input{width:76px}
-.tool-expiry-counts .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tool-expiry-counts .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:24px}
 .tool-sources td:last-child button{white-space:nowrap}.tool-sources td:nth-child(3){min-width:220px}
 @media(max-width:700px){.tool-filter-bar .search{min-width:0;flex:1 1 100%}.tool-filter-bar .segmented{flex-wrap:wrap}.tool-expiry-counts .metric-grid{grid-template-columns:1fr}}
 /* QV-66: Pulse Check — a stream the Streams filter leaves out stays listed, greyed and marked "Not counted". */

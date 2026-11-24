@@ -5,6 +5,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { ContentBulkCreate } from './ContentBulkCreate'
 import type { NamingPattern } from '../namingPatterns'
 import { fullMatch } from '../dpBulk'
+import { classificationOf, detectClassification } from '../epicSetup'
+import { useEpicSetupFile } from '../useEpicSetup'
 import type { AzureWorkItem } from '../domain'
 import { releaseFeatureTitle, releaseRegister, type ReleaseEntry } from '../releaseSource'
 import type { FeatureSetups } from '../featureSetup'
@@ -75,11 +77,16 @@ function ReleaseTable({ onOpenBulkEpics, name, title = 'Releases', detail, regis
   const [picked, setPicked] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
   const featureMatch = (release: ReleaseEntry) => matches.get(release.key)?.feature
+  const epicFile = useEpicSetupFile()
+  const classes = classificationOf(epicFile, typed ? ioccEpic : undefined)
+  const detected = (release: ReleaseEntry) => ioccEpic ? detectClassification(classes, release.release) : ''
   const columns: DataColumn<ReleaseEntry>[] = [
     ...(bulk ? [{ id: 'pick', label: 'Select', fixed: true, sortable: false, export: false as const, value: (release: ReleaseEntry) => picked.includes(release.key) ? 'yes' : '', render: (release: ReleaseEntry) => { const full = fullMatch(featureMatch(release)); return <input type="checkbox" aria-label={`Select ${release.name}`} disabled={full} title={full ? `Feature #${featureMatch(release)!.item.id} on QMS-0025 matches this release 100%: nothing to create` : undefined} checked={!full && picked.includes(release.key)} onChange={() => setPicked((current) => current.includes(release.key) ? current.filter((key) => key !== release.key) : [...current, release.key])} /> } }] : []),
     { id: 'name', label: 'Release name', value: (release) => release.name, render: (release) => <button type="button" className="text-button" aria-expanded={open === release.key} onClick={() => setOpen(open === release.key ? '' : release.key)}>{open === release.key ? '▾' : '▸'} {release.name}</button> },
-    // QV-52 Content: the Title is the release, so there is no release number column.
-    ...(titled ? [] : [{ id: 'release', label: 'Release', value: (release: ReleaseEntry) => release.release || '', render: (release: ReleaseEntry) => release.release || '—' }]),
+    // QV-52 Content: the Title is the release, so there is no release number column. DPF-12 IOCC: Version, then the
+    // Release Classification detected from it by the rules of the IOCC bulk Epic (DPF-11; '—' without one).
+    ...(titled ? [] : [{ id: 'release', label: typed ? 'Version' : 'Release', value: (release: ReleaseEntry) => release.release || '', render: (release: ReleaseEntry) => release.release || '—' }]),
+    ...(typed ? [{ id: 'class', label: `${classes.label} (detected)`, value: (release: ReleaseEntry) => detected(release), render: (release: ReleaseEntry) => detected(release) || '—', title: () => !ioccEpic ? 'No IOCC bulk creation Epic is set (Admin → Stream options → Bulk creation Epics)' : `Detected from the version by Epic #${ioccEpic}’s ${classes.label} (Admin → Epic & Feature setup)` }] : []),
     { id: 'approved', label: 'Approved', value: (release) => release.approvalDate ?? '', render: (release) => release.approvalDate ? formatDate(release.approvalDate) : '—' },
     { id: 'documents', label: 'Documents', value: (release) => release.documents, align: 'right' },
     ...(grouped ? [{ id: 'type', label: 'Type of Release', value: (release: ReleaseEntry) => release.group || '' }] : []),

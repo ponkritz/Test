@@ -444,6 +444,8 @@ Every Release page looks the same, top to bottom:
 
 **Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
 
+**Release Classification from the release number** (DP and IOCC). The Releases table of DP and IOCC starts with **Release name**, **Version** and **Release Classification (detected)** — the value of the bulk Epic's Release Classification list that its rules give for the version (— without a bulk Epic or a value). The Create Features pop-up shows the same three columns first and pre-fills each row's Release Classification, with *"detected from 5.2.1"* under it; change any row before creating. To set the rules (roles allowed *Edit the Epic setup*): **Admin → Epic & Feature setup → Setup per Epic**, choose the bulk Epic, and under its **Release Classification** field tick, for each value, the part of the release number that changes for it — **x.0** (first number only: 5.0, 5.0.0), **x.y** (second number: 5.2), **x.y.z** (third: 5.2.1), **x.y.z.w** (fourth: 5.2.1.3); the deepest non-zero part decides. For example Release ← x.0 and x.y, MLD ← x.y.z, PU ← x.y.z.w. A part can belong to one value only (the screen names a part ticked twice and does not save). **Fill with the usual rules** proposes Major, Minor, MLD and Platform Update (or PU) where your values are named so. Save to Git. Until rules are saved, the value named like the release type (Major, Minor, MLD, Platform Update) is pre-filled, as before. The fields of an Epic are listed Release name, Version, Release Classification first.
+
 ### Windchill exports
 
 A Windchill search exported to CSV becomes a Release page.
@@ -460,9 +462,10 @@ The import is saved to Git so the team sees it; **Load from Git** reads the team
 
 The **Tool Validations** page has these tabs:
 
-- **Master list** — opens first: **Validation expiry** on top, then the master list, its **Sources** and **Team settings**.
+- **Master list** — opens first: **Validation expiry** on top (the tiles, **Expiring in the next … days** and its table), then the master list with **＋ Add tool…**.
 - **Azure** — the Tool Validations query: its releases of the month (the Releases table) and, below, the query's rows (**Source data**). Before a fetch it says to fetch the query with **↻**.
-- **One tab per other source** — every source added under Sources (another Azure DevOps query, a Windchill export, a Table page) gets a tab named after it, in the order added: its rows as the app reads them with the source's field mapping, with **Edit mapping…** and **Merge into master list…**. When its data is not in this browser, the tab says how to load it. Removing the source removes its tab.
+- **One tab per other source** — every source added under **Setup → Sources** (another Azure DevOps query, a Windchill export, a Table page) gets a tab named after it, in the order added: its rows as the app reads them with the source's field mapping, with **Edit mapping…** and **Merge into master list…**. When its data is not in this browser, the tab says how to load it. Removing the source removes its tab.
+- **Setup** — last: **Sources** (**＋ Add source…**, and per source **Edit mapping…**, **Merge into master list…** and **Remove**) and **Team settings** (**Edit…**). Everyone sees it; those who may not change it see the buttons greyed out with the reason.
 
 The tiles above the tabs (Releases in {month}, Supported) are the same as before. The page remembers the last tab you chose in this browser tab.
 
@@ -481,10 +484,10 @@ The due date is the source's own due date (or one entered by hand) when there is
 
 1. Fetch the Tool Validations query (**↻**): its tools are added to the master list by themselves.
 2. On **Master list**, below Validation expiry, **＋ Add tool…** adds a tool validated elsewhere; **Edit** corrects its dates or notes — a date changed by hand is kept when the sources are read again; **Remove** takes it off the list.
-3. Under **Sources**, **＋ Add source…** adds another Azure DevOps query, a Windchill export or a Table page you keep by hand (add one with **＋ Add page…**, with columns such as Tool, Version, Validation date, Validity period and Due date).
-4. Check **Edit mapping…**: which column gives the tool name, version and dates. The app's guesses are marked **Guessed** until you save the mapping.
-5. Open the source's own tab to see its rows as read; **Merge into master list…** (on that tab or under Sources) shows what changes, then saves it to Git.
-6. **Team settings → Edit…** sets the team's window and names the list's co-owners (a Tool Owner names them).
+3. On **Setup**, under **Sources**, **＋ Add source…** adds another Azure DevOps query, a Windchill export or a Table page you keep by hand (add one with **＋ Add page…**, with columns such as Tool, Version, Validation date, Validity period and Due date). The source's tab appears at once, before Setup.
+4. Check **Edit mapping…** (on Setup or on the source's tab): which column gives the tool name, version and dates. The app's guesses are marked **Guessed** until you save the mapping.
+5. Open the source's own tab to see its rows as read; **Merge into master list…** (on that tab or under **Setup → Sources**) shows what changes, then saves it to Git.
+6. **Setup → Team settings → Edit…** sets the team's window and names the list's co-owners (a Tool Owner names them).
 
 Everyone else sees every tab read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
 

@@ -397,12 +397,14 @@ export function removeSource(file: ToolValidationsFile, id: string): ToolValidat
 }
 // ---- TVL-14: the tabs of the Tool Validations page ----
 // Master list (opens first, with the expiry view on top), Azure (the Tool Validations query: its releases of the month
-// and its rows), then one tab per other source in the order added — a removed source's tab goes with it.
-export const toolTabMaster = 'tool-master', toolTabAzure = 'tool-azure'
+// and its rows), then one tab per other source in the order added — a removed source's tab goes with it — and Setup
+// last (the sources and the team settings).
+export const toolTabMaster = 'tool-master', toolTabAzure = 'tool-azure', toolTabSetup = 'tool-setup'
 export const toolSourceTab = (id: string) => `tool-source:${id}`
 export const toolTabs = (file: Pick<ToolValidationsFile, 'sources'>): { key: string; label: string; source?: ToolSource }[] => [
   { key: toolTabMaster, label: 'Master list' }, { key: toolTabAzure, label: 'Azure' },
   ...file.sources.filter((source) => source.id !== streamSourceId).map((source) => ({ key: toolSourceTab(source.id), label: source.name, source })),
+  { key: toolTabSetup, label: 'Setup' },
 ]
 // The tabs remembered before v10.13 (Releases "main", Validation expiry, Source data "raw") open where their content is
 // now; a tab that no longer exists (a removed source) opens the Master list.
