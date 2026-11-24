@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addMonths, addSource, aggregate, azureFieldOptions, azureValue, cleanDays, dayOf, daysLeftText, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile } from '../src/toolValidations.ts'
+import { addMonths, addSource, aggregate, azureFieldOptions, azureValue, cleanDays, dayOf, daysLeftText, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile } from '../src/toolValidations.ts'
 import { pagesOfFile, fileLabel } from '../src/gitWatch.ts'
 
 // TVL-01…TVL-13: the Tool Validations master list (tool-validations.json in Git), its sources, merges and expiry view.
@@ -175,4 +175,24 @@ test('GIT-17, TVL-02: two saves of the master list are merged — tools by tool,
   assert.equal(mergeToolValidationsText(base, mine, '{broken', true), mine, 'an unreadable file in Git is not merged into')
   assert.deepEqual(pagesOfFile('tool-validations.json', 'planning-data.json'), { pages: ['board'], loader: 'toolValidations' })
   assert.equal(fileLabel('tool-validations.json', 'planning-data.json'), 'Tool Validations master list')
+})
+
+test('TVL-14: the tabs — Master list first, Azure, then one per other source in the order added; a removed source loses its tab; the tabs remembered before open where their content is now (TC-TVL-09)', () => {
+  let file = parseToolValidations(null).file
+  assert.deepEqual(toolTabs(file).map((tab) => tab.label), ['Master list', 'Azure'], 'the Tool Validations query is the Azure tab, not a tab of its own')
+  file = addSource(file, { kind: 'windchill', name: 'Windchill tools', ref: 'wc-1', mapping: guessMapping('windchill', []) })
+  file = addSource(file, { kind: 'ondemand', name: 'Tool register', ref: 'tool-register', mapping: guessMapping('ondemand', []) })
+  file = addSource(file, { kind: 'azure', name: 'Lab tools', ref: 'lab', mapping: guessMapping('azure', []) })
+  const tabs = toolTabs(file)
+  assert.deepEqual(tabs.map((tab) => tab.label), ['Master list', 'Azure', 'Windchill tools', 'Tool register', 'Lab tools'], 'in the order added')
+  assert.deepEqual(tabs.map((tab) => tab.key), ['tool-master', 'tool-azure', 'tool-source:windchill-tools', 'tool-source:tool-register', 'tool-source:lab-tools'])
+  assert.equal(tabs[3].source.ref, 'tool-register')
+  const keys = tabs.map((tab) => tab.key)
+  assert.equal(openToolTab('', keys), 'tool-master', 'nothing remembered: the Master list')
+  assert.equal(openToolTab('tool-source:tool-register', keys), 'tool-source:tool-register', 'the last tab, remembered')
+  for (const [old, now] of [['main', 'tool-azure'], ['raw', 'tool-azure'], ['tool-expiry', 'tool-master'], ['tool-master', 'tool-master']]) assert.equal(openToolTab(old, keys), now, `the old tab ${old}`)
+  const fewer = toolTabs(removeSource(file, 'tool-register')).map((tab) => tab.key)
+  assert.deepEqual(fewer, ['tool-master', 'tool-azure', 'tool-source:windchill-tools', 'tool-source:lab-tools'], 'the removed source loses its tab')
+  assert.equal(openToolTab('tool-source:tool-register', fewer), 'tool-master', 'a remembered tab that is gone: the Master list')
+  assert.equal(openToolTab('something-else', fewer), 'tool-master')
 })

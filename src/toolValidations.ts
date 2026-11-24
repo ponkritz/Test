@@ -395,6 +395,22 @@ export function removeSource(file: ToolValidationsFile, id: string): ToolValidat
   if (id === streamSourceId) return file
   return { ...file, sources: file.sources.filter((source) => source.id !== id), tools: file.tools.map((entry) => { if (!entry.sources[id]) return entry; const sources = { ...entry.sources }; delete sources[id]; return { ...entry, sources } }) }
 }
+// ---- TVL-14: the tabs of the Tool Validations page ----
+// Master list (opens first, with the expiry view on top), Azure (the Tool Validations query: its releases of the month
+// and its rows), then one tab per other source in the order added — a removed source's tab goes with it.
+export const toolTabMaster = 'tool-master', toolTabAzure = 'tool-azure'
+export const toolSourceTab = (id: string) => `tool-source:${id}`
+export const toolTabs = (file: Pick<ToolValidationsFile, 'sources'>): { key: string; label: string; source?: ToolSource }[] => [
+  { key: toolTabMaster, label: 'Master list' }, { key: toolTabAzure, label: 'Azure' },
+  ...file.sources.filter((source) => source.id !== streamSourceId).map((source) => ({ key: toolSourceTab(source.id), label: source.name, source })),
+]
+// The tabs remembered before v10.13 (Releases "main", Validation expiry, Source data "raw") open where their content is
+// now; a tab that no longer exists (a removed source) opens the Master list.
+const oldToolTabs: Record<string, string> = { main: toolTabAzure, raw: toolTabAzure, 'tool-expiry': toolTabMaster }
+export function openToolTab(chosen: string, keys: string[]): string {
+  const key = oldToolTabs[chosen] ?? chosen
+  return keys.includes(key) ? key : toolTabMaster
+}
 export const setTeam = (file: ToolValidationsFile, days: number, owners: string[]): ToolValidationsFile => ({ ...file, defaultDays: cleanDays(days) ?? file.defaultDays, owners: ownersOf(owners) })
 export const sourceProblem = (file: ToolValidationsFile, kindKey: ToolSourceKind, ref: string, name: string) => !name.trim() || name.trim().length > 80 ? 'Enter a name of up to 80 characters.' : !ref ? 'Choose what to read.' : file.sources.length >= maxSources ? `At most ${maxSources} sources.` : file.sources.some((source) => source.kind === kindKey && source.ref === ref) ? 'This one is already a source.' : ''
 

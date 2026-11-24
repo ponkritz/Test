@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
 import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
-// Tool Validations master list (TVL-01…TVL-13): the Tool Owner maps the Tool Validations query; its tools are added to
-// the master list in Git when it is fetched; the Validation expiry tab lists what is overdue, due within the viewer's
-// window and without a due date; a tool is added by hand, the team default is changed and a manual list (a Table page)
-// is merged in (TC-TVL-07, UAT). A Team Member reads it all, with the buttons disabled and the reason shown, and keeps a
-// window of their own (TC-TVL-05, TC-TVL-06). GitHub and Azure DevOps are mocked; nothing leaves the machine.
+// Tool Validations master list (TVL-01…TVL-14): the Tool Owner maps the Tool Validations query; its tools are added to
+// the master list in Git when it is fetched; the page opens on its Master list tab, whose Validation expiry on top lists
+// what is overdue, due within the viewer's window and without a due date; the Azure tab holds the query's releases and
+// rows; a tool is added by hand, the team default is changed and a manual list (a Table page) is added as a source —
+// its own tab — merged in from that tab and removed again, with its tab (TC-TVL-07, UAT; TC-TVL-09). A Team Member reads
+// it all, with the buttons disabled and the reason shown, and keeps a window of their own (TC-TVL-05, TC-TVL-06).
+// GitHub and Azure DevOps are mocked; nothing leaves the machine.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -24,10 +26,12 @@ const setup = () => {
   localStorage.setItem('demand-planning-servers-v1', JSON.stringify([{ serverUrl: '', organization: 'example' }]))
   localStorage.setItem('demand-planning-server-pats-v1', JSON.stringify({ 'https://dev.azure.com/example': 'test-pat' }))
 }
-// The viewer of the second scenario has no PAT: nothing is fetched, the master list is shown as Git has it.
+// The viewer of the second scenario has no PAT: nothing is fetched, the master list is shown as Git has it. This browser
+// tab remembers the Validation expiry tab of before TVL-14: it opens the Master list now.
 const setupReader = () => {
   localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
   localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+  sessionStorage.setItem('demand-planning-result-tab-v1', JSON.stringify({ 'azure:Tool Validations': 'tool-expiry' }))
 }
 // Synthetic validation documents: Minitab 21 (two documents, approved two years before 30 days from now, valid 24 months:
 // due in 30 days), LabVIEW 2020 (due date 10 days ago: overdue), Python 3.11 (no dates), JMP 17 (valid 36 months from a
@@ -82,6 +86,8 @@ const releaseDetails = (page) => page.locator('.sidebar nav .nav-section', { has
 const panelTitled = (page, title) => page.locator('.panel').filter({ has: page.locator('h2', { hasText: new RegExp(`^${title}`) }) })
 const until = async (check, what) => { for (const end = Date.now() + 30000; Date.now() < end;) { const value = check(); if (value) return value; await new Promise((resolve) => setTimeout(resolve, 50)) } throw new Error(`Timed out waiting for ${what}`) }
 const savedList = (writes, test = () => true) => [...writes].reverse().find((entry) => entry.path === 'tool-validations.json' && test(entry))
+const tabLabels = async (tabs) => (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
+const selectedTab = async (tabs) => (await tabs.locator('[role=tab][aria-selected=true]').innerText()).trim()
 const rowsOf = async (panel) => (await panel.locator('tbody tr').allInnerTexts()).map((row) => row.replace(/\s+/g, ' ').trim())
 // The azure-views.json the first scenario shares, so the second one opens with the same Tool Validations connection.
 let sharedViews = null
@@ -117,15 +123,20 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   assert.equal(first.data.tools.find((entry) => entry.name === 'LabVIEW').dueDate, day(-10))
   assert.deepEqual([first.data.schema, first.data.kind, first.data.defaultDays, first.data.sources[0].mapping.confirmed], [1, 'tool-validations', 60, false])
 
-  // Release Details → Tool Validations: the tabs, Validation expiry with the team default of 60 days.
+  // Release Details → Tool Validations: TVL-14 the tabs Master list | Azure; the Master list opens first, with
+  // Validation expiry on top (the team default of 60 days) and the master list under it.
   await releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' }).click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
   const tabs = page.getByRole('tablist', { name: 'Result' })
   await tabs.waitFor()
-  assert.deepEqual((await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim()), ['Releases', 'Validation expiry', 'Master list', 'Source data (5)'])
-  await tabs.getByRole('tab', { name: 'Validation expiry' }).click()
-  const expiry = page.locator('.table-panel', { hasText: 'Validation expiry' })
+  assert.deepEqual(await tabLabels(tabs), ['Master list', 'Azure'])
+  assert.equal(await selectedTab(tabs), 'Master list', 'the Master list opens first')
+  const expiry = panelTitled(page, 'Validation expiry')
+  const master = panelTitled(page, 'Master list')
   await expiry.locator('tbody tr').first().waitFor()
+  assert.equal(await master.count(), 1, 'the master list is on the same tab')
+  assert.ok((await expiry.boundingBox()).y < (await master.boundingBox()).y, 'the expiry view on top')
+  assert.equal(await page.getByLabel('Days ahead').count(), 1, 'the window N on the Master list tab')
   assert.match(await text(page.locator('.tool-expiry-counts')), /Overdue 1 .*Due in the next 60 days 1 .*No due date 1/)
   const listed = await rowsOf(expiry)
   assert.equal(listed.length, 3, 'JMP is due later: not listed')
@@ -144,9 +155,16 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   await page.locator('.tool-expiry-counts').getByText('Due in the next 60 days').waitFor()
   assert.equal((await rowsOf(expiry)).length, 3)
 
+  // TVL-14: the Azure tab — the query's releases of the month and its rows (Source data), no expiry view.
+  await tabs.getByRole('tab', { name: 'Azure' }).click()
+  await panelTitled(page, 'Source data').locator('tbody tr').first().waitFor()
+  assert.equal(await text(panelTitled(page, 'Source data').locator('.record-count').first()), '5 rows')
+  assert.equal(await panelTitled(page, 'Releases').count(), 1, 'the Releases table on the Azure tab')
+  assert.equal(await page.getByLabel('Days ahead').count(), 0)
+  await shot(page, 'azure')
+
   // TVL-10: ＋ Add tool… by hand, due in 5 days.
   await tabs.getByRole('tab', { name: 'Master list' }).click()
-  const master = page.locator('.table-panel', { hasText: 'Master list' })
   await master.locator('tbody tr').first().waitFor()
   assert.equal((await rowsOf(master)).length, 4)
   assert.equal(await master.locator('.write-blocked').count(), 0, 'nothing blocked for the Tool Owner')
@@ -198,7 +216,19 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   const register = sources.locator('tbody tr', { hasText: 'Tool register' })
   await register.waitFor()
   assert.match(await text(register), /Guessed Tool name: Tool · Version: Version · Due date: Due date/)
-  await register.getByRole('button', { name: 'Merge into master list…' }).click()
+  // TVL-14: the source has its own tab, after Azure — its rows as mapped, with Edit mapping… and Merge into master list….
+  await tabs.getByRole('tab', { name: 'Tool register' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Master list', 'Azure', 'Tool register'])
+  await tabs.getByRole('tab', { name: 'Tool register' }).click()
+  const own = panelTitled(page, 'Tool register')
+  await own.locator('tbody tr').first().waitFor()
+  const ownRows = await rowsOf(own)
+  assert.equal(ownRows.length, 2)
+  assert.match(ownRows[0], /^LabVIEW 2020 .*Not merged yet$/)
+  assert.match(ownRows[1], /^Polyspace R2024a .*\d{4} Not merged yet$/, 'its due date read')
+  assert.equal(await own.getByRole('button', { name: 'Edit mapping…' }).isDisabled(), false)
+  await shot(page, 'source-tab')
+  await own.getByRole('button', { name: 'Merge into master list…' }).click()
   const merge = page.getByRole('dialog', { name: 'Merge Tool register into the master list' })
   assert.match(await text(merge), /2 rows of Tool register read with its field mapping: 1 new, 1 updated, 0 no longer in the source\. New: Polyspace/)
   await shot(page, 'merge')
@@ -207,14 +237,27 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   const merged = await until(() => savedList(writes, (entry) => entry.data.tools.some((tool) => tool.name === 'Polyspace')), 'the merge')
   assert.deepEqual(merged.data.tools.find((entry) => entry.name === 'LabVIEW').sources, { stream: { inSource: true }, 'tool-register': { inSource: true } }, 'one entry, both sources')
   assert.ok(merged.data.sources.find((source) => source.id === 'tool-register').mergedAt)
+  await own.locator('tbody tr', { hasText: 'Polyspace' }).getByText('Merged', { exact: true }).waitFor()
+
+  // TVL-14: removing the source (Master list → Sources) removes its tab; its tools stay.
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  await master.locator('tbody tr').first().waitFor()
   await shot(page, 'master-list')
+  await sources.locator('tbody tr', { hasText: 'Tool register' }).getByRole('button', { name: 'Remove' }).click()
+  const removeSource = page.getByRole('dialog', { name: 'Remove the source Tool register' })
+  await removeSource.getByRole('button', { name: 'Remove Tool register' }).click()
+  await removeSource.waitFor({ state: 'detached' })
+  await tabs.getByRole('tab', { name: 'Tool register' }).waitFor({ state: 'detached' })
+  assert.deepEqual(await tabLabels(tabs), ['Master list', 'Azure'])
+  const removed = await until(() => savedList(writes, (entry) => !entry.data.sources.some((source) => source.id === 'tool-register')), 'the source removed')
+  assert.ok(removed.data.tools.some((tool) => tool.name === 'Polyspace'), 'its tools stay')
   assert.deepEqual(errors, [])
   await context.close()
 })
 
 test('TC-TVL-06: a Team Member reads the master list and the expiry view — every change disabled with the reason — and keeps a window of their own', async () => {
   assert.ok(sharedViews, 'the first scenario shared the connection setup')
-  const list = { schema: 1, kind: 'tool-validations', defaultDays: 45, owners: ['co.owner@example.com'], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: true, name: '@tool-name', version: '@tool-version', dueDate: 'Microsoft.VSTS.Scheduling.DueDate' } }],
+  const list = { schema: 1, kind: 'tool-validations', defaultDays: 45, owners: ['co.owner@example.com'], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: true, name: '@tool-name', version: '@tool-version', dueDate: 'Microsoft.VSTS.Scheduling.DueDate' } }, { id: 'windchill-tools', kind: 'windchill', name: 'Windchill tools', ref: 'wc-tools', mapping: { periodUnit: 'months', confirmed: true, name: 'Name' } }],
     tools: [{ name: 'LabVIEW', version: '2020', dueDate: day(-3), sources: { stream: { inSource: false } }, addedAt: '2026-01-05T10:00:00Z' }, { name: 'Excel Validator', version: '2.0', dueDate: day(40), manual: ['dueDate'], sources: {}, addedAt: '2026-01-05T10:00:00Z' }] }
   const files = { 'azure-views.json': sharedViews, 'tool-validations.json': JSON.stringify(list) }
   const { page, context, errors } = await openPage(app, { init: setupReader })
@@ -226,8 +269,11 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   await entry.click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
   const tabs = page.getByRole('tablist', { name: 'Result' })
-  await tabs.getByRole('tab', { name: 'Validation expiry' }).click()
-  const expiry = page.locator('.table-panel', { hasText: 'Validation expiry' })
+  await tabs.waitFor()
+  // TVL-14: the Validation expiry tab remembered from before opens the Master list; the Windchill source has its tab.
+  assert.deepEqual(await tabLabels(tabs), ['Master list', 'Azure', 'Windchill tools'])
+  assert.equal(await selectedTab(tabs), 'Master list')
+  const expiry = panelTitled(page, 'Validation expiry')
   await expiry.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.match(await text(page.locator('.tool-expiry-counts')), /Overdue 1 .*Due in the next 45 days 1 .*No due date 0/, 'the team default from Git: 45 days')
   // TVL-09: anyone keeps a window of their own.
@@ -237,8 +283,7 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   assert.equal(await page.getByRole('button', { name: 'Use the team default (45)' }).isDisabled(), false)
 
   // TVL-11: the master list read only — the reason visible next to the disabled buttons.
-  await tabs.getByRole('tab', { name: 'Master list' }).click()
-  const master = page.locator('.table-panel', { hasText: 'Master list' })
+  const master = panelTitled(page, 'Master list')
   await master.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.match(await text(master.locator('tbody tr', { hasText: 'LabVIEW' })), /Not in source now/)
   const reason = 'Only a Tool Owner (“Manage pages and menu groups”) or a co-owner of the Tool Validations list can change it. A Tool Owner names the co-owners in Team settings.'
@@ -252,6 +297,17 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   assert.ok(await panelTitled(page, 'Team settings').getByRole('button', { name: 'Edit…' }).isDisabled())
   assert.match(await text(panelTitled(page, 'Team settings')), /Expiry window \(team default\) 45 days Co-owners co\.owner@example\.com/i)
   await shot(page, 'read-only')
+  // TVL-14: the source's tab says how to load its data; its buttons are disabled with the reason too.
+  await tabs.getByRole('tab', { name: 'Windchill tools' }).click()
+  const own = panelTitled(page, 'Windchill tools')
+  await own.getByText('That Windchill export is not in this browser.').waitFor()
+  assert.match(await text(own), /Import the Windchill export \(Import Windchill export\)/)
+  assert.equal(await text(own.locator('.write-blocked')), reason)
+  assert.ok(await own.getByRole('button', { name: 'Edit mapping…' }).isDisabled())
+  assert.ok(await own.getByRole('button', { name: 'Merge into master list…' }).isDisabled())
+  // The Azure tab before a fetch: the usual fetch empty state.
+  await tabs.getByRole('tab', { name: 'Azure' }).click()
+  await page.getByText('“Tool Validations” has not been fetched yet.').waitFor()
   assert.equal(writes.filter((write) => write.path === 'tool-validations.json').length, 0, 'nothing written to the master list')
   assert.deepEqual(errors, [])
   await context.close()

@@ -411,7 +411,7 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   await context.close()
 })
 
-test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs and the common columns in order', async () => {
+test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Master list | Azure) and the common columns in order', async () => {
   // DP, IOCC and Content read the synthetic sample's release documents (the same query, so each shows them); the
   // Time Writing connection comes first so that the sample loads. Nothing is fetched: Azure DevOps answers 401.
   const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
@@ -445,10 +445,17 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     const tabs = page.getByRole('tablist', { name: 'Result' })
     await tabs.waitFor()
     const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
+    // TVL-14 (a named exception to §10 (3)): Tool Validations has Master list | Azure (the query's releases and rows),
+    // then a tab per other source; the Releases table is on its Azure tab.
+    if (name === 'Tool Validations') {
+      assert.deepEqual(labels, ['Master list', 'Azure'], `${name}: Master list | Azure`)
+      await tabs.getByRole('tab', { name: 'Azure' }).click()
+      await page.locator('.panel', { has: page.locator('h2', { hasText: /^Source data/ }) }).waitFor()
+      return
+    }
     assert.equal(labels[0], 'Releases', `${name}: the Releases tab first`)
     assert.match(labels.at(-1), /^Source data \(\d+\)$/, `${name}: Source data (n)`)
-    // TVL-08: Tool Validations adds its Validation expiry and Master list tabs between the two.
-    assert.deepEqual(labels.slice(1, -1), name === 'Tool Validations' ? ['Validation expiry', 'Master list'] : [], `${name}: the tabs between`)
+    assert.deepEqual(labels.slice(1, -1), [], `${name}: no tabs between`)
   }
   // The common end of the Releases table (QV-65): the Time Writing Feature, its hours, then the QMS-0025 match.
   const commonEnd = ['time writing feature', 'planned (h)', 'booked (h)', 'qms-0025 match']

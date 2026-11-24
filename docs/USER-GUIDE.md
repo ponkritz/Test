@@ -455,11 +455,19 @@ The import is saved to Git so the team sees it; **Load from Git** reads the team
 
 ### Tool Validations: master list and expiry
 
-The **Tool Validations** page has two more tabs next to **Releases**: **Validation expiry** and **Master list**. The master list keeps every tool the team has validated in Git; a tool stays listed after it leaves its source and is marked **Not in source now**.
+The **Tool Validations** page has these tabs:
+
+- **Master list** — opens first: **Validation expiry** on top, then the master list, its **Sources** and **Team settings**.
+- **Azure** — the Tool Validations query: its releases of the month (the Releases table) and, below, the query's rows (**Source data**). Before a fetch it says to fetch the query with **↻**.
+- **One tab per other source** — every source added under Sources (another Azure DevOps query, a Windchill export, a Table page) gets a tab named after it, in the order added: its rows as the app reads them with the source's field mapping, with **Edit mapping…** and **Merge into master list…**. When its data is not in this browser, the tab says how to load it. Removing the source removes its tab.
+
+The tiles above the tabs (Releases in {month}, Supported) are the same as before. The page remembers the last tab you chose in this browser tab.
+
+The master list keeps every tool the team has validated in Git; a tool stays listed after it leaves its source and is marked **Not in source now**.
 
 **See what is due**
 
-1. Open **Release Details → Tool Validations** and choose **Validation expiry**.
+1. Open **Release Details → Tool Validations**: the **Master list** tab opens with **Validation expiry** at the top.
 2. The tiles count the tools **Overdue**, **Due in the next N days** and with **No due date**. The table lists them in that order, with the days left.
 3. Change **Expiring in the next … days** to look further or nearer. The window is yours and is kept for you; **Use the team default** goes back to the team's window (60 days unless changed).
 4. **Export** writes the list to Excel or CSV.
@@ -469,13 +477,13 @@ The due date is the source's own due date (or one entered by hand) when there is
 **Keep the master list (Tool Owner and the list's co-owners)**
 
 1. Fetch the Tool Validations query (**↻**): its tools are added to the master list by themselves.
-2. On **Master list**, **＋ Add tool…** adds a tool validated elsewhere; **Edit** corrects its dates or notes — a date changed by hand is kept when the sources are read again; **Remove** takes it off the list.
+2. On **Master list**, below Validation expiry, **＋ Add tool…** adds a tool validated elsewhere; **Edit** corrects its dates or notes — a date changed by hand is kept when the sources are read again; **Remove** takes it off the list.
 3. Under **Sources**, **＋ Add source…** adds another Azure DevOps query, a Windchill export or a Table page you keep by hand (add one with **＋ Add page…**, with columns such as Tool, Version, Validation date, Validity period and Due date).
 4. Check **Edit mapping…**: which column gives the tool name, version and dates. The app's guesses are marked **Guessed** until you save the mapping.
-5. **Merge into master list…** shows what changes, then saves it to Git.
+5. Open the source's own tab to see its rows as read; **Merge into master list…** (on that tab or under Sources) shows what changes, then saves it to Git.
 6. **Team settings → Edit…** sets the team's window and names the list's co-owners (a Tool Owner names them).
 
-Everyone else sees both tabs read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
+Everyone else sees every tab read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
 
 ## On-Demand pages
 
