@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.17.0 — 2026-11-24
+
+**Changed**
+- **Tool Validations: the Expiry list tab first, the Master list on its own** — the page's tabs are now Expiry list · Master list · Azure · one tab per source · Setup. **Expiry list** (opens first) shows the Overdue / Due in the next N days / No due date tiles on top, then the window "Expiring in the next N days" and the expiry table; **Master list** shows only the master list with ＋ Add tool…, its filters and Export. A remembered Validation expiry tab, an unknown one or a removed source's tab opens the Expiry list (TVL-08, TVL-10, TVL-14).
+
+**Added**
+- **Set the team default on the Expiry list** — next to "Use the team default", **Set {N} days as team default** saves the window shown as the team default to Git, as Setup → Team settings does; only the Tool Owner and the list's co-owners, for everyone else disabled with the reason (TVL-09, TVL-11).
+
+DF-275; TC-TVL-03, TC-TVL-05, TC-TVL-07, TC-TVL-09, TC-QV-43.
+
+PR #396.
+
 ## v10.16.1 — 2026-11-24
 
 **Fixed**
