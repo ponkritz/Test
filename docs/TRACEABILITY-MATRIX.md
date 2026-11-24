@@ -532,7 +532,7 @@ Ver. = verification method (T test, D demonstration, I inspection, A analysis); 
 | OVR-09 | SR-09 | UR-07 | T | M | TC-CAP-01 | — | `capacity.test.mjs` | — |
 | CAP-01 | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01 | — | `capacity.test.mjs` | — |
 | CAP-02 | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01, TC-CAP-18 | 9 | `capacity.test.mjs`, `calculation-profiles.test.mjs` | — |
-| CAP-03 | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01 | — | `capacity.test.mjs` | — |
+| CAP-03 | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01 | — | `capacity.test.mjs` | KB-94 |
 | CAP-04 | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01, TC-CAP-02 | 9 | `capacity.test.mjs` | — |
 | CAP-05 *(retired)* | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01, TC-CAP-02, TC-CAP-13 | 9 | `capacity.test.mjs` | — |
 | CAP-06 *(retired)* | SR-10 | UR-07, UR-10 | T | M | TC-CAP-01, TC-CAP-13 | 9 | `capacity.test.mjs` | — |
