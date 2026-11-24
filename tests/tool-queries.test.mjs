@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { completionDateOf, completionFieldOptions, documentToolOf, fetchParentTitles, parentIdsToRead, selectColumns, toolMonthReport, toolQueryIndex } from '../src/toolQueries.ts'
+import { completionDateOf, completionFieldOptions, documentToolOf, fetchParentTitles, parentIdsToRead, selectColumns, setToolMasterList, statusLabelOf, statusText, toolMonthReport, toolMonthStatus, toolQueryIndex } from '../src/toolQueries.ts'
+import { azureFieldOptions, azureInputs, emptyFile, guessMapping, mergeSource, monthToolKeys } from '../src/toolValidations.ts'
 import { completedCount, defaultStreamReleases, streamCounts, supportedCount, toolReportFor } from '../src/releaseOverview.ts'
 import { releaseComparison } from '../src/pulseCheck.ts'
 import { packStreamsOf } from '../src/packInputs.ts'
@@ -247,4 +248,65 @@ test('TVL-33: the category confirmed at Add query saved as the Validation Docume
   const after = toolQueries(toolStream, [plain, listNamedDocs], noToolDocumentsQuery)
   assert.equal(after.documents, undefined, 'the Tool List query is not the Validation Documents query')
   assert.equal(toolDocumentsSettingFor(toolStream, [tools], undefined, 'missing', 'documents'), undefined, 'an unknown connection changes nothing')
+})
+
+// ---- TVL-35, TVL-36: the master list's Current Month Status and the counts from it ----
+// The master list as the app builds it: the Tools query's tools appended to the source "stream" with the guessed mapping.
+const masterOf = (items = tools()) => {
+  const file = mergeSource(emptyFile(), 'stream', azureInputs(items, guessMapping('stream', azureFieldOptions(items))), '2026-11-20T00:00:00Z').file
+  // A tool of another source and one added by hand: never a status.
+  const other = { key: 'minitab@22', name: 'Minitab', version: '22', manual: [], sources: { register: { inSource: true } }, addedAt: '2026-11-20T00:00:00Z' }
+  const hand = { key: 'jmp@18', name: 'JMP', version: '18', manual: [], sources: {}, addedAt: '2026-11-20T00:00:00Z' }
+  return [...file.tools, other, hand]
+}
+const statusOf = (master, month, settings) => { const report = toolReportFor(twoState(settings), [toolsProfile, docsProfile], month, 'UTC').report; return { report, status: toolMonthStatus(master, { report }) } }
+
+test('TVL-35: the Current Month Status — Completed, Supported, both or blank; months in UTC; only the Tools query’s tools (TC-TVL-32)', () => {
+  const master = masterOf()
+  assert.deepEqual(master.slice(0, 4).map((entry) => `${statusLabelOf(entry)} #${entry.id}`), ['JMP 17 #12', 'LabVIEW 2020 #11', 'Minitab 21 #10', 'Python 3.11 #13'], 'TVL-34: each tool with its Azure DevOps ID')
+  const text = (month) => { const { status } = statusOf(master, month); return Object.fromEntries(master.map((entry) => [statusLabelOf(entry), statusText(status.byKey.get(entry.key))])) }
+  assert.deepEqual(text('2026-10'), { 'JMP 17': '', 'LabVIEW 2020': 'Completed', 'Minitab 21': 'Completed, Supported', 'Python 3.11': '', 'Minitab 22': '', 'JMP 18': '' }, 'October: LabVIEW changed 31 Oct 23:30 UTC; Minitab changed and QA-signed')
+  assert.deepEqual(text('2026-11'), { 'JMP 17': '', 'LabVIEW 2020': 'Supported', 'Minitab 21': '', 'Python 3.11': 'Completed', 'Minitab 22': '', 'JMP 18': '' }, 'November: Python changed 1 Nov 00:30 UTC; LabVIEW signed 2 Nov')
+  assert.deepEqual(text('2026-09'), { 'JMP 17': 'Completed, Supported', 'LabVIEW 2020': '', 'Minitab 21': '', 'Python 3.11': '', 'Minitab 22': '', 'JMP 18': '' }, 'September: JMP signed 30 Sep 23:00 UTC')
+  assert.deepEqual(text('2026-12'), Object.fromEntries(master.map((entry) => [statusLabelOf(entry), ''])), 'a month without anything: all blank')
+  // A tool no longer in the Tools query, or without its ID, is blank.
+  const gone = master.map((entry) => statusLabelOf(entry) === 'Minitab 21' ? { ...entry, sources: { stream: { inSource: false } } } : entry.name.startsWith('LabVIEW') ? { ...entry, id: undefined } : entry)
+  assert.deepEqual(statusOf(gone, '2026-10').status.listed, [])
+  assert.deepEqual([statusText({ completed: true, supported: true }), statusText({ completed: false, supported: false }), statusText(undefined)], ['Completed, Supported', '', ''])
+})
+
+test('TVL-35: with one query a master list tool is Supported when a row of the query names it with a document in the month (TC-TVL-32)', () => {
+  const rows = [
+    { ...doc(1, undefined, 'Minitab 21 Validation Report'), areaPath: 'DHP\\Tool Validations\\Minitab', approvalDate: '2026-10-05T10:00:00Z' },
+    { ...doc(2, undefined, 'JMP 17 Validation Plan'), areaPath: 'DHP\\Tool Validations\\JMP', approvalDate: '2026-09-30T23:59:00Z' },
+  ]
+  const file = mergeSource(emptyFile(), 'stream', azureInputs(rows, guessMapping('stream', azureFieldOptions(rows))), '2026-11-20T00:00:00Z').file
+  const october = rows.filter((item) => item.approvalDate.startsWith('2026-10'))
+  const status = toolMonthStatus(file.tools, { supportedKeys: monthToolKeys(file, october) })
+  assert.deepEqual(status.listed.map((row) => `${statusLabelOf(row)}: ${statusText(row)}`), ['Minitab: Supported'])
+  assert.deepEqual([status.completed.length, status.supported.length], [0, 1], 'one query: never Completed')
+})
+
+test('TVL-36: the counts and Pulse Check’s Tool Validations list come from the master list — the same numbers as the two queries (TC-TVL-33)', () => {
+  const master = masterOf()
+  for (const month of ['2026-09', '2026-10', '2026-11']) {
+    for (const settings of [undefined, { toolValidations: { completionField: 'Custom.ValidationCompleted' } }]) {
+      const { report, status } = statusOf(master, month, settings)
+      assert.deepEqual([status.listed.length, status.completed.length, status.supported.length], [report.listed.length, report.completed.length, report.supported.length], `${month}: the master list counts the two queries' tools`)
+    }
+  }
+  const profiles = [toolsProfile, docsProfile]
+  setToolMasterList(master)
+  try {
+    const stream = defaultStreamReleases(twoState(), profiles, '2026-10', 'UTC').find((entry) => entry.name === 'Tool Validations')
+    assert.deepEqual([completedCount(stream), supportedCount(stream)], [2, 1])
+    assert.deepEqual(stream.titles.map((entry) => `${entry.title} · ${entry.release}`), ['LabVIEW 2020 · ID 11 · Completed', 'Minitab 21 · ID 10 · Completed, Supported'], 'the drill-down: name and version, ID, status')
+    assert.deepEqual(stream.supportedEntries.map((entry) => entry.label), ['Minitab 21'])
+    const pack = packStreamsOf(twoState(), profiles, { views: [], sources: [] }, '2026-10').find((entry) => entry.name === 'Tool Validations')
+    assert.deepEqual([pack.releases.length, pack.supported], [2, 1], 'the Monthly pack')
+    assert.equal(completedOf(twoState(), profiles, { views: [], sources: [] }, '2026-10').find((entry) => entry.name === 'Tool Validations').completed, 2, 'the cumulative chart')
+    // The master list changed (a tool gone from the Tools query): Pulse Check counts again.
+    setToolMasterList(master.map((entry) => entry.name.startsWith('LabVIEW') ? { ...entry, sources: { stream: { inSource: false } } } : entry))
+    assert.equal(completedCount(defaultStreamReleases(twoState(), profiles, '2026-10', 'UTC').find((entry) => entry.name === 'Tool Validations')), 1)
+  } finally { setToolMasterList(undefined) }
 })

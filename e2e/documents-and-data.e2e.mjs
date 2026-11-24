@@ -411,7 +411,7 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   await context.close()
 })
 
-test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Expiry list | Master list | Azure | Setup) and the common columns in order', async () => {
+test('TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Expiry list | Master list | Tool List [TFS] | Setup, no Releases table) and the common columns in order', async () => {
   // DP, IOCC and Content read the synthetic sample's release documents (the same query, so each shows them); the
   // Time Writing connection comes first so that the sample loads. Nothing is fetched: Azure DevOps answers 401.
   const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
@@ -438,16 +438,24 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     assert.match(await text(menu.locator('.view-actions-note')), /^.+ · .*(fetched|imported) /, `${name}: ⋯ starts with source · when fetched`)
     await page.keyboard.press('Escape')
     await menu.waitFor({ state: 'detached' })
-    // QV-71: a toggle Selected month | All months — the month is not repeated (it is in the top bar and the tooltip).
-    assert.deepEqual(await show.getByRole('radio').allInnerTexts(), ['Selected month', 'All months'], `${name}: Show: Selected month / All months`)
-    assert.equal(await show.getByRole('radio', { name: 'Selected month' }).getAttribute('aria-checked'), 'true', `${name}: the selected month by default`)
-    const monthLabel = (await show.getByRole('radio', { name: 'Selected month' }).getAttribute('title')).replace(/^Only (.+) \(the month in the top bar\)$/, '$1')
-    assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: the tooltip names the header month`)
+    // TVL-14 (a named exception to §10 (1) and (3)): Tool Validations has no Releases table, so no Show — its
+    // master list's Current Month Status and counts are for the header month.
+    // QV-71: elsewhere a toggle Selected month | All months — the month is not repeated (top bar and tooltip).
+    const tool = name === 'Tool Validations'
+    let monthLabel
+    if (tool) {
+      monthLabel = await page.locator('header.topbar input[type=month]').inputValue().then((value) => new Date(`${value}-01T00:00:00Z`).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }))
+      assert.equal(await show.count(), 0, `${name}: no Show`)
+    } else {
+      assert.deepEqual(await show.getByRole('radio').allInnerTexts(), ['Selected month', 'All months'], `${name}: Show: Selected month / All months`)
+      assert.equal(await show.getByRole('radio', { name: 'Selected month' }).getAttribute('aria-checked'), 'true', `${name}: the selected month by default`)
+      monthLabel = (await show.getByRole('radio', { name: 'Selected month' }).getAttribute('title')).replace(/^Only (.+) \(the month in the top bar\)$/, '$1')
+      assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: the tooltip names the header month`)
+    }
     assert.equal(await bar.locator('.view-actions .primary', { hasText: '↻' }).count(), 1, `${name}: ↻`)
     assert.equal(await bar.getByRole('button', { name: `More actions: ${name}` }).count(), 1, `${name}: ⋯`)
     // (2) Counts: every stream, with the tiles it has a rule for; the numbers in the one KPI size (24px, §9).
     // TVL-23: Tool Validations shows them on its Master list tab only, as Validations.
-    const tool = name === 'Tool Validations'
     if (tool) {
       assert.equal(await page.locator('.release-counts').count(), 0, `${name}: no counts above the tabs or on the Expiry list`)
       await page.getByRole('tablist', { name: 'Result' }).getByRole('tab', { name: 'Master list' }).click()
@@ -457,16 +465,18 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     assert.equal(await page.locator('.release-counts').getByRole('button', { name: /What was counted/ }).count(), 1, `${name}: ⓘ What was counted`)
     for (const size of await page.locator('.release-counts .metric-grid article > strong').evaluateAll((numbers) => numbers.map((number) => getComputedStyle(number).fontSize))) assert.equal(size, '24px', `${name}: KPI numbers 24px`)
     // (3) Tabs: Releases | Source data (n), with every month shown.
-    await show.getByRole('radio', { name: 'All months' }).click()
+    if (!tool) await show.getByRole('radio', { name: 'All months' }).click()
     const tabs = page.getByRole('tablist', { name: 'Result' })
     await tabs.waitFor()
     const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
-    // TVL-14 (a named exception to §10 (3)): Tool Validations has Expiry list | Master list | Azure (the query's releases and rows),
-    // then a tab per other source and Setup last; the Releases table is on its Azure tab.
-    if (name === 'Tool Validations') {
-      assert.deepEqual(labels, ['Expiry list', 'Master list', 'Azure', 'Setup'], `${name}: Expiry list | Master list | Azure | Setup`)
-      await tabs.getByRole('tab', { name: 'Azure' }).click()
-      await page.locator('.panel', { has: page.locator('h2', { hasText: /^Source data/ }) }).waitFor()
+    // TVL-14 (a named exception to §10 (3)): Tool Validations has Expiry list | Master list | Tool List [TFS] (the
+    // query's rows; Validation Documents [TFS] with a second query), then a tab per other source and Setup last; no
+    // Releases table.
+    if (tool) {
+      assert.deepEqual(labels, ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'], `${name}: Expiry list | Master list | Tool List [TFS] | Setup`)
+      await tabs.getByRole('tab', { name: 'Tool List [TFS]' }).click()
+      await page.locator('.panel', { has: page.locator('h2', { hasText: /^Tool List \[TFS\]/ }) }).locator('tbody tr').first().waitFor()
+      assert.equal(await page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).count(), 0, `${name}: no Releases table`)
       return
     }
     assert.equal(labels[0], 'Releases', `${name}: the Releases tab first`)
@@ -498,11 +508,10 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   await open('IOCC')
   await parts('IOCC', { counts: ['completed', 'supported'] })
 
-  // QV-64: Content counts its releases of the month (no Completed or Supported rule); Tool Validations its tools,
-  // Supported as Pulse Check counts them (no Completed rule).
+  // QV-64: Content counts its releases of the month (no Completed or Supported rule); Tool Validations its master
+  // list's tools, Supported as Pulse Check counts them (no Completed rule with one query, TVL-36).
   await open('Tool Validations')
   await parts('Tool Validations', { counts: ['supported validations'] })
-  assert.deepEqual((await headers()).slice(-4), commonEnd, 'Tool Validations: the common end')
 
   await open('Content')
   await parts('Content', { counts: [] })

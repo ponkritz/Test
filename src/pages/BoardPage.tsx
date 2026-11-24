@@ -20,14 +20,16 @@ import { QueryView } from '../components/QueryView'
 import { ResultTabs } from '../components/ResultTabs'
 import { ReleaseView } from '../components/ReleaseView'
 import { ToolValidationsTabs } from '../components/ToolValidations'
+import { useToolValidationsEnv } from '../useToolValidations'
+import { monthToolKeys } from '../toolValidations'
 import { SupportedReleasesTable } from '../components/DpMonthCounts'
 import { matchedFeatureColumns } from '../components/matchedFeatureColumns'
 import { PeriodSelect, ReleaseCounts, ReleaseSourceBar, type CountValue, type ReleaseScope } from '../components/ReleasePage'
 import { useDpBoardColumn } from '../useDpBoardColumn'
 import { CpReportView } from '../components/CpReportView'
 import { completedCount, cpReportFor, defaultStreamReleases, supportedCount, toolReportFor } from '../releaseOverview'
-import { ToolQueriesReleases, ToolQueriesSources } from '../components/ToolQueriesView'
-import { completionFieldOptions, fetchParentTitles, parentIdsToRead, selectColumns, type ParentTitles } from '../toolQueries'
+import { ToolListTable, ValidationDocumentsTable } from '../components/ToolQueriesView'
+import { completionFieldOptions, fetchParentTitles, parentIdsToRead, selectColumns, toolMonthStatus, type ParentTitles } from '../toolQueries'
 import { defaultCpReportingSettings } from '../cpReporting'
 import { toolQueryHowLabel } from '../streams'
 import type { AzureWorkItem } from '../domain'
@@ -174,14 +176,23 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // CP: its release-folder tree (the first CP connection) is read whole and reported by QA/QE signature month (cpReporting).
   const cp = stream?.rule === 'cp' ? cpReportFor(store.state, listAzureConnectionProfiles(), month) : undefined
   const isCp = Boolean(cp && cp.profile.id === id)
-  // TVL-19…TVL-22: Tool Validations with its two queries — this page is its Tools query's (counts, Releases, Tool List (Azure) and
-  // Validation Documents on the Azure tab, TVL-31); the Signed documents query's own page, opened from Other views, is a plain view.
+  // TVL-19…TVL-22: Tool Validations with its two queries — this page is its Tools query's (counts on the Master list tab,
+  // the Tool List [TFS] and Validation Documents [TFS] tabs, TVL-14, TVL-31); the Signed documents query's own page,
+  // opened from Other views, is a plain view.
   const toolTwo = stream?.rule === 'tool' && !stream.custom ? toolReportFor(store.state, azure.connectionProfiles, month) : undefined
   const isToolTwo = Boolean(toolTwo && toolTwo.tools.id === id), isToolDocuments = Boolean(toolTwo && toolTwo.documents.id === id)
   const toolDocumentsFound = toolTwo?.documentSource
   useMissingParentTitles(toolTwo?.documents.id, toolDocumentsFound?.fetchedAt, toolTwo?.report, toolDocumentsFound && 'parentTitles' in toolDocumentsFound ? toolDocumentsFound.parentTitles : undefined, store.update)
   // TVL-31: both tables show every column their query selects, in its SELECT order; the Parents' names read by ID.
   const toolDocumentsData = toolTwo && toolDocumentsFound ? { name: toolTwo.documents.viewName || toolTwo.documents.reason, items: toolDocumentsFound.items, columns: selectColumns(toolTwo.documents.query, 'columns' in toolDocumentsFound ? toolDocumentsFound.columns : undefined), orderBy: 'orderBy' in toolDocumentsFound ? toolDocumentsFound.orderBy : undefined, unresolved: 'unresolved' in toolDocumentsFound ? toolDocumentsFound.unresolved : undefined } : undefined
+  // TVL-35, TVL-36: the Current Month Status of the master list's tools in the header month — the same rule as Pulse
+  // Check (toolMonthStatus): with two queries by the Tools query's completion date and the documents' Quality
+  // signatures; with one query, the tools with a document in the month.
+  const toolPage = stream?.rule === 'tool' && !stream.custom && !isToolDocuments
+  const toolEnv = useToolValidationsEnv()
+  const masterFile = toolEnv?.store.shown
+  const toolMonthItems = toolPage && !toolTwo && source ? source.items.filter((item) => viewMonthOf(item) === month) : noItems
+  const toolStatus = !toolPage ? undefined : toolTwo ? toolMonthStatus(masterFile?.tools, { report: toolTwo.report }) : toolMonthStatus(masterFile?.tools ?? [], { supportedKeys: masterFile ? monthToolKeys(masterFile, toolMonthItems, namingPatterns) : new Set<string>() })
   const completionName = toolTwo ? completionFieldOptions(toolTwo.toolSource && 'columns' in toolTwo.toolSource ? toolTwo.toolSource.columns : undefined, toolTwo.toolSource?.items).find((option) => option.ref === toolTwo.report.completionField)?.name ?? toolTwo.report.completionField : ''
   const monthItems = source ? isCp ? source.items : source.items.filter((item) => isDp ? dpListedIn(item, month) : viewMonthOf(item) === month) : noItems
   const items = source ? allMonths || isCp ? source.items : monthItems : noItems
@@ -240,8 +251,8 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => inBackground('Load from Git', () => azure.loadFromGit(id)) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
   // Information about the view sits behind ⋯ → About this source… (QV-70), not as banners; only errors and warnings stay on the page.
   const notes = [
-    source && isDp ? `Month filter: by DDT Date in UTC; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with All months.` : ''}` : '',
-    toolTwo && (isToolTwo || isToolDocuments) ? `Tool Validations reads two queries: Tools “${toolTwo.tools.viewName || toolTwo.tools.reason}” and Signed documents “${toolTwo.documents.viewName || toolTwo.documents.reason}” (${toolQueryHowLabel[toolTwo.how]}).${isToolDocuments ? ' This is the Signed documents query: its documents are counted on the Tool Validations page (Azure tab).' : ''}` : '',
+    source && isDp ? `Month filter: by DDT Date in UTC; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with Show: All months.` : ''}` : '',
+    toolTwo && (isToolTwo || isToolDocuments) ? `Tool Validations reads two queries: Tools “${toolTwo.tools.viewName || toolTwo.tools.reason}” and Signed documents “${toolTwo.documents.viewName || toolTwo.documents.reason}” (${toolQueryHowLabel[toolTwo.how]}).${isToolDocuments ? ' This is the Signed documents query: its documents are listed on the Tool Validations page (Validation Documents [TFS] tab) and give the Supported status of the master list.' : ''}` : '',
     source && isCp ? `CP: the whole release-folder tree is read; the month is the QA/QE signature date in UTC (header month). ${cp!.enrichmentName ? `Release names come from “${cp!.enrichmentName}”.` : 'Add a second CP connection (e.g. “CP Releases”, with Release and Content) for the release names.'}` : '',
     source && !isDp && !isCp && undated > 0 ? `Month filter: by Author Approval Date in UTC. ${undated} of ${source.items.length} items have no approval date${role === 'release-source' ? '' : ' in the query’s columns'}, so their Changed Date is used.` : '',
     source ? `${source.items.length} items fetched${isCp || isToolTwo || isToolDocuments ? '' : `; ${monthItems.length} in ${monthName(month)}`}.` : '',
@@ -264,7 +275,14 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const listSource = listRule ? source : undefined
   const listMonth = useMemo(() => listSource ? monthReleaseCount(listSource.items, month, listRule, namingPatterns) : 0, [listSource, month, listRule, namingPatterns])
   let counts: ReactNode = null
-  if (listRule && source) {
+  // TVL-36: Tool Validations with one query counts from the master list too — each tool with a document in the month.
+  if (listRule === 'tool' && source && toolStatus) {
+    const listed = toolStatus.listed.length
+    counts = <ReleaseCounts month={month} noun="validations"
+      releases={{ value: listed, hint: 'Master list tools with a validation document in the month' }}
+      supported={{ value: toolStatus.supported.length, hint: 'Each master list tool with a document in the month, as Pulse Check counts it' }}
+      counted={<ul><li><strong>Validations in {monthName(month)}</strong>: the master list's tools whose Current Month Status is Supported — each tool of the Tool Validations query with a document approved in the month (Author Approval Date in UTC), else changed in it; each tool once.</li><li><strong>Supported validations</strong>: the same tools — Pulse Check's Supported line counts every tool with a document in the month, once each.</li><li><strong>Completed</strong> is not counted with one query: the documents carry no completion event. Add a Validation Documents query (Admin → Streams → Stream mapping → Tool Validations queries) to count Completed by the tools' completion date.</li></ul>} />
+  } else if (listRule && source) {
     const tool = listRule === 'tool', noun = tool ? 'tool' : 'release'
     counts = <ReleaseCounts month={month} noun={tool ? 'validations' : undefined}
       releases={{ value: listMonth, hint: tool ? `${streamName} tools with a validation document in the month` : `${streamName} ${noun}s the Releases table lists for the month` }}
@@ -273,18 +291,19 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   }
   // TVL-21: Tool Validations with its two queries — Completed by the completion date, Supported by the Quality
   // signatures of the tools' documents; Releases in {Month}: the tools listed (either), as Pulse Check counts them.
-  if (isToolTwo && toolTwo && source) {
+  // TVL-36: the counts are the master list's Current Month Status (toolMonthStatus), as Pulse Check counts them.
+  if (isToolTwo && toolTwo && source && toolStatus) {
     const { report } = toolTwo
     const changed = report.completionField === 'System.ChangedDate'
     counts = <ReleaseCounts month={month} noun="validations"
-      releases={{ value: report.listed.length, hint: 'Tools whose validation was completed or supported in the month' }}
-      completed={{ value: report.completed.length, hint: `Tools whose ${completionName} is in the month` }}
-      supported={{ value: report.supported.length, hint: 'Tools with a document signed by a Quality role in the month' }}
+      releases={{ value: toolStatus.listed.length, hint: 'Master list tools Completed or Supported in the month' }}
+      completed={{ value: toolStatus.completed.length, hint: `Master list tools whose ${completionName} is in the month` }}
+      supported={{ value: toolStatus.supported.length, hint: 'Master list tools with a document signed by a Quality role in the month' }}
       counted={<ul>
-        <li><strong>Validations in {monthName(month)}</strong>: the tools of the Tools query completed or supported in the month, each once (the Releases table on the Azure tab).</li>
+        <li><strong>Validations in {monthName(month)}</strong>: the master list's tools whose <strong>Current Month Status</strong> is Completed, Supported or both, each once. Only the tools of the Tools query (Tool List [TFS]) have a status.</li>
         <li><strong>Completed validations</strong>: a tool (a row of the Tools query “{toolTwo.tools.viewName || toolTwo.tools.reason}”) whose <strong>{completionName}</strong> falls in the month, in UTC.{changed ? ' Changed Date is the last update of the tool’s work item: it moves on any edit, so a tool edited later counts in that later month.' : ''} The field is chosen in Admin → Streams → Stream mapping → Tool Validations queries.{report.noCompletionDate ? ` ${report.noCompletionDate} tool${report.noCompletionDate === 1 ? ' has' : 's have'} no ${completionName}: never counted as Completed.` : ''}</li>
         <li><strong>Supported validations</strong>: a tool with at least one document of the Signed documents query “{toolTwo.documents.viewName || toolTwo.documents.reason}” whose <strong>Parent</strong> is the tool and that has a qualifying Quality signature dated in the month — as CP counts: a role on the allowlist ({defaultCpReportingSettings.roles.join(', ')}; spaces and case ignored), a name and a valid date in the same approver slot, the month in UTC. Each tool once, however many documents.</li>
-        <li><strong>Not in Tool List (Azure)</strong>: {report.unlinked.length} document{report.unlinked.length === 1 ? '' : 's'} whose Parent is no tool of the Tools query, e.g. a retired tool, or that have no Parent ({report.unlinkedSigned.length} with a Quality signature in {monthName(month)}) — listed in Validation Documents on the Azure tab with their Parent's name, <strong>not counted</strong> and not added to the master list. Only the tools of the Tools query are counted.</li>
+        <li><strong>Not in Tool List (Azure)</strong>: {report.unlinked.length} document{report.unlinked.length === 1 ? '' : 's'} whose Parent is no tool of the Tools query, e.g. a retired tool, or that have no Parent ({report.unlinkedSigned.length} with a Quality signature in {monthName(month)}) — listed on the Validation Documents [TFS] tab with their Parent's name, <strong>not counted</strong> and not added to the master list. Only the tools of the Tools query are counted.</li>
         <li>The same counts as Pulse Check, the Monthly pack and the cumulative chart. How the two connections are told apart: {toolQueryHowLabel[toolTwo.how]}.</li>
       </ul>} />
   }
@@ -306,30 +325,31 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // (3) and (4): the Releases | Source data tabs with the Releases table, else why there is nothing to show.
   const raw = (rows: AzureWorkItem[]) => <TablePanel><QueryView name={name} items={rows} columns={columns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   const dpBulk = <><span className="muted">{picked.length} selected</span><button type="button" className="ghost" disabled={!items.length} onClick={() => setPicked(items.filter((item) => !fullMatch(featureMatch(item))).map((item) => item.id))}>Select all shown</button><button type="button" className="ghost" disabled={!picked.length} onClick={() => setPicked([])}>Clear</button><WriteBlocked reason={bulkWhy} />{!bulkWhy && !dpBulkEpic && <BulkEpicNotSet stream="DP" onOpen={openBulkEpics} />}<button type="button" className="primary" disabled={!picked.length || !assign?.canChoose || !can('work.bulk') || !dpBulkEpic} title={bulkWhy ? bulkWhy : !dpBulkEpic ? bulkEpicMissing('DP') : assign?.canChoose ? 'Create a Feature for each selected release, assigned to its QE' : 'Needs the right to create work items for other people (Admin → People & roles → Role rights)'} onClick={() => setBulkOpen(true)}>Create Features ({picked.length})</button></>
-  // TVL-14: the built-in Tool Validations stream has its own tabs — Master list (with the expiry view), Azure (this
-  // query: the month's releases and its rows, or the fetch empty state) and one per other source — also before a fetch
-  // and in a month without documents (the master list is kept in Git, not in the fetch).
-  const toolPage = stream?.rule === 'tool' && !stream.custom
-  const toolTabs = (releases: ReactNode, rows: ReactNode) => <ToolValidationsTabs id={`azure:${name}`} azure={<>{releases}{rows}</>} masterTop={counts} />
-  const withTools = (node: ReactNode, rows?: AzureWorkItem[]) => toolPage ? toolTabs(node, rows && <TablePanel title="Source data" count={`${rows.length} row${rows.length === 1 ? '' : 's'}`}><QueryView name={name} items={rows} columns={columns} orderBy={orderBy} unresolved={unresolved} summary={false} /></TablePanel>) : node
-  const body = !source || !config ? withTools(<Panel><EmptyState title={config ? `“${name}” has not been fetched yet.` : `The connection for “${name}” is not saved in this browser.`} detail={config ? 'Fetch it read-only with ↻; nothing is written to Azure DevOps. Its items stay on this page and are not counted in Overview, Time Writing or My Tasks [Board].' : 'Add it again in Admin → Streams.'} /></Panel>)
-    : isToolTwo && toolTwo ? toolTabs(<ToolQueriesReleases report={toolTwo.report} fieldName={completionName} />, <ToolQueriesSources report={toolTwo.report} tools={{ name, items: source.items, columns: toolListColumns, orderBy, unresolved }} documents={toolDocumentsData} parentTitles={toolDocumentsFound && 'parentTitles' in toolDocumentsFound ? toolDocumentsFound.parentTitles : undefined}
-        documentsMissing={<Panel><EmptyState title={`The Signed documents query “${toolTwo.documents.viewName || toolTwo.documents.reason}” has not been fetched yet.`} detail="Supported counts 0 until it is fetched. Fetch it read-only; nothing is written to Azure DevOps." /><button type="button" className="primary" disabled={busy} onClick={() => inBackground('Fetch from Azure', () => azure.fetchConnection(toolTwo.documents.id))}>Fetch signed documents</button></Panel>} />)
+  // TVL-14: the built-in Tool Validations stream has its own tabs — Expiry list, Master list (with the counts and the
+  // Current Month Status), Tool List [TFS] (the Tools query's rows, or the fetch empty state), Validation Documents [TFS]
+  // (with the two queries) and one per other source — also before a fetch and in a month without documents (the master
+  // list is kept in Git, not in the fetch). No Releases table: the month's tools are the master list's status.
+  const notFetched = <Panel><EmptyState title={config ? `“${name}” has not been fetched yet.` : `The connection for “${name}” is not saved in this browser.`} detail={config ? 'Fetch it read-only with ↻; nothing is written to Azure DevOps. Its items stay on this page and are not counted in Overview, Time Writing or My Tasks [Board].' : 'Add it again in Admin → Streams.'} /></Panel>
+  const toolDocumentsNode = isToolTwo && toolTwo ? toolDocumentsData ? <ValidationDocumentsTable report={toolTwo.report} documents={toolDocumentsData} parentTitles={toolDocumentsFound && 'parentTitles' in toolDocumentsFound ? toolDocumentsFound.parentTitles : undefined} />
+    : <Panel><EmptyState title={`The Signed documents query “${toolTwo.documents.viewName || toolTwo.documents.reason}” has not been fetched yet.`} detail="Supported counts 0 until it is fetched. Fetch it read-only; nothing is written to Azure DevOps." /><button type="button" className="primary" disabled={busy} onClick={() => inBackground('Fetch from Azure', () => azure.fetchConnection(toolTwo.documents.id))}>Fetch signed documents</button></Panel> : undefined
+  const body = toolPage ? <ToolValidationsTabs id={`azure:${name}`} masterTop={counts} status={toolStatus ? { month, status: toolStatus } : undefined} documents={toolDocumentsNode}
+      toolList={!source || !config ? notFetched : <ToolListTable tools={{ name, items: source.items, columns: toolListColumns, orderBy, unresolved }} single={!isToolTwo} />} />
+    : !source || !config ? notFetched
     : isToolDocuments ? <TablePanel title="Source data" count={`${source.items.length} row${source.items.length === 1 ? '' : 's'}`}><QueryView name={name} items={source.items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} summary={false} /></TablePanel>
-    : !items.length && source.items.length ? withTools(<TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose All months (next to ↻). The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose All months (next to ↻).`} />}</TablePanel>, source.items)
+    : !items.length && source.items.length ? (<TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose All months (next to ↻). The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose All months (next to ↻).`} />}</TablePanel>)
     : isDp ? <ResultTabs id={`azure:${id}`} rawCount={items.length} main={<TablePanel title="Releases">
         {bulkOpen && <DpBulkCreate rows={(source?.items ?? []).filter((item) => picked.includes(item.id))} azure={azure} featureSetup={featureSetup} qeMapping={qeMapping} featureMatch={featureMatch} onClose={() => { setBulkOpen(false); setPicked([]) }} />}
         <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose lead={dpLead} more={dpColumns} extra={boardColumn} actions={dpBulk} />
       </TablePanel>} raw={raw(items)} />
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={cp.report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
-    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} layout={toolPage ? toolTabs : undefined} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
+    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   return <Page className="release-page">
     {/* (1) QV-48, QV-70: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}
     <ReleaseSourceBar name={name} source={`${config ? `${config.organization} / ${config.project}` : 'connection not found'}${profile?.query ? ' · query' : config?.team ? ` · team ${config.team}` : ''}`}
       fetched={source ? `fetched ${formatDateTime(source.fetchedAt)}${'fromGit' in source && source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}
       about={notes.length > 0 ? notes.map((note) => <p key={note}>{note}</p>) : undefined}
-      period={source && !isCp && !isToolTwo && !isToolDocuments ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu}>
+      period={source && !isCp && !toolPage && !isToolDocuments ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu}>
       {source && status?.state === 'error' && <Notice tone="warning">Not refreshed: {status.message} The data shown is from {formatDateTime(source.fetchedAt)}.</Notice>}
       {!azure.isSample && gitNote?.tone === 'error' && <Notice tone="error">{gitNote.text}</Notice>}
       {stale && !busy && <Notice tone="warning">The saved data was fetched with different columns than the connection's query now has. Refresh from Azure to load every column's values.</Notice>}

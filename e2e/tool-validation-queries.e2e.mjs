@@ -7,9 +7,10 @@ import { fakeGitHub } from './fakeGitHub.mjs'
 // Tool Validations from two queries (TVL-19…TVL-22, TVL-31; TC-TVL-18, UAT): the Tool Owner adds the Tools query and the
 // Signed documents query as two connections of the stream in Stream mapping, sees which is which in the Tool
 // Validations queries panel, keeps Changed Date as the completion date and then picks another date column; the
-// Tool Validations page (Azure tab) shows Completed and Supported for the month with the tools, Tool List (Azure) and
-// Validation Documents — every document with its Parent's name (a retired tool's read by ID at ↻), in the queries'
-// column order; Pulse Check counts the same. GitHub (e2e/fakeGitHub.mjs) and Azure DevOps
+// Tool Validations page shows the month's Completed and Supported tools as the master list's Current Month Status (with
+// their ID, Used by, Validated and Type, TVL-34…TVL-36), the Tool List [TFS] and Validation Documents [TFS] tabs — every
+// document with its Parent's name (a retired tool's read by ID at ↻), in the queries' column order — and no Releases
+// table; Pulse Check counts the same master list tools. GitHub (e2e/fakeGitHub.mjs) and Azure DevOps
 // are faked with synthetic rows; nothing leaves the machine. Every step waits for what it needs, never for a time.
 let app
 before(async () => { app = await startApp() })
@@ -26,11 +27,12 @@ const setup = () => {
   localStorage.setItem('demand-planning-server-pats-v1', JSON.stringify({ 'https://dev.azure.com/example': 'test-pat' }))
 }
 const base = (id, type, title, extra) => ({ id, rev: 1, fields: { 'System.Id': id, 'System.Title': title, 'System.WorkItemType': type, 'System.State': 'Active', 'System.AreaPath': 'DHP', 'System.IterationPath': 'DHP', 'System.TeamProject': 'DHP', ...extra } })
-// Tools (one row per tool): Changed Date and a Validation Completed date column.
+// Tools (one row per tool): Changed Date, a Validation Completed date column and the Source, State and Type columns
+// (TVL-34: Used by, Validated and Type on the master list).
 const tools = [
-  base(501, 'Tool', 'Minitab 21', { 'System.ChangedDate': '2026-10-05T10:00:00Z', 'Custom.ValidationCompleted': '2026-09-20T00:00:00Z' }),
-  base(502, 'Tool', 'LabVIEW 2020', { 'System.ChangedDate': '2026-11-02T10:00:00Z', 'Custom.ValidationCompleted': '2026-10-12T00:00:00Z' }),
-  base(503, 'Tool', 'JMP 17', { 'System.ChangedDate': '2026-10-20T10:00:00Z' }),
+  base(501, 'Tool', 'Minitab 21', { 'System.ChangedDate': '2026-10-05T10:00:00Z', 'Custom.ValidationCompleted': '2026-09-20T00:00:00Z', 'System.State': 'Validated', 'Custom.Source': 'Lab A', 'Custom.Type': 'Statistics' }),
+  base(502, 'Tool', 'LabVIEW 2020', { 'System.ChangedDate': '2026-11-02T10:00:00Z', 'Custom.ValidationCompleted': '2026-10-12T00:00:00Z', 'Custom.Source': 'Lab B', 'Custom.Type': 'Test bench' }),
+  base(503, 'Tool', 'JMP 17', { 'System.ChangedDate': '2026-10-20T10:00:00Z', 'Custom.Source': 'Lab A', 'Custom.Type': 'Statistics' }),
 ]
 const signed = (name, role, date) => ({ 'Custom.ApproverName1': name, 'Custom.ApproverFunction1': role, 'Custom.ApproverApprovalDate1': date })
 // Signed documents (Parent = the tool): Minitab's plan signed by QA in October; JMP's report signed by its author in
@@ -44,8 +46,8 @@ const documents = [
 ]
 // TVL-31: the retired tool 999 — not in the Tools query; its title is read by ID only (the batch read).
 const retired = [base(999, 'Tool', 'Old Analyzer 1.0', { 'System.State': 'Retired' })]
-const fieldNames = [['Custom.ValidationCompleted', 'Validation Completed'], ['System.Parent', 'Parent'], ['Custom.ApproverName1', 'ApproverName1'], ['Custom.ApproverFunction1', 'ApproverFunction1'], ['Custom.ApproverApprovalDate1', 'ApproverApprovalDate1'], ['Custom.ApproverName2', 'ApproverName2'], ['Custom.ApproverFunction2', 'ApproverFunction2'], ['Custom.ApproverApprovalDate2', 'ApproverApprovalDate2']]
-const toolsQuery = "SELECT [System.Id], [System.Title], [System.ChangedDate], [Custom.ValidationCompleted] FROM WorkItems WHERE [System.WorkItemType] = 'Tool'"
+const fieldNames = [['Custom.ValidationCompleted', 'Validation Completed'], ['Custom.Source', 'Source'], ['Custom.Type', 'Type'], ['System.Parent', 'Parent'], ['Custom.ApproverName1', 'ApproverName1'], ['Custom.ApproverFunction1', 'ApproverFunction1'], ['Custom.ApproverApprovalDate1', 'ApproverApprovalDate1'], ['Custom.ApproverName2', 'ApproverName2'], ['Custom.ApproverFunction2', 'ApproverFunction2'], ['Custom.ApproverApprovalDate2', 'ApproverApprovalDate2']]
+const toolsQuery = "SELECT [System.Id], [System.Title], [System.ChangedDate], [Custom.ValidationCompleted], [Custom.Source], [System.State], [Custom.Type] FROM WorkItems WHERE [System.WorkItemType] = 'Tool'"
 const documentsQuery = "SELECT [System.Id], [System.Title], [System.Parent], [Custom.ApproverName1], [Custom.ApproverFunction1], [Custom.ApproverApprovalDate1], [Custom.ApproverName2], [Custom.ApproverFunction2], [Custom.ApproverApprovalDate2] FROM WorkItems WHERE [System.WorkItemType] = 'Document'"
 
 async function fakeAzure(context, data = { tools, documents }) {
@@ -69,6 +71,8 @@ async function fakeAzure(context, data = { tools, documents }) {
 const until = async (check, what) => { for (const end = Date.now() + 30000; Date.now() < end;) { const value = check(); if (value) return value; await new Promise((resolve) => setTimeout(resolve, 50)) } throw new Error(`Timed out waiting for ${what}`) }
 const panelTitled = (page, title) => page.locator('.panel').filter({ has: page.locator('h2', { hasText: new RegExp(`^${title}`) }) })
 const releaseDetails = (page) => page.locator('.sidebar nav .nav-section', { hasText: 'RELEASE DETAILS' })
+const masterRow = (page, name) => panelTitled(page, 'Master list').locator('tbody tr').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^${name}$`) }) })
+const cells = async (row, ...labels) => { const heads = (await row.page().locator('.panel').filter({ has: row.page().locator('h2', { hasText: /^Master list/ }) }).locator('thead th').allTextContents()).map((label) => label.replace(/[▴▾]/g, '').trim()); const values = await row.locator('td').allInnerTexts(); return labels.map((label) => values[heads.indexOf(label)]?.replace(/\s+/g, ' ').trim()) }
 const tile = (page, label) => page.locator('.release-counts article').filter({ has: page.locator('span', { hasText: new RegExp(`^${label}$`) }) }).locator('strong')
 
 // TVL-33: Add query on a Tool Validations row asks the category — Tool List or Validation Documents — pre-selected by
@@ -89,7 +93,7 @@ async function addQuery(page, rowName, query, category) {
 
 test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queries, picks the completion date and sees Completed and Supported on the Tool Validations page and in Pulse Check', async () => {
   const gh = fakeGitHub({ files: { 'access.json': cachedRoles('Tool Owner') } })
-  const { page, context, errors } = await openPage(app, { init: setup, width: 1440, height: 1000 })
+  const { page, context, errors } = await openPage(app, { init: setup, width: 1440, height: 1000, scale: shots ? 2 : undefined })
   page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
   await context.route('https://api.github.com/**', gh.route)
   const reads = await fakeAzure(context)
@@ -118,7 +122,7 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   await shot(page, 'stream-mapping-two-queries', mappingRows)
   await shot(page, 'tool-validations-queries-panel', panel)
 
-  // TVL-21, TVL-22: October 2026 on the Tool Validations page, Azure tab — Completed by Changed Date: Minitab and JMP;
+  // TVL-21, TVL-22, TVL-35: October 2026 on the Tool Validations page — Completed by Changed Date: Minitab and JMP;
   // Supported: Minitab (a QA signature in October; JMP's October signature is its author's).
   await page.locator('header.topbar input[type=month]').fill('2026-10')
   await releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' }).click()
@@ -127,22 +131,30 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   // TVL-23: the counts are on the Master list tab only, as Validations.
   await tabs.getByRole('tab', { name: 'Master list' }).click()
   assert.deepEqual([await text(tile(page, 'Validations in October 2026')), await text(tile(page, 'Completed validations')), await text(tile(page, 'Supported validations'))], ['2', '2', '1'])
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
-  assert.equal(await page.locator('.release-counts').count(), 0, 'TVL-23: no counts on the Azure tab')
-  const releases = panelTitled(page, 'Releases')
-  await releases.locator('tbody tr').first().waitFor()
-  const rows = (await releases.locator('tbody tr').allInnerTexts()).map((row) => row.replace(/\s+/g, ' ').trim())
-  assert.equal(rows.length, 2)
-  assert.match(rows[0], /^JMP 17 503 Completed .* — 0 —$/)
-  assert.match(rows[1], /^Minitab 21 501 Completed .* Supported 1 Ana Costa \(QA\)/)
+  // TVL-14: the tabs — Tool List [TFS] and Validation Documents [TFS] after Master list; no Azure tab, no Releases table.
+  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Validation Documents [TFS]', 'Setup'])
+  await shot(page, 'tool-validations-tabs', tabs)
+  // TVL-34, TVL-35: the master list's ID, Used by, Validated, Type and Current Month Status (October, UTC).
+  await masterRow(page, 'Minitab 21').getByText('Completed').first().waitFor()
+  const columnsOf = (name) => cells(masterRow(page, name), 'ID', 'Used by', 'Validated', 'Type', 'Current Month Status')
+  assert.deepEqual(await columnsOf('Minitab 21'), ['501', 'Lab A', 'Validated', 'Statistics', 'Completed Supported'])
+  assert.deepEqual(await columnsOf('JMP 17'), ['503', 'Lab A', 'Active', 'Statistics', 'Completed'])
+  assert.deepEqual(await columnsOf('LabVIEW 2020'), ['502', 'Lab B', 'Active', 'Test bench', ''])
+  await shot(page, 'tool-validations-master-list', panelTitled(page, 'Master list'))
+  await tabs.getByRole('tab', { name: 'Tool List [TFS]' }).click()
+  assert.equal(await page.locator('.release-counts').count(), 0, 'TVL-23: no counts on the Tool List [TFS] tab')
+  assert.equal(await page.locator('.panel h2', { hasText: /^Releases/ }).count(), 0, 'TVL-14: no Releases table')
   // TVL-31: Tool List (Azure) and Validation Documents, every column in the query's SELECT order; no "Not linked to a
   // tool" table. ↻ fetches both queries, then reads the retired Parent's title by ID (999), read only; a Parent Azure
   // DevOps does not return (998) shows as #998 with the reason in ⓘ.
   const headings = async (panel) => (await panel.locator('thead th .sort-button').allTextContents()).map((label) => label.replace(/[▴▾]/g, '').trim())
-  const toolList = panelTitled(page, 'Tool List \\(Azure\\)')
+  const toolList = panelTitled(page, 'Tool List \\[TFS\\]')
   assert.match(await text(toolList.locator('.record-count')), /^3 rows$/)
-  assert.deepEqual(await headings(toolList), ['ID', 'Title', 'Changed Date', 'Validation Completed'], 'the Tools query’s SELECT order')
-  const validation = panelTitled(page, 'Validation Documents')
+  assert.deepEqual(await headings(toolList), ['ID', 'Title', 'Changed Date', 'Validation Completed', 'Source', 'State', 'Type'], 'the Tools query’s SELECT order')
+  await shot(page, 'tool-validations-tool-list-tfs')
+  await tabs.getByRole('tab', { name: 'Validation Documents [TFS]' }).click()
+  const validation = panelTitled(page, 'Validation Documents \\[TFS\\]')
+  assert.equal(await page.locator('.panel h2', { hasText: /^Releases/ }).count(), 0, 'TVL-14: no Releases table')
   assert.equal(await page.locator('.panel h2', { hasText: /^Not linked to a tool/ }).count(), 0)
   assert.deepEqual(await headings(validation), ['Tool', 'Parent ID', 'Tool List (Azure)', 'ID', 'Title', 'Parent', 'ApproverName1', 'ApproverFunction1', 'ApproverApprovalDate1', 'ApproverName2', 'ApproverFunction2', 'ApproverApprovalDate2'], 'Tool, Parent ID, then the Signed documents query’s SELECT order')
   assert.match(await text(validation.locator('.record-count')), /^4 documents · 2 not in Tool List \(Azure\) · not counted$/)
@@ -160,8 +172,11 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   assert.match(await text(docRow(604)), /^#998 998 Not in Tool List \(Azure\) 604 Gone Tool Plan/)
   assert.match(await infoText(page, validation), /1 Parent name not read — shown as #ID: Name not read: Not returned by Azure DevOps/)
   assert.match(await infoText(page, validation), /not counted/)
-  assert.deepEqual(await releases.locator('tbody tr td:first-child').allInnerTexts(), ['JMP 17', 'Minitab 21'], 'the retired tool is not counted')
-  await shot(page, 'tool-validations-azure-validation-documents')
+  await shot(page, 'tool-validations-validation-documents-tfs')
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  assert.equal(await panelTitled(page, 'Master list').locator('tbody tr', { hasText: 'Old Analyzer' }).count(), 0, 'the retired tool is not in the master list, not counted')
+  assert.equal(await text(tile(page, 'Validations in October 2026')), '2')
+  await tabs.getByRole('tab', { name: 'Validation Documents [TFS]' }).click()
   // Kept with the fetched documents (saved in this browser's database): still there after a reload, without reading again.
   await page.waitForFunction(() => new Promise((resolve) => { const open = indexedDB.open('demand-planning-data-v1'); open.onsuccess = () => { const get = open.result.transaction('snapshots').objectStore('snapshots').get('current'); get.onsuccess = () => { open.result.close(); resolve((get.result?.azureSources ?? []).some((source) => source.parentTitles?.['999']?.title === 'Old Analyzer 1.0')) }; get.onerror = () => { open.result.close(); resolve(false) } }; open.onerror = () => resolve(false) }))
   await page.reload()
@@ -169,7 +184,7 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   await releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' }).click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
   await page.locator('header.topbar input[type=month]').fill('2026-10')
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
+  await tabs.getByRole('tab', { name: 'Validation Documents [TFS]' }).click()
   await docRow(603).getByText('Old Analyzer 1.0').waitFor()
   // Still named after the reload: kept with the saved fetch, or read again if the fetch at start replaced the
   // documents before the saved names were back (a Parent without a name is always read).
@@ -185,13 +200,11 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   assert.deepEqual(saved.releaseSourceSettings.toolValidations, { completionField: 'Custom.ValidationCompleted', documentsQuery: 'Tool Validations Signed documents' }, 'the completion field and the Validation Documents query confirmed at Add query (TVL-33)')
   await releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' }).click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
-  await releases.locator('tbody tr', { hasText: 'LabVIEW 2020' }).waitFor()
   await tabs.getByRole('tab', { name: 'Master list' }).click()
+  await masterRow(page, 'LabVIEW 2020').getByText('Completed').waitFor()
   assert.deepEqual([await text(tile(page, 'Validations in October 2026')), await text(tile(page, 'Completed validations')), await text(tile(page, 'Supported validations'))], ['2', '1', '1'])
-  assert.match(await text(page.locator('.release-counts')), /Completed validations 1 Tools whose Validation Completed is in the month/)
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
-  await shot(page, 'tool-validations-azure-tab')
+  assert.match(await text(page.locator('.release-counts')), /Completed validations 1 Master list tools whose Validation Completed is in the month/)
+  assert.deepEqual([(await columnsOf('LabVIEW 2020'))[4], (await columnsOf('Minitab 21'))[4], (await columnsOf('JMP 17'))[4]], ['Completed', 'Supported', ''])
 
   // TVL-22: Pulse Check counts the same — Current month releases · October 2026.
   await navigate(page, 'Pulse Check')
@@ -201,7 +214,12 @@ test('TC-TVL-18: the Tool Owner sets up the Tools and the Signed documents queri
   assert.match(await text(quadrant.locator('.quadrant-counts')), /^1 completed 1 supported$/)
   assert.match(await text(page.locator('.supported-summary')), /Tool Validations \[1\] : Minitab 21/)
   assert.match(await text(page.locator('.release-summary').first()), /Tool Validations \[1\] : LabVIEW 2020/)
-  await shot(page, 'pulse-check-tool-validations')
+  // TVL-36: the drill-down lists the master list's tools — name and version, ID, status.
+  const lines = (await quadrant.locator('.quadrant-titles li').allInnerTexts()).map((line) => line.replace(/\s+/g, ' ').trim())
+  assert.equal(lines.length, 2, lines.join(' | '))
+  assert.match(lines[0], /^LabVIEW 2020 ID 502 · Completed/)
+  assert.match(lines[1], /^Minitab 21 ID 501 · Supported/)
+  await shot(page, 'pulse-check-tool-validations', quadrant)
 
   // Read only: Azure DevOps was only queried (WIQL, batch reads, field lists).
   assert.ok(reads.every((entry) => /^(POST|GET) .*\/_apis\/wit\/(wiql|workitemsbatch|fields)/.test(entry) || entry.startsWith('GET ')), reads.join('\n'))
@@ -254,7 +272,7 @@ test('TC-TVL-27: tools from Azure DevOps are validated on their completion date 
   const row = (name) => master.locator('tbody tr', { hasText: name })
   await row('Minitab').waitFor()
   const due = plusMonths(day(-700), 24)
-  assert.match(await text(row('Minitab')), new RegExp(`^Minitab 21 ${escape(await longDate(page, day(-700)))} \\(completion date\\) 24 \\(default\\) ${escape(await longDate(page, due))} .*\\(completion date \\+ 24 months \\(default\\)\\) In source`))
+  assert.match(await text(row('Minitab')), new RegExp(`^Minitab 21 701 ${escape(await longDate(page, day(-700)))} \\(completion date\\) 24 \\(default\\) ${escape(await longDate(page, due))} .*\\(completion date \\+ 24 months \\(default\\)\\) In source`))
   // TVL-30: Edit and Remove disabled with the reason (each button's tooltip, and the line above the table).
   const lock = 'Comes from Azure DevOps (Tool Validations query): change it there.'
   for (const name of ['Minitab', 'LabVIEW']) {

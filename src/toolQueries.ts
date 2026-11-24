@@ -115,10 +115,10 @@ export function completionFieldOptions(columns: { ref: string; name: string }[] 
   return [head, ...rest.sort((a, b) => a[1].localeCompare(b[1]))].map(([ref, name]) => ({ ref, name }))
 }
 
-// TVL-31: the Validation Documents table of the Azure tab — every document of the Signed documents query, the
+// TVL-31: the Validation Documents [TFS] table — every document of the Signed documents query, the
 // documents whose Parent is no tool of the Tools query (e.g. a retired tool) included and marked "Not in Tool List
 // (Azure)". Its Tool column is the Parent's name: the tool's label from the Tools query (its name and version, as the
-// Releases table names it), else the Parent's System.Title read from Azure DevOps by its ID (read only, at ↻, kept
+// Tools query names it), else the Parent's System.Title read from Azure DevOps by its ID (read only, at ↻, kept
 // with the fetched documents), else "#<id>" with the reason. The names never change a count (TVL-21) and never add
 // a tool to the master list.
 export type ParentTitle = { title: string } | { error: string }
@@ -191,4 +191,60 @@ export function selectColumns(wiql: string | undefined, saved?: QueryColumn[]): 
   if (!wiql?.trim()) return saved
   const names = Object.fromEntries((saved ?? []).map((column) => [column.ref, column.name]))
   return queryLayout(wiql, names).columns.map((ref) => ({ ref, name: names[ref] ?? columnName(ref) }))
+}
+
+// ---- TVL-35, TVL-36: the Current Month Status of the master list's tools, and the counts from it ----
+// One rule, used by the Master list (and Expiry list) column, the count cards on the Master list tab, Pulse Check, the
+// Monthly pack and the cumulative chart. A master list tool from the Tools query (Tool List [TFS], the master list's
+// source "stream", in it now) with its Azure DevOps ID is:
+// - Completed in month M when that tool's completion date is in M (TVL-20, TVL-21: the completion field, Changed Date
+//   by default, UTC);
+// - Supported in M when a document of the Validation Documents query whose Parent is that ID has a qualifying Quality
+//   signature in M (TVL-21);
+// - "Completed, Supported" when both, and blank otherwise. A tool from another source, added by hand or without an ID
+//   is blank. With one query (no Validation Documents query) a tool is Supported in M when a row of the query names it
+//   (its name and version as the master list reads them) and has a document in M — as Pulse Check counted it before.
+// The master list's Tools entries are the Tools query's tools, so the counts equal the two-query report's; two rows of
+// the Tools query with the same tool name and version are one master list entry, counted once (LIM-81).
+export const toolsSourceId = 'stream' // toolValidations.ts streamSourceId: the Tools query as a master list source
+export interface MasterTool { key: string; name: string; version: string; id?: number; sources: Record<string, { inSource: boolean }> }
+export interface ToolStatusRow { key: string; name: string; version: string; id?: number; url?: string; completed: boolean; supported: boolean; date?: string; documents: number }
+export type ToolEvidence = { report: Pick<ToolMonthReport, 'completed' | 'supported' | 'toolsById'> } | { supportedKeys: ReadonlySet<string> }
+export interface ToolMonthStatus { rows: ToolStatusRow[]; byKey: Map<string, ToolStatusRow>; completed: ToolStatusRow[]; supported: ToolStatusRow[]; listed: ToolStatusRow[] }
+export const statusText = (row: Pick<ToolStatusRow, 'completed' | 'supported'> | undefined) => !row ? '' : [row.completed ? 'Completed' : '', row.supported ? 'Supported' : ''].filter(Boolean).join(', ')
+export const statusLabelOf = (row: Pick<ToolStatusRow, 'name' | 'version'>) => [row.name, row.version].filter(Boolean).join(' ')
+const fromTools = (entry: MasterTool) => entry.sources[toolsSourceId]?.inSource === true
+// entries: the master list's tools (undefined: no master list in this app, e.g. a test — each tool of the Tools query
+// is then a row of its own, named by its label).
+export function toolMonthStatus(entries: readonly MasterTool[] | undefined, evidence: ToolEvidence): ToolMonthStatus {
+  const rows: ToolStatusRow[] = []
+  const blank = (entry: MasterTool): ToolStatusRow => ({ key: entry.key, name: entry.name, version: entry.version, ...(entry.id != null ? { id: entry.id } : {}), completed: false, supported: false, documents: 0 })
+  if ('report' in evidence) {
+    const { report } = evidence
+    const completed = new Map(report.completed.map((row) => [row.id, row]))
+    const supported = new Map(report.supported.map((entry) => [entry.tool.id, entry]))
+    const of = (key: string, name: string, version: string, id: number): ToolStatusRow => {
+      const done = completed.get(id), signed = supported.get(id), tool = report.toolsById.get(id), date = signed?.date ?? done?.completionDate
+      return { key, name, version, id, ...(tool ? { url: tool.url } : {}), completed: Boolean(done), supported: Boolean(signed), ...(date ? { date } : {}), documents: signed?.documents ?? 0 }
+    }
+    if (entries) for (const entry of entries) rows.push(entry.id != null && fromTools(entry) ? of(entry.key, entry.name, entry.version, entry.id) : blank(entry))
+    else for (const tool of report.toolsById.values()) rows.push(of(`id:${tool.id}`, tool.label, '', tool.id))
+  } else {
+    for (const entry of entries ?? []) rows.push({ ...blank(entry), supported: fromTools(entry) && evidence.supportedKeys.has(entry.key) })
+  }
+  const byLabel = (a: ToolStatusRow, b: ToolStatusRow) => statusLabelOf(a).localeCompare(statusLabelOf(b), 'en', { sensitivity: 'base' }) || (a.id ?? 0) - (b.id ?? 0)
+  const listed = rows.filter((row) => row.completed || row.supported).sort(byLabel)
+  return { rows, byKey: new Map(rows.map((row) => [row.key, row])), completed: listed.filter((row) => row.completed), supported: listed.filter((row) => row.supported), listed }
+}
+
+// The master list of this app, for the plain functions of Pulse Check, the Monthly pack and the cumulative chart (set by
+// App whenever the list shown changes; toolMasterVersion() changes with it, for their caches). Undefined: none read.
+let masterTools: readonly MasterTool[] | undefined
+let masterVersion = 0
+export const toolMasterList = () => masterTools
+export const toolMasterVersion = () => masterVersion
+export function setToolMasterList(tools: readonly MasterTool[] | undefined) {
+  if (tools === masterTools) return
+  masterTools = tools
+  masterVersion += 1
 }

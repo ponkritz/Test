@@ -6,7 +6,7 @@ import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 // Tool Validations master list (TVL-01…TVL-14): the Tool Owner maps the Tool Validations query; its tools are added to
 // the master list in Git when it is fetched; the page opens on its Expiry list tab, which lists what is overdue, due within
 // the viewer's window and without a due date (the owners set the team default there too); the Master list tab next to
-// it holds only the master list; the Azure tab holds the query's releases and rows; the Setup tab, last, holds the
+// it holds only the master list; the Tool List [TFS] tab holds the query's rows (no Releases table); the Setup tab, last, holds the
 // sources and the team settings; a tool is added by hand, the team default is changed (Expiry list, then Setup) and a manual list (a Table page) is added as a source (Setup → Sources) — its own tab — merged in from
 // that tab and removed again, with its tab (TC-TVL-07, UAT; TC-TVL-09). A Team Member reads it all, Setup included, with
 // the buttons disabled and the reason shown, and keeps a window of their own (TC-TVL-05, TC-TVL-06); a tool with only a
@@ -150,14 +150,15 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   assert.equal(first.data.tools.find((entry) => entry.name === 'LabVIEW').dueDate, day(-10))
   assert.deepEqual([first.data.schema, first.data.kind, first.data.defaultDays, first.data.sources[0].mapping.confirmed], [1, 'tool-validations', 60, false])
 
-  // Release Details → Tool Validations: TVL-14 the tabs Expiry list | Master list | Azure | Setup; the Expiry list opens
+  // Release Details → Tool Validations: TVL-14 the tabs Expiry list | Master list | Tool List [TFS] | Setup (one query:
+  // no Validation Documents [TFS]); the Expiry list opens
   // first — the tiles on top (the team default of 60 days), then the expiry table; no master list, no Sources or Team
   // settings there.
   await releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' }).click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
   const tabs = page.getByRole('tablist', { name: 'Result' })
   await tabs.waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'])
   assert.equal(await selectedTab(tabs), 'Expiry list', 'the Expiry list opens first')
   const expiry = panelTitled(page, 'Validation expiry')
   const master = panelTitled(page, 'Master list')
@@ -209,13 +210,13 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   assert.deepEqual([await expiry.count(), await page.locator('.tool-expiry-counts').count(), await page.getByLabel('Days ahead').count()], [0, 0, 0], 'no expiry table, no tiles, no window N on the Master list tab')
   await lineUp(master)
 
-  // TVL-14: the Azure tab — the query's releases of the month and its rows (Source data), no expiry view.
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
-  await panelTitled(page, 'Source data').locator('tbody tr').first().waitFor()
-  assert.equal(await text(panelTitled(page, 'Source data').locator('.record-count').first()), '5 rows')
-  assert.equal(await panelTitled(page, 'Releases').count(), 1, 'the Releases table on the Azure tab')
+  // TVL-14: the Tool List [TFS] tab — the query's rows, no Releases table, no expiry view.
+  await tabs.getByRole('tab', { name: 'Tool List [TFS]' }).click()
+  await panelTitled(page, 'Tool List \\[TFS\\]').locator('tbody tr').first().waitFor()
+  assert.equal(await text(panelTitled(page, 'Tool List \\[TFS\\]').locator('.record-count').first()), '5 rows')
+  assert.equal(await panelTitled(page, 'Releases').count(), 0, 'no Releases table')
   assert.equal(await page.getByLabel('Days ahead').count(), 0)
-  await shot(page, 'azure')
+  await shot(page, 'tool-list-tfs')
 
   // TVL-10: ＋ Add tool… by hand, due in 5 days.
   await tabs.getByRole('tab', { name: 'Master list' }).click()
@@ -277,10 +278,10 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   const register = sources.locator('tbody tr', { hasText: 'Tool register' })
   await register.waitFor()
   assert.match(await text(register), /Guessed Tool name: Tool · Version: Version · Due date: Due date/)
-  // TVL-14: the source has its own tab, after Azure and before Setup — its rows as mapped, with Edit mapping… and Merge
+  // TVL-14: the source has its own tab, after Tool List [TFS] and before Setup — its rows as mapped, with Edit mapping… and Merge
   // into master list….
   await tabs.getByRole('tab', { name: 'Tool register' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Tool register', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Tool register', 'Setup'])
   assert.equal(await selectedTab(tabs), 'Setup', 'Setup stays open after adding the source')
   await tabs.getByRole('tab', { name: 'Tool register' }).click()
   const own = panelTitled(page, 'Tool register')
@@ -312,7 +313,7 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   await removeSource.getByRole('button', { name: 'Remove Tool register' }).click()
   await removeSource.waitFor({ state: 'detached' })
   await tabs.getByRole('tab', { name: 'Tool register' }).waitFor({ state: 'detached' })
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'])
   assert.equal(await sources.locator('tbody tr', { hasText: 'Tool register' }).count(), 0)
   const removed = await until(() => savedList(writes, (entry) => !entry.data.sources.some((source) => source.id === 'tool-register')), 'the source removed')
   assert.ok(removed.data.tools.some((tool) => tool.name === 'Polyspace'), 'its tools stay')
@@ -342,7 +343,7 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   await tabs.waitFor()
   // TVL-14: the remembered Master list tab ("tool-master") opens the Master list, not the Expiry list; the Windchill
   // source has its tab; Setup is last and shown to everyone.
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Windchill tools', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Windchill tools', 'Setup'])
   assert.equal(await selectedTab(tabs), 'Master list', 'the remembered tab')
   await panelTitled(page, 'Master list').locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   await tabs.getByRole('tab', { name: 'Expiry list' }).click()
@@ -376,7 +377,7 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   await master.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.match(await text(master.locator('tbody tr', { hasText: 'LabVIEW' })), /Not in source now/)
   // TVL-06: the Master list shows the period as "24 (default)" and the due date worked out with it.
-  assert.match(await text(master.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^SAS 9\\.4 ${await longDate(page, sasValidated)} \\(completion date\\) 24 \\(default\\) ${await longDate(page, sasDue)} Overdue / today \\(completion date \\+ 24 months \\(default\\)\\) In source`), 'TVL-29: from the Tool Validations query, whose mapping names no validation date: the completion date')
+  assert.match(await text(master.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^SAS 9\\.4 — ${await longDate(page, sasValidated)} \\(completion date\\) 24 \\(default\\) ${await longDate(page, sasDue)} Overdue / today \\(completion date \\+ 24 months \\(default\\)\\) In source`), 'TVL-29: from the Tool Validations query, whose mapping names no validation date: the completion date')
   assert.equal(await text(master.locator('.write-blocked')), reason)
   const add = master.getByRole('button', { name: '＋ Add tool…' })
   assert.ok(await add.isDisabled())
@@ -407,8 +408,8 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   assert.equal(await text(own.locator('.write-blocked')), reason)
   assert.ok(await own.getByRole('button', { name: 'Edit mapping…' }).isDisabled())
   assert.ok(await own.getByRole('button', { name: 'Merge into master list…' }).isDisabled())
-  // The Azure tab before a fetch: the usual fetch empty state.
-  await tabs.getByRole('tab', { name: 'Azure' }).click()
+  // The Tool List [TFS] tab before a fetch: the usual fetch empty state.
+  await tabs.getByRole('tab', { name: 'Tool List [TFS]' }).click()
   await page.getByText('“Tool Validations” has not been fetched yet.').waitFor()
   assert.equal(writes.filter((write) => write.path === 'tool-validations.json').length, 0, 'nothing written to the master list')
   assert.deepEqual(errors, [])
@@ -447,7 +448,7 @@ test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab,
   const writes = await mock(context, files)
   await page.reload()
   const tabs = await openToolValidations(page)
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'])
 
   // TVL-15: Setup → Tabs → ＋ Add tab… — a Table page named Open items.
   await tabs.getByRole('tab', { name: 'Setup' }).click()
@@ -471,7 +472,7 @@ test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab,
   assert.equal(lastWrite(writes, 'on-demand/open-items.json').data.name, 'Open items', 'the page is in Git as every On-Demand page')
   assert.deepEqual(lastWrite(writes, 'menu-layout.json').data.pages['open-items'], { type: 'table', group: 'on-demand', order: 1, icon: '▦', owners: [], hidden: true }, 'placed hidden: not in the menu')
   await tabs.getByRole('tab', { name: 'Open items' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Open items', 'Setup'], 'after the source tabs, before Setup')
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Open items', 'Setup'], 'after the source tabs, before Setup')
   assert.equal(await selectedTab(tabs), 'Setup', 'Setup stays open')
 
   // An On-Demand Dashboard tab.
@@ -485,7 +486,7 @@ test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab,
   saved = await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.length === 2), 'the second tab')
   assert.deepEqual(saved.data.tabs.map((tab) => `${tab.pageId}:${tab.kind}`), ['open-items:table', 'tool-dashboard:dashboard'])
   await tabs.getByRole('tab', { name: 'Tool dashboard' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Open items', 'Tool dashboard', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Open items', 'Tool dashboard', 'Setup'])
 
   // TVL-16: Rename… renames the tab and its page; ← moves the dashboard first.
   await tabsPanel.locator('tbody tr', { hasText: 'Open items' }).getByRole('button', { name: 'Rename…' }).click()
@@ -501,7 +502,7 @@ test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab,
   await left.click()
   await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.[0]?.pageId === 'tool-dashboard'), 'the tabs reordered')
   await tabsPanel.locator('tbody tr').first().filter({ hasText: 'Tool dashboard' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Tool dashboard', 'Open actions', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Tool dashboard', 'Open actions', 'Setup'])
   assert.ok(await tabsPanel.getByRole('button', { name: 'Move Tool dashboard left' }).isDisabled(), 'the first cannot move left')
   await shot(page, 'custom-tabs-setup')
 
@@ -576,7 +577,7 @@ test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab,
   await dialog.waitFor({ state: 'detached' })
   await until(() => lastWrite(writes, 'tool-validations.json', (entry) => !entry.data.tabs), 'no tabs left')
   await tabs.getByRole('tab', { name: 'Tool dashboard' }).waitFor({ state: 'detached' })
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'])
   assert.ok(files['dashboards/tool-dashboard.json'] && files['on-demand/tool-dashboard.json'], 'the kept page and its blocks stay in Git')
   assert.equal(JSON.parse(files['menu-layout.json']).pages['tool-dashboard'].hidden, true, 'hidden')
   assert.deepEqual(errors, [])
@@ -596,7 +597,7 @@ test('TC-TVL-13: a Team Member reads the owners’ tabs — the Table and the da
   await page.reload()
   const tabs = await openToolValidations(page)
   await tabs.getByRole('tab', { name: 'Open actions' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Tool dashboard', 'Open actions', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Tool dashboard', 'Open actions', 'Setup'])
   const menu = await text(page.locator('.sidebar nav'))
   for (const name of ['Open actions', 'Tool dashboard']) assert.equal(menu.includes(name), false, `${name} is not in the menu`)
   // The dashboard tab: the chart of the master list, built by the owners; the builder's buttons disabled with the reason.
@@ -645,7 +646,7 @@ test('TC-TVL-21: the Tool Owner makes a hidden page a tab again with ＋ Add exi
     'menu-layout.json': layoutWith({ 'old-actions': placed('table', 1, { owners: ['hand@example.com'], hidden: true }), 'team-notes': placed('table', 2) }),
   }
   const { page, context, errors, writes, tabs } = await openOwners(files)
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'])
   await tabs.getByRole('tab', { name: 'Setup' }).click()
   const tabsPanel = panelTitled(page, 'Tabs')
   const existing = tabsPanel.getByRole('button', { name: '＋ Add existing page as tab…' })
@@ -665,7 +666,7 @@ test('TC-TVL-21: the Tool Owner makes a hidden page a tab again with ＋ Add exi
   assert.deepEqual(layout.data.pages['old-actions'], placed('table', 1, { owners: ['hand@example.com', 'ana@example.com'], hidden: true, ownersFromList: ['ana@example.com'] }))
   assert.match(layout.message, /^Pages & menu: the co-owners of the Tool Validations list written to the page of Old actions/)
   await tabs.getByRole('tab', { name: 'Old actions' }).waitFor()
-  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Old actions', 'Setup'], 'after the source tabs, before Setup')
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Old actions', 'Setup'], 'after the source tabs, before Setup')
   assert.equal(await selectedTab(tabs), 'Setup', 'Setup stays open')
   await tabsPanel.locator('tbody tr', { hasText: '1 from the list · 1 added by hand' }).waitFor()
   // It is a tab now: no other hidden page is left to add.

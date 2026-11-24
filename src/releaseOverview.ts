@@ -4,7 +4,7 @@ import type { AppState, AzureWorkItem } from './domain'
 import type { AzureConnectionProfileSummary } from './azureCredentials.ts'
 import { releaseFor, releaseOf } from './releasePath.ts'
 import { allStreams, defaultStreams, profileForStream, profilesForStream, streamArea, streamOfProfile, streamsVersion, toolQueries, type ReleaseRule } from './streams.ts'
-import { toolMonthReport, toolQueryIndex } from './toolQueries.ts'
+import { statusLabelOf, statusText, toolMasterList, toolMasterVersion, toolMonthReport, toolMonthStatus, toolQueryIndex, type MasterTool } from './toolQueries.ts'
 import { cpMonthReport, cpNameIndex, cpSignatures, fieldReader } from './cpReporting.ts'
 import { countStreams, normalizeReleaseSourceSettings, releaseRegister, streamPatterns, viewMonthOf, type EnteredCounts } from './releaseSource.ts'
 import { viewSource } from './viewSources.ts'
@@ -131,16 +131,19 @@ export function toolReportFor(state: Pick<AppState, 'azureSources' | 'releaseSou
   if (!index) { index = toolQueryIndex(toolItems, toolColumns, documentItems, documentColumns, { completionField: settings?.completionField, patterns, timeZone }); byKey.set(key, index) }
   return { tools: queries.tools, documents: queries.documents, how: queries.how, toolSource: tools, documentSource: documents, report: toolMonthReport(index, month) }
 }
-function toolStream(found: NonNullable<ReturnType<typeof toolReportFor>>, name: string): ReleaseStream {
+// TVL-36: Tool Validations in Pulse Check, the Monthly pack and the cumulative chart count the master list's tools by
+// their Current Month Status (toolMonthStatus — the same rule as the Master list column and its count cards):
+// Completed = the tools Completed, Supported = the tools Supported; the drill-down lists those tools (name and version,
+// ID, status). `master`: the master list (default: this app's, toolMasterList()).
+export function toolStream(found: Pick<NonNullable<ReturnType<typeof toolReportFor>>, 'tools' | 'toolSource' | 'report'>, name: string, master: readonly MasterTool[] | undefined = toolMasterList()): ReleaseStream {
   const { report } = found
-  const completed = new Set(report.completed.map((row) => row.id))
-  const supported = new Map(report.supported.map((entry) => [entry.tool.id, entry]))
+  const status = toolMonthStatus(master, { report })
   return {
     id: found.tools.id, name, fetchedAt: found.toolSource?.fetchedAt ?? '',
-    releases: report.completed.map((row) => ({ name: row.label, release: '', documents: supported.get(row.id)?.documents ?? 0, ...(row.completionDate ? { approvalDate: row.completionDate } : {}) })),
+    releases: status.completed.map((row) => ({ name: statusLabelOf(row), release: '', documents: row.documents, ...(row.date ? { approvalDate: row.date } : {}) })),
     documents: report.signedDocuments,
-    titles: report.listed.map((row) => { const entry = supported.get(row.id); return { id: row.id, title: row.label, url: row.url, release: [completed.has(row.id) ? 'Completed' : '', entry ? `Supported · ${entry.documents} signed document${entry.documents === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), ...(entry?.date ?? row.completionDate ? { approvalDate: entry?.date ?? row.completionDate } : {}) } }),
-    supported: report.supported.length, supportedEntries: report.supported.map((entry) => ({ key: `tool:${entry.tool.id}`, label: entry.tool.label })),
+    titles: status.listed.map((row) => ({ id: row.id ?? 0, title: statusLabelOf(row), url: row.url ?? '', release: [row.id != null ? `ID ${row.id}` : '', statusText(row)].filter(Boolean).join(' · '), ...(row.date ? { approvalDate: row.date } : {}) })),
+    supported: status.supported.length, supportedEntries: status.supported.map((row) => ({ key: `tool:${row.id ?? row.key}`, label: statusLabelOf(row) })),
   }
 }
 
@@ -161,7 +164,8 @@ export function defaultStreamReleases(state: Pick<AppState, 'azureSources' | 're
   let byMonth = bySettings.get(state.releaseSourceSettings ?? none)
   if (!byMonth) { byMonth = new Map(); bySettings.set(state.releaseSourceSettings ?? none, byMonth) }
   // QV-60: my own naming patterns changing works the streams out again; STR-02: so does a custom stream added or changed.
-  const key = `${month}\u0000${timeZone ?? ''}\u0000${myPatternsVersion()}\u0000${streamsVersion()}`
+  // TVL-36: so does the master list of Tool Validations.
+  const key = `${month}\u0000${timeZone ?? ''}\u0000${myPatternsVersion()}\u0000${streamsVersion()}\u0000${toolMasterVersion()}`
   const cached = byMonth.get(key)
   if (cached) return cached
   const streams = computeStreams(state, profiles, month, timeZone)

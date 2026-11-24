@@ -41,15 +41,27 @@ export const kindLabel = (key: ToolSourceKind) => sourceKinds.find((entry) => en
 
 // The fields a source is read with (TVL-07). For Azure DevOps sources a field is a field reference name of the query's
 // columns or one of the special values below; for a Windchill export a column name; for an On-Demand page a column id.
-export type MappingField = 'name' | 'version' | 'validationDate' | 'validityPeriod' | 'dueDate'
-export const mappingFields: { key: MappingField; label: string; required?: boolean; help: string }[] = [
+export type MappingField = 'name' | 'version' | 'validationDate' | 'validityPeriod' | 'dueDate' | AzureField
+// TVL-34: the fields only an Azure DevOps source gives (the Tool List [TFS] query's columns) — the work item's ID and
+// its Source, State and Type columns, shown on the master list as ID, Used by, Validated and Type. Optional; guessed by
+// column name; locked like the other Azure DevOps values (TVL-30).
+export type AzureField = 'id' | 'usedBy' | 'validated' | 'type'
+export const azureFields: AzureField[] = ['id', 'usedBy', 'validated', 'type']
+export const isAzureField = (key: MappingField): key is AzureField => (azureFields as string[]).includes(key)
+// TVL-34: "None" chosen for an Azure DevOps field in Edit mapping — stored, so that a saved mapping is not guessed again.
+export const noField = '@none'
+export const mappingFields: { key: MappingField; label: string; required?: boolean; help: string; azureOnly?: boolean }[] = [
   { key: 'name', label: 'Tool name', required: true, help: 'The tool the row belongs to.' },
   { key: 'version', label: 'Version (optional)', help: 'Different versions of a tool are separate entries.' },
   { key: 'validationDate', label: 'Validation date (optional)', help: 'When the tool was validated; the latest of a tool’s rows is kept.' },
   { key: 'validityPeriod', label: 'Validity period (optional)', help: 'How long a validation stays valid: a number (in the unit below) or a text such as “24 months” or “2 years”.' },
   { key: 'dueDate', label: 'Due date (optional)', help: 'An explicit due date; it wins over validation date + validity period.' },
+  { key: 'id', label: 'ID (optional)', help: 'The Azure DevOps work item ID of the tool (System.Id): shown as ID and used for the Current Month Status.', azureOnly: true },
+  { key: 'usedBy', label: 'Used by (optional)', help: 'The query’s Source column: who uses the tool.', azureOnly: true },
+  { key: 'validated', label: 'Validated (optional)', help: 'The query’s State column.', azureOnly: true },
+  { key: 'type', label: 'Type (optional)', help: 'The query’s Type column (else the work item type).', azureOnly: true },
 ]
-export interface ToolMapping { name?: string; version?: string; validationDate?: string; validityPeriod?: string; dueDate?: string; periodUnit: 'months' | 'years'; confirmed: boolean }
+export interface ToolMapping { name?: string; version?: string; validationDate?: string; validityPeriod?: string; dueDate?: string; id?: string; usedBy?: string; validated?: string; type?: string; periodUnit: 'months' | 'years'; confirmed: boolean }
 export const specialFields: { key: string; label: string }[] = [
   { key: '@tool-name', label: 'Tool (the Tool Validations rule: Area Path folder, else the Title)' },
   { key: '@tool-version', label: 'Version (the Tool Validations rule: Iteration Path release, else the Title’s version)' },
@@ -84,7 +96,9 @@ export interface ToolSource { id: string; kind: ToolSourceKind; name: string; ca
 // The link of an entry to a source: whether the source held the tool when it was last read (TVL-04: "not in source now").
 export interface ToolLink { inSource: boolean }
 export type ManualField = 'name' | 'validationDate' | 'validityMonths' | 'dueDate'
-export interface ToolEntry { key: string; name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string; manual: ManualField[]; notes?: string; sources: Record<string, ToolLink>; addedAt: string; addedBy?: string; changedAt?: string; changedBy?: string }
+// TVL-34: id, usedBy, validated and type — from an Azure DevOps source only (the work item's ID, its Source, State and
+// Type columns); never entered by hand.
+export interface ToolEntry { key: string; name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string; id?: number; usedBy?: string; validated?: string; type?: string; manual: ManualField[]; notes?: string; sources: Record<string, ToolLink>; addedAt: string; addedBy?: string; changedAt?: string; changedBy?: string }
 // TVL-15, TVL-16: a tab the owners added — an On-Demand page (Table, Table + Insights or On-Demand Dashboard) shown only
 // as a tab of this page, by its page id, with the tab's name and the page type it was created as.
 export interface CustomTab { pageId: string; name: string; kind: PageKind }
@@ -287,6 +301,15 @@ function cleanSource(value: unknown): ToolSource | string {
   const mergedAt = stamp(raw.mergedAt), mergedBy = text(raw.mergedBy, 200)
   return { id, kind: sourceKind, name, ...(category ? { category } : {}), ...(ref && sourceKind !== 'stream' ? { ref } : {}), mapping: cleanMapping(raw.mapping), ...(mergedAt ? { mergedAt } : {}), ...(mergedBy ? { mergedBy } : {}) }
 }
+const textFields = ['usedBy', 'validated', 'type'] as const
+const workItemId = (value: unknown) => { const id = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value; return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : undefined }
+// TVL-34: the four Azure DevOps values of an entry or a tool read from a source, those present and valid.
+type Loose = { [key: string]: unknown }
+function azureValuesOf(raw: Loose): Pick<ToolEntry, AzureField> {
+  const id = workItemId(raw.id), values: Pick<ToolEntry, AzureField> = id ? { id } : {}
+  for (const field of textFields) { const found = text(raw[field], 200); if (found) values[field] = found }
+  return values
+}
 function cleanTool(value: unknown, sources: Set<string>): ToolEntry | string {
   const raw = record(value)
   if (!raw) return 'not an object'
@@ -306,9 +329,13 @@ function cleanTool(value: unknown, sources: Set<string>): ToolEntry | string {
   for (const [id, link] of Object.entries(links)) if (sources.has(id) && record(link)) linked[id] = { inSource: record(link)!.inSource === true }
   const manual = Array.isArray(raw.manual) ? manualFields.filter((field) => (raw.manual as unknown[]).includes(field)) : []
   const changedAt = stamp(raw.changedAt), addedBy = text(raw.addedBy, 200), changedBy = text(raw.changedBy, 200)
+  // TVL-34: the Azure DevOps ID (a whole number above 0) and the Used by, Validated and Type texts (up to 200 characters).
+  if (raw.id != null && !workItemId(raw.id)) return `its ID “${String(raw.id)}” is not an Azure DevOps work item ID`
+  for (const field of textFields) if (raw[field] != null && !text(raw[field], 200)) return `its ${field === 'usedBy' ? 'Used by' : field === 'validated' ? 'Validated' : 'Type'} is not a text of 1 to 200 characters`
   return {
     key: toolKey(name, version), name, version,
     ...(isDay(raw.validationDate) ? { validationDate: raw.validationDate } : {}), ...(typeof months === 'number' ? { validityMonths: months } : {}), ...(isDay(raw.dueDate) ? { dueDate: raw.dueDate } : {}),
+    ...azureValuesOf(raw),
     manual, ...(notes ? { notes } : {}), sources: linked, addedAt, ...(addedBy ? { addedBy } : {}), ...(changedAt ? { changedAt } : {}), ...(changedBy ? { changedBy } : {}),
   }
 }
@@ -388,7 +415,7 @@ export function parseToolValidations(input: string | null | undefined): Parsed {
 const sortTools = (tools: ToolEntry[]) => [...tools].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.version.localeCompare(b.version) || a.key.localeCompare(b.key))
 // The key is worked out from the name and version, never stored; fields in a fixed order so a change is a small diff.
 function toolJson(tool: ToolEntry) {
-  return { name: tool.name, version: tool.version, ...(tool.validationDate ? { validationDate: tool.validationDate } : {}), ...(tool.validityMonths ? { validityMonths: tool.validityMonths } : {}), ...(tool.dueDate ? { dueDate: tool.dueDate } : {}), ...(tool.manual.length ? { manual: manualFields.filter((field) => tool.manual.includes(field)) } : {}), ...(tool.notes ? { notes: tool.notes } : {}), sources: Object.fromEntries(Object.keys(tool.sources).sort().map((id) => [id, { inSource: tool.sources[id].inSource }])), addedAt: tool.addedAt, ...(tool.addedBy ? { addedBy: tool.addedBy } : {}), ...(tool.changedAt ? { changedAt: tool.changedAt } : {}), ...(tool.changedBy ? { changedBy: tool.changedBy } : {}) }
+  return { name: tool.name, version: tool.version, ...(tool.validationDate ? { validationDate: tool.validationDate } : {}), ...(tool.validityMonths ? { validityMonths: tool.validityMonths } : {}), ...(tool.dueDate ? { dueDate: tool.dueDate } : {}), ...azureValuesOf(tool as unknown as Loose), ...(tool.manual.length ? { manual: manualFields.filter((field) => tool.manual.includes(field)) } : {}), ...(tool.notes ? { notes: tool.notes } : {}), sources: Object.fromEntries(Object.keys(tool.sources).sort().map((id) => [id, { inSource: tool.sources[id].inSource }])), addedAt: tool.addedAt, ...(tool.addedBy ? { addedBy: tool.addedBy } : {}), ...(tool.changedAt ? { changedAt: tool.changedAt } : {}), ...(tool.changedBy ? { changedBy: tool.changedBy } : {}) }
 }
 function sourceJson(source: ToolSource) {
   const mapping = { ...Object.fromEntries(mappingFields.filter((field) => source.mapping[field.key]).map((field) => [field.key, source.mapping[field.key]])), periodUnit: source.mapping.periodUnit, confirmed: source.mapping.confirmed }
@@ -399,7 +426,7 @@ function sourceJson(source: ToolSource) {
 export const serializeToolValidations = (file: ToolValidationsFile) => `${JSON.stringify({ schema: 1, kind, defaultDays: file.defaultDays, owners: file.owners, ...(file.highlights ? { highlights: sortBands(file.highlights).map((band) => ({ days: band.days, colour: band.colour })) } : {}), sources: file.sources.map(sourceJson), ...(file.tabs?.length ? { tabs: file.tabs.map((tab) => ({ pageId: tab.pageId, name: tab.name, kind: tab.kind })) } : {}), tools: sortTools(file.tools).map(toolJson) }, null, 2)}\n`
 
 // ---- reading a source (TVL-07) ----
-export interface ToolInput { name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string }
+export interface ToolInput { name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string; id?: number; usedBy?: string; validated?: string; type?: string }
 const later = (a?: string, b?: string) => !a ? b : !b ? a : a >= b ? a : b
 // Rows of one tool (and version) are one entry: the latest validation date and due date; the period of the row with
 // the latest validation date, else the first one given.
@@ -411,7 +438,9 @@ export function aggregate(inputs: ToolInput[]): Map<string, ToolInput> {
     const key = toolKey(name, version), known = byKey.get(key)
     if (!known) { byKey.set(key, { ...input, name, version }); continue }
     const newer = Boolean(input.validationDate && (!known.validationDate || input.validationDate > known.validationDate))
-    byKey.set(key, { ...known, validationDate: later(known.validationDate, input.validationDate), dueDate: later(known.dueDate, input.dueDate), validityMonths: newer && input.validityMonths ? input.validityMonths : known.validityMonths ?? input.validityMonths })
+    // TVL-34: the ID, Used by, Validated and Type of the row with the latest validation date, else the first row's.
+    const mine = azureValuesOf(known as unknown as Loose), theirs = azureValuesOf(input as unknown as Loose)
+    byKey.set(key, { ...known, ...(newer ? { ...mine, ...theirs } : { ...theirs, ...mine }), validationDate: later(known.validationDate, input.validationDate), dueDate: later(known.dueDate, input.dueDate), validityMonths: newer && input.validityMonths ? input.validityMonths : known.validityMonths ?? input.validityMonths })
   }
   return byKey
 }
@@ -420,6 +449,10 @@ export function azureValue(item: AzureWorkItem, field: string | undefined, patte
   if (!field) return undefined
   if (field === completionSpecial) return completionDateOf(item, completionField || undefined)
   if (field === '@tool-name' || field === '@tool-version') { const release = releaseFor(item, 'tool', patterns); return field === '@tool-name' ? release?.name : release?.release }
+  if (field === noField) return undefined
+  if (field === 'System.Id') return String(item.id)
+  if (field === 'System.WorkItemType' && item.fields?.[field] == null) return item.workItemType || undefined
+  if (field === 'System.State' && item.fields?.[field] == null) return item.state || undefined
   if (field === '@title' || field === 'System.Title') return item.title
   if (field === '@approval') return item.approvalDate ?? approvalDateFrom(item.fields ?? {})
   if (field === 'System.AreaPath') return item.areaPath
@@ -432,7 +465,9 @@ export function inputsFromRows<R>(rows: R[], mapping: ToolMapping, read: (row: R
     const name = read(row, mapping.name)?.trim()
     if (!name) return []
     const validationDate = dayOf(read(row, mapping.validationDate)), dueDate = dayOf(read(row, mapping.dueDate)), validityMonths = monthsOf(read(row, mapping.validityPeriod), mapping.periodUnit)
-    return [{ name, version: read(row, mapping.version)?.trim() ?? '', ...(validationDate ? { validationDate } : {}), ...(validityMonths ? { validityMonths } : {}), ...(dueDate ? { dueDate } : {}) }]
+    const clean = (field: string | undefined) => read(row, field)?.replace(/\s+/g, ' ').trim().slice(0, 200)
+    const azure = azureValuesOf({ id: clean(mapping.id), usedBy: clean(mapping.usedBy), validated: clean(mapping.validated), type: clean(mapping.type) })
+    return [{ name, version: read(row, mapping.version)?.trim() ?? '', ...(validationDate ? { validationDate } : {}), ...(validityMonths ? { validityMonths } : {}), ...(dueDate ? { dueDate } : {}), ...azure }]
   })
 }
 // TVL-29: the tools of an Azure DevOps source (the Tool Validations query or another query) — read with its mapping, the
@@ -442,20 +477,35 @@ export function azureInputs(items: AzureWorkItem[], mapping: ToolMapping, patter
   return inputsFromRows(items, { ...mapping, validationDate: mapping.validationDate || completionSpecial }, (item, field) => azureValue(item, field, patterns, completionField))
 }
 // What a source offers to map: its fields or columns, as [key, label].
+// TVL-34: System.Id (the work item ID) is always offered, also when the query's rows carry it only as their ID.
 export function azureFieldOptions(items: AzureWorkItem[]): [string, string][] {
-  const refs = [...new Set(items.flatMap((item) => Object.keys(item.fields ?? {})))].sort()
+  const refs = [...new Set(['System.Id', ...items.flatMap((item) => Object.keys(item.fields ?? {}))])].sort()
   return [...specialFields.map((field): [string, string] => [field.key, field.label]), ...refs.map((ref): [string, string] => [ref, ref])]
 }
 // TVL-07: the guesses while a source's mapping has not been saved — the Tool Validations rule for the name and version
 // of an Azure DevOps source, the completion date for the validation date (TVL-29), Microsoft.VSTS.Scheduling.DueDate (else
 // TargetDate) for the due date when the query has it; for a Windchill export or a page, the column whose name fits.
 const guessColumn = (options: [string, string][], pattern: RegExp, not?: RegExp) => options.find(([, label]) => pattern.test(label) && !(not && not.test(label)))?.[0]
+// TVL-34: the Azure DevOps fields by column name — ID: System.Id; Used by: the column named Source; Validated: State;
+// Type: the column named Type, else System.WorkItemType. A reference name matches by its last part (Custom.Source,
+// System.State), letter case ignored; a custom column wins over a System one.
+const lastPart = (ref: string) => ref.slice(ref.lastIndexOf('.') + 1).toLowerCase()
+function byColumnName(options: [string, string][], name: string): string | undefined {
+  const found = options.filter(([key, label]) => !key.startsWith('@') && (lastPart(key) === name || label.trim().toLowerCase() === name))
+  return found.find(([key]) => !key.startsWith('System.'))?.[0] ?? found[0]?.[0]
+}
+export function guessAzureFields(options: [string, string][]): Pick<ToolMapping, AzureField> {
+  const has = (ref: string) => options.some(([key]) => key === ref)
+  const usedBy = byColumnName(options, 'source'), validated = byColumnName(options, 'state')
+  const type = byColumnName(options, 'type') ?? (has('System.WorkItemType') ? 'System.WorkItemType' : undefined)
+  return { id: 'System.Id', ...(usedBy ? { usedBy } : {}), ...(validated ? { validated } : {}), ...(type ? { type } : {}) }
+}
 export function guessMapping(sourceKind: ToolSourceKind, options: [string, string][]): ToolMapping {
   if (sourceKind === 'stream' || sourceKind === 'azure') {
     const has = (ref: string) => options.some(([key]) => key === ref)
     const due = has('Microsoft.VSTS.Scheduling.DueDate') ? 'Microsoft.VSTS.Scheduling.DueDate' : has('Microsoft.VSTS.Scheduling.TargetDate') ? 'Microsoft.VSTS.Scheduling.TargetDate' : undefined
     const period = guessColumn(options.filter(([key]) => !key.startsWith('@')), /validity|valid\w*\s*period|revalidat\w*\s*(period|interval)/i)
-    return { name: '@tool-name', version: '@tool-version', validationDate: completionSpecial, ...(period ? { validityPeriod: period } : {}), ...(due ? { dueDate: due } : {}), periodUnit: 'months', confirmed: false }
+    return { name: '@tool-name', version: '@tool-version', validationDate: completionSpecial, ...(period ? { validityPeriod: period } : {}), ...(due ? { dueDate: due } : {}), ...guessAzureFields(options), periodUnit: 'months', confirmed: false }
   }
   const name = guessColumn(options, /^(tool(\s*name)?|name|title)$/i) ?? guessColumn(options, /tool|name|title/i)
   const version = guessColumn(options, /version|^rev(ision)?$/i)
@@ -465,7 +515,22 @@ export function guessMapping(sourceKind: ToolSourceKind, options: [string, strin
   return { ...(name ? { name } : {}), ...(version ? { version } : {}), ...(validationDate ? { validationDate } : {}), ...(validityPeriod ? { validityPeriod } : {}), ...(dueDate ? { dueDate } : {}), periodUnit: 'months', confirmed: false }
 }
 // The mapping a source is read with: the saved one, else the guesses.
-export const mappingFor = (source: ToolSource, options: [string, string][]) => source.mapping.confirmed ? source.mapping : guessMapping(source.kind, options)
+// TVL-34: a mapping saved before the Azure DevOps fields existed names none of them — they are guessed until it is saved
+// again (None is then kept as "@none").
+export function mappingFor(source: ToolSource, options: [string, string][]): ToolMapping {
+  if (!source.mapping.confirmed) return guessMapping(source.kind, options)
+  if (!isAzureKind(source.kind) || azureFields.some((field) => source.mapping[field])) return source.mapping
+  return { ...source.mapping, ...guessAzureFields(options) }
+}
+// TVL-35: with one query (no Validation Documents query) — the master list keys of the tools named by the query's rows
+// of the month (`monthItems`: the rows with a document in the month), read with the Tool Validations query's mapping.
+export function monthToolKeys(file: Pick<ToolValidationsFile, 'sources'>, monthItems: AzureWorkItem[], patterns: NamingPattern[] = []): Set<string> {
+  const source = file.sources.find((entry) => entry.id === streamSourceId)
+  if (!source || !monthItems.length) return new Set()
+  return new Set(azureInputs(monthItems, mappingFor(source, azureFieldOptions(monthItems)), patterns).map((input) => toolKey(input.name, input.version)))
+}
+// TVL-34: whether a field is mapped (a field set to None reads as not mapped).
+export const mapped = (mapping: ToolMapping, key: MappingField) => { const value = mapping[key]; return value && value !== noField ? value : undefined }
 // TVL-29: whether a source dates its tools with the completion date — an Azure DevOps source whose mapping names no
 // other Validation date (the guess names the completion date).
 export const readsCompletion = (source: Pick<ToolSource, 'kind' | 'mapping'>) => isAzureKind(source.kind) && (!source.mapping.confirmed || !source.mapping.validationDate || source.mapping.validationDate === completionSpecial)
@@ -509,6 +574,8 @@ export function mergeSource(file: ToolValidationsFile, sourceId: string, inputs:
     if (!next.manual.includes('validationDate') && input.validationDate) next.validationDate = input.validationDate
     if (!next.manual.includes('validityMonths') && input.validityMonths) next.validityMonths = input.validityMonths
     if (!next.manual.includes('dueDate') && input.dueDate) next.dueDate = input.dueDate
+    // TVL-34: the ID, Used by, Validated and Type come from Azure DevOps only — its values win; a blank never clears one.
+    if (fromAzure) Object.assign(next, azureValuesOf(input as unknown as Loose))
     const changed = JSON.stringify(toolJson(next)) !== JSON.stringify(toolJson(entry))
     if (changed) updated.push(entry.name)
     return changed ? next : entry
@@ -516,7 +583,7 @@ export function mergeSource(file: ToolValidationsFile, sourceId: string, inputs:
   for (const [key, input] of incoming) {
     if (tools.length >= maxTools) break
     added.push(input.name)
-    tools.push({ key, name: input.name, version: input.version, ...(input.validationDate ? { validationDate: input.validationDate } : {}), ...(input.validityMonths ? { validityMonths: input.validityMonths } : {}), ...(input.dueDate ? { dueDate: input.dueDate } : {}), manual: [], sources: { [sourceId]: { inSource: true } }, addedAt: at, ...(by ? { addedBy: by } : {}) })
+    tools.push({ key, name: input.name, version: input.version, ...(input.validationDate ? { validationDate: input.validationDate } : {}), ...(input.validityMonths ? { validityMonths: input.validityMonths } : {}), ...(input.dueDate ? { dueDate: input.dueDate } : {}), ...(fromAzure ? azureValuesOf(input as unknown as Loose) : {}), manual: [], sources: { [sourceId]: { inSource: true } }, addedAt: at, ...(by ? { addedBy: by } : {}) })
   }
   if (!added.length && !updated.length && !gone.length) return { file, added, updated, gone }
   return { file: { ...file, tools: sortTools(tools) }, added, updated, gone }
@@ -572,6 +639,7 @@ export function saveTool(file: ToolValidationsFile, edit: ToolEdit, at: string, 
   const entry: ToolEntry = {
     key: toolKey(name, version), name, version,
     ...(values.validationDate ? { validationDate: values.validationDate } : {}), ...(values.validityMonths ? { validityMonths: values.validityMonths } : {}), ...(values.dueDate ? { dueDate: values.dueDate } : {}),
+    ...(current ? azureValuesOf(current as unknown as Loose) : {}),
     manual: manualFields.filter((field) => manual.has(field)), ...(edit.notes.trim() ? { notes: edit.notes.trim() } : {}),
     sources: current?.sources ?? {}, addedAt: current?.addedAt ?? at, ...(current?.addedBy || !current ? { addedBy: current?.addedBy ?? by } : {}), ...(current ? { changedAt: at, changedBy: by } : {}),
   }
@@ -630,32 +698,36 @@ export function removeSource(file: ToolValidationsFile, id: string): ToolValidat
   return { ...file, sources: file.sources.filter((source) => source.id !== id), tools: file.tools.map((entry) => { if (!entry.sources[id]) return entry; const sources = { ...entry.sources }; delete sources[id]; return { ...entry, sources } }) }
 }
 // ---- TVL-14: the tabs of the Tool Validations page ----
-// Expiry list (opens first: the tiles and the expiry table), Master list (only the master list table), Azure (the Tool
-// Validations query: its releases of the month and its rows), then one tab per other source in the order added — a
-// removed source's tab goes with it — and Setup last (the sources and the team settings). Tabs of a later kind (e.g.
-// custom pages of the owners) go in `between`: after the source tabs, before Setup.
-export const toolTabExpiry = 'tool-expiry', toolTabMaster = 'tool-master', toolTabAzure = 'tool-azure', toolTabSetup = 'tool-setup'
+// Expiry list (opens first: the tiles and the expiry table), Master list (only the master list table), Tool List [TFS]
+// (the Tools query's rows) and Validation Documents [TFS] (the Signed documents query's rows — only when Tool
+// Validations reads two queries), then one tab per other source in the order added — a removed source's tab goes with
+// it — and Setup last (the sources and the team settings). Tabs of a later kind (e.g. custom pages of the owners) go in
+// `between`: after the source tabs, before Setup. There is no Releases table any more (TVL-14, v10.23).
+export const toolTabExpiry = 'tool-expiry', toolTabMaster = 'tool-master', toolTabTools = 'tool-tfs-tools', toolTabDocuments = 'tool-tfs-documents', toolTabSetup = 'tool-setup'
+export const toolListTabLabel = 'Tool List [TFS]', documentsTabLabel = 'Validation Documents [TFS]'
 export const toolSourceTab = (id: string) => `tool-source:${id}`
 export const customTabKey = (pageId: string) => `tool-tab:${pageId}`
 export interface ToolTab { key: string; label: string; source?: ToolSource; custom?: CustomTab }
 // TVL-15: the owners' tabs in their order — passed to toolTabs as `between`.
 export const customToolTabs = (file: Pick<ToolValidationsFile, 'tabs'>): ToolTab[] => (file.tabs ?? []).map((tab) => ({ key: customTabKey(tab.pageId), label: tab.name, custom: tab }))
-export const toolTabs = (file: Pick<ToolValidationsFile, 'sources'>, between: ToolTab[] = []): ToolTab[] => [
-  { key: toolTabExpiry, label: 'Expiry list' }, { key: toolTabMaster, label: 'Master list' }, { key: toolTabAzure, label: 'Azure' },
+export const toolTabs = (file: Pick<ToolValidationsFile, 'sources'>, between: ToolTab[] = [], documents = true): ToolTab[] => [
+  { key: toolTabExpiry, label: 'Expiry list' }, { key: toolTabMaster, label: 'Master list' }, { key: toolTabTools, label: toolListTabLabel },
+  ...(documents ? [{ key: toolTabDocuments, label: documentsTabLabel }] : []),
   ...file.sources.filter((source) => source.id !== streamSourceId).map((source) => ({ key: toolSourceTab(source.id), label: source.name, source })),
   ...between,
   { key: toolTabSetup, label: 'Setup' },
 ]
-// The tabs remembered before v10.13 (Releases "main", Source data "raw") open the Azure tab; every other kept key that
-// still exists opens its tab ("tool-expiry" the Expiry list, "tool-master" the Master list, "tool-setup" Setup); a tab
-// that no longer exists (a removed source) or an unknown key opens the Expiry list.
-const oldToolTabs: Record<string, string> = { main: toolTabAzure, raw: toolTabAzure }
+// The tabs remembered before v10.13 (Releases "main", Source data "raw") and the Azure tab of v10.13…v10.22
+// ("tool-azure") open Tool List [TFS]; every other kept key that still exists opens its tab ("tool-expiry" the Expiry
+// list, "tool-master" the Master list, "tool-setup" Setup); a tab that no longer exists (a removed source, Validation
+// Documents [TFS] with one query) or an unknown key opens the Expiry list.
+const oldToolTabs: Record<string, string> = { main: toolTabTools, raw: toolTabTools, 'tool-azure': toolTabTools }
 export function openToolTab(chosen: string, keys: string[]): string {
   const key = oldToolTabs[chosen] ?? chosen
   return keys.includes(key) ? key : toolTabExpiry
 }
 // ---- TVL-15, TVL-16: the owners' tabs — add, rename, reorder (← →), remove ----
-const fixedTabNames = ['expiry list', 'master list', 'azure', 'setup']
+const fixedTabNames = ['expiry list', 'master list', toolListTabLabel.toLowerCase(), documentsTabLabel.toLowerCase(), 'setup']
 // Why a tab name cannot be used ('' when it can): 1 to 40 characters, not the name of another tab of the page.
 export function tabNameProblem(file: Pick<ToolValidationsFile, 'tabs' | 'sources'>, name: string, except = '') {
   const clean = name.replace(/\s+/g, ' ').trim()

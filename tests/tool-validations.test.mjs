@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addMonths, addSource, aggregate, azureFieldOptions, azureInputs, azureLock, completionDated, dueFromText, azureValue, cleanDays, dayOf, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile, addTab, addTabReason, customTabKey, customToolTabs, maxCustomTabs, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, defaultHighlights, highlightColours, highlightsProblem, maxHighlights, setHighlights, sortBands, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories } from '../src/toolValidations.ts'
+import { addMonths, addSource, aggregate, azureFieldOptions, azureInputs, azureLock, completionDated, dueFromText, azureValue, cleanDays, dayOf, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile, addTab, addTabReason, customTabKey, customToolTabs, maxCustomTabs, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, defaultHighlights, highlightColours, highlightsProblem, maxHighlights, setHighlights, sortBands, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories, guessAzureFields, noField, mapped } from '../src/toolValidations.ts'
 import { pagesOfFile, fileLabel } from '../src/gitWatch.ts'
 
 // TVL-01…TVL-13: the Tool Validations master list (tool-validations.json in Git), its sources, merges and expiry view.
@@ -146,21 +146,21 @@ test('TVL-07: each source is read with its field mapping — the guesses until i
   const options = azureFieldOptions(items)
   assert.deepEqual(options.slice(0, 4).map(([key]) => key), ['@tool-name', '@tool-version', '@title', '@approval'])
   const guessed = guessMapping('stream', options)
-  assert.deepEqual(guessed, { name: '@tool-name', version: '@tool-version', validationDate: '@completion', validityPeriod: 'Custom.ValidityPeriod', dueDate: 'Microsoft.VSTS.Scheduling.DueDate', periodUnit: 'months', confirmed: false })
+  assert.deepEqual(guessed, { name: '@tool-name', version: '@tool-version', validationDate: '@completion', validityPeriod: 'Custom.ValidityPeriod', dueDate: 'Microsoft.VSTS.Scheduling.DueDate', id: 'System.Id', periodUnit: 'months', confirmed: false })
   assert.deepEqual(guessMapping('azure', options.filter(([key]) => key !== 'Microsoft.VSTS.Scheduling.DueDate').concat([['Microsoft.VSTS.Scheduling.TargetDate', 'Microsoft.VSTS.Scheduling.TargetDate']])).dueDate, 'Microsoft.VSTS.Scheduling.TargetDate', 'else the Target Date')
   assert.equal(azureValue(items[0], '@tool-name'), 'Minitab')
   assert.equal(azureValue(items[0], '@tool-version'), '21')
   const inputs = inputsFromRows(items, { ...guessed, validationDate: '@approval' }, (item, field) => azureValue(item, field))
   assert.deepEqual([...aggregate(inputs).values()], [
-    { name: 'Minitab', version: '21', validationDate: '2025-02-01', validityMonths: 24, dueDate: '2027-01-15' },
-    { name: 'Python', version: '3.11' },
-  ])
+    { name: 'Minitab', version: '21', validationDate: '2025-02-01', validityMonths: 24, dueDate: '2027-01-15', id: 2 },
+    { name: 'Python', version: '3.11', id: 3 },
+  ], 'TVL-34: the ID of the row with the latest validation date')
   // A Windchill export or a page: the columns whose names fit.
   const columns = [['Number', 'Number'], ['Tool Name', 'Tool Name'], ['Version', 'Version'], ['Validation Date', 'Validation Date'], ['Validity (years)', 'Validity (years)'], ['Next Validation Due', 'Next Validation Due']]
   assert.deepEqual(guessMapping('windchill', columns), { name: 'Tool Name', version: 'Version', validationDate: 'Validation Date', validityPeriod: 'Validity (years)', dueDate: 'Next Validation Due', periodUnit: 'months', confirmed: false })
   // Saved: the mapping is used as saved, guesses no longer.
   const file = setMapping(parseToolValidations(null).file, streamSourceId, { name: '@title', periodUnit: 'years', confirmed: false })
-  assert.deepEqual(mappingFor(file.sources[0], options), { name: '@title', periodUnit: 'years', confirmed: true })
+  assert.deepEqual(mappingFor(file.sources[0], options), { name: '@title', periodUnit: 'years', confirmed: true, id: 'System.Id' }, 'TVL-34: a mapping saved before ID, Used by, Validated and Type guesses those')
 })
 
 test('TVL-10, TVL-11: tools added, corrected and removed by hand; only the Tool Owner and the co-owners, never without the roles (TC-TVL-06)', () => {
@@ -201,23 +201,25 @@ test('GIT-17, TVL-02: two saves of the master list are merged — tools by tool,
   assert.equal(fileLabel('tool-validations.json', 'planning-data.json'), 'Tool Validations master list')
 })
 
-test('TVL-14: the tabs — Expiry list first, Master list, Azure, then one per other source in the order added, Setup last; a removed source loses its tab; the tabs remembered before open where their content is now — unknown ones on the Expiry list; room for later tabs before Setup (TC-TVL-09)', () => {
+test('TVL-14: the tabs — Expiry list first, Master list, Tool List [TFS], Validation Documents [TFS] (two queries only), then one per other source in the order added, Setup last; a removed source loses its tab; the tabs remembered before (Azure too) open where their content is now — unknown ones on the Expiry list; room for later tabs before Setup (TC-TVL-09)', () => {
   let file = parseToolValidations(null).file
-  assert.deepEqual(toolTabs(file).map((tab) => tab.label), ['Expiry list', 'Master list', 'Azure', 'Setup'], 'the Tool Validations query is the Azure tab, not a tab of its own; Setup is always there')
+  assert.deepEqual(toolTabs(file).map((tab) => tab.label), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Validation Documents [TFS]', 'Setup'], 'the two queries are two tabs; no Azure tab; Setup is always there')
+  assert.deepEqual(toolTabs(file, [], false).map((tab) => tab.label), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Setup'], 'one query: Tool List [TFS] only')
   file = addSource(file, { kind: 'windchill', name: 'Windchill tools', ref: 'wc-1', mapping: guessMapping('windchill', []) })
   file = addSource(file, { kind: 'ondemand', name: 'Tool register', ref: 'tool-register', mapping: guessMapping('ondemand', []) })
   file = addSource(file, { kind: 'azure', name: 'Lab tools', ref: 'lab', mapping: guessMapping('azure', []) })
   const tabs = toolTabs(file)
-  assert.deepEqual(tabs.map((tab) => tab.label), ['Expiry list', 'Master list', 'Azure', 'Windchill tools', 'Tool register', 'Lab tools', 'Setup'], 'in the order added, Setup last')
-  assert.deepEqual(tabs.map((tab) => tab.key), ['tool-expiry', 'tool-master', 'tool-azure', 'tool-source:windchill-tools', 'tool-source:tool-register', 'tool-source:lab-tools', 'tool-setup'])
-  assert.equal(tabs[4].source.ref, 'tool-register')
+  assert.deepEqual(tabs.map((tab) => tab.label), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Validation Documents [TFS]', 'Windchill tools', 'Tool register', 'Lab tools', 'Setup'], 'in the order added, Setup last')
+  assert.deepEqual(tabs.map((tab) => tab.key), ['tool-expiry', 'tool-master', 'tool-tfs-tools', 'tool-tfs-documents', 'tool-source:windchill-tools', 'tool-source:tool-register', 'tool-source:lab-tools', 'tool-setup'])
+  assert.equal(tabs[5].source.ref, 'tool-register')
   const keys = tabs.map((tab) => tab.key)
   assert.equal(openToolTab('', keys), 'tool-expiry', 'nothing remembered: the Expiry list')
   assert.equal(openToolTab('tool-source:tool-register', keys), 'tool-source:tool-register', 'the last tab, remembered')
   assert.equal(openToolTab('tool-setup', keys), 'tool-setup', 'Setup, remembered')
-  for (const [old, now] of [['main', 'tool-azure'], ['raw', 'tool-azure'], ['tool-expiry', 'tool-expiry'], ['tool-master', 'tool-master'], ['tool-setup', 'tool-setup']]) assert.equal(openToolTab(old, keys), now, `the old tab ${old}`)
+  for (const [old, now] of [['main', 'tool-tfs-tools'], ['raw', 'tool-tfs-tools'], ['tool-azure', 'tool-tfs-tools'], ['tool-tfs-documents', 'tool-tfs-documents'], ['tool-expiry', 'tool-expiry'], ['tool-master', 'tool-master'], ['tool-setup', 'tool-setup']]) assert.equal(openToolTab(old, keys), now, `the old tab ${old}`)
+  assert.equal(openToolTab('tool-tfs-documents', toolTabs(file, [], false).map((tab) => tab.key)), 'tool-expiry', 'Validation Documents [TFS] remembered, one query now: the Expiry list')
   const fewer = toolTabs(removeSource(file, 'tool-register')).map((tab) => tab.key)
-  assert.deepEqual(fewer, ['tool-expiry', 'tool-master', 'tool-azure', 'tool-source:windchill-tools', 'tool-source:lab-tools', 'tool-setup'], 'the removed source loses its tab')
+  assert.deepEqual(fewer, ['tool-expiry', 'tool-master', 'tool-tfs-tools', 'tool-tfs-documents', 'tool-source:windchill-tools', 'tool-source:lab-tools', 'tool-setup'], 'the removed source loses its tab')
   assert.equal(openToolTab('tool-source:tool-register', fewer), 'tool-expiry', 'a remembered tab that is gone: the Expiry list')
   assert.equal(openToolTab('something-else', fewer), 'tool-expiry')
   assert.deepEqual(toolTabs(file, [{ key: 'tool-page:checklist', label: 'Checklist' }]).map((tab) => tab.key).slice(-3), ['tool-source:lab-tools', 'tool-page:checklist', 'tool-setup'], 'later tabs go after the sources, before Setup')
@@ -240,16 +242,16 @@ test('TVL-15, TVL-16: the owners’ tabs in tool-validations.json — validated 
   const text = serializeToolValidations(read.file)
   assert.deepEqual(JSON.parse(text).tabs, [tab('checklist', 'Checklist'), tab('tool-dash', 'Tool dashboard', 'dashboard')], 'written in their order')
   assert.deepEqual(parseToolValidations(text).file.tabs, read.file.tabs, 'round trip')
-  // TVL-15: the tab row — Expiry list · Master list · Azure · source tabs · the owners' tabs · Setup.
+  // TVL-15: the tab row — Expiry list · Master list · Tool List [TFS] · Validation Documents [TFS] · source tabs · the owners' tabs · Setup.
   let file = addSource(read.file, { kind: 'windchill', name: 'Windchill tools', ref: 'wc-1', mapping: guessMapping('windchill', []) })
-  assert.deepEqual(toolTabs(file, customToolTabs(file)).map((entry) => entry.label), ['Expiry list', 'Master list', 'Azure', 'Windchill tools', 'Checklist', 'Tool dashboard', 'Setup'])
+  assert.deepEqual(toolTabs(file, customToolTabs(file)).map((entry) => entry.label), ['Expiry list', 'Master list', 'Tool List [TFS]', 'Validation Documents [TFS]', 'Windchill tools', 'Checklist', 'Tool dashboard', 'Setup'])
   assert.equal(customToolTabs(file)[1].key, customTabKey('tool-dash'))
   assert.equal(customToolTabs(file)[1].custom.kind, 'dashboard')
   assert.equal(openToolTab(customTabKey('tool-dash'), toolTabs(file, customToolTabs(file)).map((entry) => entry.key)), 'tool-tab:tool-dash', 'a remembered owners’ tab opens')
   assert.equal(openToolTab(customTabKey('gone'), toolTabs(file, customToolTabs(file)).map((entry) => entry.key)), 'tool-expiry', 'a removed one opens the Expiry list')
   // Names: 1 to 40 characters, not the name of another tab of the page (fixed tabs, sources, owners' tabs; case ignored).
   assert.equal(tabNameProblem(file, 'Open items'), '')
-  for (const name of ['expiry list', 'SETUP', 'Azure', 'windchill tools', 'checklist']) assert.match(tabNameProblem(file, name), /already has a tab named/, name)
+  for (const name of ['expiry list', 'SETUP', 'tool list [tfs]', 'Validation Documents [TFS]', 'windchill tools', 'checklist']) assert.match(tabNameProblem(file, name), /already has a tab named/, name)
   assert.equal(tabNameProblem(file, 'Checklist', 'checklist'), '', 'its own name when renamed')
   assert.match(tabNameProblem(file, ' '), /Enter a tab name of up to 40 characters/)
   assert.match(tabNameProblem(file, 'x'.repeat(41)), /up to 40/)
@@ -588,4 +590,51 @@ test('GIT-17, TVL-32: two saves merged — a category changed in one save and a 
   const theirsList = withCategorySources([register({ category: 'tools', name: 'Register list' })], [tool('Minitab', '21')])
   assert.equal(parseToolValidations(mergeToolValidationsText(base, mine, theirsList, false)).file.sources.find((source) => source.id === 'register').category, 'tools', 'the later save wins')
   assert.equal(parseToolValidations(mergeToolValidationsText(base, mine, theirsList, true)).file.sources.find((source) => source.id === 'register').category, 'documents')
+})
+
+test('TVL-34: ID, Used by, Validated and Type guessed by column name — System.Id, Source, State, Type (else the work item type); editable, None kept; Azure DevOps sources only (TC-TVL-32)', () => {
+  const options = (...refs) => refs.map((ref) => [ref, ref])
+  assert.deepEqual(guessAzureFields(options('System.Id', 'Custom.Source', 'System.State', 'Custom.Type', 'System.WorkItemType')), { id: 'System.Id', usedBy: 'Custom.Source', validated: 'System.State', type: 'Custom.Type' })
+  assert.deepEqual(guessAzureFields(options('System.State', 'Custom.State', 'System.WorkItemType')), { id: 'System.Id', validated: 'Custom.State', type: 'System.WorkItemType' }, 'a custom column wins; no Type column: the work item type')
+  assert.deepEqual(guessAzureFields([['Custom.UsedBySource', 'Source']]), { id: 'System.Id', usedBy: 'Custom.UsedBySource' }, 'by the column’s display name too')
+  assert.deepEqual(guessAzureFields([]), { id: 'System.Id' })
+  assert.equal(guessMapping('windchill', options('Source', 'State', 'Type')).usedBy, undefined, 'a Windchill export or a page gives none')
+  // Read with the mapping: the work item's ID, the columns' values (spaces folded).
+  const items = [doc(41, 'DHP\\Tool Validations\\Minitab', 'DHP\\Release 21', 'Minitab 21', { 'Custom.Source': '  Lab   A ', 'System.State': 'Validated', 'Custom.Type': 'Statistics' })]
+  const mapping = guessMapping('stream', azureFieldOptions(items))
+  assert.deepEqual(azureInputs(items, mapping).map(({ id, usedBy, validated, type }) => ({ id, usedBy, validated, type })), [{ id: 41, usedBy: 'Lab A', validated: 'Validated', type: 'Statistics' }])
+  // None chosen in Edit mapping is saved as "@none" and read as not mapped; it is not guessed again.
+  const file = setMapping(emptyFile(), streamSourceId, { ...mapping, type: noField })
+  assert.equal(mappingFor(file.sources[0], azureFieldOptions(items)).type, noField)
+  assert.equal(mapped(mappingFor(file.sources[0], azureFieldOptions(items)), 'type'), undefined)
+  assert.equal(azureInputs(items, file.sources[0].mapping)[0].type, undefined)
+  assert.deepEqual(parseToolValidations(serializeToolValidations(file)).file.sources[0].mapping, { ...mapping, type: noField, confirmed: true }, 'the mapping round trip')
+})
+
+test('TVL-34: the four values kept in tool-validations.json — read strictly, written, merged from Azure DevOps (Azure wins, a blank never clears) and in two saves (GIT-17) (TC-TVL-32)', () => {
+  const read = parseToolValidations(fileWith([
+    tool('Minitab', '21', { id: 41, usedBy: 'Lab A', validated: 'Validated', type: 'Statistics' }),
+    tool('JMP', '17', { id: '42' }),
+    tool('Bad', '1', { id: -3 }), tool('Worse', '1', { usedBy: 7 }), tool('Long', '1', { type: 'x'.repeat(201) }),
+  ]))
+  assert.deepEqual(read.file.tools.map(({ name, id, usedBy, validated, type }) => ({ name, id, usedBy, validated, type })), [{ name: 'JMP', id: 42, usedBy: undefined, validated: undefined, type: undefined }, { name: 'Minitab', id: 41, usedBy: 'Lab A', validated: 'Validated', type: 'Statistics' }])
+  assert.deepEqual(read.refused.map((entry) => `${entry.name}: ${entry.reason}`), ['Bad: its ID “-3” is not an Azure DevOps work item ID', 'Worse: its Used by is not a text of 1 to 200 characters', 'Long: its Type is not a text of 1 to 200 characters'])
+  const text = serializeToolValidations(read.file)
+  assert.deepEqual(Object.keys(JSON.parse(text).tools.find((entry) => entry.name === 'Minitab')), ['name', 'version', 'id', 'usedBy', 'validated', 'type', 'sources', 'addedAt'], 'written after the dates, in a fixed order')
+  assert.equal(serializeToolValidations(parseToolValidations(text).file), text, 'round trip')
+  // Merged from the Tool Validations query: Azure DevOps wins; a blank does not clear; another kind of source gives none.
+  const merged = mergeSource(read.file, streamSourceId, [{ name: 'Minitab', version: '21', id: 41, validated: 'Retired' }, { name: 'Python', version: '3.11', id: 43, type: 'Language' }], at).file
+  assert.deepEqual(merged.tools.filter((entry) => entry.name !== 'JMP').map(({ name, id, usedBy, validated, type }) => ({ name, id, usedBy, validated, type })), [{ name: 'Minitab', id: 41, usedBy: 'Lab A', validated: 'Retired', type: 'Statistics' }, { name: 'Python', id: 43, usedBy: undefined, validated: undefined, type: 'Language' }])
+  const withWindchill = addSource(merged, { kind: 'windchill', name: 'Windchill tools', ref: 'wc-1', mapping: guessMapping('windchill', []), category: 'tools' })
+  const fromWindchill = mergeSource(withWindchill, 'windchill-tools', [{ name: 'Excel', version: '365', id: 99, type: 'Spreadsheet' }], at).file
+  assert.deepEqual(['id', 'type'].map((key) => fromWindchill.tools.find((entry) => entry.name === 'Excel')[key]), [undefined, undefined], 'only Azure DevOps gives them')
+  // A note saved by hand keeps them (TVL-30: the rest is locked).
+  const noted = saveTool(merged, { ...editOf(merged.tools.find((entry) => entry.name === 'Minitab')), notes: 'checked' }, at, 'me', toolKey('Minitab', '21'))
+  assert.equal(noted.tools.find((entry) => entry.name === 'Minitab').usedBy, 'Lab A')
+  // GIT-17: one save brought the values, the other a note on another tool — both kept.
+  const base = serializeToolValidations(parseToolValidations(fileWith([tool('Minitab', '21'), tool('JMP', '17')])).file)
+  const mine = serializeToolValidations(mergeSource(parseToolValidations(base).file, streamSourceId, [{ name: 'Minitab', version: '21', id: 41, usedBy: 'Lab A' }, { name: 'JMP', version: '17' }], at).file)
+  const theirs = serializeToolValidations(saveTool(parseToolValidations(base).file, { ...editOf(parseToolValidations(base).file.tools[0]), notes: 'checked' }, at, 'them', toolKey('JMP', '17')))
+  const both = parseToolValidations(mergeToolValidationsText(base, mine, theirs, false)).file
+  assert.deepEqual(both.tools.map((entry) => `${entry.name}:${entry.id ?? ''}:${entry.usedBy ?? ''}:${entry.notes ?? ''}`), ['JMP:::checked', 'Minitab:41:Lab A:'])
 })

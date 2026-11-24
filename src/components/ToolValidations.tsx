@@ -6,9 +6,10 @@ import { onDemandPath, renamePage } from '../onDemand'
 import { createPage, type MenuLayoutStore } from '../useMenuLayout'
 import { usePageNameClash } from '../usePageNames'
 import { utcToday } from '../businessTime'
-import { formatDate, formatDateTime } from '../format'
+import { formatDate, formatDateTime, monthName } from '../format'
+import { statusText, type ToolMonthStatus, type ToolStatusRow } from '../toolQueries'
 import { windchillCell } from '../windchillViews'
-import { addSource, emptyMapping, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories, type SourceCategory, azureFieldOptions, azureInputs, azureLock, completionDated, completionNote, dueFromText, isAzureKind, readsCompletion, cleanDays, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, hiddenPageChoices, listReason, parseToolValidations, tabOwnerCounts, tabOwnersBehind, tabOwnersLayout, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, colourLabel, defaultHighlights, highlightColours, highlightsProblem, maxHighlightDays, maxHighlights, setHighlights, sortBands, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile, type HighlightBand, type HighlightColour } from '../toolValidations'
+import { addSource, emptyMapping, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories, type SourceCategory, azureFieldOptions, azureInputs, azureLock, completionDated, completionNote, dueFromText, isAzureKind, readsCompletion, cleanDays, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabDocuments, toolTabTools, toolTabExpiry, mapped, noField, isAzureField, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, hiddenPageChoices, listReason, parseToolValidations, tabOwnerCounts, tabOwnersBehind, tabOwnersLayout, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, colourLabel, defaultHighlights, highlightColours, highlightsProblem, maxHighlightDays, maxHighlights, setHighlights, sortBands, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile, type HighlightBand, type HighlightColour } from '../toolValidations'
 import { useToolValidationsEnv, type CustomTabsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
 import { KindField, OwnersField, PageNameField } from './PageDialogs'
@@ -17,7 +18,8 @@ import { EmptyState, Metric, Metrics, Modal, Notice, Panel, Pill, SaveQueueStatu
 
 // TVL-08…TVL-12, TVL-14: the Tool Validations Release page's tabs — Expiry list (what is overdue or due soon in the
 // viewer's own window of N days: the tiles, then the expiry table; the owners set the team default there too), Master
-// list (every tool kept in Git), Azure (the Tool Validations query: the month's releases and its rows), one tab per
+// list (every tool kept in Git, with its Current Month Status, TVL-35), Tool List [TFS] and Validation Documents [TFS]
+// (the two queries' rows, TVL-31), one tab per
 // other source (its rows as mapped, Edit mapping…, Merge into master list…) and Setup last (the sources and the team settings). Everyone reads them; the Tool Owner and the list's
 // co-owners change them (TVL-11), each change saved to Git (GIT-17) with its result under Background jobs (UI-STANDARDS §8).
 
@@ -49,25 +51,37 @@ function ValidationDate({ file, entry }: { file: ToolValidationsFile; entry: Too
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
 function Missing() { return <Panel><EmptyState title="The Tool Validations master list is not available here." /></Panel> }
 
-// ---- TVL-14, TVL-15: the tabs — Expiry list first, Master list, Azure (this query), one per other source in the order
-// added, the owners' tabs in their order, Setup last ----
+// ---- TVL-14, TVL-15: the tabs — Expiry list first, Master list, Tool List [TFS], Validation Documents [TFS] (only with
+// the two queries: `documents` given), one per other source in the order added, the owners' tabs in their order, Setup
+// last ----
 // TVL-23: `masterTop` (the month's Validations, Completed and Supported counts) shows on the Master list tab only.
-export function ToolValidationsTabs({ id, azure, masterTop }: { id: string; azure: ReactNode; masterTop?: ReactNode }) {
+// TVL-35: `status` — the Current Month Status of the master list's tools in `month` (toolMonthStatus).
+export interface MonthStatus { month: string; status: ToolMonthStatus }
+export function ToolValidationsTabs({ id, toolList, documents, masterTop, status }: { id: string; toolList: ReactNode; documents?: ReactNode; masterTop?: ReactNode; status?: MonthStatus }) {
   const env = useToolValidationsEnv()
   const file = env?.store.shown ?? { sources: [], tabs: [] }
-  const extra = toolTabs(file, customToolTabs(file)).filter((tab) => tab.key !== toolTabExpiry)
-    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <>{masterTop}<ToolMasterList /></> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : env && tab.custom ? <CustomTabView env={env} tab={tab.custom} /> : <Missing /> }))
-  return <ResultTabs id={id} mainKey={toolTabExpiry} mainLabel="Expiry list" main={<ToolExpiryTab />} extra={extra} open={openToolTab} />
+  const extra = toolTabs(file, customToolTabs(file), documents !== undefined).filter((tab) => tab.key !== toolTabExpiry)
+    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <>{masterTop}<ToolMasterList status={status} /></> : tab.key === toolTabTools ? toolList : tab.key === toolTabDocuments ? documents : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : env && tab.custom ? <CustomTabView env={env} tab={tab.custom} /> : <Missing /> }))
+  return <ResultTabs id={id} mainKey={toolTabExpiry} mainLabel="Expiry list" main={<ToolExpiryTab status={status} />} extra={extra} open={openToolTab} />
+}
+
+// ---- TVL-35: the Current Month Status column — "Completed", "Supported" or both as pills; blank otherwise ----
+const statusTitle = (status: MonthStatus) => `Current Month Status in ${monthName(status.month)} (the header month, UTC): Completed — the tool's completion date is in the month; Supported — one of its documents has a Quality signature in the month. Only the tools of the Tool List [TFS] query.`
+function statusColumn<R>(status: MonthStatus | undefined, entryOf: (row: R) => ToolEntry): DataColumn<R>[] {
+  if (!status) return []
+  const of = (row: R): ToolStatusRow | undefined => status.status.byKey.get(entryOf(row).key)
+  return [{ id: 'month-status', label: 'Current Month Status', value: (row) => statusText(of(row)), title: () => statusTitle(status),
+    render: (row) => { const found = of(row); return found && (found.completed || found.supported) ? <span className="nowrap">{found.completed && <Pill tone="open">Completed</Pill>}{found.completed && found.supported && ' '}{found.supported && <Pill tone="info">Supported</Pill>}</span> : '' } }]
 }
 
 // ---- TVL-08, TVL-09, TVL-14: the Expiry list tab — the tiles, then the Validation expiry table ----
-export function ToolExpiryTab() {
+export function ToolExpiryTab({ status }: { status?: MonthStatus }) {
   const env = useToolValidationsEnv()
   if (!env) return <Missing />
-  return <ToolExpiry env={env} />
+  return <ToolExpiry env={env} status={status} />
 }
 type StatusFilter = 'all' | 'overdue' | 'due' | 'none'
-function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
+function ToolExpiry({ env, status: monthStatus }: { env: ToolValidationsEnv; status?: MonthStatus }) {
   const [status, setStatus] = useState<StatusFilter>('all')
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<string | null>(null)
@@ -92,6 +106,7 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
     { id: 'from', label: 'Due date from', value: (row) => row.from === 'none' ? '' : dueFromText(row.from, completionDated(file, row.entry)) },
     { id: 'validated', label: 'Validation date', value: (row) => row.entry.validationDate ?? '', render: (row) => <ValidationDate file={file} entry={row.entry} /> },
     { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => validityOf(row.entry).months ?? '', render: (row) => periodCell(row.entry), exportValue: (row) => periodExport(row.entry) },
+    ...statusColumn<ExpiryRow>(monthStatus, (row) => row.entry),
     { id: 'sources', label: 'Sources', value: (row) => sourceNames(file, row.entry) || 'Added by hand', defaultHidden: true },
     { id: 'notes', label: 'Notes', value: (row) => row.entry.notes ?? '', defaultHidden: true },
   ]
@@ -181,7 +196,7 @@ function StoreNotices({ env }: { env: ToolValidationsEnv }) {
     <SaveQueueStatus state={store.queue} onRetry={() => void store.retry()} />
   </>
 }
-export function ToolMasterList() {
+export function ToolMasterList({ status }: { status?: MonthStatus }) {
   const env = useToolValidationsEnv()
   const [dialog, setDialog] = useState<ToolDialogState | null>(null)
   const [filter, setFilter] = useState<StateFilter>('all')
@@ -195,6 +210,12 @@ export function ToolMasterList() {
   const columns: DataColumn<ToolEntry>[] = [
     { id: 'name', label: 'Tool', value: (entry) => entry.name },
     { id: 'version', label: 'Version', value: (entry) => entry.version },
+    // TVL-34: from the Tool List [TFS] query — the work item ID, its Source (Used by), State (Validated) and Type.
+    { id: 'azure-id', label: 'ID', align: 'right', value: (entry) => entry.id ?? '', render: (entry) => entry.id ?? '—' },
+    { id: 'used-by', label: 'Used by', value: (entry) => entry.usedBy ?? '' },
+    { id: 'azure-state', label: 'Validated', value: (entry) => entry.validated ?? '' },
+    { id: 'azure-type', label: 'Type', value: (entry) => entry.type ?? '' },
+    ...statusColumn<ToolEntry>(status, (entry) => entry),
     { id: 'validated', label: 'Validation date', value: (entry) => entry.validationDate ?? '', render: (entry) => <ValidationDate file={file} entry={entry} /> },
     { id: 'period', label: 'Validity (months)', align: 'right', value: (entry) => validityOf(entry).months ?? '', render: (entry) => <>{periodCell(entry)}{entry.manual.includes('validityMonths') && <small> (entered)</small>}</>, exportValue: (entry) => periodExport(entry) },
     { id: 'due', label: 'Due date', value: (entry) => dueOf(entry).due ?? '', render: (entry) => { const due = dueOf(entry); return due.due ? <>{formatDate(due.due)} <BandPill band={bandFor(bands, due.due, today)} /> <small>({dueFromText(due.from, completionDated(file, entry))})</small></> : 'No due date' } },
@@ -276,7 +297,7 @@ function SourcesPanel({ env, why, open }: { env: ToolValidationsEnv; why: string
           <td><strong>{source.name}</strong><small>{kindLabel(source.kind)}</small></td>
           <td><Pill tone={feeds ? 'info' : 'neutral'}>{categoryLabel(categoryOf(source))}</Pill></td>
           <td><small className="plain">{read.target || '—'}{read.missing ? ` — ${read.missing}` : ` · ${read.rows} row${read.rows === 1 ? '' : 's'}`}</small></td>
-          <td><small className="plain">{!feeds ? 'Not needed — every column is listed on its tab' : <>{source.mapping.confirmed ? 'Saved' : <Pill tone="warning">Guessed</Pill>} {mappingFields.filter((field) => mapping[field.key]).map((field) => `${field.label.replace(' (optional)', '')}: ${optionLabel(read.options, mapping[field.key]!)}`).join(' · ') || 'Nothing mapped'}</>}</small></td>
+          <td><small className="plain">{!feeds ? 'Not needed — every column is listed on its tab' : <>{source.mapping.confirmed ? 'Saved' : <Pill tone="warning">Guessed</Pill>} {fieldsOf(source).filter((field) => mapped(mapping, field.key)).map((field) => `${field.label.replace(' (optional)', '')}: ${optionLabel(read.options, mapping[field.key]!)}`).join(' · ') || 'Nothing mapped'}</>}</small></td>
           <td className="num">{feeds ? tools : '—'}</td>
           <td><small className="plain">{!feeds ? 'Never (Validation Documents)' : source.mergedAt ? `${formatDateTime(source.mergedAt)}${source.mergedBy ? ` · ${source.mergedBy}` : ''}` : source.kind === 'stream' ? 'At each fetch' : 'Not yet'}</small></td>
           <td><div className="button-row nowrap">
@@ -289,6 +310,8 @@ function SourcesPanel({ env, why, open }: { env: ToolValidationsEnv; why: string
     </tbody></table></div>
   </Panel>
 }
+// TVL-34: ID, Used by, Validated and Type are mapped for an Azure DevOps source only.
+const fieldsOf = (source: Pick<ToolSource, 'kind'>) => mappingFields.filter((field) => !field.azureOnly || isAzureKind(source.kind))
 const optionLabel = (options: [string, string][], key: string) => options.find(([value]) => value === key)?.[1].replace(/ \(.*\)$/, '') ?? key
 
 // ---- TVL-14: the tab of one other source — its rows as read with its field mapping, Edit mapping… and Merge ----
@@ -605,7 +628,7 @@ function MappingDialog({ env, source, onClose }: { env: ToolValidationsEnv; sour
       </> : <>
       {!source.mapping.confirmed && <Notice tone="warning">These are the app's guesses — check each field against the data, then save the mapping.</Notice>}
       {read.missing && <Notice tone="info">{read.missing} The fields offered are the saved ones only.</Notice>}
-      {mappingFields.map((field) => <label key={field.key}>{field.label}<select required={field.required} value={mapping[field.key] ?? ''} onChange={(event) => setMappingDraft((current) => ({ ...current, [field.key]: event.target.value || undefined }))}><option value="">{field.required ? 'Choose…' : field.key === 'validationDate' && isAzureKind(source.kind) ? 'None — the completion date' : 'None'}</option>{options(mapping[field.key]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>{field.help}{field.key === 'validationDate' && isAzureKind(source.kind) ? ' From Azure DevOps: the completion date (Stream mapping → Tool Validations queries) unless another field is chosen.' : ''}</small></label>)}
+      {fieldsOf(source).map((field) => <label key={field.key}>{field.label}<select required={field.required} value={mapped(mapping, field.key) ?? ''} onChange={(event) => setMappingDraft((current) => ({ ...current, [field.key]: event.target.value || (isAzureField(field.key) ? noField : undefined) }))}><option value="">{field.required ? 'Choose…' : field.key === 'validationDate' && isAzureKind(source.kind) ? 'None — the completion date' : 'None'}</option>{options(mapping[field.key]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>{field.help}{field.key === 'validationDate' && isAzureKind(source.kind) ? ' From Azure DevOps: the completion date (Stream mapping → Tool Validations queries) unless another field is chosen.' : ''}</small></label>)}
       <label>Validity period numbers are in<select value={mapping.periodUnit} onChange={(event) => setMappingDraft((current) => ({ ...current, periodUnit: event.target.value === 'years' ? 'years' : 'months' }))}><option value="months">Months</option><option value="years">Years</option></select><small>For a plain number; a text with its unit (“2 years”, “24 months”) is read as written.</small></label>
       <p className="muted" role="status">{read.missing ? '' : `${read.rows} row${read.rows === 1 ? '' : 's'} read here give ${tools} tool${tools === 1 ? '' : 's'} with this mapping.`}</p>
       </>}
