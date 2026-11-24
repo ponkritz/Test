@@ -521,7 +521,7 @@ function DrillDialog({ page, insight, data, category, series, onClose }: { page:
   const cat = data.categories[category]
   const ser = series != null && insight.second ? data.series[series] : undefined
   const columns: DataColumn<OnDemandRow>[] = [
-    { id: 'drill-id', label: 'ID', value: (row) => rowId(page, row) || row.key || '' },
+    { id: 'drill-id', label: 'ID', value: (row) => rowId(page, row) || row.key || '', ...(page.rows.some((row) => row.link) ? { render: (row: OnDemandRow) => row.link && /^https:\/\//.test(row.link) ? <a href={row.link} target="_blank" rel="noreferrer">{rowId(page, row) || row.key || 'Open'}</a> : rowId(page, row) || row.key || '' } : {}) },
     ...page.columns.map((column): DataColumn<OnDemandRow> => ({ id: `drill-${column.id}`, label: column.name, align: column.type === 'number' || column.type === 'currency' ? 'right' : undefined, value: (row) => displayText(column, row.cells[column.id]) })),
   ]
   const where = `${cat?.label ?? ''}${ser ? ` · ${ser.label}` : ''}`

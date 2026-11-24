@@ -51,7 +51,7 @@ import { useQeMapping } from './useQeMapping'
 import { useOnDemand } from './useOnDemand'
 import { useDataMode } from './useDataMode'
 import { createPage, useMenuLayout } from './useMenuLayout'
-import { addPageReason, builtInGroupOf, findGroup, gitReasonOf, isHidden, kindOf, menuGroups, pageRights, pagesOfGroup, placementOf, type Viewer } from './menuLayout'
+import { addPageReason, builtInGroupOf, findGroup, gitReasonOf, isDashboard, isHidden, kindOf, menuGroups, pageRights, pagesOfGroup, placementOf, type Viewer } from './menuLayout'
 import { usePublishScheduler } from './publishRun'
 import { AddPageDialog } from './components/PageDialogs'
 import { OwnerPeopleContext, PageNamesContext } from './usePageNames'
@@ -591,7 +591,9 @@ export default function App() {
       <div className="data-notices"><PageGitNotice key={pageKey} page={pageName} changes={pageChanges} unsaved={unsavedHere} fullReload={fullReload} onLoad={loadNewer} />{accessNote?.page === pageKey && <Notice tone="info" className="access-changed-note">{accessNote.text}{' '}<button type="button" className="text-button" onClick={() => setAccessNote(null)}>Dismiss</button></Notice>}</div>
       <Suspense fallback={<p className="muted page-loading" role="status">Loading the page…</p>}><Fragment key={pageReads}>
       {page === 'home' && <HomePage tiles={homeTiles} name={my.me.name} />}
-      {page === 'mydash' && <MyDashboardPage month={month} azure={reportAzure} store={store} my={{ ...my, ...my.self }} navigate={setPage} views={personalViews} canSetDefault={access.can('layout.defaults')} windchill={windchill} />}
+      {/* MYD-15: My dashboard's blocks read what the app has loaded, each source as the viewer's areas allow; View as: read only, the default layout. */}
+      {page === 'mydash' && <MyDashboardPage month={month} azure={reportAzure} store={store} my={{ ...my, ...my.self }} navigate={setPage} views={personalViews} canSetDefault={access.can('layout.defaults')} windchill={windchill}
+        sources={{ sees: access.sees, viewingAs: Boolean(access.viewingAs), git, onDemand, isDashboard: (id) => isDashboard(menu.layout, id), qe: qeMapping, history, settings: dashboardHoursSettings, items: reportAzure.items }} />}
       {page === 'overview' && <DashboardPage month={month} azure={reportAzure} navigate={setPage} store={store} setMonth={setMonth} my={my} views={personalViews} canSetDefault={access.can('layout.defaults')} canLock={access.can('capacity.periods')} />}
       {page === 'pulse' && <PulseCheckPage month={month} azure={reportAzure} store={store} my={my} navigate={setPage} windchill={windchill} openWindchill={openWindchill} git={git} pack={monthlyPack} views={personalViews} canPickProfile={access.rights.roles.includes('Admin')} />}
       {page === 'pireview' && <PiReviewPage />}

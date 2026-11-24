@@ -33,7 +33,9 @@ export interface LogEntry { id: string; at: string; by: string; added?: true; ac
 // when (UTC ISO), set once; log — the update log.
 // OND-39: hidden — who hid the row and when; a hidden row stays in the file with its ID and is left out of the table,
 // the Insights, the exports and the dashboards.
-export interface OnDemandRow { id: string; key?: string; seq?: number; addedBy?: string; addedAt?: string; log?: LogEntry[]; hidden?: { by: string; at: string }; cells: Record<string, OnDemandValue> }
+// link (MYD-24): a row built by a data source of My dashboard links to its origin (an Azure DevOps work item, https only);
+// never read from or written to a page file.
+export interface OnDemandRow { id: string; key?: string; link?: string; seq?: number; addedBy?: string; addedAt?: string; log?: LogEntry[]; hidden?: { by: string; at: string }; cells: Record<string, OnDemandValue> }
 // OND-31: storage 'rows' — the page is kept as one file per row (on-demand/<id>/page.json, rows/<key>.json, counter.json,
 // src/rowFiles.ts); absent — the single page file on-demand/<id>.json (OND-08).
 // OND-63, OND-66: sample — the page as shown in Sample (src/sampleRows.ts): its rows are made up; it is never written.

@@ -96,8 +96,8 @@ function SummaryTable({ block, narrowed }: { block: DashboardBlock; narrowed: Na
 // DSH-05: the pop-up of one block — title, type, data source, the fields, the measure, the period's Date column, the
 // tab, filters — with a live preview over the current period. Add block / Save to Git saves the dashboard at once.
 // CHT-70…CHT-73: the form in the chart editor's tabs, as the Insights pop-up (the data source, the period's Date column
-// and the dashboard tab on Data).
-export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCancel, onSave }: { datasets: Dataset[]; dashboard: Dashboard; block: DashboardBlock; isNew: boolean; preview: (dataset: Dataset, block: DashboardBlock) => Narrowed | null; onCancel: () => void; onSave: (block: DashboardBlock, colors: ColorPins | undefined) => Promise<void> }) {
+// and the dashboard tab on Data). MYD-14: saveNote / saveLabel — where the block is kept and the save button, for My dashboard's personal blocks.
+export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCancel, onSave, saveNote, saveLabel }: { datasets: Dataset[]; dashboard: Dashboard; block: DashboardBlock; isNew: boolean; preview: (dataset: Dataset, block: DashboardBlock) => Narrowed | null; onCancel: () => void; onSave: (block: DashboardBlock, colors: ColorPins | undefined) => Promise<void>; saveNote?: string; saveLabel?: string }) {
   const [draft, setDraft] = useState<DashboardBlock>(block)
   const [pins, setPins] = useState(dashboard.colors)
   const [error, setError] = useState('')
@@ -240,8 +240,8 @@ export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCanc
       </div>
       <div className="od-editor-footer">
         {error && <Notice tone="error">{error}</Notice>}
-        <p className="muted">Saved to Git for everyone at once ({`dashboards/${dashboard.id}.json`}).</p>
-        <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Saving to Git…' : isNew ? 'Add block' : 'Save to Git'}</button></div>
+        <p className="muted">{saveNote ?? `Saved to Git for everyone at once (dashboards/${dashboard.id}.json).`}</p>
+        <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy}>{busy ? saveLabel ? 'Saving…' : 'Saving to Git…' : isNew ? 'Add block' : saveLabel ?? 'Save to Git'}</button></div>
       </div>
     </form>
   </Modal>

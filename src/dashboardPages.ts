@@ -83,7 +83,8 @@ export function dataSources(pages: OnDemandPage[], saved: (id: string) => OnDema
 // (as OND-17). expectedId: the file's name, which wins over the id inside.
 export interface ParsedDashboard { dashboard: Dashboard; dropped: string[] }
 const ref = (value: unknown) => typeof value === 'string' && idPattern.test(value) ? value : ''
-export function parseDashboard(raw: string, expectedId?: string): ParsedDashboard {
+// pattern: the data sources a block may name (MYD-15: My dashboard's registry passes its own, src/dashboardSources.ts).
+export function parseDashboard(raw: string, expectedId?: string, pattern: RegExp = sourcePattern): ParsedDashboard {
   const where = expectedId ? dashboardPath(expectedId) : 'The dashboard'
   let data: unknown
   try { data = JSON.parse(raw) } catch { throw new Error(`${where} is not valid JSON.`) }
@@ -104,7 +105,7 @@ export function parseDashboard(raw: string, expectedId?: string): ParsedDashboar
   const filterIds = new Set<string>()
   const filters = (Array.isArray(file.filters) ? file.filters : []).flatMap((entry): ViewerFilter[] => {
     const filter = entry as Partial<ViewerFilter> | null
-    if (!filter || !ref(filter.id) || filterIds.has(filter.id!) || typeof filter.source !== 'string' || !sourcePattern.test(filter.source) || !ref(filter.column)) { dropped.push('A filter of the filter row without a valid id, data source or column was left out.'); return [] }
+    if (!filter || !ref(filter.id) || filterIds.has(filter.id!) || typeof filter.source !== 'string' || !pattern.test(filter.source) || !ref(filter.column)) { dropped.push('A filter of the filter row without a valid id, data source or column was left out.'); return [] }
     filterIds.add(filter.id!); return [{ id: filter.id!, source: filter.source, column: filter.column! }]
   })
   if (filters.length > maxViewerFilters) dropped.push(`Only the first ${maxViewerFilters} filters are shown.`)
@@ -115,7 +116,7 @@ export function parseDashboard(raw: string, expectedId?: string): ParsedDashboar
     if (!item || typeof item !== 'object') { dropped.push(`${label} is not a block: left out.`); return [] }
     if (!blockTypeKeys.includes(item.type as BlockType)) { dropped.push(`${label} has an unknown type (${String(item.type).slice(0, 20)}): left out.`); return [] }
     if (!ref(item.id) || blockIds.has(item.id as string)) { dropped.push(`${label} has no valid id, or the id of another block: left out.`); return [] }
-    if (typeof item.source !== 'string' || !sourcePattern.test(item.source)) { dropped.push(`${label} has no known data source: left out.`); return [] }
+    if (typeof item.source !== 'string' || !pattern.test(item.source)) { dropped.push(`${label} has no known data source: left out.`); return [] }
     const title = clean(item.title, maxTitle)
     if (!title) { dropped.push(`${label} has no title: left out.`); return [] }
     blockIds.add(item.id as string)

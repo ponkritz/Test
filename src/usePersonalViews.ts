@@ -74,6 +74,8 @@ export function usePersonalViews(git: GitStorage, myEmail: string) {
     reload: () => { if (!timer.current) setReads((count) => count + 1) },
     sections: (page: string): SectionLayout | undefined => views.sections[page],
     setSections: (page: string, layout: SectionLayout) => change((current) => ({ ...current, sections: { ...current.sections, [page]: layout } })),
+    // MYD-23: the shared default of a page's sections only (View as shows it, never the viewed person's own layout).
+    defaultSections: (page: string): SectionLayout | undefined => defaults.sections[page],
     resetSections: (page: string) => change((current) => { const sections = { ...current.sections }; delete sections[page]; return { ...current, sections } }),
     menu: views.menu,
     setMenu: (menu: MenuLayout) => change((current) => ({ ...current, menu })),

@@ -1582,6 +1582,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-MYD-06 Releases and documents signed by me in a period** — Req MYD-13 — E2E `shell.e2e.mjs` ("TC-MYD-01: My dashboard is the start page: my hours, my open work, my streams and what I signed; Pulse Check offers quarter, half-year and year": the Signed by me panel, This year sets From / To, the streams listed); L1 `my-signatures.test.mjs` ("MYD-13: signature fields are Author, Reviewer or Approver names — not their dates, functions or roles (TC-MYD-06)"; "MYD-13: documents and releases I signed per stream in a from–to period; a release counts once (TC-MYD-06)"; "MYD-13: a Windchill export counts the documents I signed by its Author / Reviewer / Approver columns (TC-MYD-06)"); browser check with the stream views fetched (with their Author / Reviewer / Approver fields) and the Windchill exports imported: My dashboard → Signed by me shows releases and documents per stream for Last 12 months; choose From / To or This quarter — the figures follow; the document list names the stream, release, field and date; a stream without such fields is named.
 
+**TC-MYD-07 My dashboard with blocks of my own from every data source** — Req MYD-14, MYD-15, MYD-16, MYD-17, MYD-18, MYD-23, MYD-24 — **UAT** — E2E `my-dashboard.e2e.mjs` ("TC-MYD-07: My dashboard with blocks of my own from every data source — added, moved, resized, kept, private, per role, reset": the synthetic sample and a mocked GitHub; the default My dashboard shows its five sections in order and no block; ＋ Add block… adds a bar of Azure DevOps work by State, a KPI tile of this month's releases (Releases per stream, filter Month = this month), a line of the Average of Utilization % per month (Capacity and utilization) and a narrative over the Azure DevOps work; Customize moves the bar above Signed by me and makes it full width; a block's ⋯ Move down; the entry `my-dashboard` is kept with the personal views and a reload keeps everything; another person — with Ana's personal views file in Git — sees the default My dashboard; a Team Member (no Team insights) with the same layout sees "Not available for your role." on the capacity block and no figures; Reset to the default My dashboard brings the five sections back and removes the blocks); also run at 4x CPU slowdown (CI-12); UAT: on My dashboard choose ＋ Add block… — the Data source list offers the table pages, Time Writing hours, Azure DevOps work, Releases per stream, Capacity and utilization, QE Mapping, KPI tracker values, Historical hours and each Windchill export (those your role may not see marked "(not available)"); add a KPI tile of Capacity and utilization (Sum of Available hours, period one month) — it equals Team overview's capacity of that month with no filter; add a summary table of Releases per stream by Stream, filtered to Completed, for one month — each stream equals Pulse Check's Completed releases of that month; click a bar of Azure DevOps work — the rows behind it list each item's #ID as a link to Azure DevOps; resize a block by its corner; ask a colleague to open My dashboard — they see their own; an Admin's View as of you shows the default My dashboard; Reset to the default My dashboard.
+
+**TC-MYD-08 The data sources of My dashboard** — Req MYD-15, MYD-16, MYD-17, MYD-18, MYD-19, MYD-20, MYD-21, MYD-22 — L1 `dashboard-sources.test.mjs` ("MYD-15: the registry — every kind declares its fields and the area it needs; keys follow one pattern; a role without the area gets “Not available for your role.” and no rows (TC-MYD-08)", "MYD-16: Azure DevOps work — Features, User Stories and Tasks with their fields, #ID links; only my own for a role with My Tasks but not the backlogs (TC-MYD-08)", "MYD-17: Releases per stream — a row per release Pulse Check counts; Completed and Supported per stream and month equal Pulse Check’s, entered counts included (TC-MYD-08)", "MYD-18: Capacity and utilization — Team overview’s figures per person and month; totals equal Team overview’s (TC-MYD-08)", "MYD-19…MYD-22: QE Mapping sheets, KPI tracker values, historical hours and Windchill exports as sources with their natural fields (TC-MYD-08)"); inspection (MYD-22): Pulse Check and the Monthly pack are covered by the release and capacity sources; browser check: with the KPI tracker copy in Git, a block over KPI tracker values shows "Load the KPI tracker to see this." with **Load the KPI tracker** until chosen, then the values; the same for the QE Mapping and the historical hours.
+
+**TC-MYD-09 My dashboard's personal layout** — Req MYD-14, MYD-23 — L1 `my-dashboard.test.mjs` ("MYD-14: the default My dashboard is the built-in sections in their order; blocks of my own come after them, moved and hidden like sections (TC-MYD-09)", "MYD-23: the layout is kept as my own personal views entry, validated when read; unknown sources dropped; the shared defaults never carry it (TC-MYD-09)"); browser check (Git storage, work email, live data): after a change `personal-views/<email>.json` holds `filters.my-dashboard` with the blocks and no rows or figures; Use as default for everyone writes the sections' order and no block; View as a person shows the default My dashboard with the note that personal layouts are private and no Customize or ＋ Add block…
+
 **TC-HIS-01 Historical hours page** — Req HIS-01 — E2E `shell.e2e.mjs` ("TC-HIS-01: Settings → Historical hours explains the import and needs Git storage to upload"); browser check with Git storage and the real planning workbook: Upload Excel… reads TransformedData; the counts (rows May–Sep 2026, people, recorded hours, rows not imported with their reasons) match the workbook; Save to Git writes `history-hours.json` to the data repository (not to the app's repository); the page shows the source, cut-off and the Azure DevOps Tasks left out; Remove history removes the file.
 
 **TC-HIS-02 Reading the workbook** — Req HIS-02, HIS-03 — L1 `history.test.mjs` ("historical hours: the TransformedData sheet read before the cut-off; every other row listed with its reason (HIS-02, HIS-03)").
@@ -2449,6 +2455,17 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | MYD-11 | TC-MYD-05 |
 | MYD-12 | TC-MYD-05 |
 | MYD-13 | TC-MYD-06 |
+| MYD-14 | TC-MYD-07, TC-MYD-09 |
+| MYD-15 | TC-MYD-07, TC-MYD-08 |
+| MYD-16 | TC-MYD-07, TC-MYD-08 |
+| MYD-17 | TC-MYD-07, TC-MYD-08 |
+| MYD-18 | TC-MYD-07, TC-MYD-08 |
+| MYD-19 | TC-MYD-08 |
+| MYD-20 | TC-MYD-08 |
+| MYD-21 | TC-MYD-08 |
+| MYD-22 | TC-MYD-08 |
+| MYD-23 | TC-MYD-07, TC-MYD-09 |
+| MYD-24 | TC-MYD-07 |
 | HIS-01 | TC-HIS-01 |
 | HIS-02 | TC-HIS-02 |
 | HIS-03 | TC-HIS-02 |
@@ -2766,11 +2783,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07 |
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
-| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17 |
+| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09 |
 | UC-27 | TC-HIS-01…11 |
 | UC-28 | TC-ACT-01…12, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-ATM-21 |
 | UC-29 | TC-OVW-01…03 |
