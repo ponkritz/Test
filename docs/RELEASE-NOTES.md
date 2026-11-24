@@ -2,6 +2,24 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.13.0 — 2026-11-24
+
+**Fixed**
+- **A list with check boxes inside a pop-up closes again** — in Tool Validations → Team settings the Co-owners list could not be closed: a click elsewhere in the pop-up did nothing. A click anywhere outside the list now closes it, as do its own button and Escape (which closes only the list and puts the focus back on its button). The same applies to every such list inside a pop-up, e.g. the co-owners of a page (KB-91).
+
+TC-TVL-07.
+
+PR #390.
+
+**Added**
+- **Pulse Check → Year: Completed releases, cumulative** — with Period = Year, a panel after the period table with one chart: a line per stream adding up its Completed releases from January, an All streams line and a column per month with the month's sum, switched with Per stream, All streams and Month sum (kept per person in the personal views, entry `pulse-cumulative`). Each month counts exactly as its Month tab does (DP's Completed Releases, IOCC's and CP's Completed, Content's releases, Tool Validations' tools, custom streams, the Windchill exports' releases dated in the month and the counts an Admin entered), so December's running total of a stream is the sum of its Month tabs; the Year row counts each release once, and ⓘ says why December can be higher. Months after the current one are empty. Below the chart, each month's count per stream with the Month total and the Cumulative total, with Export; streams not counted (QV-66) have no line and are not in the sums (QV-68, QV-69).
+- **My dashboard → Completed releases per stream per month** — a data source with Stream, Month, Completed releases and Counted in Pulse Check, counted as the Month tabs count them; a line chart by Month split by Stream with Running total is Pulse Check's Year chart (MYD-25).
+- Not in scope: the On-Demand Dashboard pages do not offer the new source; the chart is in the Year view only (LIM-66).
+
+DF-268, DF-269, SM-150, LIM-66; TC-QV-49 (UAT), TC-MYD-10.
+
+PR #390.
+
 ## v10.12.0 — 2026-11-24
 
 **Added**
