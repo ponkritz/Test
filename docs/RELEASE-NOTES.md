@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.20.0 — 2026-11-24
+
+- **Tool Validations: the count cards are on the Master list tab only, as Validations** (TVL-23). The month's cards no longer sit above every tab of the Tool Validations page; they show on the **Master list** tab, named **Validations in {Month}**, **Completed validations** and **Supported validations**, with ⓘ What was counted. The other Release pages are unchanged.
+
+PR #400.
+
+**Changed**
+- **Tool Validations counts from two queries** — the counting of Tool Validations changes when a second query is set up: the stream reads a **Tools** query (one row per tool: the master list and **Completed**) and a **Signed documents** query (one row per document, its Parent the tool, with approver slots: **Supported**) as two connections of the stream. A tool is a **Completed tool validation** in a month when its **completion date** falls in it — **Changed Date** (the last updated date) by default, or another date column of the Tools query chosen under Admin → Streams → Stream mapping → **Tool Validations queries** (saved in the shared settings in Git; Changed Date moves on any edit). A tool is a **Supported tool validation** when any document under it has a qualifying Quality-role signature dated in the month — CP's rule (role allowlist, a name and a date in the same approver slot, UTC). Documents whose Parent is no tool are listed as **Not linked to a tool** and not counted. The Stream mapping has a **Tool Validations · Signed documents** row with **Add query**; the panel shows which connection is which (chosen, or found by its name or columns). The Azure tab shows the month's Releases with Completed and Supported, Source data of both queries and the unlinked documents; Pulse Check, the Monthly pack and the cumulative chart use the new counts. **With one Tool Validations connection the counts stay as before** (TVL-19, TVL-20, TVL-21, TVL-22, QV-64, TVL-04, TVL-13, TVL-14).
+
+Older app versions read one connection only (LIM-73); Changed Date moves on any edit (LIM-72). DF-285, DF-286; SM-165; TC-TVL-14…TC-TVL-18.
+
+PR #400.
+
 ## v10.19.0 — 2026-11-24
 
 **Changed**
