@@ -8,6 +8,7 @@ import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { FeatureSetups } from '../featureSetup'
 import { chooseSetup, withLinkedStories } from '../featureSetup'
 import { useBulkEpic } from '../useStreamEpics'
+import { bulkEpicMissing } from '../bulkEpics'
 import type { QeMappingFile } from '../qeMapping'
 import { ioccPlan, pickQe } from '../dpBulk'
 import type { BoardHit } from '../dpBoardMatch'
@@ -53,7 +54,7 @@ export function IoccBulkCreate({ releases, azure, featureSetup, qeMapping, featu
     return () => { active = false }
   }, [azure.config, azure.pat])
   const pair = pairs?.[choice]
-  const blocked = azure.isSample ? 'Synthetic sample data is loaded: creating in Azure DevOps is disabled.' : !azure.config || !azure.pat ? 'Connect the QMS-0025 Time Writing connection with a PAT first (My settings → Servers and PATs).' : !epicId ? 'Set the IOCC bulk Epic first (My settings → Servers and PATs → Stream mapping → Bulk creation Epics).' : !epic ? `Epic #${epicId} is not on the loaded QMS-0025 board: load the board first.` : !pair ? (error || 'Loading the PI / Sprint…') : !ready.length ? 'None of the selected releases can be created (see the reasons).' : ''
+  const blocked = azure.isSample ? 'Synthetic sample data is loaded: creating in Azure DevOps is disabled.' : !azure.config || !azure.pat ? 'Connect the QMS-0025 Time Writing connection with a PAT first (My settings → Servers and PATs).' : !epicId ? bulkEpicMissing('IOCC') : !epic ? `Epic #${epicId} is not on the loaded QMS-0025 board: load the board first.` : !pair ? (error || 'Loading the PI / Sprint…') : !ready.length ? 'None of the selected releases can be created (see the reasons).' : ''
 
   function create() {
     if (blocked || !azure.config || !epic || !pair) return

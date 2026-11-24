@@ -2,6 +2,9 @@ import { useCan, useWriteBlock } from '../useCan'
 import { countStreams, monthReleaseCount, releaseRegister, timeWritingHours } from '../releaseSource'
 import { runInBackground } from '../backgroundJobs'
 import { useBulkEpic, useStreamEpics } from '../useStreamEpics'
+import { bulkEpicMissing } from '../bulkEpics'
+import { BulkEpicNotSet } from '../components/BulkEpicsPanel'
+import type { SettingsTab } from '../settingsTabs'
 import type { FeatureSetups } from '../featureSetup'
 import { useMemo, useState, type ReactNode } from 'react'
 import { EmptyState, Notice, Page, Panel, Pill, TablePanel, WriteBlocked } from '../components/ui'
@@ -47,10 +50,10 @@ import { normalizeReleaseSourceSettings, streamPatterns } from '../releaseSource
 
 // One page for all configured Azure DevOps views (each its own entry in the sidebar): the Time Writing backlog
 // (QMS-0025) as an editable tree, and every other shown connection as a read-only query view.
-export function BoardPage({ azure, store, current, month, git, onOpenConnection, assign, featureSetup, qeMapping, views, canSetDefault = false }: { views?: PersonalViewsStore; canSetDefault?: boolean; azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null }) {
+export function BoardPage({ azure, store, current, month, git, onOpenConnection, onOpenSettings, assign, featureSetup, qeMapping, views, canSetDefault = false }: { onOpenSettings?: (tab: SettingsTab, section?: string) => void; views?: PersonalViewsStore; canSetDefault?: boolean; azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null }) {
   const { items, config, preview, pat, featureCreated, rememberPat } = azure
   const [filter, setFilter] = useState('')
-  if (current.readOnly) return <ReadOnlyView key={current.id} id={current.id} name={current.name} role={current.role} azure={azure} store={store} month={month} gitNote={git?.snapshotNotes[current.id]} onOpenConnection={onOpenConnection} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} />
+  if (current.readOnly) return <ReadOnlyView key={current.id} id={current.id} name={current.name} role={current.role} azure={azure} store={store} month={month} gitNote={git?.snapshotNotes[current.id]} onOpenConnection={onOpenConnection} onOpenSettings={onOpenSettings} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} />
   const activeItems = items.filter((item) => item.state.trim().toLowerCase() !== 'removed')
   const shown = activeItems.filter((item) => `${item.id} ${item.title} ${item.workItemType} ${item.state}`.toLowerCase().includes(filter.toLowerCase()))
   const counts = new Map<string, number>()
@@ -96,7 +99,7 @@ function useDpMatches(rows: AzureWorkItem[] | undefined, candidates: ReturnType<
 // table. QV-63: ↻ and Load from Git run as Background jobs named after the view; their result is listed there, and
 // the page keeps only the warnings about its data (a failed refresh: the data shown is older).
 const noItems: AzureWorkItem[] = []
-function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConnection, assign, featureSetup, qeMapping }: { featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
+function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConnection, onOpenSettings, assign, featureSetup, qeMapping }: { onOpenSettings?: (tab: SettingsTab, section?: string) => void; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
   // QV-16: the header month, or every month (Show: {month} / All months).
   const [scope, setScope] = useState<ReleaseScope>('month')
   const allMonths = scope === 'all'
@@ -142,7 +145,9 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const [picked, setPicked] = useState<number[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
   const can = useCan(), bulkWhy = useWriteBlock().why('work.bulk')
+  // QV-59: no DP bulk creation Epic is built in — without one mapped, Create Features is disabled and links to the setting.
   const dpBulkEpic = useBulkEpic('DP').epicId
+  const openBulkEpics = onOpenSettings ? () => onOpenSettings('options', 'bulk') : undefined
   const dpSetup = useMemo(() => chooseSetup(featureSetup, dpBulkEpic, true).setup, [featureSetup, dpBulkEpic])
   const dpEpics = useStreamEpics('DP')
   const dpCandidates = useMemo(() => isDp ? dpBoardCandidates(azure.items, dpEpics) : null, [isDp, azure.items, dpEpics])
@@ -221,7 +226,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
 
   // (3) and (4): the Releases | Source data tabs with the Releases table, else why there is nothing to show.
   const raw = (rows: AzureWorkItem[]) => <TablePanel><QueryView name={name} items={rows} columns={columns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
-  const dpBulk = <><span className="muted">{picked.length} selected</span><button type="button" className="ghost" disabled={!items.length} onClick={() => setPicked(items.filter((item) => !fullMatch(featureMatch(item))).map((item) => item.id))}>Select all shown</button><button type="button" className="ghost" disabled={!picked.length} onClick={() => setPicked([])}>Clear</button><WriteBlocked reason={bulkWhy} /><button type="button" className="primary" disabled={!picked.length || !assign?.canChoose || !can('work.bulk')} title={bulkWhy ? bulkWhy : assign?.canChoose ? 'Create a Feature for each selected release, assigned to its QE' : 'Needs the right to create work items for other people (Admin → People & roles → Role rights)'} onClick={() => setBulkOpen(true)}>Create Features ({picked.length})</button></>
+  const dpBulk = <><span className="muted">{picked.length} selected</span><button type="button" className="ghost" disabled={!items.length} onClick={() => setPicked(items.filter((item) => !fullMatch(featureMatch(item))).map((item) => item.id))}>Select all shown</button><button type="button" className="ghost" disabled={!picked.length} onClick={() => setPicked([])}>Clear</button><WriteBlocked reason={bulkWhy} />{!bulkWhy && !dpBulkEpic && <BulkEpicNotSet stream="DP" onOpen={openBulkEpics} />}<button type="button" className="primary" disabled={!picked.length || !assign?.canChoose || !can('work.bulk') || !dpBulkEpic} title={bulkWhy ? bulkWhy : !dpBulkEpic ? bulkEpicMissing('DP') : assign?.canChoose ? 'Create a Feature for each selected release, assigned to its QE' : 'Needs the right to create work items for other people (Admin → People & roles → Role rights)'} onClick={() => setBulkOpen(true)}>Create Features ({picked.length})</button></>
   // TVL-14: the built-in Tool Validations stream has its own tabs — Master list (with the expiry view), Azure (this
   // query: the month's releases and its rows, or the fetch empty state) and one per other source — also before a fetch
   // and in a month without documents (the master list is kept in Git, not in the fetch).
@@ -235,7 +240,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
         <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose more={dpColumns} extra={boardColumn} actions={dpBulk} />
       </TablePanel>} raw={raw(items)} />
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={cp.report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
-    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} layout={toolPage ? toolTabs : undefined} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
+    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} layout={toolPage ? toolTabs : undefined} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   return <Page className="release-page">
     {/* (1) QV-48: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}

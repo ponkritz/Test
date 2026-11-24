@@ -1454,8 +1454,9 @@ test('TC-QV-40: Stream mapping → Bulk creation Epics — shared and my own Epi
   const panel = page.locator('.bulk-epics')
   await panel.waitFor()
   const row = (stream) => panel.getByRole('row', { name: new RegExp(`^${stream}`) })
-  assert.match(await text(row('DP')), /#13946.*built in/)
-  assert.match(await text(row('IOCC')), /not set/)
+  // No Epic is built in: every stream is "not set" until it is mapped.
+  for (const stream of ['DP', 'IOCC', 'Content']) assert.match(await text(row(stream)), /not set/, `${stream}: not set`)
+  assert.doesNotMatch(await text(panel), /built in|13946|22919/, 'no built-in Epic hint')
   await panel.getByLabel('IOCC shared bulk Epic').fill('21000')
   await row('IOCC').getByRole('button', { name: 'Save' }).click()
   assert.match(await text(row('IOCC')), /#21000.*shared/)
@@ -1731,15 +1732,16 @@ test('TC-QV-41: My settings → My naming patterns — your own patterns for IOC
   await context.close()
 })
 
-test('TC-ADM-02: Admin → Overview lists what to set up with links (and the bulk Epic without a setup, TC-ADM-03); Ctrl K finds a setting and opens it; History filters the changes', async () => {
+test('TC-ADM-02: Admin → Overview lists what to set up with links (and the bulk streams without an Epic, TC-ADM-03); Ctrl K finds a setting and opens it; History filters the changes', async () => {
   const { page, context, errors } = await openPage(app)
   await navigate(page, /Overview$/)
   assert.equal(await text(page.locator('header.topbar h1')), 'Overview')
   const health = page.locator('.admin-overview')
   assert.match(await text(health), /Connect Git storage/, 'the open Get started steps are listed')
   assert.match(await text(health), /No access roles yet.*read-only/, 'CON-101: without access.json the app is read-only')
-  assert.match(await text(health), /DP bulk creation Epic #13946 has no Feature setup/, 'ADM-05: the built-in DP bulk Epic has no shared Feature setup yet')
-  await health.locator('li', { hasText: 'IOCC bulk creation Epic not chosen' }).getByRole('button').click()
+  for (const stream of ['DP', 'IOCC', 'Content']) assert.match(await text(health), new RegExp(`${stream} bulk creation Epic is not set`), `ADM-05: no ${stream} bulk creation Epic is built in, so it is listed until mapped`)
+  assert.doesNotMatch(await text(health), /#13946/, 'no built-in DP Epic')
+  await health.locator('li', { hasText: 'DP bulk creation Epic is not set' }).getByRole('button').click()
   assert.equal(await text(page.locator('header.topbar h1')), 'Stream options')
   assert.equal(await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Bulk creation Epics' }).getAttribute('aria-selected'), 'true', 'the fix opens the section')
   await page.keyboard.press('Control+k')

@@ -7,8 +7,9 @@ import { bulkSetFor, type EpicSetup, type QeMapColumns, type ReleaseTypeSetup } 
 import { classificationFromType } from './epicSetup.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 
-// DP releases (Release Details → DP, Epic 13946): the release type from the version, the QE from the QE Mapping, the
-// possible QEs from the earlier releases of the same product, and the plan for creating their Features in bulk.
+// DP releases (Release Details → DP, under the DP bulk creation Epic, QV-59): the release type from the version, the QE
+// from the QE Mapping, the possible QEs from the earlier releases of the same product, and the plan for creating their
+// Features in bulk.
 
 // DPF-01: x.y.z.a — X.0.0.0 Major, x.y.0.0 Minor (both a Release), x.y.z.0 MLD and x.y.z.a Platform Update (both a PU).
 // Missing parts count as 0 ("4.2" is 4.2.0.0); a leading "v" is ignored; anything else has no type.

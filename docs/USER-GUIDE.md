@@ -441,6 +441,8 @@ Every Release page looks the same, top to bottom:
 
 **Create Feature** on a release without a match opens the New Feature form, titled for that release. Load the QMS-0025 board first.
 
+**Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
+
 ### Windchill exports
 
 A Windchill search exported to CSV becomes a Release page.
@@ -826,7 +828,7 @@ The **Team tree** tab shows the reporting lines. **Capacity roles** sets which t
 
 ![Admin → Streams (here read only, with server names replaced by made-up ones)](user-guide/images/streams.png)
 
-**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream options** sets the Epics Features are matched in, the bulk creation Epics and the release counts.
+**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream options** sets the Epics Features are matched in, the bulk creation Epics (the Epic each of DP, IOCC and Content creates its Features under — none built in, so map each one the team uses) and the release counts.
 
 Your own read-only views are in **My settings → My views**: they appear under **Other views** in your menu only, and never change a stream.
 

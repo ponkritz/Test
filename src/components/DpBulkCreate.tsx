@@ -8,6 +8,7 @@ import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { FeatureSetups } from '../featureSetup'
 import { chooseSetup, withLinkedStories } from '../featureSetup'
 import { useBulkEpic } from '../useStreamEpics'
+import { bulkEpicMissing } from '../bulkEpics'
 import type { QeMappingFile } from '../qeMapping'
 import { bulkPlan, pickQe } from '../dpBulk'
 import type { BoardHit } from '../dpBoardMatch'
@@ -16,13 +17,13 @@ import { runInBackground } from '../backgroundJobs'
 import { adhocAfterLock } from '../planningLock'
 import { Modal, Notice } from './ui'
 
-// DPF-04: Create Features for the selected DP releases — under Epic 13946, each titled Program | Service | Release, with
-// the DoD and default User Stories of its release type (Release or PU set, Feature setup → Epic 13946), the Release
+// DPF-04: Create Features for the selected DP releases — under the DP bulk creation Epic (QV-59), each titled Program |
+// Service | Release, with the DoD and default User Stories of its release type (that Epic's Feature setup), the Release
 // Classification (Major, Minor, MLD, Platform Update), the Time Writing story and month Task, all assigned to the QE from
 // the QE Mapping, in the PI / Sprint chosen. One after another as a background job; releases that cannot be created
 // are listed with the reason and skipped.
 export function DpBulkCreate({ rows, azure, featureSetup, qeMapping, featureMatch, onClose }: { rows: AzureWorkItem[]; azure: AzureWorkspace; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; featureMatch: (row: AzureWorkItem) => BoardHit | undefined; onClose: () => void }) {
-  // QV-59: the DP bulk Epic — mine, else shared, else built in (13946).
+  // QV-59: the DP bulk Epic — mine, else shared; none built in (0: not set, Create is blocked).
   const dpEpicId = useBulkEpic('DP').epicId ?? 0
   const unlinked = chooseSetup(featureSetup, dpEpicId, true).setup
   const epicFile = useEpicSetupFile()
@@ -55,7 +56,7 @@ export function DpBulkCreate({ rows, azure, featureSetup, qeMapping, featureMatc
     return () => { active = false }
   }, [azure.config, azure.pat])
   const pair = pairs?.[choice]
-  const blocked = azure.isSample ? 'Synthetic sample data is loaded: creating in Azure DevOps is disabled.' : !azure.config || !azure.pat ? 'Connect the QMS-0025 Time Writing connection with a PAT first (My settings → Servers and PATs).' : !epic ? `Epic #${dpEpicId} is not on the loaded QMS-0025 board: load the board first.` : !pair ? (error || 'Loading the PI / Sprint…') : !ready.length ? 'None of the selected releases can be created (see the reasons).' : ''
+  const blocked = azure.isSample ? 'Synthetic sample data is loaded: creating in Azure DevOps is disabled.' : !azure.config || !azure.pat ? 'Connect the QMS-0025 Time Writing connection with a PAT first (My settings → Servers and PATs).' : !dpEpicId ? bulkEpicMissing('DP') : !epic ? `Epic #${dpEpicId} is not on the loaded QMS-0025 board: load the board first.` : !pair ? (error || 'Loading the PI / Sprint…') : !ready.length ? 'None of the selected releases can be created (see the reasons).' : ''
 
   function create() {
     if (blocked || !azure.config || !epic || !pair) return

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AzureWorkItem } from '../domain'
 import { classificationOf, copyEpicFields, emptyEpicSetup, newStoryTemplateId, templatesFor, upsertStoryTemplate, type StoryTemplateItem, featureFromFields, fieldTypes, ifEmptyOptions, intoOptions, maxEpicFields, serializeEpicSetup, upsertEpicFields, type EpicField, type EpicFields, type EpicSetupFile } from '../epicSetup'
-import { chooseSetup, classSetKey, dpEpicId, emptySetup, fieldKey, inheritFields, serializeFeatureSetup, setForClass, setupFor, type EpicSetup, type FeatureSetupFile, type InheritField, type SetupDefaults, type StoryTemplate } from '../featureSetup'
+import { chooseSetup, classSetKey, emptySetup, fieldKey, inheritFields, serializeFeatureSetup, setForClass, setupFor, type EpicSetup, type FeatureSetupFile, type InheritField, type SetupDefaults, type StoryTemplate } from '../featureSetup'
 import { useCan } from '../useCan'
 import type { EpicSetupStore } from '../useEpicSetup'
 import type { FeatureSetup } from '../useFeatureSetup'
@@ -68,7 +68,7 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, qeColumnNames 
   const resolved = isAll ? undefined : chooseSetup({ shared: sharedFile, personal: personalFile }, epicId, !useMine).setup
   const inheritsHere = (field: InheritField) => !entry || (entry.inherits ?? []).includes(field)
   const custom: Record<Section, boolean> = { fields: Boolean(fieldsEntry?.fields.length), dod: !isAll && !inheritsHere('featureDoD'), stories: !isAll && !inheritsHere('stories'), task: !isAll && !inheritsHere('estimate') }
-  const hasSets = !isAll && (epicId === dpEpicId || epicId === dpBulkEpic || epicId === ioccBulkEpic)
+  const hasSets = !isAll && (epicId === dpBulkEpic || epicId === ioccBulkEpic)
   const classes = classificationOf(epicFile, epicId)
   const value = isAll ? '' : cls
   const ownKey = value ? classSetKey(entry, value) : undefined

@@ -7,7 +7,7 @@ import { fixture, loadSample, navigate, openPage, profileItem, startApp, text } 
 const exportFrom = async (page, scope, format = 'CSV (.csv)') => { await scope.getByRole('button', { name: /^Export/ }).first().click(); const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: format }).click()]); return download }
 
 // Documentation, Windchill export and data-safety scenarios of the UAT (TC-DOC-01, TC-DOC-02, TC-CON-39, TC-CON-37,
-// TC-STO-04, TC-INS-01, TC-QV-23, TC-QV-43, TC-QV-44), automated against the built web app.
+// TC-STO-04, TC-INS-01, TC-QV-23, TC-QV-43, TC-QV-40, TC-QV-44), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -497,6 +497,55 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   await show.selectOption('month')
   const [listed] = (await text(releases().locator('.record-count'))).match(/^\d+/) ?? ['']
   assert.equal(await text(page.locator('.release-counts .metric-grid article').first().locator('strong')), listed, 'S&S IT: Releases in the month = the releases the table lists')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create Features is disabled with the reason and opens Bulk creation Epics; a shared mapping saved there is used', async () => {
+  // The same synthetic DP, IOCC and Content release pages as TC-QV-43; nothing is fetched (Azure DevOps answers 401).
+  const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
+  const view = (name) => ({ id: name.toLowerCase().replace(/\W+/g, '-'), url: `https://azure.example.com/tfs/Collection/${encodeURIComponent(name)}`, baseUrl: 'https://azure.example.com/tfs', token: 'e2e-token-0123456789', reason: name, viewName: name, role: 'release-source', query, showInMenu: true })
+  const profiles = [{ id: 'tw', url: 'https://dev.azure.com/ALMP-ORG-MSTP01/Patient%20Safety%20and%20Quality/_backlogs/backlog/InD%20Quality/Epics', token: '', reason: 'QMS-0025', role: 'time-tracking', showInMenu: true }, ...['DP', 'IOCC', 'Content'].map(view)]
+  const { page, context, errors } = await openPage(app, { roles: true, init: (list) => { localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify(list)) }, initArg: profiles })
+  await context.route(/azure\.example\.com|dev\.azure\.com/, (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  for (const title of ['Get started', 'Could not fetch from Azure DevOps']) {
+    const dialog = page.getByRole('dialog').filter({ hasText: title })
+    await page.addLocatorHandler(dialog, () => dialog.getByRole('button', { name: 'Close', exact: true }).last().click())
+  }
+  await loadSample(page)
+  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source', { hasText: name }).waitFor(); await page.getByLabel('Show', { exact: true }).selectOption('all') }
+  const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
+  const note = (stream) => releases().getByRole('note').filter({ hasText: `No ${stream} bulk creation Epic is set` })
+  const create = () => releases().getByRole('button', { name: /^Create Features \(\d+\)$/ })
+  await open('DP')
+  assert.equal(await text(note('DP')), 'No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics.', 'the reason next to the button')
+  await releases().getByRole('button', { name: 'Select all shown', exact: true }).click()
+  assert.notEqual(await text(create()), 'Create Features (0)', 'releases are ticked')
+  assert.equal(await create().isDisabled(), true, 'DP Create Features is disabled without a mapped Epic')
+  // Content too (the IOCC sample here has no releases; IOCC shares Content's release table and reason, L1).
+  await open('Content')
+  await note('Content').waitFor()
+  assert.equal(await create().isDisabled(), true, 'Content Create Features is disabled too')
+  // The button next to the reason opens Admin → Stream options → Bulk creation Epics: every stream "not set".
+  await open('DP')
+  await releases().getByRole('button', { name: 'Open Bulk creation Epics' }).click()
+  const panel = page.locator('.bulk-epics')
+  await panel.waitFor()
+  assert.equal(await text(page.locator('header.topbar h1')), 'Stream options')
+  const row = (stream) => panel.getByRole('row', { name: new RegExp(`^${stream}`) })
+  for (const stream of ['DP', 'IOCC', 'Content']) { assert.match(await text(row(stream)), /not set/, `${stream}: not set`); assert.doesNotMatch(await text(row(stream)), /built in/, `${stream}: no built-in Epic`) }
+  await panel.getByLabel('DP shared bulk Epic').fill('15000')
+  await row('DP').getByRole('button', { name: 'Save' }).click()
+  await row('DP').filter({ hasText: /#15000.*shared/ }).waitFor()
+  // Mapped: the reason is gone, Create Features opens and works under the mapped Epic.
+  await open('DP')
+  await releases().getByRole('button', { name: 'Select all shown', exact: true }).click()
+  assert.equal(await note('DP').count(), 0, 'no reason once the Epic is mapped')
+  assert.equal(await create().isDisabled(), false, 'Create Features is enabled')
+  await create().click()
+  const dialog = page.getByRole('dialog').filter({ hasText: /Create Features for \d+ DP release/ })
+  await dialog.waitFor()
+  assert.match(await text(dialog), /Under Epic #15000/, 'the mapped Epic is used')
   assert.deepEqual(errors, [])
   await context.close()
 })
