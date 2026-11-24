@@ -30,6 +30,7 @@ import type { GitStorage } from '../useGitStorage'
 import type { MenuLayoutStore } from '../useMenuLayout'
 import type { OnDemandStore } from '../useOnDemand'
 import type { PersonalViewsStore } from '../usePersonalViews'
+import { PageViewForEveryone } from '../components/ViewForEveryone'
 import { PageNameDialog } from './OnDemandPage'
 import { ExportNoteContext, sampleExportNote } from '../exportNote'
 import { PdfExport, type PrintItem } from '../components/PrintView'
@@ -259,6 +260,8 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
       })}
       <button type="button" className="text-button" disabled={!filtered} onClick={() => update({ period: defaultPeriod(), choices: {} })}>Reset filters</button>
     </div>
+    {/* UI-23: the period, filters and tab as the view for everyone (Tool Owner). */}
+    <PageViewForEveryone entryKey={viewerKey(pageId)} what={`${page.name} period, filters and tab`} value={viewed} onUse={(value) => setViewed(readViewed(pageId, value))} />
     <p className="muted dsh-scope" role="status">Period: {months.length === countingYears.length * 12 ? `${countingYears.join(', ')} (whole ${several ? 'years' : 'year'})` : months.map((month) => `${monthNames[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`).join(', ')}{Object.values(viewed.choices).some((value) => value.length) ? ' · filtered' : ''}.</p></div>
 
     {!dashboard.blocks.length ? <Panel eyebrow={(group?.name ?? 'On-Demand').toUpperCase()} title={page.name} info={<DashboardInfo path={dash.path} history={dash.history} owners={owners} />}>

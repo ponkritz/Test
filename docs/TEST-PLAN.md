@@ -804,7 +804,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-35 State and Assigned to multi-select filters** — Req BKL-46, BKL-21 — E2E `backlog.e2e.mjs` ("TC-BKL-35: QMS-0025 filters State and Assigned to with multi-select drop-downs; Reset filters goes back to New + Active and me"); L1 `my-work.test.mjs` ("QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)"); browser check with real data: two people chosen show only their work with its Epics and Features; Unassigned shows unassigned items; Closed added to State shows closed items.
 
-**TC-BKL-36 Column order saved for everyone** — Req BKL-47, BKL-03 — L1 `personal-views.test.mjs` ("BKL-47: Save for everyone sets one entry (the QMS-0025 column order) in the defaults and keeps every other default (TC-BKL-36)"); E2E `backlog.e2e.mjs` ("TC-BKL-36: QMS-0025 starts on the column order saved for everyone; Apply keeps my own; Reset to the team default goes back"); browser check with Git storage as a Tool Owner: Save for everyone writes personal-views-defaults.json with the order; another person (no own order) sees it after a reload; a person without the right sees no Save for everyone.
+**TC-BKL-36 Column order saved for everyone** — Req BKL-47, BKL-03 — L1 `personal-views.test.mjs` ("BKL-47: Save for everyone sets one entry (the QMS-0025 column order) in the defaults and keeps every other default (TC-BKL-36)"); E2E `backlog.e2e.mjs` ("TC-BKL-36: QMS-0025 starts on the column order saved for everyone; Apply keeps my own; Reset to the team default goes back"); browser check with Git storage as a Tool Owner: Save view for everyone (before v10.6 "Save for everyone") writes personal-views-defaults.json with the order and who and when (`by:backlog-columns`), listed under Background jobs; another person (no own order) sees it after a reload; Clear the view for everyone (confirmed) removes it; a person without the right sees no Save view for everyone.
 
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
@@ -1432,6 +1432,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-UI-11 Pop-ups work with the keyboard** — Req UI-18 — E2E `shell.e2e.mjs` ("TC-UI-11: a pop-up takes the focus, keeps Tab inside, closes on Escape and gives the focus back to its button"); browser check: open a write pop-up with a person picker, open the picker list, Escape closes only the list, a second Escape closes the pop-up.
 
 **TC-UI-12 A click beside a pop-up keeps what was typed** — Req UI-19 — E2E `shell.e2e.mjs` ("TC-UI-12: a click beside a pop-up with input keeps it open with what was typed; pop-ups without input close"); browser check: New Feature, type a title, click beside the pop-up — it stays open with the title.
+
+**TC-UI-13 Which view a table shows** — Req UI-21 — L1 `table-views.test.mjs` ("views for everyone: own view > view for everyone > the table’s built-in view (TC-UI-13)"); browser check: with a view for everyone saved, a viewer who never changed the table sees it; their first change keeps the rest of it; after the Tool Owner saves it again the Columns panel says "A new view for everyone is available — Use it".
+
+**TC-UI-14 Missing and new columns, sort and the own view in the browser** — Req UI-08, UI-22 — L1 `table-views.test.mjs` ("views for everyone: columns that no longer exist are ignored, new ones come at the end shown; sort kept (TC-UI-14)", "views for everyone: only known shapes are read; the own view in the browser folds in the earlier width and wrap entries (TC-UI-14)"); browser check: a view saved before a column was added shows the new column last; a sort on a removed column falls back to the table's default sort; a table's sort is kept after a reload.
+
+**TC-UI-15 Saved and cleared in the shared views defaults** — Req UI-20, UI-23 — L1 `table-views.test.mjs` ("views for everyone: saved and cleared in the shared views defaults with who and when; merged per entry (TC-UI-15)"); browser check: Save view for everyone writes `table:<id>` and `by:table:<id>` to `personal-views-defaults.json` with one commit, listed under Background jobs; Clear the view for everyone asks first and removes both.
+
+**TC-UI-16 The Tool Owner saves a table's view for everyone** — Req UI-20, UI-21, UI-22 — **UAT** — E2E `views-for-everyone.e2e.mjs` ("TC-UI-16: the Tool Owner saves the CoNQ table’s view for everyone; another person sees it first, keeps their own changes and can use the view for everyone again"); browser check: as the Tool Owner hide, move and widen columns of a table and sort it, Save view for everyone; on another browser as a Team Member open the table — the same columns, widths and sort, no Save option; tick a column back, reload — kept; Use the view for everyone — back.
+- L3 steps:
+  1. Tool Owner (Git connected): CoNQ → Data → Columns: untick Sites, move Cost (EUR) above Category, drag the Category edge wider, sort by Found on (newest first), **Save view for everyone**.
+  2. Second person (Team Member, another browser, first visit): open CoNQ → Data, then Columns.
+  3. Tick Sites, reload, open Columns, **Use the view for everyone**.
+- Expected:
+  - Step 1: Background jobs lists the save; the panel reads "The view for everyone, saved by <email> on <date>".
+  - Step 2: the table shows the Tool Owner's columns, order, width and sort; no Save view for everyone or Clear.
+  - Step 3: Sites stays after the reload with "Your own view · Use the view for everyone"; Use the view for everyone shows the Tool Owner's view again.
+
+**TC-UI-17 Page filters and the People list for everyone** — Req UI-20, UI-23, MYD-08 — L1 `table-views.test.mjs` ("views for everyone: People filters read back only in known shapes (TC-UI-17)"); E2E `views-for-everyone.e2e.mjs` ("TC-UI-17: the People list and its filters saved for everyone by the Tool Owner; an Admin (who holds the right) sees both first and can save too"); browser check: the Team overview, an On-Demand Dashboard page and an Insights page's filter row each offer Save view for everyone beside the filters to the Tool Owner; a person who never changed them starts on the saved period and filters; one who did keeps theirs and sees "Your own view · Use the view for everyone".
 
 - L3 steps:
   1. Click the toggle three times.
@@ -2365,7 +2383,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-05 | TC-UI-02 |
 | UI-06 | TC-UI-03 |
 | UI-07 | TC-UI-04 |
-| UI-08 | TC-UI-04 |
+| UI-08 | TC-UI-04, TC-UI-14 |
 | UI-09 | TC-UI-04 |
 | UI-10 | TC-UI-04, TC-UI-05 |
 | UI-11 | TC-UI-05 |
@@ -2377,6 +2395,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-17 | TC-UI-10 |
 | UI-18 | TC-UI-11 |
 | UI-19 | TC-UI-12 |
+| UI-20 | TC-UI-15, TC-UI-16, TC-UI-17 |
+| UI-21 | TC-UI-13, TC-UI-16 |
+| UI-22 | TC-UI-14, TC-UI-16 |
+| UI-23 | TC-UI-15, TC-UI-17 |
 | CI-01…04 | TC-INS-04, TC-CI-01 |
 | CI-05 | TC-UPD-01 |
 | CI-06 | TC-CI-02 |
@@ -2421,7 +2443,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | MYD-05 | TC-MYD-02 |
 | MYD-06 | TC-MYD-03, TC-MYD-04 |
 | MYD-07 | TC-MYD-04 |
-| MYD-08 | TC-MYD-04 |
+| MYD-08 | TC-MYD-04, TC-UI-17 |
 | MYD-09 | TC-MYD-03 |
 | MYD-10 | TC-MYD-05 |
 | MYD-11 | TC-MYD-05 |
@@ -2730,13 +2752,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
-| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34 |
+| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
 | UC-16 | TC-UPD-01, TC-UPD-02 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |
@@ -2748,7 +2770,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
-| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06 |
+| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17 |
 | UC-27 | TC-HIS-01…11 |
 | UC-28 | TC-ACT-01…12, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-ATM-21 |
 | UC-29 | TC-OVW-01…03 |

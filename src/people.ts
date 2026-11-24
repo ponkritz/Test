@@ -47,6 +47,15 @@ export interface PersonEntry {
 // '' in a filter's value means "Not set" (Region, Role) or "Default role" (Access role).
 export interface PeopleFilters { regions: string[]; roles: string[]; access: string[]; status: string[]; text: string }
 export const emptyFilters: PeopleFilters = { regions: [], roles: [], access: [], status: [...defaultStatusFilter], text: '' }
+// UI-23: People filters remembered per person (personal views, key "people-filters") and as a view for everyone: only
+// known shapes are kept (lists of text, the search at most 200 characters).
+export const peopleFiltersKey = 'people-filters'
+export function readPeopleFilters(raw: unknown): PeopleFilters | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const value = raw as Record<string, unknown>
+  const texts = (entry: unknown, fallback: string[]) => Array.isArray(entry) ? [...new Set(entry.filter((item): item is string => typeof item === 'string' && item.length <= 100))].slice(0, 50) : fallback
+  return { regions: texts(value.regions, []), roles: texts(value.roles, []), access: texts(value.access, []), status: texts(value.status, [...emptyFilters.status]), text: typeof value.text === 'string' ? value.text.slice(0, 200) : '' }
+}
 export const filtersChanged = (filters: PeopleFilters) => Boolean(filters.regions.length || filters.roles.length || filters.access.length || filters.text.trim() || filters.status.length !== defaultStatusFilter.length || filters.status.some((value) => !defaultStatusFilter.includes(value as PersonStatus)))
 
 // Nothing ticked in a filter = all; the text matches the name or the email (every word).

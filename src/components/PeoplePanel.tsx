@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { DataTable, type DataColumn } from './DataTable'
+import { PageViewForEveryone } from './ViewForEveryone'
+import { useViewsForEveryone } from '../useViewsForEveryone'
 import { Drawer, Info, Modal, Notice, Panel, Pill, WriteBlocked } from './ui'
 import { MultiSelect } from './MultiSelect'
 import { ViewActions } from './ViewActions'
@@ -10,7 +12,7 @@ import { formatDate } from '../format'
 import { utcToday } from '../businessTime'
 import { regions, resourceRoles, type Region, type ResourceProfile, type ResourceRole } from '../capacity'
 import { roles as accessRoles, type Role } from '../access'
-import { emptyFilters, filterPeople, filtersChanged, formError, formOf, missingOf, patchText, profilePatch, sameRoles, statusOptions, statusText, type PeopleFilters, type PersonEntry, type PersonForm } from '../people'
+import { emptyFilters, filterPeople, peopleFiltersKey, readPeopleFilters, filtersChanged, formError, formOf, missingOf, patchText, profilePatch, sameRoles, statusOptions, statusText, type PeopleFilters, type PersonEntry, type PersonForm } from '../people'
 import type { GitStorage } from '../useGitStorage'
 
 // Admin → People & roles → People (CAP-58…CAP-61, UI-STANDARDS §4a, §5, §7, §8). A read-only list in the shared
@@ -51,7 +53,11 @@ const failureText = (failure: unknown) => failure instanceof Error ? failure.mes
 
 export function PeoplePanel({ entries, names, outside, defaultRole, defaultJoinedOn, accessReason, accessOnly, source, teamError, readTeam, git, saves }: PeoplePanelProps) {
   const today = utcToday()
-  const [filters, setFilters] = useState<PeopleFilters>(emptyFilters)
+  // UI-23: the filters remembered per person (personal views), else the view for everyone, else the built-in start.
+  const { views } = useViewsForEveryone()
+  const [filters, setFilterState] = useState<PeopleFilters>(() => ({ ...(views?.filter(peopleFiltersKey, readPeopleFilters) ?? emptyFilters), text: '' }))
+  // The search box is not remembered (only Region, Role, Access role and Status).
+  const setFilters = (next: PeopleFilters) => { setFilterState(next); if (JSON.stringify({ ...next, text: '' }) !== JSON.stringify({ ...filters, text: '' })) views?.setFilter(peopleFiltersKey, { ...next, text: '' }) }
   const [selected, setSelected] = useState<string[]>([])
   const [open, setOpen] = useState<{ name: string; order: string[] } | null>(null)
   const [bulk, setBulk] = useState<'region' | 'role' | 'access' | null>(null)
@@ -124,6 +130,7 @@ export function PeoplePanel({ entries, names, outside, defaultRole, defaultJoine
       <button type="button" className="text-button" onClick={() => setSelected([])}>Clear selection</button>
       <WriteBlocked reason={accessReason} />
     </div>}
+    <PageViewForEveryone entryKey={peopleFiltersKey} what="People filters" value={{ ...filters, text: '' }} onUse={(value) => setFilterState(readPeopleFilters(value) ?? emptyFilters)} />
     <DataTable id="admin:people" className="people-table" columns={columns} rows={shown} rowKey={(entry) => entry.name} exportName="People" toolbar={toolbar}
       status={`${shown.length} of ${plural(entries.length, 'person', 'people')}`} defaultSort={{ id: 'person' }}
       selection={{ selected, onChange: setSelected, label: (entry) => entry.name }}

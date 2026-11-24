@@ -14,6 +14,7 @@ import { narrowPeriod, offeredMonths, offeredQuarters, periodQuarters, periodYea
 import { amountProblem, anyCurrency, chartCurrency, cleanSetup, currenciesOf, filterCurrency, filterKind, filterRowColumns, insightsLocalKey, insightsViewerKey, isFiltered, maxInsightFilters, narrowInsightRows, offeredYears, periodColumns, readChoice, resolveFilterSetup, scopeText, emptyChoice, type FieldChoice, type ResolvedSetup, type ViewerChoice } from '../insightFilters'
 import { cleanOptions, hasOptions, narrativeError, insightKindOf as kindOf, newId, parseNarrative, type ColorPins, type Insight, type InsightFilter, type InsightFilterSetup, type InsightMeasure, type OnDemandColumn, type OnDemandPage } from '../onDemand'
 import type { PersonalViewsStore } from '../usePersonalViews'
+import { PageViewForEveryone } from '../components/ViewForEveryone'
 import { PdfExport, type PrintItem } from '../components/PrintView'
 import { NarrativeFields } from '../components/NarrativeFields'
 import { EditorTabs } from '../components/EditorTabs'
@@ -136,6 +137,7 @@ export function InsightsTab({ page, canSetup, setupReason, blockNote, saveBar, v
     {narrowed.active && <div className="ins-bar">
       <FilterRow page={page} setup={setup} choice={choice} currentYear={currentYear} onChange={update} />
       <p className="muted dsh-scope ins-scope" role="status">{scopeText(setup, choice, narrowed, currentYear)}</p>
+      <PageViewForEveryone entryKey={insightsViewerKey(page.id)} what={`${page.name} filter row`} value={choice} onUse={(value) => setChoice(readChoice(value))} />
     </div>}
     {/* CHT-36, CHT-51: the KPI cards on the chart grid, in a row above the charts in the charts' order until the owners
         move them (Show as: Panel keeps a KPI among the charts as a panel); each resizable as a chart. */}
