@@ -130,7 +130,7 @@ both ⟳ and ↻, both ✕ and ×, both ＋ and +.
 - **Filters**: one filter bar under the panel heading: `MultiSelect` for a filter with several values, a segmented
   control for two to four exclusive options, a search box last, and **Reset filters** (ghost) at the end.
 - **Period**: the top-bar month is the default everywhere. A page that needs another period offers one control,
-  **Show: {month} / All months**, or one period picker — the same on every page.
+  **Show: Selected month / All months**, or one period picker — the same on every page.
 
 **Today:** six tab implementations, and the chosen Settings tab is not highlighted; four chip styles; the Region filter
 in three forms; "Reset filters" and "Clear filters"; seven period controls.
@@ -181,7 +181,7 @@ palettes for planned / actual / capacity.
 Every stream's Release page (DP, CP, IOCC, Content, Tool Validations, S&S IT, ECP) has the same parts in the same
 order; a stream leaves out a part it cannot have, and adds its own columns only after the common ones.
 
-1. **Source bar** — only the controls, right-aligned: **Show: {month} / All months**, ↻ and ⋯; no view name, source,
+1. **Source bar** — only the controls, right-aligned: **Show: Selected month / All months**, ↻ and ⋯; no view name, source,
    when fetched or ⓘ (the page title names the view). The first line of ⋯ (not an action) is the source · when
    fetched or imported; **About this source…** at the end of ⋯ opens a pop-up with that line and the details of the
    data (month filter, items fetched, milestone names, Git copy). Warnings about the data shown stay below the bar.
@@ -264,6 +264,7 @@ wrong for a real case as an Improvement to the standard.
 
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-24 | §7 Period: **Show: Selected month / All months** is a segmented toggle, no longer a drop-down repeating the month ("Month is repeating … make it as a Toggle", QV-71). | Product owner, 2026-11-24 |
 | 2026-11-24 | §3 Missing permission — **row buttons with a reason per row** (an exception): on the Tool Validations Master list a tool from Azure DevOps has Edit and Remove disabled with its own reason as each button's tooltip (Edit: change it in Azure DevOps; Remove: until Azure DevOps no longer returns it), and one line above the table covers both, with Edit notes… for the notes (TVL-30). | Product owner, 2026-11-24 |
 | 2026-11-24 | §10 (2) Counts: Tool Validations shows them on its Master list tab only, as Validations ("Keep the Supported Validations and Completed Validation Card only in Master List", TVL-23). | Product owner, 2026-11-24 |
 | 2026-11-24 | §10 (1) Source bar: the name · source · fetched text and ⓘ Info removed from the bar ("It's duplicating info"), on every Release page; Show, ↻ and ⋯ stay, right-aligned; source · fetched is the first line of ⋯ and the details are behind ⋯ → About this source… (QV-62, QV-70). | Product owner, 2026-11-24 |

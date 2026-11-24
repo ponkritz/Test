@@ -95,7 +95,7 @@ test('TC-DPF-09: a Tool Owner sets the Release Classification rules per value in
   await page.locator('.sidebar nav button').filter({ hasText: /(^|[^A-Za-z])DP$/ }).first().click()
   await page.locator('.page-loading').waitFor({ state: 'detached' })
   await page.locator('.release-source').getByRole('button', { name: 'More actions: DP', exact: true }).waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   const releases = page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
   await releases.locator('thead').waitFor()
   // (c) Select, then Release name, Version, Release Classification (detected) first (DPF-12).

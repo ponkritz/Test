@@ -435,7 +435,7 @@ The **KPI tracker** (from the Team Insights tile on Home) shows the team's KPI w
 
 Every Release page looks the same, top to bottom:
 
-1. The **source bar** — on the right, **Show: <month> / All months**, **↻** to refresh or import, and **⋯**. The first line of **⋯** says where the data comes from and when it was fetched or imported; then Load from Git, Connection settings, Remove, and **About this source…** for the details of the data (month filter, items fetched, DP's milestone names).
+1. The **source bar** — on the right, **Show: Selected month / All months**, **↻** to refresh or import, and **⋯**. The first line of **⋯** says where the data comes from and when it was fetched or imported; then Load from Git, Connection settings, Remove, and **About this source…** for the details of the data (month filter, items fetched, DP's milestone names).
 2. The **counts** of the header month — **Releases in <month>**, **Completed**, **Supported** — with **What was counted**.
 3. Two tabs: **Releases** and **Source data** (the raw rows, with search and Export).
 4. The **Releases** table: Release name (▸ opens its documents), Release, the date, Documents, the stream's own columns, the Time Writing Feature with its planned and booked hours, and the **QMS-0025 match**.

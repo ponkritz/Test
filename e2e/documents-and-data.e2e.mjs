@@ -96,7 +96,7 @@ test('TC-CON-39 / TC-CON-37 / TC-QV-27: a Windchill export lists its unique rele
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   const body = await text(releases)
   assert.match(body, /5 releases · 6 of 7 documents · 1 clubbed/)
   // QV-62: Release name ▸ (opens the documents), Release, the latest date, Documents (a count).
@@ -149,7 +149,7 @@ test('TC-CON-40: an export with a Location column reads its releases from Locati
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-locations.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   let body = await text(releases)
   assert.match(body, /5 releases · 6 of 7 documents · from Location/)
   for (const row of ['CareLink R3.2', 'Remote Diagnostics 1.7', '▸ Remote Diagnostics 1.6 2026-10-01 2 1', 'Service1 1.0']) assert.ok(body.includes(row), row)
@@ -187,7 +187,7 @@ test('TC-CON-41: the export page follows the header month, sorts by any column a
   let body = await text(releases)
   assert.match(body, /1 of 5 releases with a document Last Modified in August 2026 · 1 document/)
   assert.ok(body.includes('CareLink 3.2'))
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   assert.match(await text(releases), /5 releases · 6 of 7 documents/)
   const names = async () => (await releases.locator('tbody tr td:first-child button').allInnerTexts()).map((name) => name.replace(/^▸\s*/, ''))
   await releases.getByRole('button', { name: /^Release name/ }).click()
@@ -208,7 +208,7 @@ test('TC-QV-23: the export\'s releases have a QMS-0025 match column with Create 
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   assert.equal(await releases.getByRole('button', { name: /^QMS-0025 match/ }).count(), 1, 'the column heading sorts')
   const rows = releases.locator('table').first().locator('tbody > tr')
   assert.equal(await rows.count(), 5)
@@ -232,7 +232,7 @@ test('TC-CON-53 / TC-QV-43: "＋ ECP" imports the export as the ECP page whateve
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-ecp.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   const body = await text(releases)
   assert.match(body, /123456/)
   // QV-62 (CON-86 retired): an ECP release is a project, shown with the columns every Release page has.
@@ -256,7 +256,7 @@ test('TC-CON-55 / TC-QV-28: an ECP setup named "ECP - Type 2" reads projects fro
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-ecp-type2.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   let body = await text(releases)
   assert.match(body, /Patient Monitor/)
   assert.match(body, /Scanner/)
@@ -386,7 +386,7 @@ test('TC-CON-42: tables fit their columns — widening a column widens the table
   await page.locator('input[type=file]').first().setInputFiles(fixture('windchill-export.csv'))
   const releases = page.locator('.panel').filter({ has: page.locator('h2, h3', { hasText: /^Releases/ }) }).first()
   await releases.waitFor()
-  await page.getByLabel('Show', { exact: true }).selectOption('all')
+  await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click()
   const table = releases.locator('table.resizable')
   assert.match(await table.getAttribute('class'), /\bno-wrap\b/, 'one line per cell by default')
   const widths = () => table.locator('thead th').evaluateAll((cells) => cells.map((cell) => Math.round(cell.getBoundingClientRect().width)))
@@ -425,7 +425,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source').getByRole('button', { name: `More actions: ${name}`, exact: true }).waitFor() }
   const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
   const headers = async () => (await releases().locator('thead').waitFor(), await releases().locator('thead th').allTextContents()).map((header) => header.replace(/[▴▾▲▼↑↓]/g, '').trim().toLowerCase())
-  const show = page.getByLabel('Show', { exact: true })
+  const show = page.getByRole('radiogroup', { name: 'Show' })
   // counts: the tiles after Releases in {Month} (QV-58, QV-64; at most three, UI-STANDARDS §9).
   const parts = async (name, { counts }) => {
     const bar = page.locator('.release-source')
@@ -438,9 +438,11 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     assert.match(await text(menu.locator('.view-actions-note')), /^.+ · .*(fetched|imported) /, `${name}: ⋯ starts with source · when fetched`)
     await page.keyboard.press('Escape')
     await menu.waitFor({ state: 'detached' })
-    const monthLabel = await show.locator('option').first().innerText()
-    assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: Show offers the header month`)
-    assert.deepEqual(await show.locator('option').allInnerTexts(), [monthLabel, 'All months'], `${name}: Show: {month} / All months`)
+    // QV-71: a toggle Selected month | All months — the month is not repeated (it is in the top bar and the tooltip).
+    assert.deepEqual(await show.getByRole('radio').allInnerTexts(), ['Selected month', 'All months'], `${name}: Show: Selected month / All months`)
+    assert.equal(await show.getByRole('radio', { name: 'Selected month' }).getAttribute('aria-checked'), 'true', `${name}: the selected month by default`)
+    const monthLabel = (await show.getByRole('radio', { name: 'Selected month' }).getAttribute('title')).replace(/^Only (.+) \(the month in the top bar\)$/, '$1')
+    assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: the tooltip names the header month`)
     assert.equal(await bar.locator('.view-actions .primary', { hasText: '↻' }).count(), 1, `${name}: ↻`)
     assert.equal(await bar.getByRole('button', { name: `More actions: ${name}` }).count(), 1, `${name}: ⋯`)
     // (2) Counts: every stream, with the tiles it has a rule for; the numbers in the one KPI size (24px, §9).
@@ -455,7 +457,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     assert.equal(await page.locator('.release-counts').getByRole('button', { name: /What was counted/ }).count(), 1, `${name}: ⓘ What was counted`)
     for (const size of await page.locator('.release-counts .metric-grid article > strong').evaluateAll((numbers) => numbers.map((number) => getComputedStyle(number).fontSize))) assert.equal(size, '24px', `${name}: KPI numbers 24px`)
     // (3) Tabs: Releases | Source data (n), with every month shown.
-    await show.selectOption('all')
+    await show.getByRole('radio', { name: 'All months' }).click()
     const tabs = page.getByRole('tablist', { name: 'Result' })
     await tabs.waitFor()
     const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
@@ -517,7 +519,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   assert.deepEqual(await headers(), ['release name', 'release', 'latest last modified', 'documents', ...commonEnd], 'S&S IT: Release name, Release, the latest date (Approved place), Documents, the matched Feature with its hours, the QMS-0025 match')
   for (const label of ['documents', 'planned (h)', 'booked (h)']) assert.equal(await rightAligned(label), 'right', `S&S IT: ${label} right-aligned`)
   // QV-64: the tiles count what the table lists for the month — the same number as the table's "n of N releases".
-  await show.selectOption('month')
+  await show.getByRole('radio', { name: 'Selected month' }).click()
   const [listed] = (await text(releases().locator('.record-count'))).match(/^\d+/) ?? ['']
   assert.equal(await text(page.locator('.release-counts .metric-grid article').first().locator('strong')), listed, 'S&S IT: Releases in the month = the releases the table lists')
   assert.deepEqual(errors, [])
@@ -536,7 +538,7 @@ test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create
     await page.addLocatorHandler(dialog, () => dialog.getByRole('button', { name: 'Close', exact: true }).last().click())
   }
   await loadSample(page)
-  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source').getByRole('button', { name: `More actions: ${name}`, exact: true }).waitFor(); await page.getByLabel('Show', { exact: true }).selectOption('all') }
+  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source').getByRole('button', { name: `More actions: ${name}`, exact: true }).waitFor(); await page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'All months' }).click() }
   const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
   const note = (stream) => releases().getByRole('note').filter({ hasText: `No ${stream} bulk creation Epic is set` })
   const create = () => releases().getByRole('button', { name: /^Create Features \(\d+\)$/ })

@@ -132,7 +132,7 @@ test('TC-STR-06: as Tool Owner add a stream “Labeling” (Azure DevOps, Like C
   await bar.getByRole('button', { name: 'More actions: Labeling', exact: true }).click()
   assert.match(await text(page.getByRole('menu', { name: 'Labeling' }).locator('.view-actions-note')), /^example \/ Labeling · query · fetched /, '(1) the source bar: source · fetched in ⋯')
   await page.keyboard.press('Escape')
-  assert.equal(await bar.getByLabel('Show').count(), 1, 'Show: month / All months')
+  assert.equal(await bar.getByRole('radiogroup', { name: 'Show' }).count(), 1, 'Show: Selected month / All months')
   const counts = page.locator('.release-counts')
   assert.match(await text(counts), /Releases in \w+ \d{4} 2/, '(2) the counts: two releases this month')
   const tabs = page.getByRole('tablist').filter({ has: page.getByRole('tab', { name: /^Releases/ }) })

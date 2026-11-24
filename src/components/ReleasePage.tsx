@@ -7,10 +7,12 @@ import { ViewActions, type ViewAction } from './ViewActions'
 // ECP) shows in the same order — (1) the source bar, (2) the counts, (3) the Releases | Source data tabs
 // (ResultTabs) and (4) the Releases table. A stream leaves out a part it cannot have.
 
-// The period of a Release page (§7): the header month, or every month.
+// The period of a Release page (§7): the header month, or every month — a toggle **Selected month | All months**
+// (QV-71); the month itself is in the top bar, so it is not repeated here (named in the Selected month tooltip).
 export type ReleaseScope = 'month' | 'all'
 export function PeriodSelect({ month, value, onChange }: { month: string; value: ReleaseScope; onChange: (next: ReleaseScope) => void }) {
-  return <label className="inline-field">Show<select aria-label="Show" value={value} onChange={(event) => onChange(event.target.value === 'all' ? 'all' : 'month')}><option value="month">{monthName(month)}</option><option value="all">All months</option></select></label>
+  const options: [ReleaseScope, string, string][] = [['month', 'Selected month', `Only ${monthName(month)} (the month in the top bar)`], ['all', 'All months', 'Every month']]
+  return <div className="segmented" role="radiogroup" aria-label="Show">{options.map(([key, label, title]) => <button key={key} type="button" role="radio" aria-checked={value === key} className={value === key ? 'active' : ''} title={title} onClick={() => onChange(key)}>{label}</button>)}</div>
 }
 
 // (1) The source bar (QV-62, QV-70): only the controls, right-aligned — Show, ↻ and ⋯ (the page title already names
