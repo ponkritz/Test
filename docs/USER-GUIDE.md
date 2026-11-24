@@ -452,7 +452,8 @@ A Windchill search exported to CSV becomes a Release page.
 
 1. Choose **Import Windchill export** (or **＋ S&S IT** / **＋ ECP** for a stream without its export yet).
 2. Choose the CSV file. The page lists the unique releases read from the **Location** folders (or else the document names), each with its documents.
-3. Use **Show: All months** to see every release, not only those of the header month.
+3. Use **All months** (next to ↻) to see every release, not only those of the header month.
+4. To update the page with a newer export, choose **⋯ → Upload latest export…** (or ↻) and pick the new CSV: the same page keeps its name and setup.
 
 ![An imported Windchill export (made-up file)](user-guide/images/windchill.png)
 

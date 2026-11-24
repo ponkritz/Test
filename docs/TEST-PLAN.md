@@ -1010,6 +1010,10 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-QV-51 Selected month / All months toggle on the Release pages** — Req QV-71 — E2E `documents-and-data.e2e.mjs` ("TC-QV-43: every Release page has the source bar, counts, Releases | Source data tabs (Tool Validations: Expiry list | Master list | Azure | Setup) and the common columns in order": the bar's Show is a toggle Selected month | All months, Selected month chosen by default and its tooltip naming the header month; All months shows every month) ; E2E `custom-streams.e2e.mjs` (the custom stream's bar has the toggle) ; browser check: on DP, IOCC, Content and S&S IT the month is not repeated in the bar; switching to All months and back changes the Releases table.
 
+**TC-QV-52 CP: Selected month / All months** — Req QV-72 — L1 `cp-reporting.test.mjs` ("QV-72: CP All months — every release container with a QA/QE signature in any month, completion review only per month (TC-QV-52)") ; browser check: on CP choose All months — the Releases table lists every signed release container of every month, the counts stay the header month's; Selected month returns to the month's releases.
+
+**TC-CON-67 Upload latest export… on a Windchill export page** — Req CON-108 — E2E `documents-and-data.e2e.mjs` ("TC-QV-44: the result of an action on a Release page — a Windchill import, a file that is not an export — is listed in Background jobs, not as a notice on the page": ⋯ → Upload latest export… opens the file picker; the export is imported for the same page, listed in Background jobs) ; browser check: on an existing export page choose ⋯ → Upload latest export… and a newer CSV — the counts and Releases follow the new file, the page keeps its name.
+
 **TC-QV-24 CP releases from the asset Titles** — *(Retired — see TC-QV-25)* Req QV-40 — L1 `streams.test.mjs` ("CP: the release from the asset Title "[Release name] [Release No] [Asset name]", each release once; fuzzy QMS-0025 match (TC-QV-24)"); browser check with a CP query holding three assets of one release in both namings ("Care Pathways 3.1 Test Report", "Care Pathways 3.1.0 SRS", "Risk Analysis v3.1 (Care Pathways)") and one of another (3.2), and a QMS-0025 Feature "CP | Care Pathways | v3.1": Release Details → CP lists two releases (3 and 1 assets), 3.1 with its Feature and %, 3.2 with Create Feature opening the New Feature form titled "Care Pathways | v3.2" (release name and number only) under the CP Epic, and found after it is created; Pulse Check's Releases and Supported summary show "CP [2]"; no page errors. **UAT**
 
 **TC-QV-25 CP release reporting from QA/QE signatures** — Req QV-41…QV-45 — L1 `cp-reporting.test.mjs` ("CP release reporting: Supported and Completed per Release container from QA/QE signatures (TC-QV-25)"; "CP release reporting: slots, roles, dates and month boundaries (TC-QV-25)"; "CP release names: version from the title, Content from the CP_Releases data set, never deciding the count (TC-QV-25)"; "CP Create Feature title: the release name and number only, found again by the board match (TC-QV-25)"; "the CP menu entry: its tree-query connection, listed even when hidden from the menu (TC-QV-25)"; "CP names: the connection with Content is used, a Release with text around the version is read, and a missing version says why (TC-QV-25)"); browser check in the desktop app with the CP connection holding the CP_Release_Folder tree query and a second CP connection with CP_Releases, month October 2026: Release Details → CP shows the counts Releases in October 2026, Completed and Supported, and "n releases · m QA/QE-signed documents" on its Releases table (Release name, Release, Release Notes signed, Documents, Container, Completed, QMS-0025 match); a release with twelve asset folders is one row; a release whose main Release Notes is signed in October is Completed, one with only an asset's Release Notes is not; Clinical Platform Global is under Shared activity; names read "Setebos 26.2" or show their status; a row opens its signatures; Export evidence CSV downloads the month's signatures; Pulse Check's CP quadrant and Supported summary match; no page errors. **UAT**
@@ -2400,6 +2404,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QV-69 | TC-QV-49 |
 | QV-70 | TC-QV-50, TC-QV-43 |
 | QV-71 | TC-QV-51, TC-QV-43 |
+| QV-72 | TC-QV-52 |
 | QV-38 | TC-CON-42 |
 | OVR-01…08 | retired (TC-OVR-01…03 retired) |
 | OV-11 | TC-OV-11 |
@@ -2767,6 +2772,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | STR-07 | TC-STR-07 |
 | CON-106 | TC-PGB-06 |
 | CON-107 | TC-DSH-13 |
+| CON-108 | TC-CON-67 |
 | PGB-01 | TC-PGB-01, TC-PGB-07 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
 | PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
