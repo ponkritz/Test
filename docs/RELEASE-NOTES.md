@@ -2,6 +2,35 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.21.0 — 2026-11-24
+
+**Changed**
+- **Tool Validations: 24 months by default** — a tool with a validation date but no validity period and no due date is now taken as valid for **24 months** (2 years): its due date is the validation date + 24 months, shown as "validation date + 24 months (default)", and its period as **"24 (default)"** on the Expiry list, the Master list and each source's tab; such a tool is now **Overdue**, **Due soon** or later instead of "No due date" (TVL-06, TVL-08, TVL-10). An explicit validity period or due date, from a source or entered by hand, still wins; the default is applied when the list is read and never written to `tool-validations.json`. The Add / Edit tool pop-up says "Leave empty for 24 months (default)" and previews the due date with it.
+- **Source tabs** — the Due date column of a source's tab now shows the due date the master list works out (with where it comes from), as the Expiry list and the Master list do (TVL-06).
+- **Dashboard sources** — `tools:master` and `tools:expiry` follow the new due date (Due date, Due date from, Status, Days left); Validity (months) gives 24 for a tool whose due date uses the default, and stays empty for a tool with no period and an explicit due date or no dates (TVL-18).
+
+DF-264; TC-TVL-03, TC-TVL-20.
+- **Tool Validations two queries: every signed document counts** (TVL-21, LIM-72). Confirmed by the product owner: every document the Signed documents query returns is counted, whatever its work item type. Unlike CP, which counts only Artifacts and Documents.
+
+PR #401.
+
+**Added**
+- **Tool Validations: highlight tools by due date** — the **Master list** and the **Expiry list** tint each tool's row in the colour of its due date band, with the band named in the Due date cell ("≤ 30 days", "Overdue / today") and a legend above the table, so it is not shown by colour alone; an overdue tool is in the band with the fewest days, the narrowest band wins, a tool whose due date is the 24-month default (validation date + 24 months) is highlighted by that date, a tool without a due date is not (TVL-28, TVL-06).
+- **Setup → Due date highlights** — the Tool Owner and the list's co-owners set the team's bands, as many as needed (up to 10): each a number of days (0 = overdue or due today) and a colour from a fixed palette of eight named tints for light and dark mode, with ＋ Add band, Remove and the tools in each band, saved to Git in `tool-validations.json` (`highlights`, validated strictly, merged as one value); until saved the defaults apply — overdue red, 30 days amber, 90 days yellow — and removing every band turns the highlighting off; read only with the reason for everyone else (TVL-27, TVL-02, TVL-14).
+
+DF-291, SM-169, LIM-76; TC-TVL-24, TC-TVL-25.
+
+PR #401.
+
+**Added**
+- **Tool Validations — add an existing page as a tab** — Setup → Tabs → **＋ Add existing page as tab…** lists the On-Demand pages (Table, Table + Insights, On-Demand Dashboard) that are hidden from the menu and not a tab yet — a page kept hidden when its tab was removed, or left behind when an older app version dropped the tabs (LIM-70) — and makes the chosen one a tab again, with its data; once a tab it leaves the list. Same rights as ＋ Add tab… (TVL-24).
+- **Tool Validations — the list's co-owners are the tab pages' co-owners** — when a tab is added and whenever the list's co-owners are saved (Team settings, Set {N} days as team default), they are written as co-owners of each tab's page in menu-layout.json, so they hold the page's rights also when it is opened from Admin → Pages & menu. Co-owners added to a page by hand stay; only the ones the list wrote (remembered as `ownersFromList`) are taken off when they leave the list or the tab is removed. A change of the co-owners is refused while the pages cannot be written; a page out of line is named on Setup → Tabs with **Write the co-owners to the tab pages** (TVL-25, PGB-03).
+- **Show expiry status** on a dashboard block of the Tool Validations master list or expiry list (On-Demand Dashboards and My dashboard): switched off, the block neither offers nor shows Status and Days left — in the block, its table and its drill-down; ⓘ says the status uses the team default window of N days. Read from the product owner's "give option to hide it if need be" as a switch per block, on by default — to be confirmed (TVL-26, TVL-18).
+
+TVL-16, TVL-17, TVL-18, TVL-24, TVL-25, TVL-26, PGB-03; DF-288, DF-289, DF-290; SM-164, SM-168; LIM-70, LIM-71, LIM-75; TC-TVL-11 (UAT), TC-TVL-21, TC-TVL-22, TC-TVL-23.
+
+PR #401.
+
 ## v10.20.0 — 2026-11-24
 
 - **Tool Validations: the count cards are on the Master list tab only, as Validations** (TVL-23). The month's cards no longer sit above every tab of the Tool Validations page; they show on the **Master list** tab, named **Validations in {Month}**, **Completed validations** and **Supported validations**, with ⓘ What was counted. The other Release pages are unchanged.
