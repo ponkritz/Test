@@ -2,6 +2,24 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.11.0 — 2026-11-24
+
+**Changed**
+- **Release Details is one list** — the menu no longer splits Release Details into "Azure DevOps Server" and "Windchill exports": BRITE first, then every stream (Azure DevOps and Windchill exports, built-in and custom, each ECP export by its name, a stream not set up yet with its ＋) sorted A–Z ignoring case, then ＋ ECP export and Import Windchill export; the Home tile lists the streams in the same order. A collapsed sub-list remembered by an earlier version is forgotten, so Expand all / Collapse all act on the headings only (NAV-52, NAV-17, NAV-37, CON-84, CON-85, CON-87, STR-02).
+
+TC-NAV-52.
+
+PR #388.
+
+**Added**
+- **Tool Validations master list** — the Tool Validations page gets the tabs **Validation expiry** and **Master list**. The master list is kept in the Git data repository (`tool-validations.json`, schema 1, validated strictly when read, saved queued and merged with the save time and user, GIT-17) and keeps every validated tool once it is listed: the tools of the Tool Validations query are appended whenever its data is fetched; another Azure DevOps query, an imported Windchill export or a Table page kept by hand are added as sources and brought in with **Merge into master list…** after a preview. The same tool from two sources is one entry (name — case, spaces and punctuation ignored — and version); a tool that leaves its source stays, marked "Not in source now" (TVL-01…TVL-05).
+- **Expiry** — each tool has a validation date, a validity period in months and a due date (the source's own or one entered by hand wins, else validation date + period), read through a field mapping per source set on screen, the app's guesses marked until saved (TVL-06, TVL-07). Validation expiry lists the overdue tools, those due in the next N days with the days left and those with no due date, with Export; N is the team default (60 days) or each person's own, kept in their views (TVL-08, TVL-09).
+- **Changes by hand and rights** — ＋ Add tool…, Edit (a date changed by hand is kept) and Remove, the sources and their mapping, the team default and the co-owners: only the Tool Owner and the list's co-owners, fail closed with the reason shown; results under Background jobs (TVL-10…TVL-12). Release counts, Pulse Check and the Monthly pack still count the Tool Validations query only (TVL-13, QV-64).
+
+DF-263…DF-266, SM-148, LIM-64; TC-TVL-01…TC-TVL-08.
+
+PR #388.
+
 ## v10.10.1 — 2026-11-24
 
 **Fixed**
