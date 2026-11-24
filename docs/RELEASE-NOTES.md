@@ -2,6 +2,21 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.6.0 — 2026-11-24
+
+**Changed**
+- **The chart editor in tabs** (product owner: "group it by category or setting — it is too long") — the chart pop-up of the Insights tab and the On-Demand Dashboard block pop-up hold their fields in tabs instead of one long form: **Data** (title, type, the fields, the measure, Group dates by, Show, Sort; on a block also the data source, the period's Date column and the dashboard tab), **Filters**, **Format** (orientation, series, running total, percent, target line, Show as, width and height, colours) and **Elements** (the chart elements with the axis names), or **Narrative** for a narrative. Only the tabs the type takes are shown; the pop-up opens on Data; the arrow keys, Home and End move between the tabs (CHT-70, CHT-14, CHT-66).
+- **A tab says what it holds** — "Filters (2)", "Elements (1)": the settings changed from the defaults (CHT-71). After Save a tab with an invalid field shows a red marker with the reason, and Save opens and focuses the first one (CHT-72).
+- **The preview beside the tabs, the buttons always in view** — the preview stays beside the tabs in a wide pop-up (under them in a narrow one), Cancel and Save never scroll away, the pop-up keeps its height from tab to tab; on a phone the tabs scroll sideways (CHT-73, CHT-38).
+- Nothing is saved differently: the same fields, labels and defaults.
+
+**Fixed**
+- An automated check of the KPI cards (TC-CHT-31) now waits for the page to finish laying out after a width change before measuring a card, so it no longer fails now and then.
+
+DF-254, LIM-61; TC-CHT-58, TC-CHT-59.
+
+PR #382.
+
 ## v10.5.0 — 2026-11-24
 
 **Changed**
