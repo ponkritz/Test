@@ -175,12 +175,12 @@ test('TC-CHT-31: KPI charts are a row of cards — the value never cut, the pop-
   ]
   const files = { 'on-demand/conq.json': JSON.stringify(conq([kpis[0], barSetup, kpis[1]])) }
   const { page, context, errors, writes } = await open(files)
-  const cards = page.locator('.od-kpi-cards > article')
+  const cards = page.locator('.od-kpi-card')
   await cards.nth(1).waitFor()
   assert.deepEqual(await cards.locator('h2').evaluateAll((list) => list.map((heading) => heading.firstChild.textContent)), ['CoNQ KPI', 'Rows'], 'in the charts’ order, above them')
-  assert.equal(await page.locator('.od-insights .od-insight').count(), 1, 'only the bar chart is a panel')
+  assert.equal(await page.locator('.od-insights .od-insight.panel').count(), 1, 'only the bar chart is a panel')
   // No chart type above a chart or card (CHT-39): the type is the first line of ⓘ.
-  assert.equal(await page.locator('.od-insights .od-insight .eyebrow, .od-kpi-cards .eyebrow').count(), 0)
+  assert.equal(await page.locator('.od-insights .od-insight .eyebrow').count(), 0)
   assert.match(await infoText(page, panel(page, 'Cost by category')), /^Type: Bar \/ column\./)
   // KB-84: the whole number is visible at every width, the caption at most two lines.
   for (const width of [1440, 1024, 390]) {

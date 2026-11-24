@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { kindOf, pairFactory, type ChartSize, type SizeSource } from '../chartSize'
+import { pairFactory, type ChartSize, type SizeSource } from '../chartSize'
 import { ChartPanel } from './ChartSize'
 import { readChartLabels, saveChartLabel } from '../chartLabels'
 import { DataTable, type DataColumn } from './DataTable'
@@ -7,7 +7,9 @@ import { ChartOptionsFields } from './ChartOptionsFields'
 import { PreviewHeading } from './ChartElements'
 import { ChartCountInfo, InsightView } from './InsightCharts'
 import { EmptyState, Info, Metric, Modal, Notice, Pill } from './ui'
-import { hasOptions, type ColorPins, type InsightFilter, type InsightMeasure } from '../onDemand'
+import { hasOptions, insightKindOf as kindOf, type ColorPins, type InsightFilter, type InsightMeasure } from '../onDemand'
+import { narrativeInfo } from '../narratives'
+import { NarrativeFields } from './NarrativeFields'
 import { currencyText, formatShown, insightRules, measureColumns, measuresFor, noneKey, noneLabel, secondLabel, valueText } from '../onDemandInsights'
 import { asInsight, noData, blockData, blockError, blockProblems, blockSubject, blockTypeLabel, blockTypes, categoryColumns, filterColumns, kpiText, kpiValue, periodColumns, periodNote, secondColumns, summaryExportTotals, summaryRows, tableLimit, withBlockType, withSource, type Dashboard, type DashboardBlock, type Dataset, type Narrowed, type SummaryRow } from '../dashboardPages'
 
@@ -44,7 +46,7 @@ export function BlockPanel({ id, dataset, block, narrowed, colors, size = pairFa
   const filteredBy = [block.filters.length ? `its own filters: ${filters}` : '', narrowed?.filtered ? 'the filter row above' : ''].filter(Boolean).join('; ').replace(/^./, (first) => `Filtered by ${first}`)
   const pill = filteredBy ? <span className="chart-filtered" title={filteredBy} aria-label={filteredBy}><Pill>Filtered</Pill></span> : null
   return <ChartPanel id={id} kind={kindOf(block.type)} className={`od-insight dsh-block dsh-block-${block.type}`} size={size} source={source} arranging={arranging} title={block.title} titleHidden={block.options?.elements?.title === false}
-    info={problems.length || !narrowed ? undefined : <ul className="od-rules"><li>Type: {blockTypeLabel(block.type)} · from {dataset.name}.</li><li>{blockSubject(dataset, block)}.</li><li>{periodNote(dataset, block)}.</li><li>Its own filters: {filters || 'none'}.</li><li>Rows: {counted(narrowed)}.</li>{block.type !== 'table' && <ChartCountInfo page={narrowed.page} insight={asInsight(block)} />}{insightRules(narrowed.page, asInsight(block)).map((entry) => <li key={entry}>{entry}</li>)}<li>The period (Year / Quarter / Month above) keeps the rows whose {dataset.page.columns.find((column) => column.id === block.period)?.name ?? 'date'} falls in it; rows without that date are left out.</li></ul>}
+    info={problems.length || !narrowed ? undefined : <ul className="od-rules"><li>Type: {blockTypeLabel(block.type)} · from {dataset.name}.</li><li>{blockSubject(dataset, block)}.</li><li>{periodNote(dataset, block)}.</li><li>Its own filters: {filters || 'none'}.</li><li>Rows: {counted(narrowed)}.</li>{block.type !== 'table' && <ChartCountInfo page={narrowed.page} insight={asInsight(block)} />}{(block.type === 'narrative' ? narrativeInfo(narrowed.page, asInsight(block)) : insightRules(narrowed.page, asInsight(block))).map((entry) => <li key={entry}>{entry}</li>)}<li>The period (Year / Quarter / Month above) keeps the rows whose {dataset.page.columns.find((column) => column.id === block.period)?.name ?? 'date'} falls in it; rows without that date are left out.</li></ul>}
     action={pill || action ? <span className="button-row nowrap">{pill}{action}</span> : undefined} onResize={onResize} onReset={onReset}>
     <BlockBody dataset={dataset} block={block} narrowed={narrowed} problems={problems} colors={colors} />
   </ChartPanel>
@@ -58,7 +60,7 @@ function BlockBody({ dataset, block, narrowed, problems, colors, drill = true, q
   if (problems.length || !narrowed) return <Notice tone="warning"><strong>This block cannot be shown:</strong> {problems.join(' ')} {dataset.problem ? '' : 'Its owners edit it to choose the columns again, or remove it.'}</Notice>
   const probe = blockData(narrowed.page, block)
   if (!narrowed.page.rows.length || !probe.categories.length) return <EmptyState {...noData} />
-  return block.type === 'table' ? <SummaryTable block={block} narrowed={narrowed} /> : <InsightView quiet={quiet} page={narrowed.page} insight={asInsight(block)} colors={colors} drill={drill} />
+  return block.type === 'table' ? <SummaryTable block={block} narrowed={narrowed} /> : <InsightView quiet={quiet} page={narrowed.page} insight={asInsight(block)} colors={colors} drill={drill} compare={narrowed.base} />
 }
 
 // DSH-06: the summary table — largest first, the first 10 rows with Show all, the shared table's Export (every row).
@@ -101,7 +103,8 @@ export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCanc
   const edit = (change: Partial<DashboardBlock>) => { setDraft({ ...draft, ...change }); setError('') }
   const setFilter = (index: number, change: Partial<InsightFilter>) => edit({ filters: draft.filters.map((filter, at) => at === index ? { ...filter, ...change } : filter) })
   const filterable = filterColumns(page)
-  const chart = draft.type === 'kpi' ? null : draft.type
+  const chart = draft.type === 'kpi' || draft.type === 'narrative' ? null : draft.type
+  const narrative = draft.type === 'narrative'
   const categories = chart ? categoryColumns(page, chart) : []
   const seconds = chart ? secondColumns(page, chart).filter((column) => column.id !== draft.category) : []
   const numbers = measureColumns(page, draft.measure)
@@ -157,13 +160,15 @@ export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCanc
               </select>
             </label>}
           </div>
+          {/* CHT-66: a Narrative's own fields — Group by, the period, the sentences and rules, the width. */}
+          {narrative && <NarrativeFields page={page} insight={asInsight(draft)} onChange={(next) => { const out: DashboardBlock = { ...draft, category: next.category }; if (next.narrative) out.narrative = next.narrative; if (next.options) out.options = next.options; else delete out.options; setDraft(out); setError('') }} />}
           {(draft.type === 'bar' || draft.type === 'pie') && <label>Sort
             <select aria-label="Sort" value={draft.sort} onChange={(event) => edit({ sort: event.target.value === 'label' ? 'label' : 'value' })}>
               <option value="value">Largest first</option>
               <option value="label">By option order, month or name</option>
             </select>
           </label>}
-          <ChartOptionsFields page={page} insight={asInsight(draft)} pins={pins} onPins={setPins} scope="dashboard" onOptions={(options) => { const next = { ...draft }; if (options && draft.type !== 'kpi') next.options = options; else delete next.options; setDraft(next); setError('') }} />
+          {!narrative && <ChartOptionsFields page={page} insight={asInsight(draft)} pins={pins} onPins={setPins} scope="dashboard" onOptions={(options) => { const next = { ...draft }; if (options && draft.type !== 'kpi') next.options = options; else delete next.options; setDraft(next); setError('') }} />}
           <label>Period filter on
             <select aria-label="Period filter on" value={draft.period} onChange={(event) => edit({ period: event.target.value })}>
               <option value="">— Not filtered by the period —</option>

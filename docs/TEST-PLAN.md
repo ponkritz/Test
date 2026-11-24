@@ -1796,17 +1796,33 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-59 Export PDF of an On-Demand Dashboard** — Req OND-68, OND-69, OND-70 — browser check: on a dashboard with two KPI tiles and blocks on two tabs, the page ⋯ → Export PDF… lists the tiles (KPI card) and each block with its tab; All exports every tile and block, whatever tab is open, with "Period: 2026 (whole year) · Category: Scrap." when filtered; a block over a page in Sample carries "Sample data" in the footer.
 
-**TC-OND-60 The standalone HTML file: escaped, offline, hidden rows left out** — Req OND-74, OND-77 — L1 `standalone-html.test.mjs` ("OND-74, OND-77: the file — every value escaped, no external URL, hidden rows left out, the sort and search script with its CSP hash (TC-OND-60)", "OND-77: a chart’s SVG is kept only when it is plain drawing (TC-OND-60)"); browser check: a row with `<img src=x onerror=alert(1)>` in a Text column shows that text in the file and nothing runs; the browser's developer tools show no request when the file is opened from a folder; a chart the check refuses says "This chart could not be included."
+**TC-OND-60 The standalone HTML file: escaped, offline, hidden rows left out** — *(Retired — see TC-OND-92)* Req OND-74, OND-77 — L1 `standalone-html.test.mjs` ("OND-74, OND-77: the file — every value escaped, no external URL, hidden rows left out, the sort and search script with its CSP hash (TC-OND-60)", "OND-77: a chart’s SVG is kept only when it is plain drawing (TC-OND-60)"); browser check: a row with `<img src=x onerror=alert(1)>` in a Text column shows that text in the file and nothing runs; the browser's developer tools show no request when the file is opened from a folder; a chart the check refuses says "This chart could not be included."
 
 **TC-OND-61 The schedule's due times** — Req OND-78, OND-79 — L1 `standalone-html.test.mjs` ("OND-78, OND-79: the schedule — due times with a fake clock, a missed run once at the next start, read back strictly (TC-OND-61)"); browser check: a schedule Daily at a time two minutes ahead runs once at that time (Background jobs "Scheduled publish · CoNQ"), not again in the same day; with the app closed over that time it runs once at the next start.
 
 **TC-OND-62 Desktop: one file per page, chosen and overwritten** — Req OND-76 — L1 `standalone-html.test.mjs` ("OND-76: the desktop file — chosen in the save dialog, remembered per page, overwritten, never another path (TC-OND-62)"); browser check (desktop app on Windows): the first Publish now asks where to save "CoNQ.html" (Documents), the next ones overwrite it without asking; after the folder is renamed the publish fails with "The folder … is missing" and the page shows the warning for a scheduled run; `publish-targets.json` in the app's user data folder holds the path, and no Git file changes.
 
-**TC-OND-63 Publish CoNQ as a standalone HTML file** — Req OND-73, OND-74, OND-76, OND-77, OND-80 — **UAT** — E2E `standalone-html.e2e.mjs` ("TC-OND-63: the Tool Owner publishes CoNQ as a standalone HTML file — the confirmation, the file picked, the rows and charts written without external addresses, sort and search working offline"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): as the Tool Owner in Chrome or Edge, CoNQ ⋯ → Publish standalone HTML… warns "This file contains every row of CoNQ. Anyone who receives it can read them.", Publish now asks for the file (CoNQ.html) and Background jobs says "Published {n} rows of CoNQ to CoNQ.html"; the file opened from a shared folder shows "Published by {you} on {date, time, zone}", the charts and the table, sorts by Cost and finds a row by a word; in Firefox the file is downloaded and Background jobs says so.
+**TC-OND-63 Publish CoNQ as a standalone HTML file** — *(Retired — see TC-OND-94)* Req OND-73, OND-74, OND-76, OND-77, OND-80 — **UAT** — E2E `standalone-html.e2e.mjs` ("TC-OND-63: the Tool Owner publishes CoNQ as a standalone HTML file — the confirmation, the file picked, the rows and charts written without external addresses, sort and search working offline"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): as the Tool Owner in Chrome or Edge, CoNQ ⋯ → Publish standalone HTML… warns "This file contains every row of CoNQ. Anyone who receives it can read them.", Publish now asks for the file (CoNQ.html) and Background jobs says "Published {n} rows of CoNQ to CoNQ.html"; the file opened from a shared folder shows "Published by {you} on {date, time, zone}", the charts and the table, sorts by Cost and finds a row by a word; in Firefox the file is downloaded and Background jobs says so.
 
-**TC-OND-64 Publish disabled in Sample and for others** — Req OND-73, OND-75, CON-102 — E2E `standalone-html.e2e.mjs` ("TC-OND-64: Publish standalone HTML… is disabled with the reason in Sample and for a person who is not an owner of the page"); browser check: a page co-owner (not Tool Owner) may publish; an Admin who is not a co-owner sees the item disabled with the reason.
+**TC-OND-64 Publish disabled in Sample and for others** — Req OND-73, OND-75, CON-102 — E2E `standalone-html.e2e.mjs` ("TC-OND-64: Publish interactive HTML… is disabled with the reason in Sample and for a person who is not an owner of the page"); browser check: a page co-owner (not Tool Owner) may publish; an Admin who is not a co-owner sees the item disabled with the reason; on an On-Demand Dashboard over a page shown in Sample the item says "Switch {page} to Live to publish {dashboard}: sample rows are never published.", and on a dashboard without blocks "No blocks to publish yet.".
 
-**TC-OND-65 A failed scheduled publish warns on the page** — Req OND-79, OND-78 — E2E `standalone-html.e2e.mjs` ("TC-OND-65: a scheduled publish that is due at the start but cannot write its file warns on the page, with Publish standalone HTML… to fix it"); browser check: in Chrome, after the site's file permission is revoked, the next scheduled run fails with "The browser no longer lets the app write CoNQ.html …", Background jobs shows the failure and the page the warning; Publish now asks for the permission once and the warning goes with the next successful scheduled run.
+**TC-OND-65 A failed scheduled publish warns on the page** — Req OND-79, OND-78 — E2E `standalone-html.e2e.mjs` ("TC-OND-65: a scheduled publish that is due at the start but cannot write its file warns on the page, with Publish interactive HTML… to fix it"); browser check: in Chrome, after the site's file permission is revoked, the next scheduled run fails with "The browser no longer lets the app write CoNQ.html …", Background jobs shows the failure and the page the warning; Publish now asks for the permission once and the warning goes with the next successful scheduled run.
+
+**TC-OND-90 A table page publishes only the rows that pass the filter row** — Req OND-91, OND-93 — L1 `standalone-html.test.mjs` ("OND-91, OND-93: a table page publishes only the rows that pass the publisher’s filter row, never a hidden row, with the filters and counts in its header (TC-OND-90)"); browser check: on CoNQ with the Insights filter row at Q3 and Department QRE the pop-up says "This file contains the {n} rows of CoNQ that pass your filters." with the same {n} as the line under the filter row; with Reset filters (the current year) the number follows; on a Table page (no Insights) it is every row that is not hidden.
+
+**TC-OND-91 A dashboard publishes, per data source, only the rows a block counts** — Req OND-92 — L1 `standalone-html.test.mjs` ("OND-92: a dashboard publishes, for each table page a block reads, only the rows a block counts with the publisher’s period and filters (TC-OND-91)"); browser check: a dashboard with a block over the Time Writing hours says in the pop-up and in the file "1 block over the Time Writing hours is not published."; the file's KPI tiles show the same numbers as the dashboard at publishing.
+
+**TC-OND-92 The interactive file: escaped data block, CSP by hash, no address** — Req OND-94, OND-93 — L1 `standalone-html.test.mjs` ("OND-94: the file — the data block escaped, the viewer inline with its CSP hashes, no address, nothing but its own script and styles (TC-OND-92)"); browser check: a row with `</script><script>alert(1)</script>` in a Text column shows that text in the file's Rows tab and nothing runs; the developer tools show no request and no Content-Security-Policy report when the file is opened from a folder.
+
+**TC-OND-93 The viewer's filter row narrows within the file** — Req OND-95 — L1 `standalone-html.test.mjs` ("OND-95: the viewer’s filter row narrows within the published rows only — every year of the file when nothing is ticked, only the values found (TC-OND-93)"); browser check: in a file cut to QRE, Department offers only QRE; Year "All" counts every row of the file, also of last year.
+
+**TC-OND-94 Publish CoNQ as an interactive HTML dashboard, filtered** — Req OND-73, OND-76, OND-90, OND-91, OND-93, OND-94, OND-95, OND-97, OND-99 — **UAT** — E2E `interactive-html.e2e.mjs` ("TC-OND-94: the Tool Owner publishes CoNQ cut to Q3 and QRE; the file holds only those rows and works offline — header, filter row, charts, drill-down, Rows search, phone"); browser check (also on a 4x slower CPU, `E2E_CPU_SLOWDOWN=4`): as the Tool Owner in Chrome or Edge, CoNQ's Insights filtered to a quarter and a department, CoNQ ⋯ → Publish interactive HTML… warns "This file contains the {n} rows of CoNQ that pass your filters. Anyone who receives it can read them.", Publish now asks for the file (CoNQ.html) and Background jobs says "Published {n} rows of CoNQ ({filters}) to CoNQ.html"; the file opened from a shared folder (no network) shows "Published by {you} on {date, time, zone}" and "Data published: {filters} · {n} of {m} rows", the KPI cards and charts as in the app; a month ticked in its filter row changes every chart; a bar lists the rows behind it; the Rows tab sorts by Cost and finds a row by a word; the theme switches to dark; on a phone it reads in one column; in Firefox the file is downloaded and Background jobs says so.
+
+**TC-OND-95 Publish an On-Demand Dashboard with tabs** — Req OND-73, OND-92, OND-93, OND-95, OND-97 — E2E `interactive-html.e2e.mjs` ("TC-OND-95: an On-Demand Dashboard over two table pages published with its filter row — each source cut, the tabs, the KPI tiles and the Rows of each source in the file"); browser check: a dashboard over CoNQ and a second page with two tabs, Department QRE ticked, published; the file shows both tabs, its KPI tiles open their tab, a Supplier ticked in its filter row changes only the blocks over that page; Rows of → each data source.
+
+**TC-OND-96 A schedule publishes with the filters saved with it** — Req OND-96, OND-78 — L1 `standalone-html.test.mjs` ("OND-96: a schedule keeps the filters saved with it, read back strictly (TC-OND-96)"); E2E `interactive-html.e2e.mjs` ("TC-OND-94: the Tool Owner publishes CoNQ cut to Q3 and QRE; the file holds only those rows and works offline — header, filter row, charts, drill-down, Rows search, phone"); browser check: the pop-up says "A scheduled run publishes the rows that pass the filters saved with the schedule …"; Save schedule shows "Saved with the schedule: {filters}."; the filter row changed afterwards, the next scheduled run still publishes with the saved filters (the file's header says so).
+
+**TC-OND-97 The viewer's size** — Req OND-98 — browser check (inspection): after `pnpm build:web`, `dist/standalone-viewer.js` and `dist/standalone-viewer.css` together are under 600 KB; a published file of CoNQ is that size plus its data; the main app's start-up chunks do not contain the viewer (it loads with the first publish).
 
 ### 6.29 Custom streams
 
@@ -1967,6 +1983,32 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-CHT-36 The layout in the page and dashboard files, merged per chart, read by an older app** — Req CHT-50, CHT-47, CHT-48 — L1 `chart-grid.test.mjs` ("CHT-47, CHT-48, CHT-50: options.grid and a viewer’s size in grid units — written only when set, with the nearest presets for older apps; merged per chart (TC-CHT-36)"); browser check: a hand-edited page file with two charts at `{"x": 0, "y": 0, "w": 6, "h": 8}` and one at `{"x": 11, "w": 40}` shows them one under the other and the third clamped to full width; the same file in v10.1.0 shows the nearest presets (LIM-41).
 
 **TC-CHT-37 Arrange the charts on the grid: drag to move, resize, keyboard; a viewer resizes but cannot move** — Req CHT-43, CHT-47, CHT-48, CHT-49, CHT-46, CHT-40, CHT-41 — **UAT** — L1 `chart-grid.test.mjs` ("CHT-47: moving — dropped on a place, the others shift out of the way and gaps close; the keyboard moves one column or past a neighbour (TC-CHT-35)"); E2E `chart-grid.e2e.mjs` ("TC-CHT-37: the owner arranges the charts on the grid — drags one to the top (the others shift, saved to Git), resizes one with the grid lines shown, moves one with the keyboard; grouped bars and an own colour are drawn"); E2E `chart-grid.e2e.mjs` ("TC-CHT-37: a viewer resizes a chart on the grid for themselves but cannot move one; at 390 px every chart is full width without handle or grip"); UAT: as the owner of CoNQ (four charts) click **Arrange charts** — the grid's lines and each chart's size ("6 × 8") show; drag the third chart by ⠿ to the top left — the others move down while you drag; release — saved to Git, a colleague sees the new order after reloading; drag another chart's corner two columns narrower ("4 × 8") — saved; focus a chart's ⠿, → and Enter — it moves one column, announced; as a colleague resize a chart with its corner (it stays after a reload, Reset to default brings back the owner's size) and find no ⠿ and no Arrange charts; on a phone every chart is full width without handles; also on an On-Demand Dashboard (⋯ → Arrange on the page).
+
+**TC-CHT-38 KPI cards on the chart grid: the default 3 × 3 in a row above the charts, sizes written only when changed** — Req CHT-51, CHT-52 — L1 `chart-grid.test.mjs` ("CHT-51, CHT-52: KPI cards on the chart grid — 3 × 3 by default, in a row above the charts until moved, at least 2 × 3, written only when resized (TC-CHT-38)"); browser check at 1440 px: a page whose KPI cards nobody resized shows them four to a row above the charts, the charts two by two below them, as in v10.3.
+
+**TC-CHT-39 Match heights in a row** — Req CHT-55, CHT-56 — L1 `chart-grid.test.mjs` ("KB-89, CHT-55: Match heights in this row — every panel starting on the row takes the tallest height; the rows below shift (TC-CHT-39)"); browser check on an On-Demand Dashboard: ⋯ → Arrange on the page, a block's ⋯ → Match heights in this row — the blocks of its row take the tallest height, saved to the dashboard file.
+
+**TC-CHT-40 A ⋯ menu is never clipped** — Req CHT-53, OND-61, DSH-13 — L1 `chart-grid.test.mjs` ("KB-88: a ⋯ menu opens under its button, flips above near the bottom, stays inside the window (TC-CHT-40)"); E2E `chart-grid.e2e.mjs` ("TC-CHT-41: KPI cards — the ⋯ menu is never clipped, the header in one row; the owner resizes a card in Arrange charts (saved to Git), the number grows with it"); browser check at 1440 and 390 px, light and dark: a KPI card's, a chart panel's and an On-Demand Dashboard block's ⋯ menu each open fully on top of the page under ⋯, above it near the bottom of the window; ↓ / ↑ / Escape as before.
+
+**TC-CHT-41 KPI cards: a tidy header, sized by the owners and by each viewer, full width on a phone** — Req CHT-51, CHT-52, CHT-53, CHT-54, CHT-36, CHT-37 — **UAT** — E2E `chart-grid.e2e.mjs` ("TC-CHT-41: KPI cards — the ⋯ menu is never clipped, the header in one row; the owner resizes a card in Arrange charts (saved to Git), the number grows with it"); E2E `chart-grid.e2e.mjs` ("TC-CHT-41: a viewer resizes a KPI card for themselves (not written), Reset to default; at 390 px the cards are full width without a handle"); UAT: on CoNQ's Insights with two KPI cards (one with a long title and its own filters) — the title takes at most two lines with ⓘ beside it, "Filtered" and ⋯ on the right; open a card's ⋯ — every item is fully visible and can be chosen; as the owner Arrange charts and make a card wider and taller with its corner — saved to Git, the number grows, a colleague sees it after reloading; Size… offers 2 or 3 columns and 3…12 rows; as a colleague resize a card for yourself (Reset to default brings back the owner's size); on a phone every card is full width without a handle.
+
+**TC-CHT-42 Charts of one row line up; a height set shows; Match heights** — Req CHT-55, CHT-56, CHT-45, CHT-47 — **UAT** — E2E `chart-grid.e2e.mjs` ("TC-CHT-42: charts in one grid row line up, a resized height shows; the owner matches the heights of a row (Arrange charts and Size…)"); UAT: on CoNQ's Insights a bar chart of three bars beside a column chart — both equally tall; as a colleague make one two rows taller with its corner (↓ ↓) — it grows visibly; as the owner Arrange charts, make one taller, then the other's ⋯ → Match heights in this row — both equally tall, saved to Git; Size… → Height Small with "Same height as the other charts in its row" — both Small.
+
+**TC-CHT-50 Automatic sentences: the total, highest and lowest with the share, a threshold — currency, filters, empty data** — Req CHT-61, CHT-60, CHT-65 — L1 `narratives.test.mjs` ("CHT-61: the total, the highest and lowest category with its share — a Currency measure in one currency (TC-CHT-50)"); L1 `narratives.test.mjs` ("CHT-61: its own filters and the filter row narrow the sentences; no row counted is “nothing to report” (TC-CHT-50)"); L1 `narratives.test.mjs` ("CHT-61: above / below a threshold — the Group by values, or the total without one (TC-CHT-50)").
+
+**TC-CHT-51 Change vs the previous period and the biggest mover, counted outside the period chosen** — Req CHT-62 — L1 `narratives.test.mjs` ("CHT-62: the change against the previous period (month, quarter, year) — counted outside the period chosen (TC-CHT-51)"); browser check: on CoNQ with the filter row's period on Q4, a narrative with Change vs the previous period (Quarter) says "Q4 …, up …% vs Q3 …", not "nothing to compare with".
+
+**TC-CHT-52 Rules in order: every match or the first, the Else sentence, comparisons without a number** — Req CHT-63 — L1 `narratives.test.mjs` ("CHT-63: rules in order — every rule that matches or only the first, and the Else sentence (TC-CHT-52)").
+
+**TC-CHT-53 Placeholders as text, templates as plain text, the data embedded in the HTML file escaped** — Req CHT-64, CHT-67, CHT-69 — L1 `narratives.test.mjs` ("CHT-64: placeholders are replaced by text in one pass — markup stays text, unknown ones are dropped when stored (TC-CHT-53)").
+
+**TC-CHT-54 The narrative field validated, written in a fixed order, merged per insight; a Dashboard block; an unknown type dropped** — Req CHT-68 — L1 `narratives.test.mjs` ("CHT-68: the narrative field validated when read and written in a fixed order; older fields unchanged (TC-CHT-54)"); L1 `narratives.test.mjs` ("CHT-68: merged per insight (GIT-17) and as a Dashboard block; an older type list drops the block (LIM-50) (TC-CHT-54)"); browser check: a page file with a narrative opened in v10.3.0 shows the other charts without it (LIM-50).
+
+**TC-CHT-55 The editor's checks: what needs a Group by or a period, a number, a sentence; the type switch; ⓘ** — Req CHT-66, CHT-65 — L1 `narratives.test.mjs` ("CHT-66: the pop-up’s checks — sentences and rules that need a Group by or a period, a number, a sentence (TC-CHT-55)"); browser check at 1440 and 390 px, light and dark: in the chart pop-up and the block pop-up, type Narrative shows Group by, Period on, the sentence ticks (Change and Biggest mover disabled with the reason until a period is chosen), ＋ Add rule with If / Is / Value / Tone / Then show, ↑ ↓ and ✕, the Else field once a rule exists, and the Width; the Preview follows each change; the labels are not clipped and nothing overlaps.
+
+**TC-CHT-56 The owner adds a Narrative with the total, the highest category and a warning rule; the filter row changes it; the PDF includes it** — Req CHT-60, CHT-61, CHT-63, CHT-64, CHT-65, CHT-66, CHT-67 — **UAT** — E2E `narratives.e2e.mjs` ("TC-CHT-56: the owner adds a Narrative with the total, the highest category and a warning rule — saved to Git; the filter row changes its sentences; the PDF includes it"); UAT: as the owner of CoNQ (a Department, a Cost in EUR and a Found on column, a filter row on Found on and Department) click **＋ Add chart / table**, title "CoNQ summary", type **Narrative (text)**, Measure **Sum** of **Cost**, Group by **Department**; keep **Total** and **Highest category** ticked; **＋ Add rule**: If **Total** Is **>** Value **20000**, Tone **Warning**, Then show "CoNQ cost above budget: {value}"; Width **Full** — the Preview lists the three sentences, the last with a warning border and ⚠; **Add chart** — the page file in Git holds the narrative; the panel shows the sentences and ⓘ lists "Rule 1. If Sum of Cost > 20,000 …"; in the filter row pick Department **Design** — the total and the highest change, the warning is gone and the panel shows "Filtered"; **Export PDF…** — the print view lists the same sentences.
+
+**TC-CHT-57 A viewer reads a Narrative and a Dashboard Narrative block, the tone read out in words** — Req CHT-60, CHT-65, CHT-66 — E2E `narratives.e2e.mjs` ("TC-CHT-57: a viewer sees a Narrative and a Dashboard Narrative block read only, the tone read out in words"); browser check with a screen reader (NVDA or VoiceOver): each sentence is read with its tone first ("Warning: CoNQ cost above budget: …"), the icon is not read; the Dashboard block follows the period and the filter row as its charts do.
 
 ## 7. Requirements coverage matrix
 
@@ -2528,14 +2570,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-70 | TC-OND-56, TC-OND-58, TC-OND-59 |
 | OND-71 | TC-OND-55, TC-OND-58 |
 | OND-72 | TC-OND-56, TC-OND-57, TC-OND-58 |
-| OND-73 | TC-OND-63, TC-OND-64 |
+| OND-73 | TC-OND-63, TC-OND-64, TC-OND-94, TC-OND-95 |
 | OND-74 | TC-OND-60, TC-OND-63 |
 | OND-75 | TC-OND-64 |
-| OND-76 | TC-OND-62, TC-OND-63 |
+| OND-76 | TC-OND-62, TC-OND-63, TC-OND-94 |
 | OND-77 | TC-OND-60, TC-OND-63 |
-| OND-78 | TC-OND-61, TC-OND-65 |
+| OND-78 | TC-OND-61, TC-OND-65, TC-OND-96 |
 | OND-79 | TC-OND-61, TC-OND-65 |
 | OND-80 | TC-OND-63 |
+| OND-90 | TC-OND-94 |
+| OND-91 | TC-OND-90, TC-OND-94 |
+| OND-92 | TC-OND-91, TC-OND-95 |
+| OND-93 | TC-OND-90, TC-OND-92, TC-OND-94, TC-OND-95 |
+| OND-94 | TC-OND-92, TC-OND-94 |
+| OND-95 | TC-OND-93, TC-OND-94, TC-OND-95 |
+| OND-96 | TC-OND-96 |
+| OND-97 | TC-OND-94, TC-OND-95 |
+| OND-98 | TC-OND-97 |
+| OND-99 | TC-OND-94 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -2633,6 +2685,22 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CHT-48 | TC-CHT-36, TC-CHT-37 |
 | CHT-49 | TC-CHT-35, TC-CHT-37 |
 | CHT-50 | TC-CHT-36 |
+| CHT-51 | TC-CHT-38, TC-CHT-41 |
+| CHT-52 | TC-CHT-38, TC-CHT-41 |
+| CHT-53 | TC-CHT-40, TC-CHT-41 |
+| CHT-54 | TC-CHT-41 |
+| CHT-55 | TC-CHT-39, TC-CHT-42 |
+| CHT-56 | TC-CHT-39, TC-CHT-42 |
+| CHT-60 | TC-CHT-50, TC-CHT-56, TC-CHT-57 |
+| CHT-61 | TC-CHT-50, TC-CHT-56 |
+| CHT-62 | TC-CHT-51 |
+| CHT-63 | TC-CHT-52, TC-CHT-56 |
+| CHT-64 | TC-CHT-53, TC-CHT-56 |
+| CHT-65 | TC-CHT-50, TC-CHT-55, TC-CHT-56, TC-CHT-57 |
+| CHT-66 | TC-CHT-55, TC-CHT-56, TC-CHT-57 |
+| CHT-67 | TC-CHT-53, TC-CHT-56 |
+| CHT-68 | TC-CHT-54 |
+| CHT-69 | TC-CHT-53 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2683,8 +2751,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-CHT-01…37 |
-| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…97, TC-CHT-01…42, TC-CHT-50…57 |
+| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57 |
 
 ## 8. Result record
 

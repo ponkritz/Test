@@ -6,8 +6,8 @@ import { BlockDialog, BlockPanel, KpiTile } from '../components/DashboardBlocks'
 import { MultiSelect } from '../components/MultiSelect'
 import { ChartGrid, SizeDialog, SizeFields } from '../components/ChartSize'
 import { ViewActions } from '../components/ViewActions'
-import { blockChartId, factoryOf, kindOf, parseGridBox, sizeFromOptions, sizeText, withGridBox, withSizeOptions, type ChartSize, type GridBox } from '../chartSize'
-import type { Layout } from '../chartGrid'
+import { blockChartId, factoryOf, parseGridBox, sizeFromOptions, sizeText, withGridBox, withSizeOptions, type ChartSize, type GridBox } from '../chartSize'
+import { matchRowHeights, packLayout, resizePanel, rowOf, type Layout } from '../chartGrid'
 import { useChartSizes } from '../useChartSize'
 import { EmptyState, Metrics, Modal, Notice, Page, Panel, SaveQueueStatus, WriteBlocked } from '../components/ui'
 import { narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, type Period } from '../dashboard'
@@ -18,8 +18,11 @@ import { timeWritingMonth } from '../azureInsights'
 import type { CapacitySettings } from '../capacity'
 import type { AzureWorkItem } from '../domain'
 import { outcomeText } from '../gitSaveQueue'
-import { canBuildDashboard, deleteReason, findGroup, gitReasonOf, hideReason, isDashboard, isHidden, pageMenuReason, placementOf, removePlacement, setHidden, type Viewer } from '../menuLayout'
-import { cleanOptions, hasOptions, onDemandPath, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
+import { canBuildDashboard, deleteReason, findGroup, gitReasonOf, hideReason, isDashboard, isHidden, pageMenuReason, pageRights, placementOf, removePlacement, setHidden, type Viewer } from '../menuLayout'
+import { PublishDialog } from '../components/PublishDialog'
+import { prepareDashboard, useSchedules } from '../publishRun'
+import { formatDateTime } from '../format'
+import { cleanOptions, hasOptions, insightKindOf as kindOf, onDemandPath, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
 import { noneKey, noneLabel } from '../onDemandInsights'
 import { useWriteBlock } from '../useCan'
 import { changeOtherDashboard, useDashboardPage } from '../useDashboardPage'
@@ -57,7 +60,8 @@ function readViewed(id: string, stored: unknown): Viewed {
 // DSH-16: hours — the Time Writing data and the capacity settings Team overview counts with, and whether the viewer may
 // see Team overview (the menu area "Team insights").
 export interface DashboardHours { items: AzureWorkItem[]; settings: CapacitySettings; allowed: boolean }
-export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, onOpen, addPageReason = '', onAddPage, hours }: { git: GitStorage; store: OnDemandStore; pageId: string; menu: MenuLayoutStore; viewer: Viewer; views?: PersonalViewsStore; onOpen: (id: string) => void; addPageReason?: string; onAddPage: () => void; hours?: DashboardHours }) {
+// OND-90: publisherName — the name a published interactive HTML file says it was published by.
+export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, onOpen, addPageReason = '', onAddPage, hours, publisherName = '' }: { git: GitStorage; store: OnDemandStore; pageId: string; menu: MenuLayoutStore; viewer: Viewer; views?: PersonalViewsStore; onOpen: (id: string) => void; addPageReason?: string; onAddPage: () => void; hours?: DashboardHours; publisherName?: string }) {
   const page = store.pages.find((entry) => entry.id === pageId)
   const dash = useDashboardPage(git, pageId)
   const dashboard = dash.dashboard
@@ -73,6 +77,9 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   const [copying, setCopying] = useState<DashboardBlock | null>(null)
   // OND-68: Export PDF… (the page's ⋯).
   const [exporting, setExporting] = useState(false)
+  // OND-90, OND-92: Publish interactive HTML… (the page's ⋯) and the dashboard's schedule on this computer (OND-79).
+  const [publishing, setPublishing] = useState(false)
+  const schedule = useSchedules()[pageId]
   const sizes = useChartSizes()
   const [setup, setSetup] = useState(false)
   const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | null>(null)
@@ -148,6 +155,9 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     } }
   })
   const owners = [...new Set([...placement.owners, ...(group?.acceptsPages ? group.owners : [])])]
+  // OND-90, OND-75: publishing the dashboard as an interactive HTML file — the Tool Owner and the page's (or its group's)
+  // co-owners; never while a table page it reads is shown in Sample.
+  const publishReason = !page ? '' : sampleSources.length ? `Switch ${sampleSources.join(', ')} to Live to publish ${page.name}: sample rows are never published.` : viewer.manager || pageRights(viewer, menu.layout, pageId).owner ? '' : `Only the Tool Owner and the co-owners of ${page.name} publish it as an interactive HTML file.`
 
   async function saveDashboard(next: typeof dashboard, label: string, message: string) {
     setError('')
@@ -170,12 +180,17 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   const sizeOf = (entry: DashboardBlock) => { const kind = kindOf(entry.type); const resolved = sizes.resolve(blockChartId(pageId, entry.id), factoryOf(kind), sizeFromOptions(entry.options, kind), kind); return arrange ? { ...resolved, size: resolved.base, source: 'owner' as const } : resolved }
   const saveSize = (entry: DashboardBlock, size: ChartSize) => saveDashboard(upsertBlock(dashboard, withBlockSize(entry, size)), 'Size block', `Dashboard ${page.name}: size of the ${blockTypeLabel(entry.type)} ${entry.title} (${sizeText(size, kindOf(entry.type))})`)
   // CHT-47: the builders' layout of the tab's blocks (Arrange mode) — every block's place and size, saved at once.
-  const saveLayout = (layout: Layout, id: string, mode: 'resize' | 'move') => {
+  const saveLayout = (layout: Layout, id: string, mode: 'resize' | 'move' | 'match') => {
     const moved = dashboard.blocks.find((entry) => entry.id === id)
     const box = layout[id]
     return saveDashboard({ ...dashboard, blocks: dashboard.blocks.map((entry) => layout[entry.id] ? withBlockBox(entry, layout[entry.id]) : entry) }, mode === 'move' ? 'Move block' : 'Size block',
-      mode === 'move' ? `Dashboard ${page.name}: move the ${blockTypeLabel(moved?.type ?? 'bar')} ${moved?.title ?? id} (column ${box.x + 1}, row ${box.y + 1})` : `Dashboard ${page.name}: size of the ${blockTypeLabel(moved?.type ?? 'bar')} ${moved?.title ?? id} (${sizeText(box, kindOf(moved?.type ?? 'bar'))})`)
+      mode === 'move' ? `Dashboard ${page.name}: move the ${blockTypeLabel(moved?.type ?? 'bar')} ${moved?.title ?? id} (column ${box.x + 1}, row ${box.y + 1})` : mode === 'match' ? `Dashboard ${page.name}: match the heights in the row of ${moved?.title ?? id} (${box.h} rows)` : `Dashboard ${page.name}: size of the ${blockTypeLabel(moved?.type ?? 'bar')} ${moved?.title ?? id} (${sizeText(box, kindOf(moved?.type ?? 'bar'))})`)
   }
+  // KB-89, CHT-55: the builders' layout of the tab (their sizes, not a viewer's own); Match heights in this row (Arrange
+  // on the page) and Size… with "Same height as the other charts in its row" give every block starting on that row one height.
+  const ownerGrid = () => packLayout(panels.map((entry) => ({ id: entry.id, kind: kindOf(entry.type), size: sizeOf(entry).base, box: parseGridBox(entry.options?.grid, kindOf(entry.type)) })))
+  const rowMates = (entry: DashboardBlock) => panels.includes(entry) ? Math.max(0, rowOf(ownerGrid(), entry.id).length - 1) : 0
+  const matchRow = (entry: DashboardBlock, size?: ChartSize) => saveLayout(matchRowHeights(size ? resizePanel(ownerGrid(), entry.id, size) : ownerGrid(), entry.id, size?.h), entry.id, 'match')
   // DSH-15: Copy to… — this dashboard (a duplicate) or another one the viewer may build; saved to the target's file at once
   // (queued, merged, GIT-17), the result in Background jobs.
   const copyTargets = [{ id: pageId, name: 'This dashboard' }, ...store.pages.filter((entry) => entry.id !== pageId && isDashboard(menu.layout, entry.id) && canBuildDashboard(viewer, menu.layout, entry.id)).map((entry) => ({ id: entry.id, name: entry.name })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))]
@@ -214,6 +229,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
       { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
       { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
       { key: 'pdf', label: 'Export PDF…', disabled: !dashboard.blocks.length, title: dashboard.blocks.length ? undefined : 'No blocks to export yet.', onClick: () => setExporting(true) },
+      { key: 'publish', label: 'Publish interactive HTML…', disabled: Boolean(publishReason) || !dashboard.blocks.length, title: publishReason || (dashboard.blocks.length ? undefined : 'No blocks to publish yet.'), onClick: () => setPublishing(true) },
       ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { void dash.reload(); void store.reload() } }] : []),
     ]} />}>
     {gitReason && <Notice tone={git.isSample ? 'warning' : 'info'}>{gitReason}{!git.connected ? ' The dashboard last loaded in this browser is shown.' : ''}</Notice>}
@@ -224,6 +240,8 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     {/* OND-65: a block over a table page the viewer shows in Sample draws its sample rows; the page says so. */}
     {sampleSources.length > 0 && <Notice tone="warning" className="od-sample-banner"><strong>Sample data — nothing is saved.</strong> {sampleSources.join(', ')} {sampleSources.length === 1 ? 'is' : 'are'} set to Sample by you: the blocks over {sampleSources.length === 1 ? 'it' : 'them'} show made-up rows. Choose Live on {sampleSources.length === 1 ? 'that page' : 'those pages'} to see the real figures.</Notice>}
     {error && <Notice tone="error">{error}</Notice>}
+    {/* OND-79: a failed scheduled publish of this dashboard, with the way to put it right. */}
+    {schedule && schedule.mode !== 'off' && schedule.lastOk === false && <Notice tone="warning" className="od-publish-failed">The scheduled publish of {page.name}{schedule.lastRun ? ` at ${formatDateTime(schedule.lastRun)}` : ''} failed: {schedule.lastText} {!publishReason && <button type="button" className="ghost" onClick={() => setPublishing(true)}>Publish interactive HTML…</button>}</Notice>}
     <SaveQueueStatus state={dash.queue} onRetry={() => void dash.retry()} />
 
     {/* DSH-13: the filter row on one line, its status at the end. */}
@@ -261,6 +279,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
               { key: 'down', label: 'Move down', disabled: at === dashboard.blocks.length - 1, onClick: () => run(() => saveDashboard(moveBlock(dashboard, entry.id, 1), 'Move block', `Dashboard ${page.name}: move ${entry.title} down`)) },
               { key: 'edit', label: 'Edit…', onClick: () => setEditing({ block: entry, isNew: false }) },
               { key: 'size', label: 'Size…', onClick: () => setSizing(entry) },
+              ...(arrange ? [{ key: 'match', label: 'Match heights in this row', disabled: !rowMates(entry), title: rowMates(entry) ? undefined : 'No other block starts on its row.', onClick: () => run(() => matchRow(entry)) }] : []),
               { key: 'copy', label: 'Copy to…', onClick: () => setCopying(entry) },
               { key: 'remove', label: 'Remove…', danger: true, onClick: () => setRemoving(entry) },
             ]} />} /> })}
@@ -271,8 +290,10 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
 
     {editing && <BlockDialog datasets={datasets} dashboard={dashboard} block={editing.block} isNew={editing.isNew} preview={narrow} onCancel={() => setEditing(null)}
       onSave={async (entry, colors) => { const next = upsertBlock(dashboard, entry); if (colors) next.colors = colors; else delete next.colors; await saveDashboard(next, editing.isNew ? 'Add block' : 'Edit block', `Dashboard ${page.name}: ${editing.isNew ? 'add' : 'change'} the ${blockTypeLabel(entry.type)} ${entry.title}`); setEditing(null) }} />}
+    {/* OND-92: Publish now cuts each data source with the period and filters on screen (the table pages as saved in Git). */}
+    {publishing && <PublishDialog pageId={pageId} name={page.name} cut={{ kind: 'dashboard', period: viewed.period, choices: viewed.choices }} prepare={prepareDashboard(page, dashboard, (id) => store.stored(id), { kind: 'dashboard', period: viewed.period, choices: viewed.choices }, publisherName)} onClose={() => setPublishing(false)} />}
     {exporting && page && <PdfExport eyebrow={(group?.name ?? 'On-Demand').toUpperCase()} pageName={page.name} sample={sampleSources.length > 0} items={printItems()} onClose={() => setExporting(false)} filtersLine={(filters) => filters ? scopeLine(viewed.period, viewed.choices) : `${scopeLine(defaultPeriod(), {})} Without your filters.`} />}
-    {sizing && <SizeDialog eyebrow="DASHBOARD · BLOCK" title={sizing.title} kind={kindOf(sizing.type)} size={sizeOf(sizing).base} heightReason={sizing.type === 'table' ? 'A summary table takes the height of its content.' : ''} onCancel={() => setSizing(null)} onSave={async (size) => { await saveSize(sizing, size); setSizing(null) }} />}
+    {sizing && <SizeDialog eyebrow="DASHBOARD · BLOCK" title={sizing.title} kind={kindOf(sizing.type)} size={sizeOf(sizing).base} row={sizing.type === 'table' || sizing.type === 'narrative' ? 0 : rowMates(sizing)} heightReason={sizing.type === 'table' || sizing.type === 'narrative' ? 'A summary table or a narrative takes the height of its content.' : ''} onCancel={() => setSizing(null)} onSave={async (size, match) => { await (match ? matchRow(sizing, size) : saveSize(sizing, size)); setSizing(null) }} />}
     {removing && <RemoveBlockDialog block={removing} onCancel={() => setRemoving(null)} onRemove={async () => { await saveDashboard(removeBlock(dashboard, removing.id), 'Remove block', `Dashboard ${page.name}: remove the ${blockTypeLabel(removing.type)} ${removing.title}`); setRemoving(null) }} />}
     {copying && <CopyBlockDialog block={copying} targets={copyTargets} onCancel={() => setCopying(null)} onCopy={async (target) => { await copyTo(copying, target); setCopying(null) }} />}
     {arranging && <ArrangeDialog onCopy={(entry) => { setArranging(false); setCopying(entry) }} blocks={dashboard.blocks} sizeOf={(entry) => sizeOf(entry).base} onSize={(entry, size) => run(() => saveSize(entry, size))} tabs={tabs} sourceOf={(source) => sourceName(datasets, source)} onClose={() => setArranging(false)} onEdit={(entry) => { setArranging(false); setEditing({ block: entry, isNew: false }) }}
@@ -331,7 +352,7 @@ function ArrangeDialog({ blocks, sizeOf, onSize, tabs, sourceOf, onClose, onEdit
     { id: 'dsh-source', label: 'Data source', sortable: false, value: (entry) => sourceOf(entry.source) },
     ...(tabs.length ? [{ id: 'dsh-tab', label: 'Tab', sortable: false, value: (entry: DashboardBlock) => (tabs.find((tab) => tab.id === entry.tab) ?? tabs[0]).name }] : []),
     // CHT-17: each chart's or table's size for everyone (a KPI tile sits in the tile row).
-    { id: 'dsh-size', label: 'Size', sortable: false, value: (entry) => entry.type === 'kpi' ? '' : sizeText(sizeOf(entry), kindOf(entry.type)), render: (entry) => entry.type === 'kpi' ? <span className="muted">Tile row</span> : <SizeFields size={sizeOf(entry)} kind={kindOf(entry.type)} label={entry.title} heightReason={entry.type === 'table' ? 'A summary table takes the height of its content.' : ''} onChange={(size) => onSize(entry, size)} /> },
+    { id: 'dsh-size', label: 'Size', sortable: false, value: (entry) => entry.type === 'kpi' ? '' : sizeText(sizeOf(entry), kindOf(entry.type)), render: (entry) => entry.type === 'kpi' ? <span className="muted">Tile row</span> : <SizeFields size={sizeOf(entry)} kind={kindOf(entry.type)} label={entry.title} heightReason={entry.type === 'table' || entry.type === 'narrative' ? 'A summary table or a narrative takes the height of its content.' : ''} onChange={(size) => onSize(entry, size)} /> },
     { id: '@actions', label: 'Actions', sortable: false, export: false, render: (entry) => { const at = blocks.indexOf(entry); return <span className="button-row nowrap">
       <button type="button" className="ghost" aria-label={`Edit ${entry.title}`} onClick={() => onEdit(entry)}>Edit</button>
       <button type="button" className="ghost" aria-label={`Copy ${entry.title} to…`} onClick={() => onCopy(entry)}>Copy to…</button>

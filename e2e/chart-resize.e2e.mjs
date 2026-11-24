@@ -151,7 +151,8 @@ test('TC-CHT-13: the owner sets a chart to ⅔ × Large with its own axis names 
   const grid = await box(page.locator('.od-insights'))
   const wide = await box(bars)
   assert.ok(Math.abs(wide.width - (grid.width - 5 * 18) / 6 * 4 - 3 * 18) < 3, `⅔ wide: ${wide.width} of ${grid.width}`)
-  assert.equal(await bars.locator('rect.viz-row-hit').first().getAttribute('height'), '45')
+  // CHT-56: four bars spread their rows to about a column chart's height at Large (at least the 45 px of Large).
+  assert.equal(await bars.locator('rect.viz-row-hit').first().getAttribute('height'), String(Math.min(Math.round(75 * 1.5), Math.floor((320 * 1.5 - 36) / await bars.locator('rect.viz-row-hit').count()))))
 
   // Arrange charts: the handle of Cost Pareto with the keyboard — ← ← two columns narrower (4 of 12, ⅓), Enter keeps;
   // saved for everyone with every chart's place on the grid (CHT-47) and the nearest presets for older apps (CHT-50).

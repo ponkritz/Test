@@ -95,7 +95,7 @@ export function ChartOptionsFields({ page, insight, pins, onOptions, onPins, sco
     {/* CHT-26…CHT-35: Excel's chart elements, only those the chart type takes. */}
     {kind && <ElementsFields kind={kind} stacked={Boolean(insight.second) && options.grouping !== 'grouped'} percent={Boolean(options.percent)} money={money} elements={options.elements} onChange={(elements) => set({ elements })} />}
     {/* CHT-15, CHT-16: the owner's size for everyone (each viewer may still resize the chart for themselves). */}
-    {type === 'kpi' && scope === 'page' && options.view !== 'panel' ? <small>A card takes its place in the row of KPI cards: no width or height to set.</small> : <SizeFields size={current} kind={gridKind} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
+    {type === 'kpi' && scope === 'page' && options.view !== 'panel' ? <small>A card sits in the row of KPI cards above the charts until it is moved; its size is set with Size… in its ⋯ menu, in Arrange charts or with its corner handle.</small> : <SizeFields size={current} kind={gridKind} heightReason={type === 'kpi' || type === 'table' ? 'A KPI or a summary table takes the height of its content.' : ''}
       onChange={(size) => onOptions(cleanOptions(type, insight.measure, withSizeOptions(options, size, factoryOf(gridKind), Boolean(options.size) || size.h === current.h, gridKind)))} />}
     {values.length > 0 && <div className="od-colors" role="group" aria-label={`Colours of ${colored!.name}`}>
       <small>Colours of “{colored!.name}” — the same in every chart of this {scope}; “Default” keeps the palette order. Colour 1…5 follow the light and dark theme; an own colour (the picker or #rrggbb) is the same in both.</small>

@@ -34,7 +34,7 @@ import { changesForPage, pagesOfFile, type FilePages } from './gitWatch'
 import { PageGitNotice } from './components/PageGitNotice'
 import { useUnsavedEdits } from './pageEdits'
 import { cached as cachedDashboard } from './useDashboardPage'
-import { pageOfSource } from './dashboardPages'
+import { pageOfSource, parseDashboard } from './dashboardPages'
 import { useWindchill } from './useWindchill'
 import { viewAsLabel, viewAsPeople, type ViewAs } from './viewAs'
 import { ViewAsDialog } from './components/ViewAsDialog'
@@ -257,10 +257,12 @@ export default function App() {
   const viewedEmail = access.viewingAs?.kind === 'person' ? (access.viewingAs.email ?? '').trim().toLowerCase() : access.viewingAs ? '' : access.email
   const viewer: Viewer = { email: viewedEmail, can: access.can, readOnly: access.readOnly, manager: canManagePages(access.policy, access.rights) }
   const [addPageFor, setAddPageFor] = useState<string | null>(null)
-  // OND-73, OND-78: who a standalone HTML file is published by; the publish schedules of this computer run while the app
+  // OND-73, OND-78, OND-90: who an interactive HTML file is published by; the publish schedules of this computer run while the app
   // is open, each only while the person may still publish the page (the Tool Owner or its co-owners).
   const publisherName = my.self.me.name?.trim() || azure.creatorEmail.trim()
-  usePublishScheduler({ store: onDemand, views: personalViews, publishedBy: publisherName, kindOf: (id) => kindOf(menu.layout, id), allowed: (id) => viewer.manager || pageRights(viewer, menu.layout, id).owner ? '' : 'You are no longer the Tool Owner or a co-owner of the page: the scheduled publish did not run.' })
+  // OND-96: a dashboard's scheduled run reads its definition from Git (else the one last read in this browser).
+  const dashboardOf = async (id: string) => { try { const read = await git.readDashboard(id); return read.text == null ? null : parseDashboard(read.text, id).dashboard } catch { return cachedDashboard(id) } }
+  usePublishScheduler({ store: onDemand, views: personalViews, publishedBy: publisherName, kindOf: (id) => kindOf(menu.layout, id), dashboardOf, allowed: (id) => viewer.manager || pageRights(viewer, menu.layout, id).owner ? '' : 'You are no longer the Tool Owner or a co-owner of the page: the scheduled publish did not run.' })
   // Who creates new work items (the email on the Time Writing connection) and whether they may assign them to others.
   const assign = { me: azure.creatorEmail.trim().toLowerCase(), canChoose: access.can('azure.createForOthers') }
   // NAV-42, NAV-46: the start page — Home (the tiles) in the tile view, My dashboard in the classic view.
@@ -595,7 +597,7 @@ export default function App() {
       {page === 'pireview' && <PiReviewPage />}
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
-      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} />}
+      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} publisherName={publisherName} />}
       {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} dataMode={dataMode} publisherName={publisherName} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}
