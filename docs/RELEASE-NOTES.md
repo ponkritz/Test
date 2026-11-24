@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.15.1 — 2026-11-24
+
+**Fixed**
+- **A data repository the token cannot read no longer looks empty** — after Git storage was moved to a new repository, streams, links and connections were shown as empty: GitHub answers "Not Found" also when the token cannot see the repository, and the app took that for missing files. The app now asks GitHub once per session whether the repository can be read; if it cannot, it says "Repository … or branch … was not found, or the token cannot access it." on Git storage, the read-only notice and People & roles, keeps the custom streams, connections, PATs and roles this browser has, and does not offer Set up roles (GIT-25, KB-92).
+- **Changing the repository keeps your connections** — the first start after Change connection… or Switch only adds the new repository's connections that are not here; nothing is removed or replaced, a clean-up found there is not applied, and Admin → Data & sharing (Git storage, and Shared setup in Git) says what differs (GIT-26, KB-92).
+
+DF-270, DF-271, SM-151, LIM-67; TC-GIT-18, TC-GIT-19, TC-GIT-20.
+
+PR #393.
+
 ## v10.15.0 — 2026-11-24
 
 **Changed**
