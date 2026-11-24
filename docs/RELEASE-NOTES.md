@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.15.0 — 2026-11-24
+
+**Changed**
+- **No built-in bulk creation Epics** — the Epic IDs built into the app for bulk Create Features (DP #13946, Content #22919) are gone. DP, IOCC and Content create their Features only under the Epic mapped in **Admin → Stream options → Bulk creation Epics**: your own (this browser) or else the shared one (Git). A stream with neither shows **not set** there; its **Create Features** is disabled with "No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics." and an **Open Bulk creation Epics** button; Admin → Overview lists "DP bulk creation Epic is not set" (and IOCC, Content) as it did for IOCC. The Feature setup editor shows the release type sets for the DP and IOCC bulk Epics as mapped (QV-59, DPF-02, DPF-04, CNB-01, ADM-05).
+- **What to do** — a shared mapping already saved to Git keeps working; nothing changes for that team. A team that relied on the built-in Epics sees "not set" after the update: the **Tool Owner** (or a role with the right *Stream options*) opens Admin → Stream options → Bulk creation Epics, enters the DP Epic ID (the former built-in was 13946) and the Content Epic ID (the former 22919) under **Shared**, clicks **Save** on each row, then **Save to Git**. Everyone else does nothing (or enters their own Epic under **Mine**); the Feature setups of those Epics are unchanged.
+
+DF-110, DF-280, SM-161; TC-QV-40, TC-ADM-03, TC-DPF-04, TC-CNB-01.
+
+PR #392.
+
 ## v10.14.0 — 2026-11-24
 
 **Changed**
