@@ -1,8 +1,0 @@
----
-bump: minor
----
-**Changed**
-- **Tool Validations: tools from Azure DevOps are validated on their completion date** — a tool of the Tool Validations query (or of another Azure DevOps query) now takes as its validation date the **completion date** chosen in Stream mapping → Tool Validations queries (Changed Date by default), unless its source's field mapping names another Validation date field; its due date is that date **+ 24 months** (default) unless the query gives a validity period or a due date. The Master list and the Expiry list show "(completion date)" and "completion date + 24 months (default)"; the source's tab and the dashboard field Due date from say the same. The guess for an Azure DevOps source's Validation date is now the completion date (it was Author Approval Date), and the mapping pop-up offers "None — the completion date"; a mapping saved before with Author Approval Date is kept — pick Completion date in Setup → Edit mapping… to use it (TVL-29, TVL-06, TVL-07, TVL-20).
-- **Tool Validations: tools from Azure DevOps are changed there** — on the Master list, **Edit** and **Remove** are disabled for a tool from Azure DevOps, with the reason ("Comes from Azure DevOps (Tool Validations query): change it there."); **Edit notes…** changes only its notes (saved to Git); once Azure DevOps no longer returns it (Not in source now) it can be removed, Edit stays disabled. The app refuses the change itself (any field but the notes), not only the buttons; a tool added by hand with the same name and version is refused; the query's values replace dates entered by hand on its tools. Tools added by hand, or only from a Windchill export or a manual list, are unchanged (TVL-30, TVL-10, TVL-04).
-
-DF-292, SM-170, LIM-77; TC-TVL-26, TC-TVL-27 (UAT).

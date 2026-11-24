@@ -2,6 +2,33 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.22.0 — 2026-11-24
+
+**Changed**
+- **Tool Validations: tools from Azure DevOps are validated on their completion date** — a tool of the Tool Validations query (or of another Azure DevOps query) now takes as its validation date the **completion date** chosen in Stream mapping → Tool Validations queries (Changed Date by default), unless its source's field mapping names another Validation date field; its due date is that date **+ 24 months** (default) unless the query gives a validity period or a due date. The Master list and the Expiry list show "(completion date)" and "completion date + 24 months (default)"; the source's tab and the dashboard field Due date from say the same. The guess for an Azure DevOps source's Validation date is now the completion date (it was Author Approval Date), and the mapping pop-up offers "None — the completion date"; a mapping saved before with Author Approval Date is kept — pick Completion date in Setup → Edit mapping… to use it (TVL-29, TVL-06, TVL-07, TVL-20).
+- **Tool Validations: tools from Azure DevOps are changed there** — on the Master list, **Edit** and **Remove** are disabled for a tool from Azure DevOps, with the reason ("Comes from Azure DevOps (Tool Validations query): change it there."); **Edit notes…** changes only its notes (saved to Git); once Azure DevOps no longer returns it (Not in source now) it can be removed, Edit stays disabled. The app refuses the change itself (any field but the notes), not only the buttons; a tool added by hand with the same name and version is refused; the query's values replace dates entered by hand on its tools. Tools added by hand, or only from a Windchill export or a manual list, are unchanged (TVL-30, TVL-10, TVL-04).
+
+DF-292, SM-170, LIM-77; TC-TVL-26, TC-TVL-27 (UAT).
+
+PR #402.
+
+**Added**
+- **Tool Validations: the category of a source** (TVL-32) — **Setup → Sources → ＋ Add source…** asks a required **Category**: **Tool List** or **Validation Documents**. Only a Tool List source feeds the master list (Merge into master list…). A Validation Documents source keeps its own tab, listing its rows with every column of the source (no field mapping needed), and never adds to or changes the master list. The category is shown in Setup → Sources and changed in the source's **Edit mapping…**: changed to Validation Documents, the source stops feeding the master list and the tools it fed stay, marked **Not in source now** (nothing is deleted). Stored as `category` on the source in `tool-validations.json`; a source without it reads as a Tool List, so the sources added before behave as before. Read from the product owner's "when a user adds a tab – ask them if it's validation documents or Tools List. And only if they categorize it as Tools List use it for Master List" ("Add source + queries").
+- **Stream mapping: Tool List and Validation Documents** (TVL-33) — the two Tool Validations queries are named by their category: the roles in **Tool Validations queries** are **Tool List** and **Validation Documents** (the picker **Validation Documents query**, the row **Tool Validations · Validation Documents**). **Add query** on a Tool Validations row asks the same Category, pre-selected from the query's name or columns and confirmed by you; only a query categorised Tool List feeds the master list. The two-query counting is unchanged.
+
+DF-295, SM-173, LIM-80; TC-TVL-29, TC-TVL-30, TC-TVL-31 (UAT).
+
+PR #402.
+
+**Changed**
+- **Tool Validations, Azure tab: Validation Documents** (TVL-31, TVL-22, TVL-21) — the Signed documents query's table is now **Validation Documents**: one row per document, **including the documents whose Parent is not a tool of the Tools query** (e.g. a retired tool), which used to sit in a separate "Not linked to a tool" table (removed). It starts with **Tool** — the Parent's name: the tool's name and version from the Tools query, else the Parent's title read from Azure DevOps by its ID —, **Parent ID** and **Tool List (Azure)** (*Listed* or **Not in Tool List (Azure)**). Those documents are listed, **not counted** and not added to the master list; ⓘ What was counted and the table's ⓘ say so. Read from the product owner's "Name it as Validation Documents. And it should take the name of the parent Name" and "keep them in the Validation Docs, but don't do anything to the master list".
+- **Parent names read by ID, read only** (TVL-31) — when **↻** on the Tool Validations page fetches the two queries, the titles of those Parents are read with the same batch read as the queries' rows, on the Signed documents connection (its server and PAT; on-premises servers stay read only), and kept with the fetched documents, so they survive a reload and the fetch at start. A name that cannot be read shows as **#ID** with the reason in the cell's tooltip and the table's ⓘ; the table never waits for it.
+- **Tool List (Azure)** (TVL-31) — the Tools query's table (formerly "Source data · Tools query") — and Validation Documents show **every column the query selects, in the query's SELECT order**, none hidden by default (hide some with Columns). The month's table keeps its title **Releases**.
+
+DF-294, SM-172, LIM-79; TC-TVL-28, TC-TVL-18 (UAT).
+
+PR #402.
+
 ## v10.21.0 — 2026-11-24
 
 **Changed**
