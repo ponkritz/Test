@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.10.0 — 2026-11-24
+
+**Changed**
+- **The team's data repository is now `philips-internal/InD_DemandPlanningStorage`** — the Connect Git storage form, its placeholders and the Get started guide start with owner `philips-internal`, repository `InD_DemandPlanningStorage`, branch `main`, data file `planning-data.json`, so a new user adds only the token (GIT-13). The browser version's address is unchanged.
+
+**Added**
+- **A notice for connections to the old repository** — a connection still saved to `ponkritz/DemandPlanningStorage` shows a warning on every page with **Switch to philips-internal/InD_DemandPlanningStorage**, which keeps the branch, data file and token, asks first when there are unsaved changes, and loads from the new repository. Nothing changes without that click. The token must be allowed on the new repository (GIT-24).
+
+DF-262, SM-147; TC-GIT-16, TC-GIT-06.
+
+PR #386.
+
 ## v10.9.0 — 2026-11-24
 
 **Added**
