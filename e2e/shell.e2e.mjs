@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { cachedRoles, loadSample, navigate, openPage, openPerson, peopleSource, profileItem, rolesFile, startApp, text, toggleFilter } from './helpers.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
-// TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-SET-05), automated against the built web app.
+// TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-GIT-17, TC-SET-05), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -272,7 +272,7 @@ test('TC-GIT-06: Connect Git storage starts with the team repository prefilled; 
   await context.close()
 })
 
-test('TC-GIT-16: a connection still saved to the old data repository shows a notice; Switch moves it to the new one, same branch and file', async () => {
+test('TC-GIT-16, TC-GIT-17: a connection still saved to the old data repository shows a notice; Switch moves it to the new one, same branch and file, and Change connection then shows the new one', async () => {
   const old = { owner: 'ponkritz', repo: 'DemandPlanningStorage', branch: 'main', path: 'planning-data.json' }
   // The init script runs on every load: it saves the old connection only once, so a reload keeps what the app saved.
   const { page, context, errors } = await openPage(app, { init: (config) => {
@@ -288,6 +288,9 @@ test('TC-GIT-16: a connection still saved to the old data repository shows a not
   await notice.waitFor()
   assert.match(await text(notice), /The team data has moved to philips-internal\/InD_DemandPlanningStorage\. This app is still connected to ponkritz\/DemandPlanningStorage, which is no longer updated\./)
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('demand-planning-git-storage-v1') ?? 'null')), old, 'nothing changes by itself')
+  // KB-90: the Git storage panel is shown with the old connection before the switch.
+  await navigate(page, 'Data & sharing')
+  await page.getByRole('button', { name: 'Change connection…' }).waitFor()
   asked.length = 0
   const read = page.waitForRequest((request) => new URL(request.url()).pathname.startsWith('/repos/philips-internal/InD_DemandPlanningStorage/'))
   await notice.getByRole('button', { name: 'Switch to philips-internal/InD_DemandPlanningStorage' }).click()
@@ -295,6 +298,15 @@ test('TC-GIT-16: a connection still saved to the old data repository shows a not
   await notice.waitFor({ state: 'detached' })
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('demand-planning-git-storage-v1') ?? 'null')), { ...old, owner: 'philips-internal', repo: 'InD_DemandPlanningStorage' })
   assert.equal(await page.evaluate(() => localStorage.getItem('demand-planning-git-token-v1')), 'test-token', 'the token is kept')
+  // TC-GIT-17 (GIT-13, KB-90): Change connection… opens with the connection in use now, not the one the panel was shown with.
+  await page.getByRole('button', { name: 'Change connection…' }).click()
+  const form = page.getByRole('dialog').filter({ hasText: 'Change Git storage' })
+  await form.waitFor()
+  assert.equal(await form.getByLabel('Owner (user or organisation)').inputValue(), 'philips-internal')
+  assert.equal(await form.getByLabel('Repository', { exact: true }).inputValue(), 'InD_DemandPlanningStorage')
+  assert.equal(await form.getByLabel('Branch', { exact: true }).inputValue(), 'main')
+  await form.getByRole('button', { name: 'Cancel' }).click()
+  await form.waitFor({ state: 'detached' })
   // After a reload the start-up reads go to the new repository only (reads started before the click may still finish).
   asked.length = 0
   const views = page.waitForRequest((request) => new URL(request.url()).pathname === '/repos/philips-internal/InD_DemandPlanningStorage/contents/planning-data.json')

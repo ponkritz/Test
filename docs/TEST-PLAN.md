@@ -1188,7 +1188,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-GIT-15 Access changes load quietly, with an info line** — Req GIT-23, GIT-18, CON-101 — L1 `git-watch.test.mjs` ("GIT-23: a newer access.json loaded quietly — what changed in the viewer's own rights, in words (TC-GIT-15)", "GIT-18: each shared file is shown on the pages that use it; the menu and the views are loaded quietly"); E2E `page-notices.e2e.mjs` ("TC-GIT-14: …; TC-GIT-15: a change of the access roles is loaded quietly — the rights change in place with an info line, the notice only on People & roles"), `shell.e2e.mjs` ("TC-GIT-08 …": access roles created in Git are loaded quietly on Data & sharing); browser check with two browsers: B on CoNQ as a Team Member, A gives Team Members "Edit On-Demand data (rows)" — within 5 minutes B's ＋ Add row is enabled and the line "Your access was changed by {A}: you can now edit On-Demand data (rows)." shows on CoNQ only (not a pop-up, not in Background jobs) and goes on the next page; with B on Admin → People & roles the "Newer data in Git" notice for Access shows instead; with Git unreachable the rights loaded before stay.
 
-**TC-GIT-16 A connection to the old data repository is offered the switch** — Req GIT-24, GIT-13 — L1 `git-storage.test.mjs` ("GIT-24: a connection to the old data repository points to the new one, keeping its branch and data file; any other connection does not (TC-GIT-16)"); E2E `shell.e2e.mjs` ("TC-GIT-16": a connection saved to ponkritz/DemandPlanningStorage shows the notice naming both repositories and is not changed by itself; Switch saves philips-internal/InD_DemandPlanningStorage with the same branch, file and token, reads from the new repository and not the old one, and the notice goes); browser check: with unsaved changes, Switch asks first.
+**TC-GIT-16 A connection to the old data repository is offered the switch** — Req GIT-24, GIT-13 — L1 `git-storage.test.mjs` ("GIT-24: a connection to the old data repository points to the new one, keeping its branch and data file; any other connection does not (TC-GIT-16)"); E2E `shell.e2e.mjs` ("TC-GIT-16, TC-GIT-17": a connection saved to ponkritz/DemandPlanningStorage shows the notice naming both repositories and is not changed by itself; Switch saves philips-internal/InD_DemandPlanningStorage with the same branch, file and token, reads from the new repository and not the old one, and the notice goes); browser check: with unsaved changes, Switch asks first.
+
+**TC-GIT-17 Change connection opens with the connection in use** — Req GIT-13, GIT-24 — E2E `shell.e2e.mjs` ("TC-GIT-16, TC-GIT-17": the Git storage panel is shown with the old connection, Switch moves it, then Change connection… shows owner philips-internal, repository InD_DemandPlanningStorage, branch main; KB-90).
 
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
@@ -2353,7 +2355,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-01 | TC-GIT-01 |
 | GIT-03, GIT-04, GIT-08 | TC-GIT-02, TC-GIT-05 |
 | GIT-02…04, GIT-06, GIT-08, GIT-12 | TC-GIT-02 |
-| GIT-13 | TC-GIT-06 |
+| GIT-13 | TC-GIT-06, TC-GIT-17 |
 | GIT-14 | TC-GIT-07 |
 | GIT-15 | TC-GIT-08, TC-OND-02 |
 | GIT-16 | TC-GIT-09 |
@@ -2789,7 +2791,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-CON-62 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
