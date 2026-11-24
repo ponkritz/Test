@@ -2,6 +2,13 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.18.1 — 2026-11-24
+
+- **Bulk creation Epics: a shared Epic is saved straight to Git** (QV-59). In Admin → Stream options → Bulk creation Epics, **Save to Git** on a shared Epic commits it to the shared planning data in Git at once, with no separate Save to Git step. It shows Saved or why it failed. Without a writable Git connection (not connected, read-only token, synthetic sample loaded) the shared field is disabled and says why. Your own Epic works as before.
+- **A missing bulk creation Epic needs attention** (ADM-05). Admin → Overview lists *{stream} bulk creation Epic is not set* under **Attention** instead of Optional, because that stream's Create Features stays disabled until it is mapped.
+
+PR #398.
+
 ## v10.18.0 — 2026-11-24
 
 **Added**
