@@ -320,6 +320,7 @@ The data sources are what the app has already loaded:
 
 - **Azure DevOps work** — Features, User Stories and Tasks by type, state, assignee, area, Epic, Feature, PI, Sprint, dates, hours and tags. A click on a bar lists the items with their #ID links. With only *My Tasks [Board]* you see your own items.
 - **Releases per stream** — a row per release as Pulse Check counts it.
+- **Completed releases per stream per month** — each stream's Completed releases in each month up to this one, as Pulse Check's Month tabs count them, with **Counted in Pulse Check** (Yes / No, from your own Streams not counted). A line chart by Month, split by Stream, with **Running total** is Pulse Check's Year chart.
 - **Capacity and utilization** — Team overview's figures per person and month.
 - **The On-Demand table pages**, the **Time Writing hours**, the **QE Mapping** sheets, the **KPI tracker** values, the **historical hours** and each **Windchill export**.
 
@@ -366,6 +367,16 @@ The tabs: **Capacity and workload**, **Streams**, **Plan quality**, **Utilizatio
 - **Monthly pack** (below).
 
 **Streams not counted.** To leave a few streams out of the counts, tick them in **Streams not counted** in the filter bar (next to Period). They stay on the page, greyed and marked **Not counted**, and every release total, the Supported total and — for a quarter, half-year or year — the **Releases** and **Change** tiles leave them out (both periods, so the Change compares like with like). The ⓘ of each panel names them, and the Windchill exports export has a **Counted** column. A stream added later is counted. **Reset filters** counts every stream again. The **Work closed and opened** tables count every Epic, and the Monthly pack and other pages count every stream.
+
+**Completed releases over the year.** With **Period** set to **Year**, the panel **Completed releases · {year}, cumulative** shows how the year's Completed releases add up month by month:
+
+- one **line per stream**, adding up its Completed releases from January (**Per stream**);
+- the **All streams** line, adding up all of them (**All streams**, off at first);
+- a grey **column per month** with that month's sum (**Month sum**).
+
+Tick or untick the three switches above the chart; your choice is kept for you. Point at a month to read each stream's total so far and the month's count (+n); **Data labels** writes each line's total at the current month and each column's sum. A month counts exactly as its Month tab counts it, so the totals agree with the monthly Pulse Check. The **Releases** row of the Year table above counts each release once over the year: a release counted in two months (for example an S&S IT release with documents dated in September and October) counts twice in the chart, so December can be higher than that row — the panel's ⓘ says so. Months still to come are empty. The table under the chart lists each month's Completed releases per stream with the **Month total** and the **Cumulative total**; **Export** saves it. Streams you left out with **Streams not counted** have no line and are not in the sums.
+
+To chart the same numbers on **My dashboard**, add a block over **Completed releases per stream per month** ([Edit My dashboard](#edit-my-dashboard)): a **line** chart by Month, split by Stream, with **Running total** on.
 
 The Tool Owner (and the Admin) can **Save view for everyone** beside the filter: that is the team default, kept in Git. Your own change is kept for you on every computer; **Use the view for everyone** goes back to the team default.
 

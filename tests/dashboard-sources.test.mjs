@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { azureWorkFields, azureWorkRows, azureWorkSource, capacityFields, capacityRows, capacitySource, enteredRelease, entryOf, fieldsDataset, headingMonth, historyRows, historySource, kindOfKey, kpiRows, kpiSource, mySourcePattern, releaseCountsOf, releaseFields, releaseRows, releasesSource, sourceEntries, sourceKinds } from '../src/dashboardSources.ts'
+import { azureWorkFields, azureWorkRows, azureWorkSource, completedFields, completedSource, capacityFields, capacityRows, capacitySource, enteredRelease, entryOf, fieldsDataset, headingMonth, historyRows, historySource, kindOfKey, kpiRows, kpiSource, mySourcePattern, releaseCountsOf, releaseFields, releaseRows, releasesSource, sourceEntries, sourceKinds } from '../src/dashboardSources.ts'
 import { notAvailable } from '../src/dashboardHours.ts'
 import { blankBlock, blockData, hoursSource, kpiValue, narrowRows } from '../src/dashboardPages.ts'
 import { personMonths, totals } from '../src/dashboard.ts'
@@ -22,12 +22,12 @@ const items = [epic, feature, story, task, bug, history]
 const everyone = () => true
 
 test('MYD-15: the registry — every kind declares its fields and the area it needs; keys follow one pattern; a role without the area gets “Not available for your role.” and no rows (TC-MYD-08)', () => {
-  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'capacity', 'qe', 'kpi', 'history', 'windchill'])
+  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'completed', 'capacity', 'qe', 'kpi', 'history', 'windchill'])
   for (const kind of sourceKinds) assert.ok(kind.areas.length && kind.label && kind.describe, kind.id)
-  for (const key of ['page:conq', hoursSource, azureWorkSource, releasesSource, capacitySource, kpiSource, historySource, 'qe:s1', 'windchill:abc123']) assert.ok(mySourcePattern.test(key), key)
+  for (const key of ['page:conq', hoursSource, azureWorkSource, releasesSource, completedSource, capacitySource, kpiSource, historySource, 'qe:s1', 'windchill:abc123']) assert.ok(mySourcePattern.test(key), key)
   for (const key of ['other:x', 'page:Bad Id', 'qe:', 'azure:all']) assert.equal(mySourcePattern.test(key), false, key)
-  assert.deepEqual(['page:x', hoursSource, 'qe:s1', 'windchill:w', capacitySource].map(kindOfKey), ['page', 'hours', 'qe', 'windchill', 'capacity'])
-  for (const fields of [azureWorkFields, capacityFields]) assert.equal(new Set(fields.map((field) => field.id)).size, fields.length, 'unique field ids')
+  assert.deepEqual(['page:x', hoursSource, 'qe:s1', 'windchill:w', capacitySource, completedSource, releasesSource].map(kindOfKey), ['page', 'hours', 'qe', 'windchill', 'capacity', 'completed', 'releases'])
+  for (const fields of [azureWorkFields, capacityFields, completedFields]) assert.equal(new Set(fields.map((field) => field.id)).size, fields.length, 'unique field ids')
   // Fail closed: no area, no rows — and the hours / capacity are never worked out.
   let counted = 0
   const input = { sees: () => false, months: ['2026-08'], today: '2026-08-15', me: { name: 'Ana' }, items, settings: capacityContext({}), releases: { state: {}, profiles: [], streamsOf: () => { counted++; return [] } }, qe: { file: null, loaded: true }, kpi: undefined, history: { file: null, loaded: true, connected: true }, windchill: [], pages: [], hours: () => { counted++; return [] } }
@@ -145,4 +145,28 @@ test('MYD-19…MYD-22: QE Mapping sheets, KPI tracker values, historical hours a
   assert.deepEqual(export1.page.columns.map((column) => [column.name, column.type]), [['Number', 'text'], ['State', 'dropdown'], ['Approved On', 'date']])
   assert.deepEqual(export1.page.rows.map((row) => row.cells.wc2), ['2026-09-02', '2026-09-20', ''])
   assert.equal(entryOf(entries, 'windchill:w-1', (area) => area !== 'release').dataset.problem, notAvailable)
+})
+
+test('MYD-25: Completed releases per stream per month — the Month tabs’ counts by stream and month, Windchill exports included, Counted in Pulse Check per my filter; a line with Running total is the Year chart (TC-MYD-10)', async () => {
+  const { completedOf, cumulativeYear } = await import('../src/cumulativeReleases.ts')
+  const state = { azureSources: [], releaseSourceSettings: { countOverrides: { CP: { '2026-09': { completed: 2 }, '2026-10': { completed: 1 } } } } }
+  const columns = ['Name', 'Location', 'Last Modified']
+  const windchill = { views: [{ id: 'w1', name: 'S&S IT', exportFile: 'sns.csv', columns }], sources: [{ viewId: 'w1', columns, rows: [{ Name: 'SRS', Location: '/Products/Remote Diagnostics/1.7/DHF', 'Last Modified': '2026-10-03' }] }] }
+  const months = ['2026-09', '2026-10', '2026-11', '2026-12']
+  const input = { sees: (area) => area === 'release', months, today: '2026-11-24', me: { name: 'Ana' }, items: [], settings: capacityContext({}), releases: { state, profiles: [], streamsOf: (month) => defaultStreamReleases(state, [], month), windchill, excluded: ['S&S IT'] }, qe: { file: null, loaded: true }, kpi: null, history: { file: null, loaded: true, connected: false }, windchill: [], pages: [], hours: () => [] }
+  const dataset = entryOf(sourceEntries(input), completedSource, input.sees).dataset
+  assert.deepEqual(dataset.page.columns.map((column) => [column.name, column.type]), [['Stream', 'dropdown'], ['Month', 'date'], ['Completed releases', 'number'], ['Counted in Pulse Check', 'dropdown']])
+  const cells = (stream, month) => dataset.page.rows.find((row) => row.cells['cr-stream'] === stream && row.cells['cr-month'] === `${month}-01`)?.cells
+  for (const month of months.slice(0, 3)) for (const entry of completedOf(state, [], windchill, month)) assert.equal(cells(entry.name, month)['cr-completed'], String(entry.completed), `${entry.name} ${month}`)
+  assert.equal(dataset.page.rows.some((row) => row.cells['cr-month'] === '2026-12-01'), false, 'no month after the current one')
+  assert.deepEqual([cells('S&S IT', '2026-10')['cr-counted'], cells('CP', '2026-10')['cr-counted']], ['No', 'Yes'])
+  // A line by Month with Running total, split by Stream: the Year chart's running totals.
+  const line = { ...blankBlock(dataset, 'l1', 'line'), category: 'cr-month', second: 'cr-stream', measure: 'sum', value: 'cr-completed', period: '', options: { cumulative: true } }
+  const data = blockData(dataset.page, line)
+  const year = cumulativeYear(months, months.map((month) => month > '2026-11' ? [] : completedOf(state, [], windchill, month)), '2026-11-24')
+  const cp = data.series.findIndex((ser) => ser.label === 'CP')
+  assert.deepEqual(data.values.map((row) => row[cp]), year.streams.find((entry) => entry.name === 'CP').cumulative.slice(0, 3))
+  // Fail closed: no Release Details and no Team insights, no rows.
+  assert.equal(entryOf(sourceEntries({ ...input, sees: () => false }), completedSource, () => false).dataset.problem, notAvailable)
+  assert.equal(entryOf(sourceEntries({ ...input, sees: (area) => area === 'insights' }), completedSource, (area) => area === 'insights').dataset.problem, undefined, 'Team insights sees it too')
 })

@@ -30,6 +30,7 @@ import { factoryOf, sizeFromOptions, withSizeOptions, type GridSize } from '../c
 import { blockTypeLabel, dashId, dataSources, narrowRows, type DashboardBlock, type Dataset } from '../dashboardPages'
 import { hoursLinesCached } from '../dashboardHours'
 import { defaultStreamReleases } from '../releaseOverview'
+import { pulseStreamsKey, readPulseStreams } from '../pulseStreams'
 import { entryOf, sourceEntries, type LoadAction, type SourceInput } from '../dashboardSources'
 import { arrangeMyItems, isSection, maxMyBlocks, myBlankBlock, myDashboardKey, myDashboardOut, myDashboardPage, myDashboardViewKey, mySections, parseMyDashboard, sectionKindSize, withBlock, withoutBlock, type MyDashboard } from '../myDashboard'
 import { cleanOptions, insightKindOf as kindOf, withoutHidden } from '../onDemand'
@@ -86,12 +87,14 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
   const usedKey = wantAll ? '*' : [...used].sort().join(',')
   const onDemand = sources?.onDemand, qe = sources?.qe, history = sources?.history, items = sources?.items ?? azure.items
   const settings = sources?.settings
+  // MYD-25: the person's own Pulse Check Streams filter, for the Completed releases source's Counted in Pulse Check.
+  const excludedKey = (views.filter(pulseStreamsKey, readPulseStreams)?.excluded ?? []).join('\u0000')
   const entries = useMemo(() => {
     if (!sources || !settings) return []
     const visibleStored = (id: string) => { const found = onDemand!.stored(id); return found ? withoutHidden(found) : null }
     const input: SourceInput = {
       sees, months: monthsKey ? monthsKey.split(',') : [], today: utcToday(), me: my.me, items, settings,
-      releases: { state: store.state, profiles: azure.connectionProfiles, streamsOf: (at) => defaultStreamReleases(store.state, azure.connectionProfiles, at) },
+      releases: { state: store.state, profiles: azure.connectionProfiles, streamsOf: (at) => defaultStreamReleases(store.state, azure.connectionProfiles, at), windchill: windchill ?? { views: [], sources: [] }, excluded: excludedKey ? excludedKey.split('\u0000') : [] },
       qe: { file: qe!.file, loaded: qe!.loaded }, kpi, history: { file: history!.file, loaded: history!.loaded, connected: sources.git.connected },
       windchill: store.state.windchillSources ?? [],
       pages: dataSources(onDemand!.pages, visibleStored, sources.isDashboard, ''),
@@ -99,7 +102,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
     }
     return sourceEntries(input, (key) => usedKey === '*' || usedKey.split(',').includes(key))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, my.me.email, my.me.name, sources?.git.connected])
+  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, my.me.email, my.me.name, sources?.git.connected, windchill?.views, windchill?.sources, excludedKey])
   const sourceOf = (key: string) => entryOf(entries, key, sees)
   const narrow = (dataset: Dataset, block: DashboardBlock) => dataset.problem ? null : narrowRows(dataset, block, months)
   const datasets = entries.map((entry) => entry.dataset)

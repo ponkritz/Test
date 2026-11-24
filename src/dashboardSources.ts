@@ -11,6 +11,7 @@ import { isMine, myNames, piPathOf, type Me } from './myWork.ts'
 import type { OnDemandColumn, OnDemandRow, OnDemandType } from './onDemand.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 import { completedCount, supportedCount, type ReleaseStream } from './releaseOverview.ts'
+import { completedRows, monthCounts, windchillLinesOf, type StreamMonthCount, type WindchillInput } from './cumulativeReleases.ts'
 
 // MYD-15…MYD-22 The data sources of My dashboard's blocks, as one registry so that more can be added: each kind of
 // source declares its fields (text, category, date, number, currency), the menu area a role needs to see it
@@ -38,7 +39,9 @@ export interface SourceInput {
   // The report items: Azure DevOps with the historical hours merged in (HIS-05), as Team overview reads them.
   items: AzureWorkItem[]
   settings: CapacitySettings
-  releases: { state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>; profiles: AzureConnectionProfileSummary[]; streamsOf: (month: string) => ReleaseStream[] }
+  // MYD-25: windchill — the exports with their views (each a stream of Completed releases); excluded — the person's own
+  // Pulse Check Streams filter (QV-66), for the Counted in Pulse Check column.
+  releases: { state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>; profiles: AzureConnectionProfileSummary[]; streamsOf: (month: string) => ReleaseStream[]; windchill?: WindchillInput; excluded?: string[] }
   qe: { file: QeMappingFile | null; loaded: boolean }
   kpi: KpiTracker | null | undefined // undefined: not loaded in this visit yet
   history: { file: HistoryFile | null; loaded: boolean; connected: boolean }
@@ -152,6 +155,19 @@ export function releaseRows(months: string[], streamsOf: (month: string) => Rele
 // The counts the rows give per stream and month — equal to Pulse Check's completedCount / supportedCount (tests).
 export const releaseCountsOf = (stream: ReleaseStream) => ({ completed: completedCount(stream), supported: supportedCount(stream) })
 
+// ---- MYD-25 Completed releases per stream per month ----
+export const completedSource = 'releases:completed'
+export const completedFields: SourceField[] = [
+  { id: 'cr-stream', name: 'Stream', type: 'category' }, { id: 'cr-month', name: 'Month', type: 'date' },
+  { id: 'cr-completed', name: 'Completed releases', type: 'number' }, { id: 'cr-counted', name: 'Counted in Pulse Check', type: 'category' },
+]
+// One row per stream and month up to the current one, with the month's Completed releases as Pulse Check's Month tabs
+// count them (cumulativeReleases.ts: Azure streams by their rule and entered counts, Windchill exports by their dated
+// releases) — a Sum per stream and month is Pulse Check's count, a line with Running total its Year chart (QV-68).
+export function completedSourceRows(months: string[], today: string, countsOf: (month: string) => StreamMonthCount[], excluded: string[] = []): SourceRow[] {
+  return completedRows(months, countsOf, today, excluded).map((row) => ({ cells: { 'cr-stream': row.stream, 'cr-month': `${row.month}-01`, 'cr-completed': String(row.completed), 'cr-counted': row.counted ? 'Yes' : 'No' } }))
+}
+
 // ---- MYD-18 Capacity and utilization ----
 export const capacitySource = 'capacity:people'
 export const capacityFields: SourceField[] = [
@@ -249,6 +265,13 @@ export const sourceKinds: SourceKind[] = [
       if (!input.sees('release') && !input.sees('insights')) return [entry(blocked(releasesSource, name, kind, notAvailable), name)]
       return [entry(fieldsDataset(releasesSource, name, kind, 'Completed and Supported releases of every stream in each month of the period, counted as Pulse Check counts them (a Count per stream and month is Pulse Check’s)', releaseFields, wanted(releasesSource) ? releaseRows(input.months, input.releases.streamsOf) : []), name)]
     } },
+  { id: 'completed', label: 'Completed releases per stream per month', areas: ['release', 'insights'], describe: 'Each stream’s Completed releases per month as Pulse Check’s Month tabs count them.',
+    entries: (input, wanted) => {
+      const name = 'Completed releases per stream per month', kind = 'as in Pulse Check'
+      if (!input.sees('release') && !input.sees('insights')) return [entry(blocked(completedSource, name, kind, notAvailable), name)]
+      const countsOf = (month: string) => monthCounts(input.releases.streamsOf(month), input.releases.windchill ? windchillLinesOf(input.releases.windchill, month) : [])
+      return [entry(fieldsDataset(completedSource, name, kind, 'Every stream’s Completed releases in each month of the period up to the current month, counted as Pulse Check’s Month tabs count them (a month without any is 0); Counted in Pulse Check follows your own Streams not counted filter — a line chart by Month with Running total gives Pulse Check’s Year chart', completedFields, wanted(completedSource) ? completedSourceRows(input.months, input.today, countsOf, input.releases.excluded) : []), name)]
+    } },
   { id: 'capacity', label: 'Capacity and utilization', areas: ['insights'], describe: 'Team overview’s figures per team member and month.',
     entries: (input, wanted) => {
       const name = 'Capacity and utilization', kind = 'as in Team overview'
@@ -290,8 +313,8 @@ export const sourceKinds: SourceKind[] = [
 // stream, the Pulse Check rules) and the utilization (Capacity and utilization) — see MYD-22.
 
 // The source keys a stored block may name (MYD-23): the table pages and the Time Writing hours (DSH-04) and each kind above.
-export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|capacity:people|kpi:tracker|history:hours|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54})$/
-export const kindOfKey = (key: string) => key === hoursSource ? 'hours' : key.split(':')[0] === 'page' ? 'page' : key.split(':')[0] === 'releases' ? 'releases' : key.split(':')[0] === 'capacity' ? 'capacity' : key.split(':')[0]
+export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|releases:completed|capacity:people|kpi:tracker|history:hours|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54})$/
+export const kindOfKey = (key: string) => key === hoursSource ? 'hours' : key === completedSource ? 'completed' : key.split(':')[0] === 'page' ? 'page' : key.split(':')[0] === 'releases' ? 'releases' : key.split(':')[0] === 'capacity' ? 'capacity' : key.split(':')[0]
 
 // Every source entry in the registry's order; wanted: the keys whose rows are worked out.
 export const sourceEntries = (input: SourceInput, wanted: (key: string) => boolean = () => true) => sourceKinds.flatMap((kind) => kind.entries(input, wanted))

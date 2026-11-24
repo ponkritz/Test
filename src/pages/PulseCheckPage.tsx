@@ -4,6 +4,8 @@ import { SupportedReleasesTable } from '../components/DpMonthCounts'
 import { useMemo, useState } from 'react'
 import { NotCounted, ReleaseQuadrants, SupportedSummary, type SupportedLine } from '../components/ReleaseQuadrants'
 import { MultiSelect } from '../components/MultiSelect'
+import { CumulativeReleasesPanel } from '../components/CumulativeReleasesChart'
+import { cumulativeViewKey, cumulativeYear, defaultSwitches, monthCounts, readSwitches, windchillLinesOf, type CumulativeSwitches, type CumulativeYear } from '../cumulativeReleases'
 import { PageViewForEveryone } from '../components/ViewForEveryone'
 import { chosenOf, isCounted, notCountedNote, pulseStreamsKey, readPulseStreams, streamNames, withChosen, type PulseStreamsChoice } from '../pulseStreams'
 import { CapacityMetrics, MonthSections } from '../components/MonthOverview'
@@ -39,6 +41,7 @@ const tabKey = 'demand-planning-pulse-tab-v1'
 const dpListKey = 'demand-planning-pulse-dp-list-v1'
 const periodKey = 'demand-planning-pulse-period-v1'
 const streamsKey = 'demand-planning-pulse-streams-v1'
+const cumulativeKey = 'demand-planning-pulse-cumulative-v1'
 const workNote = 'Every Epic counts here: the Streams filter applies to the release counts only.'
 const change = (now: number, before: number) => now === before ? <span className="muted">±0</span> : <span className={now > before ? 'positive' : 'negative'}>{now > before ? '+' : '−'}{Math.abs(now - before)}</span>
 
@@ -70,6 +73,10 @@ export function PulseCheckPage({ month, azure, store, my, navigate, windchill, o
   const known = streamNames(allStreams().map((stream) => stream.name), exports.map((entry) => entry.name), streams.map((stream) => stream.name), lastStreams.map((stream) => stream.name))
   const saveChoice = (next: PulseStreamsChoice) => { if (views) views.setFilter(pulseStreamsKey, next); else { setLocalChoice(next); try { localStorage.setItem(streamsKey, JSON.stringify(next)) } catch { /* convenience only */ } } }
   const counted = (name: string) => isCounted(excluded, name)
+  // QV-69: the Year view's cumulative chart switches — the person's own (personal views), else this browser's.
+  const [localSwitches, setLocalSwitches] = useState<CumulativeSwitches>(() => { try { return readSwitches(JSON.parse(localStorage.getItem(cumulativeKey) ?? 'null')) ?? defaultSwitches } catch { return defaultSwitches } })
+  const switches = (views ? views.filter(cumulativeViewKey, readSwitches) : localSwitches) ?? defaultSwitches
+  const setSwitches = (next: CumulativeSwitches) => { if (views) views.setFilter(cumulativeViewKey, next); else { setLocalSwitches(next); try { localStorage.setItem(cumulativeKey, JSON.stringify(next)) } catch { /* convenience only */ } } }
   const note = notCountedNote(excluded, known)
   const chosenStreams = chosenOf(excluded, known)
   // The Supported summary (QV-33, QV-34, QV-36): DP's and IOCC's Supported Releases, the Tool Validations' unique tools, then the Windchill
@@ -110,9 +117,13 @@ export function PulseCheckPage({ month, azure, store, my, navigate, windchill, o
   const bar = <>{periodBar}{viewLine}</>
   if (chosen) {
     const before = previousPeriod(chosen)
-    const windchillLines = (at: string) => exports.map(({ name, view }) => { const source = view ? windchill.sources.find((entry) => entry.viewId === view.id) : undefined; return { name, releases: source && view ? windchillSupported(source.rows, source.columns.length ? source.columns : view.columns, at, windchillOptionsForView(view)) : [] } })
+    const windchillLines = (at: string) => windchillLinesOf(windchill, at)
     const of = (months: string[]) => periodStreams(months.map((at) => defaultStreamReleases(store.state, azure.connectionProfiles, at)), months.map(windchillLines))
-    return <Page>{bar}<PeriodPulse label={chosen.label} previous={before.label} months={chosen.months} rows={periodComparison(of(chosen.months), of(before.months))} azure={azure} absenceEpicId={capacityContext(store.state).absenceEpicId} counted={counted} note={note} /></Page>
+    // QV-68: the Year view's cumulative Completed releases — each month counted as its Month tab counts it, the months
+    // after the current one left empty (not read).
+    const current = utcToday().slice(0, 7)
+    const cumulative = period.kind === 'year' ? cumulativeYear(chosen.months, chosen.months.map((at) => at > current ? [] : monthCounts(defaultStreamReleases(store.state, azure.connectionProfiles, at), windchillLines(at))), utcToday(), excluded) : undefined
+    return <Page>{bar}<PeriodPulse label={chosen.label} previous={before.label} months={chosen.months} rows={periodComparison(of(chosen.months), of(before.months))} azure={azure} absenceEpicId={capacityContext(store.state).absenceEpicId} counted={counted} note={note} cumulative={cumulative && { data: cumulative, switches, onSwitches: setSwitches }} /></Page>
   }
   return <Page>
     {bar}
@@ -200,7 +211,7 @@ function LastMonth({ month, last, azure, store, my, navigate, current, canPickPr
 
 // A quarter, half-year or year (QV-50): each stream's releases in the period (each release once) against the period
 // before, and the Features and User Stories opened and closed in it.
-function PeriodPulse({ label, previous, months, rows, azure, absenceEpicId, counted, note }: { label: string; previous: string; months: string[]; rows: ReturnType<typeof periodComparison>; azure: AzureWorkspace; absenceEpicId: number; counted: (name: string) => boolean; note: string }) {
+function PeriodPulse({ label, previous, months, rows, azure, absenceEpicId, counted, note, cumulative }: { label: string; previous: string; months: string[]; rows: ReturnType<typeof periodComparison>; azure: AzureWorkspace; absenceEpicId: number; counted: (name: string) => boolean; note: string; cumulative?: { data: CumulativeYear; switches: CumulativeSwitches; onSwitches: (next: CumulativeSwitches) => void } }) {
   const monthsKey = months.join(',')
   const flow = useMemo(() => periodWorkFlow(azure.items, monthsKey.split(','), absenceEpicId), [azure.items, monthsKey, absenceEpicId])
   // QV-66: the streams not counted stay in the table, greyed; both periods leave them out, so the Change compares like with like.
@@ -222,6 +233,7 @@ function PeriodPulse({ label, previous, months, rows, azure, absenceEpicId, coun
         <tr className="matrix-total"><td>Total</td><td>{total}</td><td>{totalBefore}</td><td>{change(total, totalBefore)}</td><td /></tr>
       </tbody></table>}
     </TablePanel>
+    {cumulative && <CumulativeReleasesPanel year={label} data={cumulative.data} switches={cumulative.switches} onSwitches={cumulative.onSwitches} note={note} />}
     <TablePanel title={`Work closed and opened · ${label}`} info={`Features and User Stories created (Created Date) and closed (Closed Date) in the months of the period, per stream — the Epic above them. Removed items and work under the absence Epic are left out. ${workNote}`}
       count={`Features +${flow.totals.Feature.created} / ✓${flow.totals.Feature.closed} · Stories +${flow.totals['User Story'].created} / ✓${flow.totals['User Story'].closed}`} empty={flow.streams.length ? undefined : `No Features or User Stories created or closed in ${label}.`}>
       {flow.streams.length > 0 && <table><thead><tr><th>Stream (Epic)</th><th>Features opened</th><th>Features closed</th><th>Stories opened</th><th>Stories closed</th></tr></thead><tbody>

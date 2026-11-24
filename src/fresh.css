@@ -1186,3 +1186,7 @@ div.chart-grid:not(.od-insights){margin-bottom:18px}
 .release-quadrant.not-counted .quadrant-counts strong{color:var(--muted)}
 .not-counted .pill{margin-right:4px}
 .not-counted .positive,.not-counted .negative{color:var(--muted)!important}
+/* QV-68: Pulse Check → Year, the cumulative Completed releases — the switches above the chart, a dashed key for the
+   sixth stream and later (the palette again with a dashed line). */
+.pulse-cumulative-switches{gap:16px;margin:2px 0 6px;flex-wrap:wrap}.pulse-cumulative-switches .check{margin:0;font-size:12px;color:var(--text)}
+.viz-legend i.viz-key-dashed{width:18px;height:0;border-top:2px dashed;border-radius:0;background:none}
