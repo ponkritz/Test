@@ -88,6 +88,7 @@ What the team shares lives in a private GitHub repository: the planning data, th
 - Use a **fine-grained GitHub token** for that one repository: **Contents: Read-only** if you only read, **Read and write** if you save (for example rows, charts, baselines or people).
 - With a read-only token the app shows the shared data, but saving buttons are greyed out with the reason.
 - The token stays in your browser, like the PAT.
+- **The team's data moved** to `philips-internal/InD_DemandPlanningStorage`. If you connected before the move, a notice at the top of every page says so: press **Switch to philips-internal/InD_DemandPlanningStorage**. Your token must be allowed on the new repository; if it is not, ask for a new fine-grained token for it.
 
 ### Your work email
 

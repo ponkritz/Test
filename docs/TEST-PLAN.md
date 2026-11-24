@@ -1161,7 +1161,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-GIT-01 Config validation** — Req GIT-01 — L1 `git-storage.test.mjs`.
 
-**TC-GIT-06 Default data repository prefilled** — Req GIT-13 — L1 `git-storage.test.mjs` ("the default data repository is a valid config: ponkritz/DemandPlanningStorage, main, planning-data.json"); E2E `shell.e2e.mjs` ("TC-GIT-06": Settings → Storage → Connect Git storage… shows Owner ponkritz, Repository DemandPlanningStorage, Branch main and Data file planning-data.json prefilled with the token empty; the Get started guide's Git step names the repository); browser check: with a connection saved to another repository, Change connection… shows that repository.
+**TC-GIT-06 Default data repository prefilled** — Req GIT-13 — L1 `git-storage.test.mjs` ("the default data repository is a valid config: philips-internal/InD_DemandPlanningStorage, main, planning-data.json"); E2E `shell.e2e.mjs` ("TC-GIT-06": Settings → Storage → Connect Git storage… shows Owner ponkritz, Repository DemandPlanningStorage, Branch main and Data file planning-data.json prefilled with the token empty; the Get started guide's Git step names the repository); browser check: with a connection saved to another repository, Change connection… shows that repository.
 
 **TC-GIT-05 Capacity settings and mappings in Git** — Req GIT-03, GIT-04, GIT-08, CAP-10 — L1 `git-storage.test.mjs` ("capacity settings, holidays and common activities travel in the Git planning file": round-trip without change, mappings sorted by ID, an older file without them loads as before and makes Save to Git appear, invalid mappings dropped); browser check: add a mapping on Settings → Capacity → the sync bar there says "Unsaved changes"; Save to Git; on a second browser Load latest shows the same mapping. **UAT**
 
@@ -1187,6 +1187,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-GIT-14 The notice names the app user who saved** — Req GIT-22, GIT-18, GIT-17 — L1 `git-watch.test.mjs` ("GIT-22: every commit the app writes names the app user — display name and work email — and the notice shows them; a commit made outside the app shows its GitHub author (TC-GIT-14)"); E2E `page-notices.e2e.mjs` ("TC-GIT-14: the notice names the app user who saved, not the GitHub account; TC-GIT-15: …"), `page-notices.e2e.mjs` ("TC-GIT-11: …": a commit made outside the app shows its GitHub author); browser check: save a row on CoNQ — the commit in GitHub ends with `[saved …] [by {your name} <{your work email}>]` and holds no token; in the other browser the notice says "saved by {your name}"; a commit made on github.com shows the GitHub author.
 
 **TC-GIT-15 Access changes load quietly, with an info line** — Req GIT-23, GIT-18, CON-101 — L1 `git-watch.test.mjs` ("GIT-23: a newer access.json loaded quietly — what changed in the viewer's own rights, in words (TC-GIT-15)", "GIT-18: each shared file is shown on the pages that use it; the menu and the views are loaded quietly"); E2E `page-notices.e2e.mjs` ("TC-GIT-14: …; TC-GIT-15: a change of the access roles is loaded quietly — the rights change in place with an info line, the notice only on People & roles"), `shell.e2e.mjs` ("TC-GIT-08 …": access roles created in Git are loaded quietly on Data & sharing); browser check with two browsers: B on CoNQ as a Team Member, A gives Team Members "Edit On-Demand data (rows)" — within 5 minutes B's ＋ Add row is enabled and the line "Your access was changed by {A}: you can now edit On-Demand data (rows)." shows on CoNQ only (not a pop-up, not in Background jobs) and goes on the next page; with B on Admin → People & roles the "Newer data in Git" notice for Access shows instead; with Git unreachable the rights loaded before stay.
+
+**TC-GIT-16 A connection to the old data repository is offered the switch** — Req GIT-24, GIT-13 — L1 `git-storage.test.mjs` ("GIT-24: a connection to the old data repository points to the new one, keeping its branch and data file; any other connection does not (TC-GIT-16)"); E2E `shell.e2e.mjs` ("TC-GIT-16": a connection saved to ponkritz/DemandPlanningStorage shows the notice naming both repositories and is not changed by itself; Switch saves philips-internal/InD_DemandPlanningStorage with the same branch, file and token, reads from the new repository and not the old one, and the notice goes); browser check: with unsaved changes, Switch asks first.
 
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
@@ -2360,6 +2362,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-21 | TC-GIT-13 |
 | GIT-22 | TC-GIT-14 |
 | GIT-23 | TC-GIT-15 |
+| GIT-24 | TC-GIT-16 |
 | GIT-19 | TC-GIT-12 |
 | GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
@@ -2786,7 +2789,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-CON-62 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |

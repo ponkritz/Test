@@ -360,7 +360,7 @@ The fields apply to every new Feature under the Epic — **New Feature** and **b
 
 ### Sharing through Git
 
-A **separate private GitHub repository** (Admin → Data & sharing → Git storage: owner, repository, branch, data file, token — the form starts with the team's repository `ponkritz/DemandPlanningStorage`, branch `main`, so a new user adds only the token) holds:
+A **separate private GitHub repository** (Admin → Data & sharing → Git storage: owner, repository, branch, data file, token — the form starts with the team's repository `philips-internal/InD_DemandPlanningStorage`, branch `main`, so a new user adds only the token; a connection still saved to the old repository `ponkritz/DemandPlanningStorage` shows a notice with **Switch to philips-internal/InD_DemandPlanningStorage**, GIT-24) holds:
 
 | File | Content | Written by | Read by |
 |---|---|---|---|
@@ -576,7 +576,7 @@ Refresh Azure once after updating to populate new scheduling fields in older sav
 
 ### Snapshots in Git
 
-LTE and PI Review snapshots (Snapshots page) are separate JSON files saved to the private Git data repository of Git storage (`ponkritz/DemandPlanningStorage`), in the folder `lte-snapshots/` beside the planning data — one commit per snapshot, named `{month}-{type}-{id}.json` (SNP-04…08). A snapshot is saved only as a **new file** (an existing one is never replaced) and is reported saved only after it is read back and matches. Saving needs Git storage with a token that can write; it is off with the synthetic sample, and nothing is kept in the browser. The history lists the snapshot files in Git, newest month first, each linked to GitHub. Files are capped at 50 MB.
+LTE and PI Review snapshots (Snapshots page) are separate JSON files saved to the private Git data repository of Git storage (`philips-internal/InD_DemandPlanningStorage`), in the folder `lte-snapshots/` beside the planning data — one commit per snapshot, named `{month}-{type}-{id}.json` (SNP-04…08). A snapshot is saved only as a **new file** (an existing one is never replaced) and is reported saved only after it is read back and matches. Saving needs Git storage with a token that can write; it is off with the synthetic sample, and nothing is kept in the browser. The history lists the snapshot files in Git, newest month first, each linked to GitHub. Files are capped at 50 MB.
 
 Each snapshot freezes **all the app data present at the moment** — the work items with their hours, the release data (release source, release views, Windchill exports, plans), capacity, people, baselines and settings (SNP-05) — with the selected month/type, author (your work email), UTC creation time and build identity. It includes saved Azure work items, not an unsaved Azure fetch preview; refresh/save source data first. Earlier snapshot payloads and credentials are excluded. Snapshot JSON is not a rendered PPT/PDF report or a normal restore-backup file. *(Snapshots used to go to a SharePoint library; SharePoint is in the backlog — see PROJECT-PLAN.md.)*
 

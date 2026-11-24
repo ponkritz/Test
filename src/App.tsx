@@ -76,7 +76,7 @@ import { utcMonthKey } from './businessTime'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
-import { confirmReplace, defaultGitRepository, normalizeSetupLinks, setCommitSaver, type SetupLinks } from './gitStorage'
+import { confirmReplace, defaultGitRepository, movedRepositoryTarget, normalizeSetupLinks, setCommitSaver, type SetupLinks } from './gitStorage'
 import { guideKey, requiredOpen, setupSteps } from './setupGuide'
 import { azureResources, capacityContext, setAccessRoles, setAzureEmails } from './capacity'
 import { hasServerPat, serverKey } from './azureCredentials'
@@ -117,6 +117,8 @@ export default function App() {
   const gitData = useRef<GitDataSource | undefined>(undefined)
   const azure = useAzureWorkspace(store, onFetched, gitData)
   const git = useGitStorage(store, azure.isSample)
+  // GIT-24: a connection still saved to a repository the team data has moved away from.
+  const movedGit = movedRepositoryTarget(git.config)
   // On-prem views can load the data the desktop app saved to Git: on request, or when a fetch cannot run.
   gitData.current = {
     available: (id) => { const profile = azure.connectionProfiles.find((entry) => entry.id === id); return Boolean(git.connected && !azure.isSample && profile && sharedThroughGit(profile)) },
@@ -589,6 +591,7 @@ export default function App() {
       {viewAsOpen && <ViewAsDialog current={access.viewingAs} people={viewAsPeople(azure.items, access.policy)} onStart={(next) => { setViewAs(next); setViewAsOpen(false); setPage(startPageOf(startView)) }} onClose={() => setViewAsOpen(false)} />}
       <DataNotices azure={azure} onOpenConnection={openConnection} />
       {/* CON-101 (fail closed): until the roles file is loaded the app is read-only; say why and what to do. */}
+      {movedGit && git.config && <Notice tone="warning" className="git-moved"><strong>The team data has moved</strong> to {movedGit.owner}/{movedGit.repo}. This app is still connected to {git.config.owner}/{git.config.repo}, which is no longer updated.{' '}{git.connected ? <button type="button" className="primary" disabled={git.status === 'loading' || git.status === 'saving'} onClick={() => { if (confirmReplace(git.dirty, git.status === 'conflict')) void git.connect(movedGit, '', false) }}>Switch to {movedGit.owner}/{movedGit.repo}</button> : <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Open Git storage →</button>}</Notice>}
       {access.readOnly && <Notice tone="warning" className="access-read-only"><strong>Read-only:</strong> {access.bootstrap ? <>there are no access roles yet (no {access.path || 'access.json'} in Git storage), so no changes can be made. <button type="button" className="text-button" onClick={() => openSettings('resources', 'rights')}>Set up roles →</button></> : access.error ? <>the access roles ({access.path || 'access.json'}) could not be read, so no changes can be made: {access.error} <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Open Git storage →</button></> : git.accessScope && !access.loaded ? <>loading the access roles ({access.path || 'access.json'}) from Git storage; no changes can be made until they are loaded.</> : <>the access roles (access.json) are not loaded, so no changes can be made. <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Connect Git storage →</button></>}</Notice>}
       {guideOpen && <SetupGuide steps={steps} busy={azure.busy} problem={azure.fetchProblem} links={setupLinks} linkDefaults={linkDefaults} editLinks={access.can('layout.defaults') && git.connected && !git.readOnly && !azure.isSample ? { links: store.state.setupLinks ?? {}, onChange: (links) => store.update((draft) => { draft.setupLinks = links; return draft }), saveBar: <GitSyncBar git={git} /> } : undefined} inputs={{ connectGit: (token) => git.connect({ ...defaultGitRepository, ...git.config }, token, true), saveEmail: (email) => { azure.setCreatorEmail(email) }, savePat: (token) => { azure.rememberPat(token); azure.reloadConnectionProfiles() }, detectEmail: () => azure.config ? detectWorkEmail(azure.config, azure.pat) : Promise.reject(new Error('Set up the Time Writing connection first.')), gitMessage: git.status === 'error' ? git.message : undefined }} onClose={() => setGuideOpen(false)} onDismiss={dismissGuide} onOpenTab={(tab, section) => { openSettings(tab, section); setGuideOpen(false) }} onFetch={() => void azure.refresh()} />}
       {store.cache.status === 'error' && <Notice tone="error"><p>{store.cache.message}</p><div className="button-row"><button className="ghost" onClick={() => exportStateJson(store.state)}>Export JSON backup now</button><button className="primary" onClick={store.retrySave}>Retry browser save</button></div></Notice>}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { cachedRoles, loadSample, navigate, openPage, openPerson, peopleSource, profileItem, rolesFile, startApp, text, toggleFilter } from './helpers.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
-// TC-UPD-02, TC-GIT-06, TC-SET-05), automated against the built web app.
+// TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-SET-05), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -257,18 +257,52 @@ test('TC-GIT-06: Connect Git storage starts with the team repository prefilled; 
   const { page, context, errors } = await openPage(app, { guide: true })
   const guide = page.getByRole('dialog').filter({ hasText: 'Get started' })
   await guide.waitFor()
-  assert.match(await guide.getByLabel('GitHub token').getAttribute('placeholder') ?? '', /ponkritz\/DemandPlanningStorage/, 'the Git step names the prefilled repository')
+  assert.match(await guide.getByLabel('GitHub token').getAttribute('placeholder') ?? '', /philips-internal\/InD_DemandPlanningStorage/, 'the Git step names the prefilled repository')
   await guide.getByRole('button', { name: /Don.t show again automatically/ }).click()
   await navigate(page, 'Data & sharing')
   await page.getByRole('button', { name: 'Connect Git storage…' }).click()
   const form = page.getByRole('dialog').filter({ hasText: 'Connect Git storage' })
   await form.waitFor()
-  assert.equal(await form.getByLabel('Owner (user or organisation)').inputValue(), 'ponkritz')
-  assert.equal(await form.getByLabel('Repository', { exact: true }).inputValue(), 'DemandPlanningStorage')
+  assert.equal(await form.getByLabel('Owner (user or organisation)').inputValue(), 'philips-internal')
+  assert.equal(await form.getByLabel('Repository', { exact: true }).inputValue(), 'InD_DemandPlanningStorage')
   assert.equal(await form.getByLabel('Branch', { exact: true }).inputValue(), 'main')
   assert.equal(await form.getByLabel('Data file', { exact: true }).inputValue(), 'planning-data.json')
   assert.equal(await form.getByLabel('GitHub token').inputValue(), '')
   assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-GIT-16: a connection still saved to the old data repository shows a notice; Switch moves it to the new one, same branch and file', async () => {
+  const old = { owner: 'ponkritz', repo: 'DemandPlanningStorage', branch: 'main', path: 'planning-data.json' }
+  // The init script runs on every load: it saves the old connection only once, so a reload keeps what the app saved.
+  const { page, context, errors } = await openPage(app, { init: (config) => {
+    if (localStorage.getItem('demand-planning-git-storage-v1')) return
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify(config))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+  }, initArg: old })
+  // GitHub answers every read with Not Found (an empty repository); the requests are recorded.
+  const asked = []
+  await context.route('https://api.github.com/**', (route) => { asked.push(new URL(route.request().url()).pathname); return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"Not Found"}' }) })
+  await page.reload()
+  const notice = page.locator('.notice.git-moved')
+  await notice.waitFor()
+  assert.match(await text(notice), /The team data has moved to philips-internal\/InD_DemandPlanningStorage\. This app is still connected to ponkritz\/DemandPlanningStorage, which is no longer updated\./)
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('demand-planning-git-storage-v1') ?? 'null')), old, 'nothing changes by itself')
+  asked.length = 0
+  const read = page.waitForRequest((request) => new URL(request.url()).pathname.startsWith('/repos/philips-internal/InD_DemandPlanningStorage/'))
+  await notice.getByRole('button', { name: 'Switch to philips-internal/InD_DemandPlanningStorage' }).click()
+  await read // the data is read from the new repository
+  await notice.waitFor({ state: 'detached' })
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('demand-planning-git-storage-v1') ?? 'null')), { ...old, owner: 'philips-internal', repo: 'InD_DemandPlanningStorage' })
+  assert.equal(await page.evaluate(() => localStorage.getItem('demand-planning-git-token-v1')), 'test-token', 'the token is kept')
+  // After a reload the start-up reads go to the new repository only (reads started before the click may still finish).
+  asked.length = 0
+  const views = page.waitForRequest((request) => new URL(request.url()).pathname === '/repos/philips-internal/InD_DemandPlanningStorage/contents/planning-data.json')
+  await page.reload()
+  await views
+  assert.equal(await page.locator('.notice.git-moved').count(), 0, 'no notice after the switch')
+  assert.deepEqual(asked.filter((path) => path.startsWith('/repos/ponkritz/')), [], 'nothing is read from the old repository')
+  assert.deepEqual(errors.filter((error) => !/404|Not Found/.test(error)), [])
   await context.close()
 })
 
@@ -1737,7 +1771,7 @@ test('TC-UI-11: a pop-up takes the focus, keeps Tab inside, closes on Escape and
   const dialog = page.getByRole('dialog').filter({ hasText: 'Connect Git storage' })
   await dialog.waitFor()
   const inside = () => page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('placeholder')), 'ponkritz', 'the first field has the focus')
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('placeholder')), 'philips-internal', 'the first field has the focus')
   for (let step = 0; step < 25; step++) { await page.keyboard.press('Tab'); assert.equal(await inside(), true, `Tab ${step + 1} stays in the pop-up`) }
   for (let step = 0; step < 5; step++) { await page.keyboard.press('Shift+Tab'); assert.equal(await inside(), true, `Shift+Tab ${step + 1} stays in the pop-up`) }
   await page.keyboard.press('Escape')
