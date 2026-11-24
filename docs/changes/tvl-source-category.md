@@ -1,0 +1,8 @@
+---
+bump: minor
+---
+**Added**
+- **Tool Validations: the category of a source** (TVL-32) — **Setup → Sources → ＋ Add source…** asks a required **Category**: **Tool List** or **Validation Documents**. Only a Tool List source feeds the master list (Merge into master list…). A Validation Documents source keeps its own tab, listing its rows with every column of the source (no field mapping needed), and never adds to or changes the master list. The category is shown in Setup → Sources and changed in the source's **Edit mapping…**: changed to Validation Documents, the source stops feeding the master list and the tools it fed stay, marked **Not in source now** (nothing is deleted). Stored as `category` on the source in `tool-validations.json`; a source without it reads as a Tool List, so the sources added before behave as before. Read from the product owner's "when a user adds a tab – ask them if it's validation documents or Tools List. And only if they categorize it as Tools List use it for Master List" ("Add source + queries").
+- **Stream mapping: Tool List and Validation Documents** (TVL-33) — the two Tool Validations queries are named by their category: the roles in **Tool Validations queries** are **Tool List** and **Validation Documents** (the picker **Validation Documents query**, the row **Tool Validations · Validation Documents**). **Add query** on a Tool Validations row asks the same Category, pre-selected from the query's name or columns and confirmed by you; only a query categorised Tool List feeds the master list. The two-query counting is unchanged.
+
+DF-295, SM-173, LIM-80; TC-TVL-29, TC-TVL-30, TC-TVL-31 (UAT).

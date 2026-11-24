@@ -189,7 +189,7 @@ test('TVL-18: the Tool Validations master list and expiry list as data sources â
   const rows = toolRows(file, '2026-08-15')
   const byTool = Object.fromEntries(rows.map((row) => [row.cells['tv-tool'], row.cells]))
   assert.deepEqual([byTool.LabVIEW['tv-status'], byTool.LabVIEW['tv-days'], byTool.LabVIEW['tv-from'], byTool.LabVIEW['tv-sources'], byTool.LabVIEW['tv-state']], ['Overdue', '-10', 'from the source', ['Tool Validations', 'Tool register'], 'In source'])
-  assert.deepEqual([byTool.Minitab['tv-status'], byTool.Minitab['tv-due'], byTool.Minitab['tv-days'], byTool.Minitab['tv-from'], byTool.Minitab['tv-state']], ['Due soon', '2026-09-01', '17', 'validation date + validity period', 'Not in source now'], 'due within the team default of 30 days')
+  assert.deepEqual([byTool.Minitab['tv-status'], byTool.Minitab['tv-due'], byTool.Minitab['tv-days'], byTool.Minitab['tv-from'], byTool.Minitab['tv-state']], ['Due soon', '2026-09-01', '17', 'completion date + validity period', 'Not in source now'], 'due within the team default of 30 days; from the Tool Validations query: the completion date (TVL-29)')
   assert.deepEqual([byTool.Python['tv-status'], byTool.Python['tv-days'], byTool.Python['tv-due'], byTool.Python['tv-state']], ['No due date', '', '', 'Added by hand'])
   assert.deepEqual([byTool.JMP['tv-status'], byTool.JMP['tv-months']], ['OK', '36'], 'due later: OK')
   // TVL-06 (TC-TVL-20): only a validation date â€” due 24 months later (default), Validity (months) 24.

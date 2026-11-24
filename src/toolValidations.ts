@@ -4,6 +4,7 @@ import { isHidden, kindOf, ownersOf, withListOwners, type MenuLayout, type Viewe
 import { releaseFor } from './releasePath.ts'
 import { approvalDateFrom, normalizeVersion } from './releaseSource.ts'
 import { parseExportDate } from './windchillReleases.ts'
+import { completionDateOf } from './toolQueries.ts'
 import type { NamingPattern } from './namingPatterns.ts'
 import type { PageKind } from './menuLayout.ts'
 import type { AzureWorkItem } from './domain'
@@ -15,7 +16,10 @@ import type { AzureWorkItem } from './domain'
 // Windchill export and a manual list kept as an On-Demand table page (each merged with "Merge into master list", TVL-05).
 // The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version
 // (TVL-03). Each entry has a validation date, a validity period (months) and a due date — the source's own due date when
-// it has one, else the validation date plus the period, and 24 months when no period is given (TVL-06). Pure: the file, its checks, merges and the expiry list.
+// it has one, else the validation date plus the period, and 24 months when no period is given (TVL-06). A tool from an
+// Azure DevOps source takes the completion date (TVL-20) as its validation date unless the source maps one (TVL-29), and
+// is changed only there: Edit and Remove are refused while Azure DevOps returns it (TVL-30). Pure: the file, its checks,
+// merges and the expiry list.
 
 export const toolValidationsFile = 'tool-validations.json'
 const kind = 'tool-validations'
@@ -51,9 +55,32 @@ export const specialFields: { key: string; label: string }[] = [
   { key: '@tool-version', label: 'Version (the Tool Validations rule: Iteration Path release, else the Title’s version)' },
   { key: '@title', label: 'Title' },
   { key: '@approval', label: 'Author Approval Date (as the Releases table’s Approved)' },
+  { key: '@completion', label: 'Completion date (Stream mapping → Tool Validations queries; the default)' },
 ]
+// TVL-29: the special value of an Azure DevOps source's Validation date — the completion date chosen in Stream mapping →
+// Tool Validations queries → Completion date (TVL-20, default System.ChangedDate). An Azure DevOps source whose mapping
+// names no validation date reads this one too.
+export const completionSpecial = '@completion'
+export const isAzureKind = (sourceKind: ToolSourceKind) => sourceKind === 'stream' || sourceKind === 'azure'
 
-export interface ToolSource { id: string; kind: ToolSourceKind; name: string; ref?: string; mapping: ToolMapping; mergedAt?: string; mergedBy?: string }
+// TVL-32: the category of a source, asked when it is added (Setup → Sources → ＋ Add source…) and changed in its Edit
+// mapping…: a **Tool List** (one row per tool: it feeds the master list — Merge into master list…, and for the Tool
+// Validations query the automatic append) or **Validation Documents** (documents of the validations: listed on the
+// source's own tab with every column, never added to or changing the master list). Stored as `category` on the source in
+// tool-validations.json; a source without it reads as a Tool List (sources from before TVL-32 behave as before). The
+// Tool Validations query (source "stream") is always a Tool List: its Validation Documents query is set in Stream mapping
+// (TVL-33).
+export type SourceCategory = 'tools' | 'documents'
+export const sourceCategories: { key: SourceCategory; label: string; detail: string }[] = [
+  { key: 'tools', label: 'Tool List', detail: 'One row per tool: its tools are added to the master list (Merge into master list…).' },
+  { key: 'documents', label: 'Validation Documents', detail: 'Documents of the validations: listed on the source’s own tab with every column; never added to the master list.' },
+]
+export const categoryOf = (source: Pick<ToolSource, 'category'>): SourceCategory => source.category ?? 'tools'
+export const categoryLabel = (key: SourceCategory) => sourceCategories.find((entry) => entry.key === key)?.label ?? key
+// Only a Tool List source feeds the master list (TVL-04, TVL-05, TVL-32).
+export const feedsMasterList = (source: Pick<ToolSource, 'category'>) => categoryOf(source) === 'tools'
+
+export interface ToolSource { id: string; kind: ToolSourceKind; name: string; category?: SourceCategory; ref?: string; mapping: ToolMapping; mergedAt?: string; mergedBy?: string }
 // The link of an entry to a source: whether the source held the tool when it was last read (TVL-04: "not in source now").
 export interface ToolLink { inSource: boolean }
 export type ManualField = 'name' | 'validationDate' | 'validityMonths' | 'dueDate'
@@ -128,6 +155,9 @@ export function validityOf(entry: Pick<ToolEntry, 'validationDate' | 'validityMo
   return entry.validationDate && !entry.dueDate ? { months: defaultValidityMonths, defaulted: true } : { defaulted: false }
 }
 export const dueFromLabel: Record<DueFrom, string> = { source: 'from the source', entered: 'entered by hand', calculated: 'validation date + validity period', default: `validation date + ${defaultValidityMonths} months (default)`, none: 'no due date' }
+// TVL-29: where the due date comes from, worded for a tool whose validation date is the completion date of Azure DevOps.
+export const dueFromText = (from: DueFrom, completion = false) => !completion ? dueFromLabel[from] : from === 'default' ? `completion date + ${defaultValidityMonths} months (default)` : from === 'calculated' ? 'completion date + validity period' : dueFromLabel[from]
+export const completionNote = '(completion date)'
 const dayMs = 86_400_000
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / dayMs)
 
@@ -231,6 +261,7 @@ const text = (value: unknown, max: number) => typeof value === 'string' && value
 const stamp = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/.test(value) ? value : undefined
 const sourceIdPattern = /^[a-z0-9][a-z0-9-]{0,39}$/
 const manualFields: ManualField[] = ['name', 'validationDate', 'validityMonths', 'dueDate']
+const dateFields = ['validationDate', 'validityMonths', 'dueDate'] as const
 function cleanMapping(value: unknown): ToolMapping {
   const raw = record(value) ?? {}
   const mapping: ToolMapping = { periodUnit: raw.periodUnit === 'years' ? 'years' : 'months', confirmed: raw.confirmed === true }
@@ -249,8 +280,12 @@ function cleanSource(value: unknown): ToolSource | string {
   if (!name) return 'its name is missing or longer than 80 characters'
   const ref = text(raw.ref, 200)
   if (sourceKind !== 'stream' && !ref) return 'it names no connection, export or page'
+  // TVL-32: the category — absent: a Tool List; any other value than "tools" or "documents" refuses the source.
+  const category = raw.category === undefined ? undefined : sourceCategories.find((entry) => entry.key === raw.category)?.key
+  if (raw.category !== undefined && !category) return `unknown category “${String(raw.category)}” (“tools”: Tool List, or “documents”: Validation Documents)`
+  if (sourceKind === 'stream' && category === 'documents') return 'the Tool Validations query is always a Tool List (its Validation Documents query is set in Stream mapping)'
   const mergedAt = stamp(raw.mergedAt), mergedBy = text(raw.mergedBy, 200)
-  return { id, kind: sourceKind, name, ...(ref && sourceKind !== 'stream' ? { ref } : {}), mapping: cleanMapping(raw.mapping), ...(mergedAt ? { mergedAt } : {}), ...(mergedBy ? { mergedBy } : {}) }
+  return { id, kind: sourceKind, name, ...(category ? { category } : {}), ...(ref && sourceKind !== 'stream' ? { ref } : {}), mapping: cleanMapping(raw.mapping), ...(mergedAt ? { mergedAt } : {}), ...(mergedBy ? { mergedBy } : {}) }
 }
 function cleanTool(value: unknown, sources: Set<string>): ToolEntry | string {
   const raw = record(value)
@@ -357,7 +392,7 @@ function toolJson(tool: ToolEntry) {
 }
 function sourceJson(source: ToolSource) {
   const mapping = { ...Object.fromEntries(mappingFields.filter((field) => source.mapping[field.key]).map((field) => [field.key, source.mapping[field.key]])), periodUnit: source.mapping.periodUnit, confirmed: source.mapping.confirmed }
-  return { id: source.id, kind: source.kind, name: source.name, ...(source.ref ? { ref: source.ref } : {}), mapping, ...(source.mergedAt ? { mergedAt: source.mergedAt } : {}), ...(source.mergedBy ? { mergedBy: source.mergedBy } : {}) }
+  return { id: source.id, kind: source.kind, name: source.name, ...(source.category ? { category: source.category } : {}), ...(source.ref ? { ref: source.ref } : {}), mapping, ...(source.mergedAt ? { mergedAt: source.mergedAt } : {}), ...(source.mergedBy ? { mergedBy: source.mergedBy } : {}) }
 }
 // The tabs are written only when there are some (in their order), so a file without tabs stays as it was; the highlight
 // bands (TVL-27) only once the owners saved them — an empty list too, which means "no highlighting".
@@ -381,8 +416,9 @@ export function aggregate(inputs: ToolInput[]): Map<string, ToolInput> {
   return byKey
 }
 // Azure DevOps (the stream's query or another one): a field reference name of the query's columns, or a special value.
-export function azureValue(item: AzureWorkItem, field: string | undefined, patterns: NamingPattern[] = []): string | undefined {
+export function azureValue(item: AzureWorkItem, field: string | undefined, patterns: NamingPattern[] = [], completionField?: string): string | undefined {
   if (!field) return undefined
+  if (field === completionSpecial) return completionDateOf(item, completionField || undefined)
   if (field === '@tool-name' || field === '@tool-version') { const release = releaseFor(item, 'tool', patterns); return field === '@tool-name' ? release?.name : release?.release }
   if (field === '@title' || field === 'System.Title') return item.title
   if (field === '@approval') return item.approvalDate ?? approvalDateFrom(item.fields ?? {})
@@ -399,13 +435,19 @@ export function inputsFromRows<R>(rows: R[], mapping: ToolMapping, read: (row: R
     return [{ name, version: read(row, mapping.version)?.trim() ?? '', ...(validationDate ? { validationDate } : {}), ...(validityMonths ? { validityMonths } : {}), ...(dueDate ? { dueDate } : {}) }]
   })
 }
+// TVL-29: the tools of an Azure DevOps source (the Tool Validations query or another query) — read with its mapping, the
+// Validation date being the field the mapping names, else the completion date (`completionField`: the TVL-20 setting,
+// default System.ChangedDate). Decided per source, not per row: a mapped field that a row leaves empty gives no date.
+export function azureInputs(items: AzureWorkItem[], mapping: ToolMapping, patterns: NamingPattern[] = [], completionField?: string): ToolInput[] {
+  return inputsFromRows(items, { ...mapping, validationDate: mapping.validationDate || completionSpecial }, (item, field) => azureValue(item, field, patterns, completionField))
+}
 // What a source offers to map: its fields or columns, as [key, label].
 export function azureFieldOptions(items: AzureWorkItem[]): [string, string][] {
   const refs = [...new Set(items.flatMap((item) => Object.keys(item.fields ?? {})))].sort()
   return [...specialFields.map((field): [string, string] => [field.key, field.label]), ...refs.map((ref): [string, string] => [ref, ref])]
 }
 // TVL-07: the guesses while a source's mapping has not been saved — the Tool Validations rule for the name and version
-// of an Azure DevOps source, its Author Approval Date for the validation date, Microsoft.VSTS.Scheduling.DueDate (else
+// of an Azure DevOps source, the completion date for the validation date (TVL-29), Microsoft.VSTS.Scheduling.DueDate (else
 // TargetDate) for the due date when the query has it; for a Windchill export or a page, the column whose name fits.
 const guessColumn = (options: [string, string][], pattern: RegExp, not?: RegExp) => options.find(([, label]) => pattern.test(label) && !(not && not.test(label)))?.[0]
 export function guessMapping(sourceKind: ToolSourceKind, options: [string, string][]): ToolMapping {
@@ -413,7 +455,7 @@ export function guessMapping(sourceKind: ToolSourceKind, options: [string, strin
     const has = (ref: string) => options.some(([key]) => key === ref)
     const due = has('Microsoft.VSTS.Scheduling.DueDate') ? 'Microsoft.VSTS.Scheduling.DueDate' : has('Microsoft.VSTS.Scheduling.TargetDate') ? 'Microsoft.VSTS.Scheduling.TargetDate' : undefined
     const period = guessColumn(options.filter(([key]) => !key.startsWith('@')), /validity|valid\w*\s*period|revalidat\w*\s*(period|interval)/i)
-    return { name: '@tool-name', version: '@tool-version', validationDate: '@approval', ...(period ? { validityPeriod: period } : {}), ...(due ? { dueDate: due } : {}), periodUnit: 'months', confirmed: false }
+    return { name: '@tool-name', version: '@tool-version', validationDate: completionSpecial, ...(period ? { validityPeriod: period } : {}), ...(due ? { dueDate: due } : {}), periodUnit: 'months', confirmed: false }
   }
   const name = guessColumn(options, /^(tool(\s*name)?|name|title)$/i) ?? guessColumn(options, /tool|name|title/i)
   const version = guessColumn(options, /version|^rev(ision)?$/i)
@@ -424,16 +466,31 @@ export function guessMapping(sourceKind: ToolSourceKind, options: [string, strin
 }
 // The mapping a source is read with: the saved one, else the guesses.
 export const mappingFor = (source: ToolSource, options: [string, string][]) => source.mapping.confirmed ? source.mapping : guessMapping(source.kind, options)
+// TVL-29: whether a source dates its tools with the completion date — an Azure DevOps source whose mapping names no
+// other Validation date (the guess names the completion date).
+export const readsCompletion = (source: Pick<ToolSource, 'kind' | 'mapping'>) => isAzureKind(source.kind) && (!source.mapping.confirmed || !source.mapping.validationDate || source.mapping.validationDate === completionSpecial)
+// TVL-29: whether an entry's validation date is the completion date: not entered by hand, and every source it is linked
+// to is an Azure DevOps source that reads the completion date (with another source the date may be that source's).
+export function completionDated(file: Pick<ToolValidationsFile, 'sources'>, entry: Pick<ToolEntry, 'validationDate' | 'manual' | 'sources'>): boolean {
+  if (!entry.validationDate || entry.manual.includes('validationDate')) return false
+  const linked = Object.keys(entry.sources).map((id) => file.sources.find((source) => source.id === id))
+  return linked.length > 0 && linked.every((source) => source && readsCompletion(source))
+}
 
 // ---- merging a source into the master list (TVL-04, TVL-05) ----
 // The values of a tool read from a source replace the entry's — except fields corrected by hand (manual), which stay —
 // and only when the source gives one (a blank never clears a date). The entry is linked to the source (in source now);
 // an entry linked to it that the source no longer holds is marked "not in source now" and stays. A new tool is added.
 // `inputs` is the whole of the source as last read. Returns the same file object when nothing changes.
+// TVL-32: a Validation Documents source never adds or updates a tool: it is read as holding none, so the tools it fed
+// while it was a Tool List are marked "not in source now" for it (kept, as by the rule above).
 export interface MergeResult { file: ToolValidationsFile; added: string[]; updated: string[]; gone: string[] }
 export function mergeSource(file: ToolValidationsFile, sourceId: string, inputs: ToolInput[], at: string, by?: string): MergeResult {
-  const incoming = aggregate(inputs)
+  const source = file.sources.find((entry) => entry.id === sourceId)
+  const incoming = aggregate(source && !feedsMasterList(source) ? [] : inputs)
   const added: string[] = [], updated: string[] = [], gone: string[] = []
+  const kindOfSource = source?.kind
+  const fromAzure = Boolean(kindOfSource && isAzureKind(kindOfSource))
   const tools = file.tools.map((entry) => {
     const input = incoming.get(entry.key), link = entry.sources[sourceId]
     if (!input) {
@@ -443,9 +500,15 @@ export function mergeSource(file: ToolValidationsFile, sourceId: string, inputs:
     }
     incoming.delete(entry.key)
     const next: ToolEntry = { ...entry, sources: { ...entry.sources, [sourceId]: { inSource: true } } }
-    if (!entry.manual.includes('validationDate') && input.validationDate) next.validationDate = input.validationDate
-    if (!entry.manual.includes('validityMonths') && input.validityMonths) next.validityMonths = input.validityMonths
-    if (!entry.manual.includes('dueDate') && input.dueDate) next.dueDate = input.dueDate
+    // TVL-30: Azure DevOps is the truth for its tools — a date or period entered by hand (before the tool came from
+    // Azure DevOps, or before the lock) is replaced by the source's value, or emptied when the source gives none.
+    if (fromAzure) {
+      for (const field of dateFields) if (entry.manual.includes(field) && !input[field]) delete next[field]
+      next.manual = entry.manual.filter((field) => !(dateFields as readonly string[]).includes(field))
+    }
+    if (!next.manual.includes('validationDate') && input.validationDate) next.validationDate = input.validationDate
+    if (!next.manual.includes('validityMonths') && input.validityMonths) next.validityMonths = input.validityMonths
+    if (!next.manual.includes('dueDate') && input.dueDate) next.dueDate = input.dueDate
     const changed = JSON.stringify(toolJson(next)) !== JSON.stringify(toolJson(entry))
     if (changed) updated.push(entry.name)
     return changed ? next : entry
@@ -465,6 +528,10 @@ export const mergeSummary = (result: Pick<MergeResult, 'added' | 'updated' | 'go
 export interface ToolEdit { name: string; version: string; validationDate: string; validityMonths: string; dueDate: string; notes: string }
 // The problems of a form (empty: none). A new tool or a renamed one must not be the same tool as another entry.
 export function editProblem(file: ToolValidationsFile, edit: ToolEdit, editing?: string): string {
+  // TVL-30: a tool from Azure DevOps — only its notes are changed here.
+  const locked = editing ? file.tools.find((entry) => entry.key === editing) : undefined
+  const lock = azureLock(file, locked).edit
+  if (lock && locked) return notesOnly(locked, edit) ? (edit.notes.length > 2000 ? 'Notes are at most 2000 characters.' : '') : lock
   if (!nameKey(edit.name) || edit.name.trim().length > 200) return 'Enter the tool name (1 to 200 characters with a letter or digit).'
   if (edit.version.trim().length > 60) return 'The version is at most 60 characters.'
   if (edit.validationDate && !isDay(edit.validationDate)) return 'The validation date is not a date.'
@@ -472,12 +539,25 @@ export function editProblem(file: ToolValidationsFile, edit: ToolEdit, editing?:
   if (edit.validityMonths.trim() && !monthsOf(edit.validityMonths.trim())) return `The validity period is a whole number of months from 1 to ${maxPeriodMonths}.`
   if (edit.notes.length > 2000) return 'Notes are at most 2000 characters.'
   const key = toolKey(edit.name, edit.version)
-  if (key !== editing && file.tools.some((entry) => entry.key === key)) return 'This tool and version is already in the master list.'
+  const same = key !== editing ? file.tools.find((entry) => entry.key === key) : undefined
+  // TVL-30: a tool added by hand is matched by name and version (TVL-03), so it never stands beside — or over — a tool of Azure DevOps.
+  if (same) { const lock = azureLock(file, same).edit; return lock ? `This tool and version is already in the master list. ${lock}` : 'This tool and version is already in the master list.' }
   return ''
 }
 // A field changed by hand is kept from then on (a later merge does not replace it); emptied, it follows the sources again.
 export function saveTool(file: ToolValidationsFile, edit: ToolEdit, at: string, by: string, editing?: string): ToolValidationsFile {
   const current = editing ? file.tools.find((entry) => entry.key === editing) : undefined
+  // TVL-30: of a tool from Azure DevOps only the notes are changed here (any other field: the same file); nor is a new
+  // tool added over one already listed (TVL-03).
+  if (current && azureLock(file, current).edit) {
+    if (!notesOnly(current, edit) || edit.notes.length > 2000) return file
+    const notes = edit.notes.trim()
+    if (notes === (current.notes ?? '')) return file
+    const next: ToolEntry = { ...current, changedAt: at, changedBy: by }
+    if (notes) next.notes = notes; else delete next.notes
+    return { ...file, tools: file.tools.map((tool) => tool.key === current.key ? next : tool) }
+  }
+  if (!current && file.tools.some((entry) => entry.key === toolKey(edit.name, edit.version))) return file
   const name = edit.name.replace(/\s+/g, ' ').trim(), version = edit.version.trim()
   const values = { validationDate: edit.validationDate || undefined, validityMonths: monthsOf(edit.validityMonths.trim()), dueDate: edit.dueDate || undefined }
   const manual = new Set<ManualField>(current?.manual ?? [])
@@ -497,18 +577,51 @@ export function saveTool(file: ToolValidationsFile, edit: ToolEdit, at: string, 
   }
   return { ...file, tools: sortTools([...file.tools.filter((tool) => tool.key !== editing), entry]) }
 }
+// TVL-30: whether a form changes nothing but the notes of an entry (the name and version as matched, TVL-03).
+export function notesOnly(entry: ToolEntry, edit: ToolEdit): boolean {
+  const was = editOf(entry)
+  return toolKey(edit.name, edit.version) === entry.key && edit.validationDate === was.validationDate && edit.dueDate === was.dueDate && (monthsOf(edit.validityMonths.trim()) ?? '') === (entry.validityMonths ?? '')
+}
 export const editOf = (entry?: ToolEntry): ToolEdit => ({ name: entry?.name ?? '', version: entry?.version ?? '', validationDate: entry?.validationDate ?? '', validityMonths: entry?.validityMonths ? String(entry.validityMonths) : '', dueDate: entry?.dueDate ?? '', notes: entry?.notes ?? '' })
-export const removeTool = (file: ToolValidationsFile, key: string): ToolValidationsFile => ({ ...file, tools: file.tools.filter((entry) => entry.key !== key) })
+// TVL-30: a tool Azure DevOps still returns is not removed (the same file comes back).
+export const removeTool = (file: ToolValidationsFile, key: string): ToolValidationsFile => azureLock(file, file.tools.find((entry) => entry.key === key)).remove ? file : ({ ...file, tools: file.tools.filter((entry) => entry.key !== key) })
+// ---- TVL-30: tools from Azure DevOps are changed there ----
+// An entry linked to an Azure DevOps source (the Tool Validations query or another query) cannot be edited here — its
+// dates, period and due date come from the work item; it can be removed only once no Azure DevOps source returns it any
+// more ("not in it now" for each of them). Entries added by hand, or only from a Windchill export or a manual list, are
+// unchanged. '' when allowed.
+export const azureSourceLabel = (source: Pick<ToolSource, 'kind' | 'name'>) => source.kind === 'stream' ? 'Tool Validations query' : source.name
+export function azureLock(file: Pick<ToolValidationsFile, 'sources'>, entry?: Pick<ToolEntry, 'sources'>): { edit: string; remove: string } {
+  if (!entry) return { edit: '', remove: '' }
+  const linked = Object.entries(entry.sources).flatMap(([id, link]) => { const source = file.sources.find((found) => found.id === id); return source && isAzureKind(source.kind) ? [{ source, link }] : [] })
+  if (!linked.length) return { edit: '', remove: '' }
+  const edit = `Comes from Azure DevOps (${linked.map(({ source }) => azureSourceLabel(source)).join(', ')}): change it there.`
+  const holding = linked.filter(({ link }) => link.inSource).map(({ source }) => azureSourceLabel(source)).join(', ')
+  return { edit, remove: holding ? `Comes from Azure DevOps (${holding}): change it there; it can be removed here once Azure DevOps no longer returns it.` : '' }
+}
 // A tool from a source keeps its name and version as the source gives them (they are how it is matched); a tool added
 // by hand can be renamed.
 export const nameLocked = (entry?: ToolEntry) => Boolean(entry && Object.keys(entry.sources).length > 0)
 
 // ---- sources (TVL-07) ----
-export function addSource(file: ToolValidationsFile, input: { kind: Exclude<ToolSourceKind, 'stream'>; name: string; ref: string; mapping: ToolMapping }): ToolValidationsFile {
+// TVL-32: the category is asked when the source is added and stored with it.
+export function addSource(file: ToolValidationsFile, input: { kind: Exclude<ToolSourceKind, 'stream'>; name: string; ref: string; mapping: ToolMapping; category: SourceCategory }): ToolValidationsFile {
   const base = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || input.kind
   let id = base, n = 2
   while (file.sources.some((source) => source.id === id) || id === streamSourceId) id = `${base}-${n++}`
-  return { ...file, sources: [...file.sources, { id, kind: input.kind, name: input.name.trim().slice(0, 80), ref: input.ref, mapping: input.mapping }] }
+  return { ...file, sources: [...file.sources, { id, kind: input.kind, name: input.name.trim().slice(0, 80), category: input.category, ref: input.ref, mapping: input.mapping }] }
+}
+// TVL-32: why a source cannot be added ('' when it can) — the category must be chosen.
+export const categoryProblem = (category: string) => sourceCategories.some((entry) => entry.key === category) ? '' : 'Choose the category: Tool List or Validation Documents.'
+// TVL-32: a source's category changed (Edit mapping…). To Validation Documents: the source stops feeding the master list
+// and the tools it fed are marked "not in source now" for it at once (mergeSource with nothing read; kept, never
+// deleted); back to Tool List: they are linked again at its next merge. The Tool Validations query stays a Tool List.
+export function setCategory(file: ToolValidationsFile, id: string, category: SourceCategory, at: string, by?: string): MergeResult {
+  const source = file.sources.find((entry) => entry.id === id)
+  if (!source || id === streamSourceId || categoryOf(source) === category) return { file, added: [], updated: [], gone: [] }
+  const next = { ...file, sources: file.sources.map((entry) => entry.id === id ? { ...entry, category } : entry) }
+  if (category === 'tools') return { file: next, added: [], updated: [], gone: [] }
+  return mergeSource(next, id, [], at, by)
 }
 export const setMapping = (file: ToolValidationsFile, id: string, mapping: ToolMapping): ToolValidationsFile => ({ ...file, sources: file.sources.map((source) => source.id === id ? { ...source, mapping: { ...mapping, confirmed: true } } : source) })
 // A removed source's links go with it; its tools stay (added by hand when no other source has them).

@@ -6,7 +6,7 @@ import { bulkEpicMissing } from '../bulkEpics'
 import { BulkEpicNotSet } from '../components/BulkEpicsPanel'
 import type { SettingsTab } from '../settingsTabs'
 import type { FeatureSetups } from '../featureSetup'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EmptyState, Notice, Page, Panel, Pill, TablePanel, WriteBlocked } from '../components/ui'
 import type { PersonalViewsStore } from '../usePersonalViews'
 import { viewMetaKey } from '../personalViews'
@@ -27,7 +27,7 @@ import { useDpBoardColumn } from '../useDpBoardColumn'
 import { CpReportView } from '../components/CpReportView'
 import { completedCount, cpReportFor, defaultStreamReleases, supportedCount, toolReportFor } from '../releaseOverview'
 import { ToolQueriesReleases, ToolQueriesSources } from '../components/ToolQueriesView'
-import { completionFieldOptions } from '../toolQueries'
+import { completionFieldOptions, fetchParentTitles, parentIdsToRead, selectColumns, type ParentTitles } from '../toolQueries'
 import { defaultCpReportingSettings } from '../cpReporting'
 import { toolQueryHowLabel } from '../streams'
 import type { AzureWorkItem } from '../domain'
@@ -105,6 +105,36 @@ function useDpMatches(rows: AzureWorkItem[] | undefined, candidates: ReturnType<
 // table. QV-63: ↻ and Load from Git run as Background jobs named after the view; their result is listed there, and
 // the page keeps only the warnings about its data (a failed refresh: the data shown is older).
 const noItems: AzureWorkItem[] = []
+// TVL-31: the titles of work items by ID on a saved connection (its PAT, its server; read only), or why not.
+async function readParentTitles(connectionId: string, ids: number[]): Promise<ParentTitles> {
+  const all = (error: string): ParentTitles => Object.fromEntries(ids.map((parent) => [String(parent), { error }]))
+  const profile = loadAzureConnectionProfile(connectionId)
+  if (!profile) return all('The Signed documents connection is not saved in this browser.')
+  try { return await fetchParentTitles(connectionConfig(profile), profile.token, ids) } catch (failure) { return all(failure instanceof Error ? failure.message : String(failure)) }
+}
+// TVL-31: the names of the documents' Parents that are no tool of the Tools query are read by ID (read only) and kept
+// on the saved documents (by work item ID; keepParentTitles keeps them over a later fetch).
+// - Whenever the documents are shown and a Parent has no name yet (neither a title nor a reason it was not read), its
+//   name is read — after any fetch (↻, Save and refresh data, the fetch at start), so no path can miss it; once per
+//   fetched data set.
+// - ↻ reads every Parent again (a name changed in Azure DevOps, a failed read).
+async function readAndKeepParentTitles(documentsId: string, ids: number[], update: PageProps['store']['update']) {
+  if (!ids.length) return
+  const titles = await readParentTitles(documentsId, ids)
+  update((draft) => { const entry = draft.azureSources?.find((found) => found.connectionId === documentsId); if (entry) entry.parentTitles = { ...(entry.parentTitles ?? {}), ...titles }; return draft })
+}
+function useMissingParentTitles(documentsId: string | undefined, fetchedAt: string | undefined, report: Parameters<typeof parentIdsToRead>[0] | undefined, titles: ParentTitles | undefined, update: PageProps['store']['update']) {
+  const tried = useRef('')
+  useEffect(() => {
+    if (!documentsId || !fetchedAt || !report) return
+    const missing = parentIdsToRead(report).filter((parent) => !titles?.[String(parent)])
+    if (!missing.length) return
+    const key = `${documentsId}@${fetchedAt}:${missing.join(',')}`
+    if (tried.current === key) return
+    tried.current = key
+    void readAndKeepParentTitles(documentsId, missing, update)
+  }, [documentsId, fetchedAt, report, titles, update])
+}
 function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConnection, onOpenSettings, assign, featureSetup, qeMapping }: { onOpenSettings?: (tab: SettingsTab, section?: string) => void; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
   // QV-16: the header month, or every month (Show: {month} / All months).
   const [scope, setScope] = useState<ReleaseScope>('month')
@@ -129,6 +159,8 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const ownView = Boolean(profile && !stream && !dataSetOfProfile({ id: profile.id, viewName: profile.viewName, reason: profile.reason, role }))
   const linkColumns = ownView && columns ? ([[successorRef, 'Successor ID'], [predecessorRef, 'Predecessor ID']] as const).filter(([ref]) => source?.items.some((item) => item.fields?.[ref])).map(([ref, name]) => ({ ref, name })) : []
   const viewColumns = linkColumns.length && columns ? [...columns.filter((column) => !linkColumns.some((link) => link.ref === column.ref)), ...linkColumns] : columns
+  // TVL-31: Tool List (Azure) shows every column the Tools query selects, in its SELECT order.
+  const toolListColumns = selectColumns(profile?.query, viewColumns)
   const orderBy: QueryOrder[] | undefined = stale && current ? current.orderBy : source?.orderBy
   const unresolved = stale ? current?.unresolved : source?.unresolved
   // Month filter (header month picker): items approved in the month, else changed in it; "All months" turns it off.
@@ -142,12 +174,14 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // CP: its release-folder tree (the first CP connection) is read whole and reported by QA/QE signature month (cpReporting).
   const cp = stream?.rule === 'cp' ? cpReportFor(store.state, listAzureConnectionProfiles(), month) : undefined
   const isCp = Boolean(cp && cp.profile.id === id)
-  // TVL-19…TVL-22: Tool Validations with its two queries — this page is its Tools query's (counts, Releases and both
-  // queries' Source data on the Azure tab); the Signed documents query's own page, opened from Other views, is a plain view.
+  // TVL-19…TVL-22: Tool Validations with its two queries — this page is its Tools query's (counts, Releases, Tool List (Azure) and
+  // Validation Documents on the Azure tab, TVL-31); the Signed documents query's own page, opened from Other views, is a plain view.
   const toolTwo = stream?.rule === 'tool' && !stream.custom ? toolReportFor(store.state, azure.connectionProfiles, month) : undefined
   const isToolTwo = Boolean(toolTwo && toolTwo.tools.id === id), isToolDocuments = Boolean(toolTwo && toolTwo.documents.id === id)
   const toolDocumentsFound = toolTwo?.documentSource
-  const toolDocumentsData = toolTwo && toolDocumentsFound ? { name: toolTwo.documents.viewName || toolTwo.documents.reason, items: toolDocumentsFound.items, columns: 'columns' in toolDocumentsFound ? toolDocumentsFound.columns : undefined, orderBy: 'orderBy' in toolDocumentsFound ? toolDocumentsFound.orderBy : undefined, unresolved: 'unresolved' in toolDocumentsFound ? toolDocumentsFound.unresolved : undefined } : undefined
+  useMissingParentTitles(toolTwo?.documents.id, toolDocumentsFound?.fetchedAt, toolTwo?.report, toolDocumentsFound && 'parentTitles' in toolDocumentsFound ? toolDocumentsFound.parentTitles : undefined, store.update)
+  // TVL-31: both tables show every column their query selects, in its SELECT order; the Parents' names read by ID.
+  const toolDocumentsData = toolTwo && toolDocumentsFound ? { name: toolTwo.documents.viewName || toolTwo.documents.reason, items: toolDocumentsFound.items, columns: selectColumns(toolTwo.documents.query, 'columns' in toolDocumentsFound ? toolDocumentsFound.columns : undefined), orderBy: 'orderBy' in toolDocumentsFound ? toolDocumentsFound.orderBy : undefined, unresolved: 'unresolved' in toolDocumentsFound ? toolDocumentsFound.unresolved : undefined } : undefined
   const completionName = toolTwo ? completionFieldOptions(toolTwo.toolSource && 'columns' in toolTwo.toolSource ? toolTwo.toolSource.columns : undefined, toolTwo.toolSource?.items).find((option) => option.ref === toolTwo.report.completionField)?.name ?? toolTwo.report.completionField : ''
   const monthItems = source ? isCp ? source.items : source.items.filter((item) => isDp ? dpListedIn(item, month) : viewMonthOf(item) === month) : noItems
   const items = source ? allMonths || isCp ? source.items : monthItems : noItems
@@ -198,7 +232,10 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     return { text: last?.message || (ok ? 'Done.' : 'Not done.'), failed: !ok }
   })
   // TVL-22: ↻ on Tool Validations with its two queries fetches both, the Tools query first.
-  const fetchAll = isToolTwo && toolTwo ? async () => { const tools = await azure.fetchConnection(id); const documents = await azure.fetchConnection(toolTwo.documents.id); return tools && documents } : () => azure.fetchConnection(id)
+  // TVL-31: then the titles of the documents' Parents that are no tool of the Tools query (e.g. retired tools) are read
+  // by ID — read only, on the Signed documents connection with its server's PAT — and kept with the fetched documents;
+  // a name not read shows as #ID with the reason. The tables never wait for it.
+  const fetchAll = isToolTwo && toolTwo ? async () => { const tools = await azure.fetchConnection(id); const documents = await azure.fetchConnection(toolTwo.documents.id); await readAndKeepParentTitles(toolTwo.documents.id, parentIdsToRead(toolTwo.report), store.update); return tools && documents } : () => azure.fetchConnection(id)
   const refresh = <button type="button" className="primary" aria-label={refreshLabel} title={isToolTwo ? `${refreshLabel}: the Tools and the Signed documents queries` : refreshLabel} disabled={busy} onClick={() => inBackground(refreshLabel, fetchAll)}>↻{busy ? <small>{status?.message || 'Fetching…'}</small> : !source ? <small>Fetch</small> : null}</button>
   const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => inBackground('Load from Git', () => azure.loadFromGit(id)) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
   // Information about the view sits behind ⋯ → About this source… (QV-70), not as banners; only errors and warnings stay on the page.
@@ -247,7 +284,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
         <li><strong>Validations in {monthName(month)}</strong>: the tools of the Tools query completed or supported in the month, each once (the Releases table on the Azure tab).</li>
         <li><strong>Completed validations</strong>: a tool (a row of the Tools query “{toolTwo.tools.viewName || toolTwo.tools.reason}”) whose <strong>{completionName}</strong> falls in the month, in UTC.{changed ? ' Changed Date is the last update of the tool’s work item: it moves on any edit, so a tool edited later counts in that later month.' : ''} The field is chosen in Admin → Streams → Stream mapping → Tool Validations queries.{report.noCompletionDate ? ` ${report.noCompletionDate} tool${report.noCompletionDate === 1 ? ' has' : 's have'} no ${completionName}: never counted as Completed.` : ''}</li>
         <li><strong>Supported validations</strong>: a tool with at least one document of the Signed documents query “{toolTwo.documents.viewName || toolTwo.documents.reason}” whose <strong>Parent</strong> is the tool and that has a qualifying Quality signature dated in the month — as CP counts: a role on the allowlist ({defaultCpReportingSettings.roles.join(', ')}; spaces and case ignored), a name and a valid date in the same approver slot, the month in UTC. Each tool once, however many documents.</li>
-        <li><strong>Not linked to a tool</strong>: {report.unlinked.length} document{report.unlinked.length === 1 ? '' : 's'} whose Parent is no tool of the Tools query ({report.unlinkedSigned.length} with a Quality signature in {monthName(month)}) — listed on the Azure tab, not counted.</li>
+        <li><strong>Not in Tool List (Azure)</strong>: {report.unlinked.length} document{report.unlinked.length === 1 ? '' : 's'} whose Parent is no tool of the Tools query, e.g. a retired tool, or that have no Parent ({report.unlinkedSigned.length} with a Quality signature in {monthName(month)}) — listed in Validation Documents on the Azure tab with their Parent's name, <strong>not counted</strong> and not added to the master list. Only the tools of the Tools query are counted.</li>
         <li>The same counts as Pulse Check, the Monthly pack and the cumulative chart. How the two connections are told apart: {toolQueryHowLabel[toolTwo.how]}.</li>
       </ul>} />
   }
@@ -276,7 +313,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   const toolTabs = (releases: ReactNode, rows: ReactNode) => <ToolValidationsTabs id={`azure:${name}`} azure={<>{releases}{rows}</>} masterTop={counts} />
   const withTools = (node: ReactNode, rows?: AzureWorkItem[]) => toolPage ? toolTabs(node, rows && <TablePanel title="Source data" count={`${rows.length} row${rows.length === 1 ? '' : 's'}`}><QueryView name={name} items={rows} columns={columns} orderBy={orderBy} unresolved={unresolved} summary={false} /></TablePanel>) : node
   const body = !source || !config ? withTools(<Panel><EmptyState title={config ? `“${name}” has not been fetched yet.` : `The connection for “${name}” is not saved in this browser.`} detail={config ? 'Fetch it read-only with ↻; nothing is written to Azure DevOps. Its items stay on this page and are not counted in Overview, Time Writing or My Tasks [Board].' : 'Add it again in Admin → Streams.'} /></Panel>)
-    : isToolTwo && toolTwo ? toolTabs(<ToolQueriesReleases report={toolTwo.report} fieldName={completionName} />, <ToolQueriesSources report={toolTwo.report} tools={{ name, items: source.items, columns: viewColumns, orderBy, unresolved }} documents={toolDocumentsData}
+    : isToolTwo && toolTwo ? toolTabs(<ToolQueriesReleases report={toolTwo.report} fieldName={completionName} />, <ToolQueriesSources report={toolTwo.report} tools={{ name, items: source.items, columns: toolListColumns, orderBy, unresolved }} documents={toolDocumentsData} parentTitles={toolDocumentsFound && 'parentTitles' in toolDocumentsFound ? toolDocumentsFound.parentTitles : undefined}
         documentsMissing={<Panel><EmptyState title={`The Signed documents query “${toolTwo.documents.viewName || toolTwo.documents.reason}” has not been fetched yet.`} detail="Supported counts 0 until it is fetched. Fetch it read-only; nothing is written to Azure DevOps." /><button type="button" className="primary" disabled={busy} onClick={() => inBackground('Fetch from Azure', () => azure.fetchConnection(toolTwo.documents.id))}>Fetch signed documents</button></Panel>} />)
     : isToolDocuments ? <TablePanel title="Source data" count={`${source.items.length} row${source.items.length === 1 ? '' : 's'}`}><QueryView name={name} items={source.items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} summary={false} /></TablePanel>
     : !items.length && source.items.length ? withTools(<TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose Show: All months. The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose Show: All months.`} />}</TablePanel>, source.items)

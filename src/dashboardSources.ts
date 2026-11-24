@@ -12,7 +12,7 @@ import type { OnDemandColumn, OnDemandRow, OnDemandType } from './onDemand.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 import { completedCount, supportedCount, type ReleaseStream } from './releaseOverview.ts'
 import { completedRows, monthCounts, windchillLinesOf, type StreamMonthCount, type WindchillInput } from './cumulativeReleases.ts'
-import { daysBetween, dueFromLabel, dueOf, entryState, entryStateLabel, validityOf, type ToolValidationsFile } from './toolValidations.ts'
+import { completionDated, daysBetween, dueFromText, dueOf, entryState, entryStateLabel, validityOf, type ToolValidationsFile } from './toolValidations.ts'
 
 // MYD-15…MYD-22 The data sources of My dashboard's blocks, as one registry so that more can be added: each kind of
 // source declares its fields (text, category, date, number, currency), the menu area a role needs to see it
@@ -272,7 +272,7 @@ export function toolRows(file: ToolValidationsFile, today: string, expiryOnly = 
     if (expiryOnly && status === 'OK') return []
     return [{ key: `${entry.name}${entry.version ? ` ${entry.version}` : ''}`, cells: {
       'tv-tool': entry.name, 'tv-version': entry.version, 'tv-validated': entry.validationDate ?? '', 'tv-months': String(validityOf(entry).months ?? ''),
-      'tv-due': due ?? '', 'tv-from': from === 'none' ? '' : dueFromLabel[from], 'tv-status': status, 'tv-days': days === undefined ? '' : String(days),
+      'tv-due': due ?? '', 'tv-from': from === 'none' ? '' : dueFromText(from, completionDated(file, entry)), 'tv-status': status, 'tv-days': days === undefined ? '' : String(days),
       'tv-sources': Object.keys(entry.sources).map(sourceName), 'tv-state': entryStateLabel[entryState(entry)],
     } }]
   })

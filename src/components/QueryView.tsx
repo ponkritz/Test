@@ -34,6 +34,9 @@ export function QueryView({ name, items, columns, orderBy = [], unresolved = [],
   const shown = useMemo(() => {
     const text = search.trim().toLowerCase()
     const filtered = items.filter((item) => (!state || item.state === state) && (!type || item.workItemType === type) && (!text || all.some((column) => formatCell(cellValue(item, column.ref)).toLowerCase().includes(text)) || Boolean(extra?.text(item).toLowerCase().includes(text)) || [...lead, ...more].some((column) => String(column.value?.(item) ?? '').toLowerCase().includes(text))))
+    // A computed column (lead / more, e.g. Tool Validations' Tool, TVL-31) sorts by its own value.
+    const computed = sort[0] ? [...lead, ...more].find((column) => column.id === sort[0].ref && column.value) : undefined
+    if (computed) { const value = (item: AzureWorkItem) => String(computed.value!(item) ?? ''); return [...filtered].sort((a, b) => { const result = value(a).localeCompare(value(b), undefined, { numeric: true, sensitivity: 'base' }); return sort[0].desc ? -result : result }) }
     return sortItems(filtered, sort)
   }, [items, state, type, search, sort, all, extra, lead, more])
   const chips = (rows: [string, number][], active: string, pick: (value: string) => void, limit = 8) => rows.slice(0, limit).map(([label, count]) => <button key={label} type="button" className={`summary-chip ${active === label ? 'summary-chip-active' : ''}`} aria-pressed={active === label} onClick={() => pick(active === label ? '' : label)}><strong>{count}</strong> {label}</button>)

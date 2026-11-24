@@ -2,11 +2,11 @@ import { utcMonthKey } from '../businessTime'
 import { useState } from 'react'
 import { EmptyState, Modal, Notice, Panel, Pill, type Tone, Info } from './ui'
 import { formatDateTime } from '../format'
-import { allStreams, dataSetOfProfile, dataSets, defaultMatchThreshold, namesStream, profileForDataSet, profileForStream, streamOfProfile, toolQueries } from '../streams'
+import { allStreams, dataSetOfProfile, dataSets, defaultMatchThreshold, namesStream, profileForDataSet, profileForStream, streamOfProfile, toolCategoryGuess, toolDocumentsSettingFor, toolQueries, toolRoleLabel, type ToolQueryRole } from '../streams'
 import { ToolQueriesPanel } from './ToolQueriesPanel'
 import { ruleOf } from '../customStreams'
 import { CustomStreamsPanel } from './CustomStreamsPanel'
-import { normalizeReleaseSourceSettings } from '../releaseSource'
+import { normalizeReleaseSourceSettings, withToolValidationsSettings } from '../releaseSource'
 import { collectionUrlFrom, composeAzureUrl, forgetKnownServer, listKnownServers, loadServerPat, saveKnownServer, saveServerPat, serverKey, defaultShowInMenu, listAzureConnectionProfiles, loadAzureConnectionProfile, showsInMenu, splitAzureUrl, viewNameOf, splitCollectionUrl, type AzureConnectionProfileSummary, type AzureConnectionRole } from '../azureCredentials'
 import { defaultReleaseQuery, projectQuery } from '../releaseSource'
 import type { AzureWorkspace, ConnectionInput } from '../useAzureWorkspace'
@@ -44,6 +44,9 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
   const { connectionProfiles, connectionStatus, activeConnectionProfileId, busy } = azure
   const [form, setForm] = useState<ConnectionInput | null>(null)
   const [formError, setFormError] = useState('')
+  // TVL-33: Add query on a Tool Validations row asks the category — Tool List or Validation Documents. `picked` is the
+  // person's own choice; until they pick, the automatic identification (name, columns) pre-selects one.
+  const [toolAdd, setToolAdd] = useState<{ picked?: ToolQueryRole } | null>(null)
   const [cleanup, setCleanup] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null)
   const [fetchingAll, setFetchingAll] = useState(false)
   const [dismissed, setDismissed] = useState(loadDismissedPresets)
@@ -89,7 +92,7 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
       // TVL-19: Tool Validations' second query, the Signed documents (its own row; Add query names it so it is found).
       if (stream.rule !== 'tool' || stream.custom) return [row]
       const documents = toolQueries(stream, connectionProfiles).documents
-      return [row, { name: `${stream.name} · Signed documents`, toolDocuments: true, timeWriting: false, windchill: false, profile: documents, preset: undefined, rule: 'Tool Validations Signed documents: one row per document, Parent = the tool’s work item ID, with the approver slots; Supported = a tool with a document signed by a Quality role in the month (as CP)', where: documents ? whereOf(documents) : '', query: documents?.query ?? '' }]
+      return [row, { name: `${stream.name} · ${toolRoleLabel.documents}`, toolDocuments: true, timeWriting: false, windchill: false, profile: documents, preset: undefined, rule: 'Tool Validations Validation Documents (the Signed documents query): one row per document, Parent = the tool’s work item ID, with the approver slots; Supported = a tool with a document signed by a Quality role in the month (as CP)', where: documents ? whereOf(documents) : '', query: documents?.query ?? '' }]
     }),
   ]
   const mapped = new Set(mapping.flatMap((row) => row.profile ? [row.profile.id] : []))
@@ -117,22 +120,43 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
     const { serverUrl, organization } = splitCollectionUrl(parts.baseUrl)
     return { id: profile.id, name: profile.reason, viewName: profile.viewName ?? '', showInMenu: showsInMenu(profile), role: profile.role, serverUrl, organization, project: parts.project, team: parts.team, pat: '', query: profile.query ?? '', creatorEmail: profile.creatorEmail ?? '', apiVersion: profile.apiVersion ?? '' }
   }
-  function edit(profile: AzureConnectionProfileSummary) { setFormError(''); setForm(formFrom(profile)) }
+  function edit(profile: AzureConnectionProfileSummary) { setFormError(''); setToolAdd(null); setForm(formFrom(profile)) }
   // Clone: a new connection with every setting of this one (server, project, team, query, role, menu) and its saved
   // PAT, so only what differs (query, project, …) needs changing. Saving creates it; the original is unchanged.
   function clone(profile: AzureConnectionProfileSummary) {
     const copy = formFrom(profile)
-    setFormError(''); setForm({ ...copy, id: undefined, cloneOf: profile.id, name: `${profile.reason} (copy)`, viewName: profile.viewName ? `${profile.viewName} (copy)` : '' })
+    setFormError(''); setToolAdd(null); setForm({ ...copy, id: undefined, cloneOf: profile.id, name: `${profile.reason} (copy)`, viewName: profile.viewName ? `${profile.viewName} (copy)` : '' })
   }
   const clonedFrom = form?.cloneOf ? connectionProfiles.find((profile) => profile.id === form.cloneOf)?.reason : undefined
+  // TVL-33: the category of a new Tool Validations query — a role already held by a connection is not offered (change
+  // the roles in Tool Validations queries); the pre-selection follows the name and columns until the person picks.
+  const toolStream = allStreams().find((stream) => stream.rule === 'tool' && !stream.custom)
+  const toolTaken = toolStream ? toolQueries(toolStream, connectionProfiles) : undefined
+  const takenBy: Record<ToolQueryRole, string | undefined> = { tools: toolTaken?.tools ? viewNameOf(toolTaken.tools) : undefined, documents: toolTaken?.documents ? viewNameOf(toolTaken.documents) : undefined }
+  const toolCategory = toolAdd && form && toolStream ? (() => {
+    const guess = toolCategoryGuess(toolStream, { name: form.name, viewName: form.viewName, query: form.query })
+    const free = (role: ToolQueryRole) => !takenBy[role]
+    const role = toolAdd.picked && free(toolAdd.picked) ? toolAdd.picked : free(guess.role) ? guess.role : (['tools', 'documents'] as const).find(free)
+    return { role, guess, picked: Boolean(toolAdd.picked && role === toolAdd.picked) }
+  })() : undefined
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!form) return
     // Save also refreshes: the connection is fetched right away and its data saved locally.
+    const category = toolAdd ? toolCategory?.role : undefined
+    if (toolAdd && !category) { setFormError('Choose the category: Tool List or Validation Documents.'); return }
     let id: string
-    try { id = azure.saveConnection(form); setForm(null); setFormError('') } catch (failure) { setFormError(failure instanceof Error ? failure.message : 'Unable to save the connection.'); return }
+    try { id = azure.saveConnection(form); setForm(null); setFormError(''); setToolAdd(null) } catch (failure) { setFormError(failure instanceof Error ? failure.message : 'Unable to save the connection.'); return }
     void azure.fetchConnection(id)
-    const saved = listAzureConnectionProfiles().find((profile) => profile.id === id)
+    const all = listAzureConnectionProfiles()
+    const saved = all.find((profile) => profile.id === id)
+    // TVL-33: the confirmed category is saved in Tool Validations queries (the shared settings) so the new connection
+    // keeps that role whatever its name or columns: Validation Documents names it; a Tool List never becomes it.
+    if (category && toolStream && saved && streamOfProfile(saved)?.name === toolStream.name) {
+      const current = normalizeReleaseSourceSettings(store.state.releaseSourceSettings).toolValidations?.documentsQuery
+      const next = toolDocumentsSettingFor(toolStream, all, current, id, category)
+      if (next !== current) store.update((state) => withToolValidationsSettings(state, { documentsQuery: next }, `Tool Validations: ${viewNameOf(saved)} added as the ${toolRoleLabel[category]} query`))
+    }
     if (saved && (saved.role === 'time-tracking' || streamOfProfile(saved) || dataSetOfProfile(saved))) void shareMapping(viewNameOf(saved), saved.id)
   }
   const lastFetch = (profile: AzureConnectionProfileSummary) => {
@@ -247,7 +271,7 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
           <td>{row.windchill ? <small className="muted">Import on the Windchill page</small> : <><Pill tone={tone}>{label}</Pill>{status?.message && <small>{status.message}</small>}</>}</td>
           <td><div className="button-row nowrap">
             {!row.windchill && !row.profile && row.preset && <button type="button" className="primary" onClick={() => setUpStream(row.preset!)}>Set up</button>}
-            {!row.windchill && !row.profile && !row.preset && canManageStreams && <button type="button" className="primary" onClick={() => { setFormError(''); setForm('dataSet' in row && row.dataSet ? { ...empty('reference'), name: row.name, viewName: row.name, showInMenu: false } : 'toolDocuments' in row && row.toolDocuments ? { ...empty('release-source'), name: 'Tool Validations Signed documents', viewName: 'Tool Validations Signed documents', showInMenu: false } : { ...empty('release-source'), name: row.name, viewName: row.name, showInMenu: true }) }}>Add query</button>}
+            {!row.windchill && !row.profile && !row.preset && canManageStreams && <button type="button" className="primary" onClick={() => { setFormError(''); setToolAdd(toolStream && (row.name === toolStream.name || ('toolDocuments' in row && row.toolDocuments)) ? {} : null); setForm('dataSet' in row && row.dataSet ? { ...empty('reference'), name: row.name, viewName: row.name, showInMenu: false } : 'toolDocuments' in row && row.toolDocuments ? { ...empty('release-source'), name: 'Tool Validations Signed documents', viewName: 'Tool Validations Signed documents', showInMenu: false } : { ...empty('release-source'), name: row.name, viewName: row.name, showInMenu: true }) }}>Add query</button>}
             {row.profile && <button type="button" className="ghost" disabled={status?.state === 'busy' || fetchingAll} onClick={() => void azure.fetchConnection(row.profile!.id)}>Fetch</button>}
             {row.profile && (canManageStreams || row.timeWriting) && <button type="button" className="ghost" onClick={() => edit(row.profile!)}>Edit</button>}
           </div></td>
@@ -294,7 +318,7 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
       <div className="button-row"><button type="button" className="ghost" disabled={busy} onClick={() => { if (azure.saved.length && !azure.isSample && !window.confirm('Replace the saved Azure cache with a synthetic sample dataset? Export a JSON backup first if you need the current data.')) return; azure.loadSampleData() }}>Load synthetic sample dataset</button></div>
     </Panel>}
     {/* The connection editor, outside the sections: Edit / Add query / Set up open it from Stream mapping and Other views alike (KI fix). */}
-      {form && <Modal title={form.id ? `Edit “${connectionProfiles.find((profile) => profile.id === form.id)?.reason ?? form.name}”` : clonedFrom ? `Clone of “${clonedFrom}”` : 'New connection'} eyebrow={`AZURE DEVOPS · ${roleLabel[form.role].toUpperCase()}`} wide form onClose={() => { setForm(null); setFormError('') }}><form className="connection-editor" onSubmit={submit}>
+      {form && <Modal title={form.id ? `Edit “${connectionProfiles.find((profile) => profile.id === form.id)?.reason ?? form.name}”` : clonedFrom ? `Clone of “${clonedFrom}”` : 'New connection'} eyebrow={`AZURE DEVOPS · ${roleLabel[form.role].toUpperCase()}`} wide form onClose={() => { setForm(null); setFormError(''); setToolAdd(null) }}><form className="connection-editor" onSubmit={submit}>
         {clonedFrom ? <Notice>All settings and the PAT of “{clonedFrom}” are copied. Change the name and what differs (query, project, team, …), then Save and refresh data. “{clonedFrom}” itself is not changed.</Notice> : !form.id && form.organization && <Notice>Pre-filled settings: enter your PAT, change anything else if needed, then Save and Test.</Notice>}
         <div className="connection-form">
           <label>Name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. QMS-0025, Digital Platform, DHFI releases" /></label>
@@ -309,9 +333,13 @@ export function AzureConnections({ azure, store, git, onOpenBoard, canManage = t
           {form.role === 'time-tracking' && <p className="muted">Your work email is set on its own under Admin → Streams → <strong>Your work email</strong>{azure.creatorEmail ? <> (now {azure.creatorEmail})</> : ' — not set yet'}.</p>}
           <label className="query-field">Query (optional, WIQL)<textarea rows={4} spellCheck={false} value={form.query} onChange={(event) => setForm({ ...form, query: event.target.value })} placeholder={queryPlaceholder[form.role]} /><small>A flat query: SELECT … FROM WorkItems WHERE …. Only the WHERE clause is used; results are read in pages. {form.role === 'time-tracking' || form.role === 'backlog-view' ? '' : 'Empty uses the default shown.'}</small></label>
         </div>
+        {toolAdd && toolCategory && <fieldset className="pgb-kinds"><legend>Category</legend>
+          {(['tools', 'documents'] as const).map((role) => { const taken = takenBy[role] ? `Tool Validations already has a ${toolRoleLabel[role]} query (“${takenBy[role]}”): change the roles in Tool Validations queries below.` : ''; return <div key={role} className="pgb-kind"><label className="check" title={taken || undefined}><input type="radio" name="tool-query-category" required disabled={Boolean(taken)} aria-describedby={`tool-query-category-${role}`} checked={toolCategory.role === role} onChange={() => { setToolAdd({ picked: role }); setFormError('') }} />{toolRoleLabel[role]}</label><small id={`tool-query-category-${role}`}>{taken || (role === 'tools' ? 'One row per tool: the master list and Completed. Only a Tool List query feeds the master list.' : 'One row per document, its Parent the tool’s work item ID, with the approver slots: Supported. Never added to the master list.')}</small></div> })}
+          <small className="muted">{toolCategory.picked ? 'Chosen by you.' : `Pre-selected ${toolCategory.guess.how === 'name' ? 'by its name (documents, signed)' : toolCategory.guess.how === 'columns' ? 'by its columns (Parent and approver slots)' : 'as the Tool List (its name and columns do not say documents)'}: check it before saving.`}</small>
+        </fieldset>}
         <Notice>{roleUse[form.role]}</Notice>
         {formError && <Notice tone="error">{formError}</Notice>}
-        <div className="button-row"><button className="primary">Save and refresh data</button><button type="button" className="ghost" onClick={() => { setForm(null); setFormError('') }}>Cancel</button></div>
+        <div className="button-row"><button className="primary">Save and refresh data</button><button type="button" className="ghost" onClick={() => { setForm(null); setFormError(''); setToolAdd(null) }}>Cancel</button></div>
       </form></Modal>}
   </section>
 }

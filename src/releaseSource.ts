@@ -3,7 +3,7 @@ import { businessTimeZone } from './businessTime.ts'
 import { normalizeBulkEpics, type BulkStream } from './bulkEpics.ts'
 import { myPatternsFor } from './myNamingPatterns.ts'
 import { normalizeNamingPatterns, patternsFor, type NamingPattern, type NamingPatterns } from './namingPatterns.ts'
-import type { AzureWorkItem } from './domain'
+import type { AppState, AzureWorkItem } from './domain'
 import { mapAzureWorkItem, requestAzure, type AzureConfig, type AzureRequest } from './azureDevOps.ts'
 import { pickFields, queryLayout } from './queryView.ts'
 import { releaseFor } from './releasePath.ts'
@@ -425,4 +425,15 @@ export function attachFeatures(entries: ReleaseEntry[], backlog: AzureWorkItem[]
     const { planned, booked, hourTasks } = hoursOf(tracking.map((feature) => feature.id))
     return { ...entry, ...(best ? { match: best } : {}), tracked: trackedBy.length > 0, trackedBy, features: tracking, planned, booked, hourTasks }
   }).sort((a, b) => a.name.localeCompare(b.name) || b.release.localeCompare(a.release, undefined, { numeric: true }))
+}
+
+// TVL-20, TVL-33: the Tool Validations queries settings changed (Stream mapping → Tool Validations queries, or Add query
+// with its category confirmed), with an audit entry; an empty value removes the setting (Automatic / the default).
+export function withToolValidationsSettings(state: AppState, next: ToolValidationsSettings, detail: string): AppState {
+  const current = normalizeReleaseSourceSettings(state.releaseSourceSettings)
+  const merged = { ...(current.toolValidations ?? {}), ...next }
+  const clean = Object.fromEntries(Object.entries(merged).filter(([, value]) => value)) as ToolValidationsSettings
+  state.releaseSourceSettings = { ...current, toolValidations: Object.keys(clean).length ? clean : undefined }
+  state.audits.unshift({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), actor: 'u-owner', action: 'Update', entity: 'ReleaseSourceSettings', entityId: 'tool-validations', detail })
+  return state
 }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addMonths, addSource, aggregate, azureFieldOptions, azureValue, cleanDays, dayOf, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile, addTab, addTabReason, customTabKey, customToolTabs, maxCustomTabs, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, defaultHighlights, highlightColours, highlightsProblem, maxHighlights, setHighlights, sortBands } from '../src/toolValidations.ts'
+import { addMonths, addSource, aggregate, azureFieldOptions, azureInputs, azureLock, completionDated, dueFromText, azureValue, cleanDays, dayOf, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile, addTab, addTabReason, customTabKey, customToolTabs, maxCustomTabs, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, defaultHighlights, highlightColours, highlightsProblem, maxHighlights, setHighlights, sortBands, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories } from '../src/toolValidations.ts'
 import { pagesOfFile, fileLabel } from '../src/gitWatch.ts'
 
 // TVL-01…TVL-13: the Tool Validations master list (tool-validations.json in Git), its sources, merges and expiry view.
@@ -61,20 +61,22 @@ test('TVL-04, TVL-05: a source merged in — new tools appended, values updated 
   file = first.file
   assert.equal(file.tools.find((entry) => entry.name === 'Minitab').addedBy, 'Diya Sharma')
   assert.equal(mergeSource(file, streamSourceId, [{ name: 'minitab', version: '21.0', validationDate: '2025-01-15' }, { name: 'LabVIEW', version: '2020', dueDate: '2026-11-14' }], at).file, file, 'the same data: the same file, nothing to save')
-  // A date corrected by hand stays; LabVIEW leaves the query and stays, marked; a new tool comes.
-  file = saveTool(file, { ...editOf(file.tools.find((entry) => entry.name === 'Minitab')), validationDate: '2025-02-01' }, at, 'Diya Sharma', toolKey('Minitab', '21'))
+  // A tool of the Tool Validations query is not changed by hand (TVL-30); LabVIEW leaves the query and stays, marked; a new tool comes.
+  assert.equal(saveTool(file, { ...editOf(file.tools.find((entry) => entry.name === 'Minitab')), validationDate: '2025-02-01' }, at, 'Diya Sharma', toolKey('Minitab', '21')), file, 'refused: the same file')
+  file = saveTool(file, { name: 'Excel Validator', version: '2', validationDate: '2025-02-01', validityMonths: '', dueDate: '', notes: '' }, at, 'Diya Sharma')
   const second = mergeSource(file, streamSourceId, [{ name: 'Minitab', version: '21', validationDate: '2025-06-01', validityMonths: 24 }, { name: 'Python', version: '3.11' }], at)
   assert.deepEqual([second.added, second.updated, second.gone], [['Python'], ['Minitab'], ['LabVIEW']])
   const minitab = second.file.tools.find((entry) => entry.name === 'Minitab')
-  assert.equal(minitab.validationDate, '2025-02-01', 'the date changed by hand is kept')
-  assert.equal(minitab.validityMonths, 24, 'a value not changed by hand follows the source')
+  assert.equal(minitab.validationDate, '2025-06-01', 'follows the source')
+  assert.equal(minitab.validityMonths, 24, 'follows the source')
   const labview = second.file.tools.find((entry) => entry.name === 'LabVIEW')
   assert.equal(entryState(labview), 'gone', 'not in source now — still listed')
   assert.equal(labview.dueDate, '2026-11-14', 'its dates are kept')
   // Another source holding the same tool links the same entry.
   const withSource = addSource(second.file, { kind: 'windchill', name: 'Tools export', ref: 'view-1', mapping: guessMapping('windchill', [['Tool', 'Tool'], ['Version', 'Version']]) })
-  const third = mergeSource(withSource, 'tools-export', [{ name: 'lab-view', version: '2020' }], at)
+  const third = mergeSource(withSource, 'tools-export', [{ name: 'lab-view', version: '2020' }, { name: 'Excel Validator', version: '2', validationDate: '2025-06-01' }], at)
   assert.deepEqual(third.added, [])
+  assert.equal(third.file.tools.find((entry) => entry.name === 'Excel Validator').validationDate, '2025-02-01', 'a date changed by hand is kept when a source other than Azure DevOps is read')
   assert.equal(entryState(third.file.tools.find((entry) => entry.name === 'LabVIEW')), 'in-source', 'in a source again')
   assert.deepEqual(Object.keys(third.file.tools.find((entry) => entry.name === 'LabVIEW').sources), ['stream', 'tools-export'])
   const marked = markMerged(third.file, 'tools-export', at, 'Diya Sharma')
@@ -144,11 +146,11 @@ test('TVL-07: each source is read with its field mapping — the guesses until i
   const options = azureFieldOptions(items)
   assert.deepEqual(options.slice(0, 4).map(([key]) => key), ['@tool-name', '@tool-version', '@title', '@approval'])
   const guessed = guessMapping('stream', options)
-  assert.deepEqual(guessed, { name: '@tool-name', version: '@tool-version', validationDate: '@approval', validityPeriod: 'Custom.ValidityPeriod', dueDate: 'Microsoft.VSTS.Scheduling.DueDate', periodUnit: 'months', confirmed: false })
+  assert.deepEqual(guessed, { name: '@tool-name', version: '@tool-version', validationDate: '@completion', validityPeriod: 'Custom.ValidityPeriod', dueDate: 'Microsoft.VSTS.Scheduling.DueDate', periodUnit: 'months', confirmed: false })
   assert.deepEqual(guessMapping('azure', options.filter(([key]) => key !== 'Microsoft.VSTS.Scheduling.DueDate').concat([['Microsoft.VSTS.Scheduling.TargetDate', 'Microsoft.VSTS.Scheduling.TargetDate']])).dueDate, 'Microsoft.VSTS.Scheduling.TargetDate', 'else the Target Date')
   assert.equal(azureValue(items[0], '@tool-name'), 'Minitab')
   assert.equal(azureValue(items[0], '@tool-version'), '21')
-  const inputs = inputsFromRows(items, guessed, (item, field) => azureValue(item, field))
+  const inputs = inputsFromRows(items, { ...guessed, validationDate: '@approval' }, (item, field) => azureValue(item, field))
   assert.deepEqual([...aggregate(inputs).values()], [
     { name: 'Minitab', version: '21', validationDate: '2025-02-01', validityMonths: 24, dueDate: '2027-01-15' },
     { name: 'Python', version: '3.11' },
@@ -187,7 +189,7 @@ test('TVL-10, TVL-11: tools added, corrected and removed by hand; only the Tool 
 })
 
 test('GIT-17, TVL-02: two saves of the master list are merged — tools by tool, sources by id, co-owners as sets; the file is mapped for “Newer data in Git” (TC-TVL-01)', () => {
-  const base = serializeToolValidations(parseToolValidations(fileWith([tool('Minitab', '21')], { owners: ['a@example.com'] })).file)
+  const base = serializeToolValidations(parseToolValidations(fileWith([tool('Minitab', '21', { sources: {} })], { owners: ['a@example.com'] })).file)
   const mine = serializeToolValidations(saveTool(setTeam(parseToolValidations(base).file, 45, ['a@example.com', 'b@example.com']), { name: 'JMP', version: '17', validationDate: '', validityMonths: '', dueDate: '', notes: '' }, at, 'me'))
   const theirs = serializeToolValidations(saveTool(setTeam(parseToolValidations(base).file, 60, []), { ...editOf(parseToolValidations(base).file.tools[0]), notes: 'checked' }, at, 'them', toolKey('Minitab', '21')))
   const merged = parseToolValidations(mergeToolValidationsText(base, mine, theirs, true)).file
@@ -434,4 +436,156 @@ test('GIT-17, TVL-27: two saves of the highlight bands merged as one value — t
   const cleared = serializeToolValidations(setHighlights(file, []))
   assert.deepEqual(parseToolValidations(mergeToolValidationsText(base, cleared, tools, true)).file.highlights, [], 'every band removed stays removed')
   assert.equal(parseToolValidations(mergeToolValidationsText(base, tools, base, true)).file.highlights, undefined, 'nobody set them: still the defaults')
+})
+
+// TVL-29, TVL-30: tools from Azure DevOps — dated by the completion date, changed only there.
+const item = (id, title, areaPath, dates = {}, fields = {}) => ({ ...doc(id, areaPath, 'DHP\\Release 1', title, fields), ...dates })
+const withSources = (tools) => parseToolValidations(fileWith(tools, { sources: [
+  { id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: false } },
+  { id: 'other-query', kind: 'azure', name: 'Lab tools query', ref: 'conn-2', mapping: { name: '@title', periodUnit: 'months', confirmed: true } },
+  { id: 'tools-export', kind: 'windchill', name: 'Tools export', ref: 'view-1', mapping: { name: 'Tool', periodUnit: 'months', confirmed: true } },
+] })).file
+
+test('TVL-29: a tool from Azure DevOps takes the completion date as its validation date — a mapped Validation date wins; due = + 24 months unless the source gives a period or a due date (TC-TVL-26)', () => {
+  const items = [
+    item(1, 'Minitab 21 Validation', 'DHP\\Tool Validations\\Minitab', { changedDate: '2025-03-10T08:00:00Z', closedDate: '2025-01-05T08:00:00Z' }, { 'Custom.ValidatedOn': '2024-12-01' }),
+    item(2, 'Python 3.11 Validation', 'DHP\\Tool Validations\\Python', { changedDate: '2025-04-20T08:00:00Z' }, { 'Custom.Period': '12', 'Microsoft.VSTS.Scheduling.DueDate': '2026-01-31T00:00:00Z' }),
+  ]
+  const options = azureFieldOptions(items)
+  assert.ok(options.some(([key]) => key === '@completion'), 'the completion date is offered as a field')
+  const guessed = guessMapping('stream', options)
+  assert.equal(guessed.validationDate, '@completion', 'the guess for an Azure DevOps source: the completion date')
+  // The default completion field: Changed Date.
+  const read = azureInputs(items, { ...guessed, dueDate: undefined }, [], undefined)
+  assert.deepEqual(read.map((input) => [input.name, input.validationDate]), [['Minitab', '2025-03-10'], ['Python', '2025-04-20']])
+  assert.deepEqual(dueOf({ ...read[0], manual: [] }), { due: '2027-03-10', from: 'default' }, 'completion date + 24 months')
+  assert.equal(dueFromText('default', true), 'completion date + 24 months (default)')
+  assert.equal(dueFromText('calculated', true), 'completion date + validity period')
+  assert.equal(dueFromText('default', false), 'validation date + 24 months (default)')
+  // The field chosen in Stream mapping (TVL-20) reaches the read; an empty Validation date mapping reads it too.
+  assert.equal(azureInputs(items, { ...guessed, validationDate: undefined }, [], 'Microsoft.VSTS.Common.ClosedDate')[0].validationDate, '2025-01-05')
+  // A mapped Validation date wins — decided per source: a row without it has no validation date.
+  const mapped = azureInputs(items, { ...guessed, validationDate: 'Custom.ValidatedOn', dueDate: undefined }, [], undefined)
+  assert.deepEqual(mapped.map((input) => input.validationDate), ['2024-12-01', undefined])
+  // A period or a due date of the source still wins over the default.
+  const sourced = azureInputs(items, { ...guessed, validityPeriod: 'Custom.Period' }, [], undefined)
+  assert.deepEqual(dueOf({ ...sourced[1], manual: [] }), { due: '2026-01-31', from: 'source' })
+  assert.deepEqual(dueOf({ ...azureInputs(items, { ...guessed, validityPeriod: 'Custom.Period', dueDate: undefined }, [], undefined)[1], manual: [] }), { due: '2026-04-20', from: 'calculated' })
+  // Appended to the master list as source values are (written to the file), and shown as the completion date.
+  let file = mergeSource(withSources([]), streamSourceId, read, at).file
+  const minitab = file.tools.find((entry) => entry.name === 'Minitab')
+  assert.equal(minitab.validationDate, '2025-03-10')
+  assert.match(serializeToolValidations(file), /"validationDate": "2025-03-10"/)
+  assert.equal(completionDated(file, minitab), true)
+  // A later edit of the work item (Changed Date) moves the date, and the due date with it.
+  file = mergeSource(file, streamSourceId, azureInputs([{ ...items[0], changedDate: '2025-09-01T08:00:00Z' }, items[1]], { ...guessed, dueDate: undefined }, [], undefined), at).file
+  assert.equal(dueOf(file.tools.find((entry) => entry.name === 'Minitab')).due, '2027-09-01')
+  // Not the completion date: a source mapping another field, a Windchill export, a date entered by hand.
+  assert.equal(completionDated(setMapping(file, streamSourceId, { ...guessed, validationDate: 'Custom.ValidatedOn' }), minitab), false)
+  assert.equal(completionDated(file, { ...minitab, sources: { 'tools-export': { inSource: true } } }), false)
+  assert.equal(completionDated(file, { ...minitab, manual: ['validationDate'] }), false)
+})
+
+test('TVL-30: a tool from Azure DevOps cannot be edited (but its notes) or removed here — Remove allowed once it is not in the source; hand and Windchill tools unchanged; a hand-added duplicate is refused (TC-TVL-27)', () => {
+  let file = withSources([
+    tool('Minitab', '21', { validationDate: '2025-03-10' }),
+    tool('LabVIEW', '2020', { sources: { 'other-query': { inSource: true } } }),
+    tool('JMP', '17', { sources: { 'tools-export': { inSource: true } } }),
+    tool('Excel', '', { sources: {}, dueDate: '2099-01-01', manual: ['dueDate'] }),
+  ])
+  const find = (name) => file.tools.find((entry) => entry.name === name)
+  assert.deepEqual(azureLock(file, find('Minitab')), { edit: 'Comes from Azure DevOps (Tool Validations query): change it there.', remove: 'Comes from Azure DevOps (Tool Validations query): change it there; it can be removed here once Azure DevOps no longer returns it.' })
+  assert.equal(azureLock(file, find('LabVIEW')).edit, 'Comes from Azure DevOps (Lab tools query): change it there.', 'another Azure DevOps query too')
+  assert.deepEqual(azureLock(file, find('JMP')), { edit: '', remove: '' }, 'a Windchill tool is unchanged')
+  assert.deepEqual(azureLock(file, find('Excel')), { edit: '', remove: '' }, 'a tool added by hand is unchanged')
+  // The logic refuses, not only the buttons.
+  const minitab = find('Minitab')
+  assert.equal(editProblem(file, { ...editOf(minitab), dueDate: '2099-01-01', notes: 'mine' }, minitab.key), 'Comes from Azure DevOps (Tool Validations query): change it there.')
+  assert.equal(saveTool(file, { ...editOf(minitab), dueDate: '2099-01-01' }, at, 'me', minitab.key), file)
+  for (const change of [{ validationDate: '2020-01-01' }, { validityMonths: '36' }, { name: 'Minitab Pro' }, { version: '22' }]) {
+    assert.match(editProblem(file, { ...editOf(minitab), ...change, notes: 'mine' }, minitab.key), /^Comes from Azure DevOps/, JSON.stringify(change))
+    assert.equal(saveTool(file, { ...editOf(minitab), ...change, notes: 'mine' }, at, 'me', minitab.key), file, JSON.stringify(change))
+  }
+  // Its notes are changed here (the product owner's answer): only the notes, with who and when.
+  assert.equal(editProblem(file, { ...editOf(minitab), notes: 'Re-check the macro library' }, minitab.key), '')
+  const noted = saveTool(file, { ...editOf(minitab), notes: '  Re-check the macro library ' }, at, 'Diya Sharma', minitab.key).tools.find((entry) => entry.name === 'Minitab')
+  assert.deepEqual([noted.notes, noted.validationDate, noted.manual, noted.changedBy, noted.sources], ['Re-check the macro library', '2025-03-10', [], 'Diya Sharma', { stream: { inSource: true } }])
+  assert.equal(saveTool(file, { ...editOf(minitab), notes: '' }, at, 'me', minitab.key), file, 'no change: the same file')
+  assert.equal(removeTool(file, minitab.key), file)
+  assert.equal(removeTool(file, find('LabVIEW').key), file)
+  assert.equal(saveTool(file, { ...editOf(find('JMP')), notes: 'checked' }, at, 'me', find('JMP').key).tools.find((entry) => entry.name === 'JMP').notes, 'checked')
+  assert.equal(removeTool(file, find('Excel').key).tools.length, 3)
+  // Added by hand with the name and version of an Azure DevOps tool: matched (TVL-03), refused — never a second entry.
+  const twin = { name: 'mini-tab', version: 'v21.0', validationDate: '', validityMonths: '', dueDate: '2099-01-01', notes: '' }
+  assert.equal(editProblem(file, twin), 'This tool and version is already in the master list. Comes from Azure DevOps (Tool Validations query): change it there.')
+  assert.equal(saveTool(file, twin, at, 'me'), file)
+  // Gone from the query: Remove allowed (normal rights), Edit still locked.
+  file = mergeSource(file, streamSourceId, [{ name: 'Excel', version: '', validationDate: '2025-01-01' }], at).file
+  assert.equal(entryState(find('Minitab')), 'gone')
+  assert.deepEqual(azureLock(file, find('Minitab')), { edit: 'Comes from Azure DevOps (Tool Validations query): change it there.', remove: '' })
+  assert.equal(removeTool(file, find('Minitab').key).tools.some((entry) => entry.name === 'Minitab'), false)
+  // A tool added by hand that the query brings later: the query's values replace the hand ones, and it is locked.
+  const excel = find('Excel')
+  assert.deepEqual([excel.validationDate, excel.dueDate, excel.manual], ['2025-01-01', undefined, []], 'the due date entered by hand cannot hide the expiry')
+  assert.deepEqual(dueOf(excel), { due: '2027-01-01', from: 'default' })
+  assert.match(azureLock(file, excel).edit, /^Comes from Azure DevOps/)
+})
+
+// TVL-32: the category of a source — Tool List (feeds the master list) or Validation Documents (its own tab only).
+const register = (extra = {}) => ({ id: 'register', kind: 'ondemand', name: 'Register', ref: 'page-1', mapping: { periodUnit: 'months', confirmed: true, name: 'c-tool' }, ...extra })
+const withCategorySources = (sources, tools = []) => JSON.stringify({ schema: 1, kind: 'tool-validations', defaultDays: 60, owners: [], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: false } }, ...sources], tools })
+
+test('TVL-32: the category of a source read and written — "tools" or "documents"; none reads as Tool List; an unknown value refused; the Tool Validations query always a Tool List (TC-TVL-29)', () => {
+  assert.deepEqual(sourceCategories.map((entry) => [entry.key, entry.label]), [['tools', 'Tool List'], ['documents', 'Validation Documents']])
+  const parsed = parseToolValidations(withCategorySources([register(), register({ id: 'docs', name: 'Docs', ref: 'page-2', category: 'documents' }), register({ id: 'list', name: 'List', ref: 'page-3', category: 'tools' })]))
+  assert.deepEqual(parsed.refused, [])
+  assert.deepEqual(parsed.file.sources.map((source) => [source.id, source.category, categoryOf(source), feedsMasterList(source)]), [['stream', undefined, 'tools', true], ['register', undefined, 'tools', true], ['docs', 'documents', 'documents', false], ['list', 'tools', 'tools', true]], 'no category: a Tool List, as before')
+  const written = JSON.parse(serializeToolValidations(parsed.file))
+  assert.deepEqual(written.sources.map((source) => source.category), [undefined, undefined, 'documents', 'tools'], 'written only when set — a file from before TVL-32 stays as it was')
+  assert.deepEqual(Object.keys(written.sources[2]).slice(0, 4), ['id', 'kind', 'name', 'category'])
+  assert.equal(serializeToolValidations(parseToolValidations(serializeToolValidations(parsed.file)).file), serializeToolValidations(parsed.file), 'round trip')
+  const strict = parseToolValidations(withCategorySources([register({ category: 'signed' }), register({ id: 'other', name: 'Other', ref: 'page-4', category: 7 })]))
+  assert.deepEqual(strict.refused.map((entry) => entry.name), ['Source “Register”', 'Source “Other”'])
+  assert.match(strict.refused[0].reason, /^unknown category “signed”/)
+  assert.deepEqual(strict.file.sources.map((source) => source.id), ['stream'], 'a source with an unknown category is not used')
+  const stream = parseToolValidations(JSON.stringify({ schema: 1, kind: 'tool-validations', sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', category: 'documents', mapping: {} }], tools: [] }))
+  assert.match(stream.refused[0].reason, /always a Tool List/)
+  assert.deepEqual([categoryLabel('tools'), categoryLabel('documents'), categoryProblem(''), categoryProblem('documents')], ['Tool List', 'Validation Documents', 'Choose the category: Tool List or Validation Documents.', ''])
+  const added = addSource(emptyFile(), { kind: 'ondemand', name: 'Signed register', ref: 'page-9', mapping: { periodUnit: 'months', confirmed: false }, category: 'documents' })
+  assert.equal(added.sources[1].category, 'documents', 'the category asked when the source is added is stored')
+})
+
+test('TVL-32: a Validation Documents source never adds to or updates the master list; changed to it, the tools it fed stay, "not in source now" (TC-TVL-29)', () => {
+  const docs = parseToolValidations(withCategorySources([register({ category: 'documents' })], [tool('Minitab', '21', { validationDate: '2025-01-01' })])).file
+  const result = mergeSource(docs, 'register', [{ name: 'Polyspace', version: 'R2024a', dueDate: '2027-01-01' }, { name: 'Minitab', version: '21', validationDate: '2026-02-01' }], at)
+  assert.deepEqual([result.added, result.updated, result.gone], [[], [], []], 'nothing added, nothing updated')
+  assert.equal(result.file, docs, 'the master list unchanged')
+  // A Tool List source feeds it: Polyspace appended, Minitab linked.
+  const list = parseToolValidations(withCategorySources([register()], [tool('Minitab', '21', { validationDate: '2025-01-01' })])).file
+  const fed = mergeSource(list, 'register', [{ name: 'Polyspace', version: 'R2024a' }, { name: 'Minitab', version: '21' }], at)
+  assert.deepEqual([fed.added, fed.updated], [['Polyspace'], ['Minitab']])
+  // Changed to Validation Documents: its tools stay, marked not in source now for it; nothing deleted.
+  const changed = setCategory(fed.file, 'register', 'documents', at)
+  assert.deepEqual(changed.gone.sort(), ['Minitab', 'Polyspace'])
+  assert.deepEqual(changed.file.tools.map((entry) => [entry.name, entry.sources.register]), [['Minitab', { inSource: false }], ['Polyspace', { inSource: false }]])
+  assert.deepEqual(changed.file.tools.find((entry) => entry.name === 'Minitab').sources.stream, { inSource: true }, 'the links to other sources unchanged')
+  assert.equal(entryState(changed.file.tools.find((entry) => entry.name === 'Polyspace')), 'gone', '"Not in source now"')
+  assert.equal(changed.file.sources.find((source) => source.id === 'register').category, 'documents')
+  // Back to Tool List: linked again at its next merge.
+  const back = setCategory(changed.file, 'register', 'tools', at)
+  assert.deepEqual([back.gone, back.file.sources.find((source) => source.id === 'register').category], [[], 'tools'])
+  assert.deepEqual(mergeSource(back.file, 'register', [{ name: 'Polyspace', version: 'R2024a' }], at).file.tools.find((entry) => entry.name === 'Polyspace').sources.register, { inSource: true })
+  assert.equal(setCategory(fed.file, streamSourceId, 'documents', at).file, fed.file, 'the Tool Validations query stays a Tool List')
+  assert.equal(setCategory(changed.file, 'register', 'documents', at).file, changed.file, 'unchanged: the same file')
+})
+
+test('GIT-17, TVL-32: two saves merged — a category changed in one save and a tool added in the other both kept; both changed: the later save (TC-TVL-29)', () => {
+  const base = withCategorySources([register()], [tool('Minitab', '21')])
+  const mine = withCategorySources([register({ category: 'documents' })], [tool('Minitab', '21')])
+  const theirs = withCategorySources([register()], [tool('Minitab', '21'), tool('JMP', '17')])
+  const merged = parseToolValidations(mergeToolValidationsText(base, mine, theirs, true)).file
+  assert.deepEqual([merged.sources.find((source) => source.id === 'register').category, merged.tools.map((entry) => entry.name)], ['documents', ['JMP', 'Minitab']])
+  const theirsList = withCategorySources([register({ category: 'tools', name: 'Register list' })], [tool('Minitab', '21')])
+  assert.equal(parseToolValidations(mergeToolValidationsText(base, mine, theirsList, false)).file.sources.find((source) => source.id === 'register').category, 'tools', 'the later save wins')
+  assert.equal(parseToolValidations(mergeToolValidationsText(base, mine, theirsList, true)).file.sources.find((source) => source.id === 'register').category, 'documents')
 })

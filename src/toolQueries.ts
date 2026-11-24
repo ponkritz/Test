@@ -3,6 +3,8 @@ import type { NamingPattern } from './namingPatterns.ts'
 import { approverSlotReader, defaultCpReportingSettings, fieldReader, qualifyingRoles, qualifyingSlots, signatureDate, type FieldColumns } from './cpReporting.ts'
 import { releaseFor } from './releasePath.ts'
 import { approvalMonthOf, defaultCompletionField } from './releaseSource.ts'
+import { requestAzure, type AzureConfig, type AzureRequest } from './azureDevOps.ts'
+import { columnName, queryLayout, type QueryColumn } from './queryView.ts'
 
 // TVL-19…TVL-22: Tool Validations from two queries (streams.ts toolQueries tells the two connections apart).
 // - Tools query: one row per tool (its work item) — the master list's source (TVL-04) and Completed: a tool is a
@@ -21,7 +23,7 @@ export interface ToolRow { id: number; title: string; url: string; label: string
 export interface ToolSignature { documentId: number; documentTitle: string; url: string; toolId: number; slot: number; name: string; role: string; date: string; month: string }
 export interface UnlinkedDocument { id: number; title: string; url: string; parentId?: number; months: string[] }
 export interface ToolQueryOptions { completionField?: string; roles?: string[]; patterns?: NamingPattern[]; timeZone?: string }
-export interface ToolQueryIndex { completionField: string; tools: Map<number, ToolRow>; completedByMonth: Map<string, ToolRow[]>; signaturesByMonth: Map<string, Map<number, ToolSignature[]>>; unlinked: UnlinkedDocument[]; unlinkedByMonth: Map<string, UnlinkedDocument[]>; documents: number; noCompletionDate: number }
+export interface ToolQueryIndex { completionField: string; tools: Map<number, ToolRow>; completedByMonth: Map<string, ToolRow[]>; signaturesByMonth: Map<string, Map<number, ToolSignature[]>>; unlinked: UnlinkedDocument[]; unlinkedByMonth: Map<string, UnlinkedDocument[]>; documents: number; noCompletionDate: number; parentOf: Map<number, number | undefined> }
 
 const validDay = (value: unknown) => { const text = value == null ? '' : String(value).trim(); return /^\d{4}-\d{2}-\d{2}/.test(text) && Number.isFinite(Date.parse(text)) ? text : undefined }
 // A tool's completion date from the chosen field: the work item's own Changed / Created / Closed Date where the field
@@ -57,12 +59,13 @@ export function toolQueryIndex(tools: AzureWorkItem[], toolColumns: FieldColumns
   const field = fieldReader(documentColumns), slotsOf = approverSlotReader(documentColumns, field)
   const roles = qualifyingRoles(options.roles ?? defaultCpReportingSettings.roles)
   const signaturesByMonth = new Map<string, Map<number, ToolSignature[]>>(), unlinked: UnlinkedDocument[] = [], unlinkedByMonth = new Map<string, UnlinkedDocument[]>()
-  const seen = new Set<number>()
+  const seen = new Set<number>(), parentOf = new Map<number, number | undefined>()
   for (const item of documents) {
     if (seen.has(item.id)) continue
     seen.add(item.id)
     const written = item.parentId ?? Number(field(item, 'Parent'))
     const parentId = Number.isSafeInteger(written) && written > 0 ? written : undefined
+    parentOf.set(item.id, parentId)
     const tool = parentId != null ? byId.get(parentId) : undefined
     const qualifying = qualifyingSlots(slotsOf(item), roles).map((entry) => { const date = signatureDate(entry)!; return { entry, date, month: approvalMonthOf(date, options.timeZone) ?? date.slice(0, 7) } })
     if (!tool) {
@@ -80,7 +83,7 @@ export function toolQueryIndex(tools: AzureWorkItem[], toolColumns: FieldColumns
       byTool.set(tool.id, list)
     }
   }
-  return { completionField, tools: byId, completedByMonth, signaturesByMonth, unlinked, unlinkedByMonth, documents: seen.size, noCompletionDate }
+  return { completionField, tools: byId, completedByMonth, signaturesByMonth, unlinked, unlinkedByMonth, documents: seen.size, noCompletionDate, parentOf }
 }
 
 export interface SupportedTool { tool: ToolRow; signatures: ToolSignature[]; documents: number; date: string }
@@ -95,7 +98,7 @@ export function toolMonthReport(index: ToolQueryIndex, month: string) {
   for (const row of completed) listed.set(row.id, row)
   for (const entry of supported) listed.set(entry.tool.id, entry.tool)
   const signedDocuments = new Set(supported.flatMap((entry) => entry.signatures.map((signature) => signature.documentId))).size
-  return { month, completionField: index.completionField, completed, supported, listed: [...listed.values()].sort(byLabel), signedDocuments, unlinked: index.unlinked, unlinkedSigned: index.unlinkedByMonth.get(month) ?? [], documents: index.documents, tools: index.tools.size, noCompletionDate: index.noCompletionDate }
+  return { month, completionField: index.completionField, completed, supported, listed: [...listed.values()].sort(byLabel), signedDocuments, unlinked: index.unlinked, unlinkedSigned: index.unlinkedByMonth.get(month) ?? [], documents: index.documents, tools: index.tools.size, noCompletionDate: index.noCompletionDate, toolsById: index.tools, parentOf: index.parentOf }
 }
 export type ToolMonthReport = ReturnType<typeof toolMonthReport>
 
@@ -110,4 +113,82 @@ export function completionFieldOptions(columns: { ref: string; name: string }[] 
   }
   const [head, ...rest] = [...options]
   return [head, ...rest.sort((a, b) => a[1].localeCompare(b[1]))].map(([ref, name]) => ({ ref, name }))
+}
+
+// TVL-31: the Validation Documents table of the Azure tab — every document of the Signed documents query, the
+// documents whose Parent is no tool of the Tools query (e.g. a retired tool) included and marked "Not in Tool List
+// (Azure)". Its Tool column is the Parent's name: the tool's label from the Tools query (its name and version, as the
+// Releases table names it), else the Parent's System.Title read from Azure DevOps by its ID (read only, at ↻, kept
+// with the fetched documents), else "#<id>" with the reason. The names never change a count (TVL-21) and never add
+// a tool to the master list.
+export type ParentTitle = { title: string } | { error: string }
+export type ParentTitles = Record<string, ParentTitle>
+export interface DocumentTool { parentId?: number; name: string; listed: boolean; note?: string }
+export const notInToolList = 'Not in Tool List (Azure)'
+const cleanTitle = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 255)
+const titleOf = (entry: unknown) => { const title = entry && typeof entry === 'object' ? (entry as { title?: unknown }).title : undefined; return typeof title === 'string' && title.trim() ? cleanTitle(title) : undefined }
+const errorOf = (entry: unknown) => { const error = entry && typeof entry === 'object' ? (entry as { error?: unknown }).error : undefined; return typeof error === 'string' ? error.slice(0, 300) : undefined }
+export function documentToolOf(report: Pick<ToolMonthReport, 'toolsById' | 'parentOf'>, documentId: number, titles: ParentTitles | undefined = {}): DocumentTool {
+  const parentId = report.parentOf.get(documentId)
+  if (parentId == null) return { name: 'No Parent', listed: false, note: 'The document has no Parent: listed, never counted.' }
+  return parentToolOf(report, parentId, titles)
+}
+export function parentToolOf(report: Pick<ToolMonthReport, 'toolsById'>, parentId: number, titles: ParentTitles | undefined = {}): DocumentTool {
+  const tool = report.toolsById.get(parentId)
+  if (tool) return { parentId, name: tool.label, listed: true }
+  const entry = titles?.[String(parentId)], title = titleOf(entry)
+  if (title) return { parentId, name: title, listed: false, note: `${notInToolList}: the Parent’s title read from Azure DevOps by its ID (e.g. a retired tool). Listed, never counted.` }
+  const error = errorOf(entry)
+  return { parentId, name: `#${parentId}`, listed: false, note: error ? `Name not read: ${error}` : 'Name not read yet: ↻ reads it from Azure DevOps with the two queries.' }
+}
+// The Parents to read by ID: those of the documents whose Parent is no tool of the Tools query, each once, in order.
+export const parentIdsToRead = (report: Pick<ToolMonthReport, 'unlinked'>) => [...new Set(report.unlinked.flatMap((entry) => entry.parentId != null ? [entry.parentId] : []))].sort((a, b) => a - b)
+
+// Reads the System.Title of work items by ID — read only, through the app's batch read (the 'items' operation:
+// workitemsbatch, as every query's rows are read; on-premises servers stay read only, the PAT is the server's) — in
+// batches of 200. A batch that fails is read one by one, so one deleted or hidden work item does not hide the other
+// names; a rejected PAT, refused access or an unreachable server stops at once. Never throws: a name not read says why.
+const stopsAll = /PAT was rejected|Access denied|could not (be )?reach|sign-in|Synthetic|CORS/i
+const readableError = (failure: unknown) => { const text = failure instanceof Error ? failure.message : String(failure); return /^Not found/i.test(text) ? 'The work item was not found (deleted, or not readable with this PAT).' : text.slice(0, 300) }
+export async function fetchParentTitles(config: AzureConfig, pat: string, ids: number[], transport: (request: AzureRequest) => Promise<unknown> = requestAzure): Promise<ParentTitles> {
+  const wanted = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))]
+  const titles: ParentTitles = {}
+  if (!wanted.length) return titles
+  if (!pat.trim()) { for (const id of wanted) titles[id] = { error: 'No PAT in this browser for this server.' }; return titles }
+  const scoped = { ...config, team: config.team || config.project }
+  const read = async (batch: number[]) => {
+    const result = await transport({ ...scoped, pat: pat.trim(), operation: 'items', ids: batch }) as { value?: unknown } | null
+    const found = new Map<number, string>()
+    for (const item of Array.isArray(result?.value) ? result.value as unknown[] : []) {
+      const entry = item as { id?: unknown; fields?: Record<string, unknown> } | null
+      const title = entry?.fields?.['System.Title']
+      if (entry && typeof entry.id === 'number' && typeof title === 'string' && title.trim()) found.set(entry.id, cleanTitle(title))
+    }
+    for (const id of batch) titles[id] = found.has(id) ? { title: found.get(id)! } : { error: 'Not returned by Azure DevOps (deleted, or not readable with this PAT).' }
+  }
+  const stop = (from: number, reason: string) => { for (const id of wanted.slice(from)) titles[id] = { error: reason }; return titles }
+  for (let index = 0; index < wanted.length; index += 200) {
+    const batch = wanted.slice(index, index + 200)
+    try { await read(batch); continue } catch (failure) {
+      const reason = readableError(failure)
+      if (stopsAll.test(reason)) return stop(index, reason)
+      if (batch.length === 1) { titles[batch[0]] = { error: reason }; continue }
+    }
+    for (const [at, id] of batch.entries()) {
+      try { await read([id]) } catch (failure) {
+        const reason = readableError(failure)
+        if (stopsAll.test(reason)) return stop(index + at, reason)
+        titles[id] = { error: reason }
+      }
+    }
+  }
+  return titles
+}
+
+// TVL-31: a query table's columns — every column the query selects, in its SELECT order, named as at the fetch (else
+// a readable form of the reference name); a field the query does not select is left out.
+export function selectColumns(wiql: string | undefined, saved?: QueryColumn[]): QueryColumn[] | undefined {
+  if (!wiql?.trim()) return saved
+  const names = Object.fromEntries((saved ?? []).map((column) => [column.ref, column.name]))
+  return queryLayout(wiql, names).columns.map((ref) => ({ ref, name: names[ref] ?? columnName(ref) }))
 }

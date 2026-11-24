@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { completionDateOf, completionFieldOptions, toolMonthReport, toolQueryIndex } from '../src/toolQueries.ts'
+import { completionDateOf, completionFieldOptions, documentToolOf, fetchParentTitles, parentIdsToRead, selectColumns, toolMonthReport, toolQueryIndex } from '../src/toolQueries.ts'
 import { completedCount, defaultStreamReleases, streamCounts, supportedCount, toolReportFor } from '../src/releaseOverview.ts'
 import { releaseComparison } from '../src/pulseCheck.ts'
 import { packStreamsOf } from '../src/packInputs.ts'
 import { completedOf } from '../src/cumulativeReleases.ts'
-import { defaultStreams, noToolDocumentsQuery, profileForStream, setToolDocumentsQuery, toolQueries } from '../src/streams.ts'
+import { defaultStreams, noToolDocumentsQuery, profileForStream, setToolDocumentsQuery, toolCategoryGuess, toolDocumentsSettingFor, toolQueries, toolQueryHowLabel, toolRoleLabel } from '../src/streams.ts'
 import { normalizeReleaseSourceSettings, normalizeToolValidationsSettings } from '../src/releaseSource.ts'
 import { planningData, parsePlanning, serializePlanning } from '../src/gitStorage.ts'
 
@@ -149,4 +149,102 @@ test('TVL-20: the setting is kept in the shared settings and survives the Git ro
   assert.equal(normalizeToolValidationsSettings({ completionField: 'System.ChangedDate; DROP', documentsQuery: 'x'.repeat(121) }), undefined)
   assert.equal(normalizeToolValidationsSettings('nope'), undefined)
   assert.deepEqual(normalizeToolValidationsSettings({ documentsQuery: '@none' }), { documentsQuery: '@none' })
+})
+
+// TVL-31: the Azure tab's Validation Documents — every document, its Tool the Parent's name; Tool List (Azure) and
+// Validation Documents with the query's columns in SELECT order.
+test('TVL-31: the Tool of each document — the Tools query’s name, a title read by ID, else #ID with the reason (TC-TVL-28)', () => {
+  const docs = [...documents(), doc(107, 888, 'Retired Tool Report', slot(1, 'Ana Costa', 'QA', '2026-10-16T09:00:00Z'))]
+  const report = toolMonthReport(toolQueryIndex(tools(), toolColumns, docs, docColumns), '2026-10')
+  assert.deepEqual(parentIdsToRead(report), [888, 999], 'the Parents that are no tool of the Tools query, each once, in order')
+  const titles = { 999: { title: '  Old   Analyzer 1.0 ' }, 888: { error: 'The PAT was rejected or has expired. Check your PAT.' } }
+  assert.deepEqual(documentToolOf(report, 100, titles), { parentId: 10, name: 'Minitab 21', listed: true }, 'from the Tools query (its name and version)')
+  const retired = documentToolOf(report, 104, titles)
+  assert.deepEqual([retired.parentId, retired.name, retired.listed], [999, 'Old Analyzer 1.0', false], 'a title read from Azure DevOps by ID, spaces squashed')
+  assert.match(retired.note, /Not in Tool List \(Azure\).*never counted/)
+  const failed = documentToolOf(report, 107, titles)
+  assert.deepEqual([failed.name, failed.listed], ['#888', false])
+  assert.match(failed.note, /^Name not read: The PAT was rejected/)
+  assert.match(documentToolOf(report, 107).note, /Name not read yet: ↻/, 'not read yet')
+  assert.deepEqual([documentToolOf(report, 105).name, documentToolOf(report, 105).parentId], ['No Parent', undefined])
+  // A cached entry of another shape (e.g. from a hand-edited backup) is never shown as a name.
+  assert.equal(documentToolOf(report, 104, { 999: { title: 42 } }).name, '#999')
+})
+
+test('TVL-31, TVL-21: documents of tools not in the Tools query (e.g. retired) are listed, never counted — whatever their names (TC-TVL-28)', () => {
+  const docs = [...documents(), doc(107, 888, 'Retired Tool Report', slot(1, 'Ana Costa', 'QA', '2026-10-16T09:00:00Z'))]
+  const index = toolQueryIndex(tools(), toolColumns, docs, docColumns)
+  const report = toolMonthReport(index, '2026-10')
+  assert.equal(index.documents, 7, 'every document is read')
+  assert.deepEqual(report.unlinked.map((entry) => entry.id), [104, 105, 107], 'listed in Validation Documents as Not in Tool List (Azure)')
+  assert.deepEqual(report.supported.map((entry) => entry.tool.label), ['Minitab 21'], 'Supported counts only tools of the Tools query')
+  assert.deepEqual(report.listed.map((row) => row.label), ['LabVIEW 2020', 'Minitab 21'])
+  assert.equal(report.toolsById.size, 4, 'no tool is added for a retired Parent')
+  assert.ok(!report.toolsById.has(888) && !report.toolsById.has(999))
+})
+
+test('TVL-31: Parent titles read by ID — read only, in batches; a failed batch read one by one; a rejected PAT stops (TC-TVL-28)', async () => {
+  const config = { organization: 'o', project: 'p', team: '' }
+  const requests = []
+  const item = (id, title) => ({ id, fields: { 'System.Id': id, 'System.Title': title } })
+  const known = { 888: 'Retired Logger 2', 999: 'Old Analyzer 1.0' }
+  const transport = async (request) => {
+    requests.push({ operation: request.operation, ids: request.ids, team: request.team })
+    if (request.ids.includes(777)) throw new Error('Not found at dev.azure.com/o/p. Check the organization / collection, project and team names.')
+    return { value: request.ids.filter((id) => known[id]).map((id) => item(id, known[id])) }
+  }
+  const titles = await fetchParentTitles(config, 'pat', [999, 888, 777, 999], transport)
+  assert.deepEqual(titles, { 777: { error: 'The work item was not found (deleted, or not readable with this PAT).' }, 888: { title: 'Retired Logger 2' }, 999: { title: 'Old Analyzer 1.0' } })
+  assert.ok(requests.every((request) => request.operation === 'items' && request.team === 'p'), 'only the batch read, never a write')
+  assert.deepEqual(requests.map((request) => request.ids), [[999, 888, 777], [999], [888], [777]], 'the failed batch read again one by one')
+  // Not returned (e.g. left out by the server): #ID with the reason.
+  assert.match((await fetchParentTitles(config, 'pat', [555], transport))[555].error, /Not returned by Azure DevOps/)
+  // A rejected PAT stops at once; no PAT reads nothing.
+  let calls = 0
+  const rejected = await fetchParentTitles(config, 'pat', [1, 2, 3], async () => { calls += 1; throw new Error('The PAT was rejected or has expired. Check your PAT.') })
+  assert.equal(calls, 1)
+  assert.deepEqual(Object.values(rejected).map((entry) => entry.error), Array(3).fill('The PAT was rejected or has expired. Check your PAT.'))
+  assert.deepEqual(await fetchParentTitles(config, ' ', [4], () => { throw new Error('never called') }), { 4: { error: 'No PAT in this browser for this server.' } })
+  assert.deepEqual(await fetchParentTitles(config, 'pat', [], transport), {})
+  // 450 Parents: three batches of at most 200.
+  const sizes = []
+  await fetchParentTitles(config, 'pat', Array.from({ length: 450 }, (_, at) => at + 1), async (request) => { sizes.push(request.ids.length); return { value: [] } })
+  assert.deepEqual(sizes, [200, 200, 50])
+})
+
+test('TVL-31: Tool List (Azure) and Validation Documents show every column the query selects, in SELECT order (TC-TVL-28)', () => {
+  const wiql = "SELECT [System.Id], [System.Title], [System.Parent], [Custom.ApproverName1], [Custom.ApproverFunction1], [Custom.ApproverApprovalDate1] FROM WorkItems WHERE [System.WorkItemType] = 'Document' ORDER BY [System.Title]"
+  // Saved at the fetch in another order and with a column the query no longer selects.
+  const saved = [{ ref: 'Custom.ApproverName1', name: 'ApproverName1' }, { ref: 'System.Title', name: 'Title' }, { ref: 'System.Id', name: 'ID' }, { ref: 'System.State', name: 'State' }, { ref: 'System.Parent', name: 'Parent' }]
+  assert.deepEqual(selectColumns(wiql, saved).map((column) => column.ref), ['System.Id', 'System.Title', 'System.Parent', 'Custom.ApproverName1', 'Custom.ApproverFunction1', 'Custom.ApproverApprovalDate1'])
+  assert.deepEqual(selectColumns(wiql, saved).map((column) => column.name), ['ID', 'Title', 'Parent', 'ApproverName1', 'Approver Function1', 'Approver Approval Date1'], 'named as at the fetch, else readable')
+  // Display names and any letter case resolve; without a query the saved columns stay.
+  assert.deepEqual(selectColumns('SELECT [id], [title], [Assigned To], [custom.validationcompleted] FROM WorkItems', [{ ref: 'Custom.ValidationCompleted', name: 'Validation Completed' }]).map((column) => [column.ref, column.name]), [['System.Id', 'ID'], ['System.Title', 'Title'], ['System.AssignedTo', 'Assigned To'], ['Custom.ValidationCompleted', 'Validation Completed']])
+  assert.equal(selectColumns('', saved), saved)
+})
+
+// TVL-33: the Tool Validations queries named Tool List / Validation Documents; Add query asks the category, pre-selected
+// by the automatic identification, and the confirmed choice is saved as the Validation Documents setting.
+test('TVL-33: the roles named Tool List and Validation Documents; the category pre-selected by name or columns (TC-TVL-30)', () => {
+  assert.deepEqual(toolRoleLabel, { tools: 'Tool List', documents: 'Validation Documents' })
+  assert.equal(toolQueryHowLabel.none, 'no Validation Documents query found: one query, counted as before')
+  assert.deepEqual(toolCategoryGuess(toolStream, { name: 'Tool Validations Signed documents' }), { role: 'documents', how: 'name' })
+  assert.deepEqual(toolCategoryGuess(toolStream, { name: 'Tool Validations B', query: docsProfile.query }), { role: 'documents', how: 'columns' })
+  assert.deepEqual(toolCategoryGuess(toolStream, { name: 'Tool Validations', viewName: '', query: 'SELECT [System.Id] FROM WorkItems' }), { role: 'tools', how: 'default' })
+})
+
+test('TVL-33: the category confirmed at Add query saved as the Validation Documents setting — a Tool List never becomes it (TC-TVL-30)', () => {
+  const tools = { ...toolsProfile }, docs = { ...docsProfile }
+  assert.equal(toolDocumentsSettingFor(toolStream, [tools, docs], undefined, 'tvd', 'documents'), 'Tool Validations Signed documents', 'Validation Documents: named in the setting')
+  assert.equal(toolDocumentsSettingFor(toolStream, [tools, docs], undefined, 'tv', 'tools'), undefined, 'Tool List as Automatic finds it: unchanged')
+  // A Tool List query whose name says documents: Automatic would take it for the Validation Documents query.
+  const listNamedDocs = { id: 'tvx', reason: 'Tool Validations docs list', role: 'release-source', query: 'SELECT [System.Id] FROM WorkItems' }
+  assert.equal(toolQueries(toolStream, [listNamedDocs], undefined).tools.id, 'tvx')
+  assert.equal(toolDocumentsSettingFor(toolStream, [listNamedDocs], undefined, 'tvx', 'tools'), noToolDocumentsQuery, 'alone: none, so a second connection added later never makes it the Validation Documents query')
+  assert.equal(toolDocumentsSettingFor(toolStream, [listNamedDocs, docs], undefined, 'tvx', 'tools'), 'Tool Validations Signed documents', 'the other one Automatic finds')
+  const plain = { ...docsProfile, id: 'tvp', reason: 'Tool Validations B', query: 'SELECT [System.Id] FROM WorkItems' }
+  assert.equal(toolDocumentsSettingFor(toolStream, [plain, listNamedDocs], undefined, 'tvx', 'tools'), noToolDocumentsQuery, 'no other one: none')
+  const after = toolQueries(toolStream, [plain, listNamedDocs], noToolDocumentsQuery)
+  assert.equal(after.documents, undefined, 'the Tool List query is not the Validation Documents query')
+  assert.equal(toolDocumentsSettingFor(toolStream, [tools], undefined, 'missing', 'documents'), undefined, 'an unknown connection changes nothing')
 })

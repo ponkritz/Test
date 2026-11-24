@@ -8,7 +8,7 @@ import { usePageNameClash } from '../usePageNames'
 import { utcToday } from '../businessTime'
 import { formatDate, formatDateTime } from '../format'
 import { windchillCell } from '../windchillViews'
-import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, hiddenPageChoices, listReason, parseToolValidations, tabOwnerCounts, tabOwnersBehind, tabOwnersLayout, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, colourLabel, defaultHighlights, highlightColours, highlightsProblem, maxHighlightDays, maxHighlights, setHighlights, sortBands, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile, type HighlightBand, type HighlightColour } from '../toolValidations'
+import { addSource, emptyMapping, categoryLabel, categoryOf, categoryProblem, feedsMasterList, setCategory, sourceCategories, type SourceCategory, azureFieldOptions, azureInputs, azureLock, completionDated, completionNote, dueFromText, isAzureKind, readsCompletion, cleanDays, daysLeftText, defaultValidityMonths, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, hiddenPageChoices, listReason, parseToolValidations, tabOwnerCounts, tabOwnersBehind, tabOwnersLayout, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, validityOf, bandCounts, bandFor, bandLabel, bandShort, bandsOf, colourLabel, defaultHighlights, highlightColours, highlightsProblem, maxHighlightDays, maxHighlights, setHighlights, sortBands, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile, type HighlightBand, type HighlightColour } from '../toolValidations'
 import { useToolValidationsEnv, type CustomTabsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
 import { KindField, OwnersField, PageNameField } from './PageDialogs'
@@ -38,6 +38,12 @@ const Swatch = ({ colour }: { colour: HighlightColour }) => <span className={`tv
 function BandLegend({ bands }: { bands: HighlightBand[] }) {
   if (!bands.length) return null
   return <p className="tvl-legend" aria-label="Due date highlights"><span className="muted">Highlighted:</span>{bands.map((band) => <span key={band.days} className="tvl-legend-item"><Swatch colour={band.colour} />{bandLabel(band)}</span>)}<span className="muted">(an overdue tool is in the first band; set on Setup)</span></p>
+}
+
+// TVL-06, TVL-29: the validation date with where it comes from — "(entered)" by hand, "(completion date)" when it is the
+// completion date of Azure DevOps (Stream mapping → Tool Validations queries → Completion date).
+function ValidationDate({ file, entry }: { file: ToolValidationsFile; entry: ToolEntry }) {
+  return <>{formatDate(entry.validationDate, '—')}{entry.manual.includes('validationDate') ? <small> (entered)</small> : completionDated(file, entry) ? <small> {completionNote}</small> : null}</>
 }
 
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
@@ -81,10 +87,10 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
     { id: 'status', label: 'Status', value: (row) => statusLabel[row.status], render: (row) => <Pill tone={pillTone[row.status]}>{statusLabel[row.status]}</Pill> },
     { id: 'name', label: 'Tool', value: (row) => row.entry.name },
     { id: 'version', label: 'Version', value: (row) => row.entry.version },
-    { id: 'due', label: 'Due date', value: (row) => row.due ?? '', render: (row) => row.due ? <>{formatDate(row.due)} <BandPill band={bandFor(bands, row.due, today)} /></> : 'No due date', title: (row) => `Due date: ${dueFromLabel[row.from]}`, firstSortDesc: false },
+    { id: 'due', label: 'Due date', value: (row) => row.due ?? '', render: (row) => row.due ? <>{formatDate(row.due)} <BandPill band={bandFor(bands, row.due, today)} /></> : 'No due date', title: (row) => `Due date: ${dueFromText(row.from, completionDated(file, row.entry))}`, firstSortDesc: false },
     { id: 'days', label: 'Days left', align: 'right', value: (row) => row.days ?? '', render: (row) => daysLeftText(row) || '—', exportValue: (row) => row.days ?? '' },
-    { id: 'from', label: 'Due date from', value: (row) => row.from === 'none' ? '' : dueFromLabel[row.from] },
-    { id: 'validated', label: 'Validation date', value: (row) => row.entry.validationDate ?? '', render: (row) => formatDate(row.entry.validationDate, '—') },
+    { id: 'from', label: 'Due date from', value: (row) => row.from === 'none' ? '' : dueFromText(row.from, completionDated(file, row.entry)) },
+    { id: 'validated', label: 'Validation date', value: (row) => row.entry.validationDate ?? '', render: (row) => <ValidationDate file={file} entry={row.entry} /> },
     { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => validityOf(row.entry).months ?? '', render: (row) => periodCell(row.entry), exportValue: (row) => periodExport(row.entry) },
     { id: 'sources', label: 'Sources', value: (row) => sourceNames(file, row.entry) || 'Added by hand', defaultHidden: true },
     { id: 'notes', label: 'Notes', value: (row) => row.entry.notes ?? '', defaultHidden: true },
@@ -117,7 +123,7 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
       <Metric label="No due date" value={count('none')} hint="No due date and no validation date" />
     </Metrics></div>
     <TablePanel title="Validation expiry" count={`${rows.length} of ${all.length} tools`}
-      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are on the Master list tab.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months) — {defaultValidityMonths} months when the tool has none (shown as “{defaultValidityMonths} (default)”). Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set. The Tool Owner and the list's co-owners make the window shown the team default with <strong>Set … days as team default</strong> (saved to Git, as Setup → Team settings).</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
+      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are on the Master list tab.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months) — {defaultValidityMonths} months when the tool has none (shown as “{defaultValidityMonths} (default)”). A tool from Azure DevOps is validated on its <strong>completion date</strong> (Stream mapping → Tool Validations queries → Completion date; Changed Date by default, which moves on any edit of the work item) unless its source maps another validation date. Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set. The Tool Owner and the list's co-owners make the window shown the team default with <strong>Set … days as team default</strong> (saved to Git, as Setup → Team settings).</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
       <DataTable id="tool-validations:expiry" rows={rows} rowKey={(row) => row.entry.key} columns={columns} exportName="Tool validation expiry" defaultSort={{ id: 'days' }} rowClassName={(row) => bandClass(bandFor(bands, row.due, today))}
         toolbar={<div className="tool-filter-bar">{windowField}
           <div className="segmented" role="group" aria-label="Status">{([['all', 'All'], ['overdue', `Overdue (${count('overdue')})`], ['due', `Due soon (${count('due')})`], ['none', `No due date (${count('none')})`]] as [StatusFilter, string][]).map(([key, label]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => setStatus(key)}>{label}</button>)}</div>
@@ -131,33 +137,40 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
 }
 
 // ---- reading a source (TVL-07) ----
-interface SourceRead { options: [string, string][]; rows: number; read: (mapping: ToolMapping) => ToolInput[]; missing: string; target: string }
+// TVL-32: `table` — every column of the source and its rows as text, for a Validation Documents source's tab.
+interface SourceTable { columns: [string, string][]; rows: Record<string, string>[] }
+interface SourceRead { options: [string, string][]; rows: number; read: (mapping: ToolMapping) => ToolInput[]; table: () => SourceTable; missing: string; target: string }
+const cellText = (value: unknown) => value == null ? '' : Array.isArray(value) ? value.join(', ') : String(value)
 function readSource(source: Pick<ToolSource, 'kind' | 'ref'>, data: SourceData): SourceRead {
-  const none = (missing: string, target: string): SourceRead => ({ options: [], rows: 0, read: () => [], missing, target })
+  const none = (missing: string, target: string): SourceRead => ({ options: [], rows: 0, read: () => [], table: () => ({ columns: [], rows: [] }), missing, target })
   if (source.kind === 'stream' || source.kind === 'azure') {
     const found = source.kind === 'stream' ? { name: 'Tool Validations', items: data.streamItems } : data.azure.find((entry) => entry.id === source.ref)
     if (!found) return none('That connection is not set up in this browser.', source.ref ?? '')
     const items = found.items ?? []
     if (!items.length) return none(`“${found.name}” has not been fetched in this browser yet (or has no items): fetch it first.`, found.name)
-    return { options: azureFieldOptions(items), rows: items.length, read: (mapping) => inputsFromRows(items, mapping, (item, field) => azureValue(item, field, data.patterns)), missing: '', target: found.name }
+    const table = (): SourceTable => {
+      const refs = [...new Set(items.flatMap((item) => Object.keys(item.fields ?? {})))].filter((ref) => ref !== 'System.Id' && ref !== 'System.Title')
+      return { columns: [['System.Id', 'ID'], ['System.Title', 'Title'], ...refs.map((ref): [string, string] => [ref, ref])], rows: items.map((item) => ({ ...Object.fromEntries(refs.map((ref) => [ref, cellText(item.fields?.[ref])])), 'System.Id': String(item.id), 'System.Title': item.title })) }
+    }
+    return { options: azureFieldOptions(items), rows: items.length, read: (mapping) => azureInputs(items, mapping, data.patterns, data.completionField), table, missing: '', target: found.name }
   }
   if (source.kind === 'windchill') {
     const found = data.windchill.find((entry) => entry.id === source.ref)
     if (!found) return none('That Windchill export is not in this browser.', source.ref ?? '')
     if (!found.rows?.length) return none(`“${found.name}” has no rows here yet: import it (or load it from Git) first.`, found.name)
     const rows = found.rows
-    return { options: found.columns.map((column): [string, string] => [column, column]), rows: rows.length, read: (mapping) => inputsFromRows(rows, mapping, (row, field) => field ? windchillCell(row, field) || undefined : undefined), missing: '', target: found.name }
+    return { options: found.columns.map((column): [string, string] => [column, column]), rows: rows.length, read: (mapping) => inputsFromRows(rows, mapping, (row, field) => field ? windchillCell(row, field) || undefined : undefined), table: () => ({ columns: found.columns.map((column): [string, string] => [column, column]), rows: rows.map((row) => Object.fromEntries(found.columns.map((column) => [column, windchillCell(row, column)]))) }), missing: '', target: found.name }
   }
   const page = data.pages.find((entry) => entry.id === source.ref)
   if (!page) return none('That table page is not in the menu (removed, or not read from Git yet).', source.ref ?? '')
   const rows = page.rows.filter((row) => !row.hidden)
-  return { options: page.columns.map((column): [string, string] => [column.id, column.name]), rows: rows.length, read: (mapping) => inputsFromRows(rows, mapping, (row, field) => { const value = field ? row.cells[field] : undefined; return Array.isArray(value) ? value.join(', ') || undefined : value || undefined }), missing: rows.length ? '' : `“${page.name}” has no rows yet.`, target: page.name }
+  return { options: page.columns.map((column): [string, string] => [column.id, column.name]), rows: rows.length, table: () => ({ columns: page.columns.map((column): [string, string] => [column.id, column.name]), rows: rows.map((row) => Object.fromEntries(page.columns.map((column) => [column.id, cellText(row.cells[column.id])]))) }), read: (mapping) => inputsFromRows(rows, mapping, (row, field) => { const value = field ? row.cells[field] : undefined; return Array.isArray(value) ? value.join(', ') || undefined : value || undefined }), missing: rows.length ? '' : `“${page.name}” has no rows yet.`, target: page.name }
 }
 const choicesFor = (kind: Exclude<ToolSourceKind, 'stream'>, data: SourceData): [string, string][] => kind === 'azure' ? data.azure.map((entry) => [entry.id, entry.name]) : kind === 'windchill' ? data.windchill.map((entry) => [entry.id, entry.name]) : data.pages.map((entry) => [entry.id, entry.name])
 
 // ---- TVL-10, TVL-12: the Master list ----
 type StateFilter = 'all' | EntryState
-type ToolDialogState = { kind: 'tool'; editing?: ToolEntry } | { kind: 'remove'; entry: ToolEntry }
+type ToolDialogState = { kind: 'tool'; editing?: ToolEntry } | { kind: 'notes'; entry: ToolEntry } | { kind: 'remove'; entry: ToolEntry }
 // The notices about the list's file in Git, on the Master list and on Setup: not connected, not readable, its save queue.
 function StoreNotices({ env }: { env: ToolValidationsEnv }) {
   const { store } = env
@@ -182,23 +195,26 @@ export function ToolMasterList() {
   const columns: DataColumn<ToolEntry>[] = [
     { id: 'name', label: 'Tool', value: (entry) => entry.name },
     { id: 'version', label: 'Version', value: (entry) => entry.version },
-    { id: 'validated', label: 'Validation date', value: (entry) => entry.validationDate ?? '', render: (entry) => <>{formatDate(entry.validationDate, '—')}{entry.manual.includes('validationDate') && <small> (entered)</small>}</> },
+    { id: 'validated', label: 'Validation date', value: (entry) => entry.validationDate ?? '', render: (entry) => <ValidationDate file={file} entry={entry} /> },
     { id: 'period', label: 'Validity (months)', align: 'right', value: (entry) => validityOf(entry).months ?? '', render: (entry) => <>{periodCell(entry)}{entry.manual.includes('validityMonths') && <small> (entered)</small>}</>, exportValue: (entry) => periodExport(entry) },
-    { id: 'due', label: 'Due date', value: (entry) => dueOf(entry).due ?? '', render: (entry) => { const due = dueOf(entry); return due.due ? <>{formatDate(due.due)} <BandPill band={bandFor(bands, due.due, today)} /> <small>({dueFromLabel[due.from]})</small></> : 'No due date' } },
+    { id: 'due', label: 'Due date', value: (entry) => dueOf(entry).due ?? '', render: (entry) => { const due = dueOf(entry); return due.due ? <>{formatDate(due.due)} <BandPill band={bandFor(bands, due.due, today)} /> <small>({dueFromText(due.from, completionDated(file, entry))})</small></> : 'No due date' } },
     { id: 'state', label: 'Status', value: (entry) => entryStateLabel[entryState(entry)], render: (entry) => <Pill tone={stateTone[entryState(entry)]}>{entryStateLabel[entryState(entry)]}</Pill> },
     { id: 'sources', label: 'Sources', value: (entry) => sourceNames(file, entry) || '—' },
     { id: 'notes', label: 'Notes', value: (entry) => entry.notes ?? '' },
     { id: 'added', label: 'Added', value: (entry) => entry.addedAt, render: (entry) => <>{formatDateTime(entry.addedAt)}{entry.addedBy && <small> · {entry.addedBy}</small>}</>, defaultHidden: true },
-    { id: 'actions', label: 'Actions', sortable: false, export: false, render: (entry) => <div className="button-row nowrap"><button type="button" className="ghost" disabled={Boolean(why)} title={why || `Edit ${entry.name}`} onClick={() => setDialog({ kind: 'tool', editing: entry })}>Edit</button><button type="button" className="text-button danger-text" disabled={Boolean(why)} title={why || `Remove ${entry.name}`} onClick={() => setDialog({ kind: 'remove', entry })}>Remove</button></div> },
+    // TVL-30: a tool from Azure DevOps is changed there — Edit disabled (Edit notes… for its notes), Remove too while
+    // Azure DevOps returns it.
+    { id: 'actions', label: 'Actions', sortable: false, export: false, render: (entry) => { const lock = azureLock(file, entry), noEdit = why || lock.edit, noRemove = why || lock.remove; return <div className="button-row nowrap"><button type="button" className="ghost" disabled={Boolean(noEdit)} title={noEdit || `Edit ${entry.name}`} onClick={() => setDialog({ kind: 'tool', editing: entry })}>Edit</button>{lock.edit && <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Edit the notes of ${entry.name} (the rest comes from Azure DevOps)`} onClick={() => setDialog({ kind: 'notes', entry })}>Edit notes…</button>}<button type="button" className="text-button danger-text" disabled={Boolean(noRemove)} title={noRemove || `Remove ${entry.name}`} onClick={() => setDialog({ kind: 'remove', entry })}>Remove</button></div> } },
   ]
+  const fromAzure = file.tools.some((entry) => azureLock(file, entry).edit)
   const close = () => setDialog(null)
   return <>
     <StoreNotices env={env} />
     {store.pending && why && <Notice tone="info">{mergeSummary(store.pending)} in the latest fetch of the Tool Validations query — shown here, saved to Git by the next Tool Owner or co-owner who opens the app.</Notice>}
     <TablePanel title="Master list" count={`${rows.length} of ${file.tools.length} tools`}
-      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
+      info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>A tool from <strong>Azure DevOps</strong> (the Tool Validations query or another query) is changed there: <strong>Edit</strong> is disabled for it, and <strong>Remove</strong> until Azure DevOps no longer returns it (Not in source now). Its validation date is the <strong>completion date</strong> unless its source maps another, and its due date that date + {defaultValidityMonths} months unless the source gives a period or a due date.</li><li>Rows are <strong>highlighted</strong> by how soon they are due, in the colours of the team's bands (Setup → Due date highlights), with the band named in the Due date cell.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
       action={<button type="button" className="primary" disabled={Boolean(why)} title={why || 'Add a tool by hand'} onClick={() => setDialog({ kind: 'tool' })}>＋ Add tool…</button>}>
-      <WriteBlocked reason={why} />
+      <WriteBlocked reason={why || (fromAzure ? 'Tools from Azure DevOps are changed there: Edit is disabled for them (Edit notes… changes their notes here), and Remove until Azure DevOps no longer returns them.' : '')} />
       <DataTable id="tool-validations:master" rows={rows} rowKey={(entry) => entry.key} columns={columns} exportName="Tool validations master list" defaultSort={{ id: 'name' }} rowClassName={(entry) => bandClass(bandFor(bands, dueOf(entry).due, today))}
         toolbar={<div className="tool-filter-bar">
           <div className="segmented" role="group" aria-label="Status">{([['all', 'All'], ['in-source', `In source (${countOf('in-source')})`], ['gone', `Not in source now (${countOf('gone')})`], ['manual', `Added by hand (${countOf('manual')})`]] as [StateFilter, string][]).map(([key, label]) => <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
@@ -209,6 +225,7 @@ export function ToolMasterList() {
         empty={<EmptyState title={file.tools.length ? 'No tools match the filters.' : 'The master list has no tools yet.'} detail={file.tools.length ? 'Reset filters to see every tool.' : 'Fetch the Tool Validations query (↻), merge a source (its tab, or Setup → Sources), or add a tool by hand.'} />} />
     </TablePanel>
     {dialog?.kind === 'tool' && <ToolDialog env={env} editing={dialog.editing} onClose={close} />}
+    {dialog?.kind === 'notes' && <NotesDialog env={env} entry={dialog.entry} onClose={close} />}
     {dialog?.kind === 'remove' && <RemoveDialog env={env} entry={dialog.entry} onClose={close} />}
   </>
 }
@@ -246,23 +263,25 @@ export function ToolSetup() {
 
 function SourcesPanel({ env, why, open }: { env: ToolValidationsEnv; why: string; open: (dialog: Dialog) => void }) {
   const file = env.store.shown
-  return <Panel title="Sources" info={<ul><li><strong>Tool Validations query</strong>: the connection named “Tool Validations”; its tools are added to the master list whenever its data is fetched.</li><li><strong>Another Azure DevOps query</strong>, a <strong>Windchill export</strong> or a <strong>manual list</strong> (a Table page of the app, e.g. one added under On-Demand): read on its own page, shown on a tab of its own here (its rows as mapped) and merged with <strong>Merge into master list</strong>, which shows what changes before it saves.</li><li>Each source is read with its <strong>field mapping</strong> — which field or column gives the tool name, version, validation date, validity period and due date. Until the mapping is saved, the app's guesses are used (marked “Guessed”).</li></ul>}
+  return <Panel title="Sources" info={<ul><li><strong>Tool Validations query</strong>: the connection named “Tool Validations”; its tools are added to the master list whenever its data is fetched.</li><li><strong>Another Azure DevOps query</strong>, a <strong>Windchill export</strong> or a <strong>manual list</strong> (a Table page of the app, e.g. one added under On-Demand): read on its own page, shown on a tab of its own here (its rows as mapped) and merged with <strong>Merge into master list</strong>, which shows what changes before it saves.</li><li>Each source is read with its <strong>field mapping</strong> — which field or column gives the tool name, version, validation date, validity period and due date. Until the mapping is saved, the app's guesses are used (marked “Guessed”).</li><li><strong>Category</strong>, asked when a source is added and changed in its Edit mapping…: only a <strong>Tool List</strong> feeds the master list. A <strong>Validation Documents</strong> source keeps its own tab with every column of its rows and never adds to or changes the master list; changed to Validation Documents, the tools it fed stay, marked “Not in source now” for it.</li></ul>}
     action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || 'Add another source'} onClick={() => open({ kind: 'add-source' })}>＋ Add source…</button>}>
     <WriteBlocked reason={why} />
-    <div className="azure-table tool-sources"><table><thead><tr><th>Source</th><th>Reads</th><th>Field mapping</th><th className="num">Tools</th><th>Last merged</th><th>Actions</th></tr></thead><tbody>
+    <div className="azure-table tool-sources"><table><thead><tr><th>Source</th><th>Category</th><th>Reads</th><th>Field mapping</th><th className="num">Tools</th><th>Last merged</th><th>Actions</th></tr></thead><tbody>
       {file.sources.map((source) => {
         const read = readSource(source, env.sources)
         const mapping = mappingFor(source, read.options)
         const tools = file.tools.filter((entry) => entry.sources[source.id]?.inSource).length
+        const feeds = feedsMasterList(source)
         return <tr key={source.id}>
           <td><strong>{source.name}</strong><small>{kindLabel(source.kind)}</small></td>
+          <td><Pill tone={feeds ? 'info' : 'neutral'}>{categoryLabel(categoryOf(source))}</Pill></td>
           <td><small className="plain">{read.target || '—'}{read.missing ? ` — ${read.missing}` : ` · ${read.rows} row${read.rows === 1 ? '' : 's'}`}</small></td>
-          <td><small className="plain">{source.mapping.confirmed ? 'Saved' : <Pill tone="warning">Guessed</Pill>} {mappingFields.filter((field) => mapping[field.key]).map((field) => `${field.label.replace(' (optional)', '')}: ${optionLabel(read.options, mapping[field.key]!)}`).join(' · ') || 'Nothing mapped'}</small></td>
-          <td className="num">{tools}</td>
-          <td><small className="plain">{source.mergedAt ? `${formatDateTime(source.mergedAt)}${source.mergedBy ? ` · ${source.mergedBy}` : ''}` : source.kind === 'stream' ? 'At each fetch' : 'Not yet'}</small></td>
+          <td><small className="plain">{!feeds ? 'Not needed — every column is listed on its tab' : <>{source.mapping.confirmed ? 'Saved' : <Pill tone="warning">Guessed</Pill>} {mappingFields.filter((field) => mapping[field.key]).map((field) => `${field.label.replace(' (optional)', '')}: ${optionLabel(read.options, mapping[field.key]!)}`).join(' · ') || 'Nothing mapped'}</>}</small></td>
+          <td className="num">{feeds ? tools : '—'}</td>
+          <td><small className="plain">{!feeds ? 'Never (Validation Documents)' : source.mergedAt ? `${formatDateTime(source.mergedAt)}${source.mergedBy ? ` · ${source.mergedBy}` : ''}` : source.kind === 'stream' ? 'At each fetch' : 'Not yet'}</small></td>
           <td><div className="button-row nowrap">
             <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Set which fields of ${source.name} are read`} onClick={() => open({ kind: 'mapping', source })}>Edit mapping…</button>
-            {source.kind !== 'stream' && <button type="button" className="ghost" disabled={Boolean(why || read.missing)} title={why || read.missing || `Merge the tools of ${source.name} into the master list`} onClick={() => open({ kind: 'merge', source })}>Merge into master list…</button>}
+            {source.kind !== 'stream' && feeds && <button type="button" className="ghost" disabled={Boolean(why || read.missing)} title={why || read.missing || `Merge the tools of ${source.name} into the master list`} onClick={() => open({ kind: 'merge', source })}>Merge into master list…</button>}
             {source.kind !== 'stream' && <button type="button" className="text-button danger-text" disabled={Boolean(why)} title={why || `Remove the source ${source.name}`} onClick={() => open({ kind: 'remove-source', source })}>Remove</button>}
           </div></td>
         </tr>
@@ -278,6 +297,30 @@ const howToLoad = (source: ToolSource) => source.kind === 'azure' ? 'Open its pa
   : source.kind === 'windchill' ? 'Import the Windchill export (Import Windchill export), or load it from Git on its page, then come back to this tab.'
   : 'Open the table page in the menu and add its rows (or wait until it is read from Git), then come back to this tab.'
 function SourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSource }) {
+  return feedsMasterList(source) ? <ToolListSourceTab env={env} source={source} /> : <DocumentsSourceTab env={env} source={source} />
+}
+// TVL-32: a Validation Documents source's tab — its rows with every column of the source, in its order; nothing is merged.
+interface DocumentRow { index: number; cells: Record<string, string> }
+function DocumentsSourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSource }) {
+  const [dialog, setDialog] = useState<'mapping' | null>(null)
+  const why = env.store.reason
+  const read = useMemo(() => readSource(source, env.sources), [source, env.sources])
+  const table = useMemo(() => read.missing ? { columns: [], rows: [] } : read.table(), [read])
+  const rows: DocumentRow[] = table.rows.map((cells, index) => ({ index, cells }))
+  const columns: DataColumn<DocumentRow>[] = table.columns.map(([key, label]) => ({ id: `c:${key}`, label, value: (row) => row.cells[key] ?? '' }))
+  return <>
+    <TablePanel title={source.name} detail={`${kindLabel(source.kind)} · ${categoryLabel('documents')} · reads ${read.target || '—'}`} count={read.missing ? undefined : `${rows.length} row${rows.length === 1 ? '' : 's'} · not in the master list`}
+      info={<ul><li>A <strong>Validation Documents</strong> source: its rows as they are read in this browser, with <strong>every column</strong> of the source in its order — no field mapping is needed.</li><li>It <strong>never adds to or changes the master list</strong>; only a Tool List source does. Change its category with <strong>Edit mapping…</strong> (Setup → Sources too).</li><li>The source is set up under Setup → Sources; removing it there removes this tab.</li></ul>}
+      action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || `Change the category of ${source.name}`} onClick={() => setDialog('mapping')}>Edit mapping…</button>}>
+      <WriteBlocked reason={why} />
+      {read.missing ? <EmptyState title={read.missing} detail={howToLoad(source)} />
+        : <DataTable id={`tool-validations:documents:${source.id}`} rows={rows} rowKey={(row) => String(row.index)} columns={columns} exportName={`${source.name} (validation documents)`}
+          empty={<EmptyState title={`${read.target} has no rows here yet.`} />} />}
+    </TablePanel>
+    {dialog === 'mapping' && <MappingDialog env={env} source={source} onClose={() => setDialog(null)} />}
+  </>
+}
+function ToolListSourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSource }) {
   const [dialog, setDialog] = useState<'mapping' | 'merge' | null>(null)
   const why = env.store.reason, file = env.store.shown
   const read = useMemo(() => readSource(source, env.sources), [source, env.sources])
@@ -285,18 +328,19 @@ function SourceTab({ env, source }: { env: ToolValidationsEnv; source: ToolSourc
   const listed = new Set(file.tools.filter((entry) => entry.sources[source.id]?.inSource).map((entry) => entry.key))
   const rows: SourceRow[] = read.missing ? [] : read.read(mapping).map((input, index) => ({ index, input, listed: listed.has(toolKey(input.name, input.version)) }))
   const tools = new Set(rows.map((row) => toolKey(row.input.name, row.input.version))).size
+  const completion = readsCompletion({ kind: source.kind, mapping: { ...mapping, confirmed: true } })
   const columns: DataColumn<SourceRow>[] = [
     { id: 'name', label: 'Tool', value: (row) => row.input.name },
     { id: 'version', label: 'Version', value: (row) => row.input.version },
-    { id: 'validated', label: 'Validation date', value: (row) => row.input.validationDate ?? '', render: (row) => formatDate(row.input.validationDate, '—') },
+    { id: 'validated', label: 'Validation date', value: (row) => row.input.validationDate ?? '', render: (row) => <>{formatDate(row.input.validationDate, '—')}{completion && row.input.validationDate && <small> {completionNote}</small>}</> },
     { id: 'period', label: 'Validity (months)', align: 'right', value: (row) => validityOf(row.input).months ?? '', render: (row) => periodCell(row.input), exportValue: (row) => periodExport(row.input) },
-    { id: 'due', label: 'Due date', value: (row) => dueOf({ ...row.input, manual: [] }).due ?? '', render: (row) => { const due = dueOf({ ...row.input, manual: [] }); return due.due ? <>{formatDate(due.due)} <small>({dueFromLabel[due.from]})</small></> : '—' } },
+    { id: 'due', label: 'Due date', value: (row) => dueOf({ ...row.input, manual: [] }).due ?? '', render: (row) => { const due = dueOf({ ...row.input, manual: [] }); return due.due ? <>{formatDate(due.due)} <small>({dueFromText(due.from, completion)})</small></> : '—' } },
     { id: 'listed', label: 'Master list', value: (row) => row.listed ? 'Merged' : 'Not merged yet', render: (row) => <Pill tone={row.listed ? 'open' : 'neutral'}>{row.listed ? 'Merged' : 'Not merged yet'}</Pill> },
   ]
   const close = () => setDialog(null)
   return <>
     {!source.mapping.confirmed && <Notice tone="warning">The field mapping of {source.name} is still the app's guess: check it with Edit mapping… before merging.</Notice>}
-    <TablePanel title={source.name} detail={`${kindLabel(source.kind)} · reads ${read.target || '—'}`} count={read.missing ? undefined : `${rows.length} row${rows.length === 1 ? '' : 's'} · ${tools} tool${tools === 1 ? '' : 's'}`}
+    <TablePanel title={source.name} detail={`${kindLabel(source.kind)} · ${categoryLabel('tools')} · reads ${read.target || '—'}`} count={read.missing ? undefined : `${rows.length} row${rows.length === 1 ? '' : 's'} · ${tools} tool${tools === 1 ? '' : 's'}`}
       info={<ul><li>The rows of this source as they are read in this browser with its <strong>field mapping</strong> (tool, version, validation date, validity period, due date) — the same rows <strong>Merge into master list…</strong> brings in.</li><li><strong>Master list</strong> says whether the tool is in the master list from this source (merged before). A row without a tool name is not read.</li><li>The source is set up under Setup → Sources; removing it there removes this tab, its tools stay in the list.</li></ul>}
       action={<>
         <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Set which fields of ${source.name} are read`} onClick={() => setDialog('mapping')}>Edit mapping…</button>
@@ -354,6 +398,27 @@ function ToolDialog({ env, editing, onClose }: { env: ToolValidationsEnv; editin
   </Modal>
 }
 
+// TVL-30: the notes of a tool from Azure DevOps — the one field changed here; the rest is shown read only.
+function NotesDialog({ env, entry, onClose }: { env: ToolValidationsEnv; entry: ToolEntry; onClose: () => void }) {
+  const [notes, setNotes] = useState(entry.notes ?? '')
+  const { busy, error, setError, run } = useSaving(env, onClose)
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    const form = { ...editOf(entry), notes }
+    const problem = editProblem(env.store.file, form, entry.key)
+    if (problem) { setError(problem); return }
+    void run(saveTool(env.store.file, form, stampNow(), env.who, entry.key), `Tool Validations: notes of ${entry.name}${entry.version ? ` ${entry.version}` : ''}`, `Tool Validations · notes of ${entry.name}`)
+  }
+  return <Modal title={`Edit notes of ${entry.name}`} eyebrow="TOOL VALIDATIONS · MASTER LIST" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={submit}>
+      <p className="muted">{entry.name}{entry.version ? ` ${entry.version}` : ''} comes from Azure DevOps ({sourceNames(env.store.file, entry)}): its dates are changed there. Only the notes are kept here.</p>
+      <label>Notes (optional)<textarea maxLength={2000} rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+      {error && <Notice tone="error">{error}</Notice>}
+      <Actions busy={busy} onCancel={onClose} label="Save to Git" why={env.store.reason} />
+    </form>
+  </Modal>
+}
+
 function RemoveDialog({ env, entry, onClose }: { env: ToolValidationsEnv; entry: ToolEntry; onClose: () => void }) {
   const { busy, error, run } = useSaving(env, onClose)
   const holding = Object.entries(entry.sources).filter(([, link]) => link.inSource).map(([id]) => env.store.file.sources.find((source) => source.id === id)?.name ?? id)
@@ -362,7 +427,7 @@ function RemoveDialog({ env, entry, onClose }: { env: ToolValidationsEnv; entry:
       <p>Remove <strong>{entry.name}{entry.version ? ` ${entry.version}` : ''}</strong> from the master list for everyone, with its dates and notes? {toolValidationsFile} keeps its history in Git.</p>
       {holding.length > 0 && <Notice tone="warning">It is still in {holding.join(', ')}: it comes back the next time {holding.length === 1 ? 'that source is' : 'those sources are'} read (fetched or merged).</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
-      <Actions busy={busy} onCancel={onClose} label={`Remove ${entry.name}`} why={env.store.reason} danger />
+      <Actions busy={busy} onCancel={onClose} label={`Remove ${entry.name}`} why={env.store.reason || azureLock(env.store.file, entry).remove} danger />
     </form>
   </Modal>
 }
@@ -472,7 +537,14 @@ function HighlightsDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: 
   </Modal>
 }
 
+// TVL-32: the Category question — Tool List or Validation Documents, required; nothing chosen until the person picks.
+function CategoryField({ value, onChange }: { value: SourceCategory | ''; onChange: (category: SourceCategory) => void }) {
+  return <fieldset className="pgb-kinds"><legend>Category</legend>
+    {sourceCategories.map((entry) => <div key={entry.key} className="pgb-kind"><label className="check"><input type="radio" name="source-category" required aria-describedby={`source-category-${entry.key}`} checked={value === entry.key} onChange={() => onChange(entry.key)} />{entry.label}</label><small id={`source-category-${entry.key}`}>{entry.detail}</small></div>)}
+  </fieldset>
+}
 function AddSourceDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: () => void }) {
+  const [category, setCategoryChoice] = useState<SourceCategory | ''>('')
   const [kind, setKind] = useState<Exclude<ToolSourceKind, 'stream'>>('windchill')
   const choices = choicesFor(kind, env.sources)
   const [ref, setRef] = useState('')
@@ -482,16 +554,19 @@ function AddSourceDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: (
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const label = name.trim() || chosen?.[1] || ''
-    const problem = sourceProblem(env.store.file, kind, ref, label)
-    if (problem) { setError(problem); return }
+    const problem = categoryProblem(category) || sourceProblem(env.store.file, kind, ref, label)
+    if (problem || !category) { setError(problem); return }
     const read = readSource({ kind, ref }, env.sources)
-    void run(addSource(env.store.file, { kind, name: label, ref, mapping: guessMapping(kind, read.options) }), `Tool Validations: add source ${label} (${kindLabel(kind)})`, `Tool Validations · add source ${label}`)
+    const mapping = category === 'tools' ? guessMapping(kind, read.options) : emptyMapping()
+    void run(addSource(env.store.file, { kind, name: label, ref, mapping, category }), `Tool Validations: add source ${label} (${kindLabel(kind)}, ${categoryLabel(category)})`, `Tool Validations · add source ${label}`)
   }
   return <Modal title="Add a source" eyebrow="TOOL VALIDATIONS · SOURCES" onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={submit}>
       <label>Kind<select value={kind} onChange={(event) => { setKind(event.target.value as Exclude<ToolSourceKind, 'stream'>); setRef(''); setName('') }}>{sourceKinds.filter((entry) => entry.key !== 'stream').map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select><small>{sourceKinds.find((entry) => entry.key === kind)?.detail}</small></label>
       <label>{kind === 'azure' ? 'Connection' : kind === 'windchill' ? 'Windchill export' : 'Table page'}<select required value={ref} onChange={(event) => { setRef(event.target.value); setName(choices.find(([key]) => key === event.target.value)?.[1] ?? '') }}><option value="">Choose…</option>{choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>{choices.length ? 'Its data is read in this browser when it is merged.' : kind === 'azure' ? 'No other connection is set up in this browser.' : kind === 'windchill' ? 'No Windchill export is imported in this browser.' : 'No table page yet: add one (＋ Add page…) with columns such as Tool, Version, Validation date, Validity period and Due date.'}</small></label>
       <label>Name<input required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /><small>How the source is listed in the master list.</small></label>
+      <CategoryField value={category} onChange={(next) => { setCategoryChoice(next); setError('') }} />
+      {category === 'documents' && <Notice tone="info">No field mapping is needed: its tab lists every column of its rows. It never adds to or changes the master list.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <Actions busy={busy} onCancel={onClose} label="Add source" why={env.store.reason} />
     </form>
@@ -501,22 +576,39 @@ function AddSourceDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: (
 function MappingDialog({ env, source, onClose }: { env: ToolValidationsEnv; source: ToolSource; onClose: () => void }) {
   const read = useMemo(() => readSource(source, env.sources), [source, env.sources])
   const [mapping, setMappingDraft] = useState<ToolMapping>(() => mappingFor(source, read.options))
+  // TVL-32: the category, changed here (the Tool Validations query stays a Tool List).
+  const [category, setCategoryChoice] = useState<SourceCategory>(categoryOf(source))
   const { busy, error, setError, run } = useSaving(env, onClose)
-  const inputs = read.missing ? [] : read.read(mapping)
+  const inputs = read.missing || category === 'documents' ? [] : read.read(mapping)
   const tools = new Set(inputs.map((input) => `${input.name}@${input.version}`)).size
+  const fed = env.store.file.tools.filter((entry) => entry.sources[source.id]?.inSource).length
   const options = (current?: string): [string, string][] => current && !read.options.some(([key]) => key === current) ? [...read.options, [current, `${current} (not in the data here)`]] : read.options
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    if (category === 'documents') {
+      if (categoryOf(source) === 'documents') { onClose(); return }
+      const result = setCategory(env.store.file, source.id, 'documents', stampNow(), env.who || undefined)
+      void run(result.file, `Tool Validations: ${source.name} is Validation Documents${result.gone.length ? ` — ${result.gone.length} no longer in the source` : ''}`, `Tool Validations · category of ${source.name}`)
+      return
+    }
     if (!mapping.name) { setError('Choose the field that gives the tool name.'); return }
-    void run(setMapping(env.store.file, source.id, mapping), `Tool Validations: field mapping of ${source.name}`, `Tool Validations · field mapping of ${source.name}`)
+    const changed = category !== categoryOf(source)
+    void run(setMapping(setCategory(env.store.file, source.id, 'tools', stampNow(), env.who || undefined).file, source.id, mapping), `Tool Validations: field mapping of ${source.name}${changed ? ' (Tool List)' : ''}`, `Tool Validations · field mapping of ${source.name}`)
   }
   return <Modal title={`Field mapping of ${source.name}`} eyebrow="TOOL VALIDATIONS · SOURCES" wide onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={submit}>
+      {source.kind === 'stream' ? <p className="muted">Category: <strong>{categoryLabel('tools')}</strong> — the Tool Validations query is always the Tool List; its Validation Documents query is set in Admin → Streams → Stream mapping → Tool Validations queries.</p>
+        : <CategoryField value={category} onChange={(next) => { setCategoryChoice(next); setError('') }} />}
+      {category === 'documents' ? <>
+        <Notice tone="info">A Validation Documents source needs no field mapping: its tab lists every column of its rows. It never adds to or changes the master list.</Notice>
+        {categoryOf(source) === 'tools' && fed > 0 && <Notice tone="warning">{fed} tool{fed === 1 ? '' : 's'} of the master list came from {source.name}: {fed === 1 ? 'it stays' : 'they stay'} in the list, marked “Not in source now” for this source. Nothing is deleted.</Notice>}
+      </> : <>
       {!source.mapping.confirmed && <Notice tone="warning">These are the app's guesses — check each field against the data, then save the mapping.</Notice>}
       {read.missing && <Notice tone="info">{read.missing} The fields offered are the saved ones only.</Notice>}
-      {mappingFields.map((field) => <label key={field.key}>{field.label}<select required={field.required} value={mapping[field.key] ?? ''} onChange={(event) => setMappingDraft((current) => ({ ...current, [field.key]: event.target.value || undefined }))}><option value="">{field.required ? 'Choose…' : 'None'}</option>{options(mapping[field.key]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>{field.help}</small></label>)}
+      {mappingFields.map((field) => <label key={field.key}>{field.label}<select required={field.required} value={mapping[field.key] ?? ''} onChange={(event) => setMappingDraft((current) => ({ ...current, [field.key]: event.target.value || undefined }))}><option value="">{field.required ? 'Choose…' : field.key === 'validationDate' && isAzureKind(source.kind) ? 'None — the completion date' : 'None'}</option>{options(mapping[field.key]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>{field.help}{field.key === 'validationDate' && isAzureKind(source.kind) ? ' From Azure DevOps: the completion date (Stream mapping → Tool Validations queries) unless another field is chosen.' : ''}</small></label>)}
       <label>Validity period numbers are in<select value={mapping.periodUnit} onChange={(event) => setMappingDraft((current) => ({ ...current, periodUnit: event.target.value === 'years' ? 'years' : 'months' }))}><option value="months">Months</option><option value="years">Years</option></select><small>For a plain number; a text with its unit (“2 years”, “24 months”) is read as written.</small></label>
       <p className="muted" role="status">{read.missing ? '' : `${read.rows} row${read.rows === 1 ? '' : 's'} read here give ${tools} tool${tools === 1 ? '' : 's'} with this mapping.`}</p>
+      </>}
       {error && <Notice tone="error">{error}</Notice>}
       <Actions busy={busy} onCancel={onClose} label="Save to Git" why={env.store.reason} />
     </form>

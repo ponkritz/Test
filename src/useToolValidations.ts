@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { recordJob } from './backgroundJobs'
 import { outcomeText } from './gitSaveQueue'
-import { listReason, azureValue, emptyFile, inputsFromRows, mappingFor, markMerged, mergeSource, mergeSummary, parseToolValidations, serializeToolValidations, streamSourceId, toolValidationsFile, azureFieldOptions, type Refused, type ToolValidationsFile } from './toolValidations'
+import { listReason, azureInputs, emptyFile, mappingFor, markMerged, mergeSource, mergeSummary, parseToolValidations, serializeToolValidations, streamSourceId, toolValidationsFile, azureFieldOptions, type Refused, type ToolValidationsFile } from './toolValidations'
 import type { AzureWorkItem } from './domain'
 import type { NamingPattern } from './namingPatterns'
 import type { GitStorage } from './useGitStorage'
@@ -23,7 +23,9 @@ const cacheKey = 'demand-planning-tool-validations-v1'
 function cached(): { file: ToolValidationsFile; refused: Refused[] } { try { return parseToolValidations(localStorage.getItem(cacheKey)) } catch { return { file: emptyFile(), refused: [] } } }
 function remember(text: string | null) { try { if (text) localStorage.setItem(cacheKey, text); else localStorage.removeItem(cacheKey) } catch { /* this visit only */ } }
 
-export interface StreamData { items?: AzureWorkItem[]; fetchedAt?: string; patterns: NamingPattern[] }
+// completionField: the completion date of the Tools query (TVL-20, releaseSourceSettings.toolValidations), the
+// validation date of its tools unless the mapping names another (TVL-29).
+export interface StreamData { items?: AzureWorkItem[]; fetchedAt?: string; patterns: NamingPattern[]; completionField?: string }
 // blocked: why nothing can be saved here at all (Git not connected or read-only, the sample, View as); '' otherwise.
 export interface ToolWriter { viewer: Pick<Viewer, 'email' | 'readOnly' | 'manager'>; blocked: string; by: string }
 export function useToolValidations(git: GitStorage, stream: StreamData, writer: ToolWriter) {
@@ -63,7 +65,7 @@ export function useToolValidations(git: GitStorage, stream: StreamData, writer: 
   }, [git])
 
   // TVL-04: the Tool Validations query's tools merged in memory, so everyone sees the latest fetch.
-  const { items, fetchedAt, patterns } = stream
+  const { items, fetchedAt, patterns, completionField } = stream
   // The time a tool is added when the fetch carries none (older saved data): when this app was opened.
   const [openedAt] = useState(() => new Date().toISOString().slice(0, 19) + 'Z')
   const streamSource = state.file.sources.find((source) => source.id === streamSourceId)
@@ -72,8 +74,8 @@ export function useToolValidations(git: GitStorage, stream: StreamData, writer: 
     if (!items?.length || !streamSource) return null
     const mapping = mappingFor(streamSource, options)
     if (!mapping.name) return null
-    return mergeSource(state.file, streamSourceId, inputsFromRows(items, mapping, (item, field) => azureValue(item, field, patterns)), fetchedAt ?? openedAt, writer.by || undefined)
-  }, [items, streamSource, options, patterns, state.file, fetchedAt, openedAt, writer.by])
+    return mergeSource(state.file, streamSourceId, azureInputs(items, mapping, patterns, completionField), fetchedAt ?? openedAt, writer.by || undefined)
+  }, [items, streamSource, options, patterns, completionField, state.file, fetchedAt, openedAt, writer.by])
   const pending = auto && auto.file !== state.file ? auto : null
   // Saved by the app of someone who may edit the list, once per fetch and version of the list.
   const tried = useRef('')
@@ -122,6 +124,8 @@ export interface SourceData {
   pages: { id: string; name: string; columns: { id: string; name: string }[]; rows: { cells: Record<string, string | string[]>; hidden?: unknown }[] }[]
   streamItems?: AzureWorkItem[]
   patterns: NamingPattern[]
+  // TVL-29: the completion date field of the Tools query (TVL-20), the validation date of the Azure DevOps sources' tools.
+  completionField?: string
 }
 export const ToolValidationsContext = createContext<ToolValidationsEnv | null>(null)
 export const useToolValidationsEnv = () => useContext(ToolValidationsContext)

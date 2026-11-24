@@ -19,6 +19,9 @@ import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 // again without touching those added by hand (TC-TVL-22), a dashboard block with Show expiry status off (TC-TVL-23).
 // TVL-27, TVL-28: the Tool Owner sets the due date highlights on Setup; the Master list and the Expiry list tint the rows
 // with a pill and a legend; a Team Member sees them read only (TC-TVL-25, UAT).
+// TVL-32: the Tool Owner adds a Validation Documents source — its tab lists its rows with every column, the master list
+// unchanged — and a Tool List source whose tools are appended; changed to Validation Documents, its tools stay, "Not in
+// source now" (TC-TVL-31, UAT).
 // GitHub and Azure DevOps are mocked; nothing leaves the machine.
 let app
 before(async () => { app = await startApp() })
@@ -47,8 +50,8 @@ const setupReader = () => {
   localStorage.setItem('demand-planning-git-token-v1', 'test-token')
   sessionStorage.setItem('demand-planning-result-tab-v1', JSON.stringify({ 'azure:Tool Validations': 'tool-master' }))
 }
-// Synthetic validation documents: Minitab 21 (two documents, approved two years before 30 days from now, valid 24 months:
-// due in 30 days), LabVIEW 2020 (due date 10 days ago: overdue), Python 3.11 (no dates), JMP 17 (valid 36 months from a
+// Synthetic validation documents: Minitab 21 (two documents, approved — and last changed, the completion date that dates
+// them, TVL-29 — two years before 30 days from now, valid 24 months: due in 30 days), LabVIEW 2020 (due date 10 days ago: overdue), Python 3.11 (no dates), JMP 17 (valid 36 months from a
 // month ago: due later).
 const documents = () => [
   { id: 201, title: 'Minitab 21 Validation Plan', area: 'DHP\\Tool Validations\\Minitab', iteration: 'DHP\\Release 21', approved: `${yearsBack(day(28), 2)}T09:00:00Z`, period: '24' },
@@ -56,7 +59,7 @@ const documents = () => [
   { id: 203, title: 'LabVIEW 2020 Validation Report', area: 'DHP\\Tool Validations\\LabVIEW', iteration: 'DHP\\Release 2020', due: `${day(-10)}T00:00:00Z` },
   { id: 204, title: 'Python 3.11 Validation Report', area: 'DHP\\Tool Validations', iteration: 'DHP' },
   { id: 205, title: 'JMP 17 Validation Report', area: 'DHP\\Tool Validations\\JMP', iteration: 'DHP\\Release 17', approved: `${day(-30)}T09:00:00Z`, period: '3 years' },
-].map((entry) => ({ id: entry.id, rev: 1, fields: { 'System.Id': entry.id, 'System.Title': entry.title, 'System.WorkItemType': 'Document', 'System.State': 'Approved', 'System.AreaPath': entry.area, 'System.IterationPath': entry.iteration, 'System.TeamProject': 'DHP', ...(entry.approved ? { 'Custom.AuthorApprovalDate': entry.approved } : {}), ...(entry.period ? { 'Custom.ValidityPeriod': entry.period } : {}), ...(entry.due ? { 'Microsoft.VSTS.Scheduling.DueDate': entry.due } : {}) } }))
+].map((entry) => ({ id: entry.id, rev: 1, fields: { 'System.Id': entry.id, 'System.Title': entry.title, 'System.WorkItemType': 'Document', 'System.State': 'Approved', 'System.AreaPath': entry.area, 'System.IterationPath': entry.iteration, 'System.TeamProject': 'DHP', ...(entry.approved ? { 'Custom.AuthorApprovalDate': entry.approved, 'System.ChangedDate': entry.approved } : {}), ...(entry.period ? { 'Custom.ValidityPeriod': entry.period } : {}), ...(entry.due ? { 'Microsoft.VSTS.Scheduling.DueDate': entry.due } : {}) } }))
 // A manual list kept as a Table page of the app (On-Demand): LabVIEW (also in the query) and Polyspace (only here).
 const toolRegister = () => JSON.stringify({ schema: 1, kind: 'on-demand-page', id: 'tool-register', name: 'Tool register', description: '', keyPrefix: 'TR', insights: [],
   columns: [{ id: 'c-tool', name: 'Tool', type: 'text', options: [], required: true }, { id: 'c-version', name: 'Version', type: 'text', options: [], required: false }, { id: 'c-due', name: 'Due date', type: 'date', options: [], required: false }],
@@ -126,7 +129,7 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   // Stream mapping → Tool Validations → Add query: the connection, fetched at once.
   await navigate(page, /Streams$/)
   const mapping = page.locator('.connection-panel', { hasText: 'STEP 2' })
-  // The stream's own row (TVL-19 adds a "Tool Validations · Signed documents" row below it).
+  // The stream's own row (TVL-19 adds a "Tool Validations · Validation Documents" row below it, TVL-33).
   const row = mapping.locator('tbody tr').filter({ has: page.locator('td:first-child strong', { hasText: /^Tool Validations$/ }) })
   await row.getByRole('button', { name: 'Add query' }).click()
   const form = page.getByRole('dialog', { name: 'New connection' })
@@ -218,7 +221,7 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   await tabs.getByRole('tab', { name: 'Master list' }).click()
   await master.locator('tbody tr').first().waitFor()
   assert.equal((await rowsOf(master)).length, 4)
-  assert.equal(await master.locator('.write-blocked').count(), 0, 'nothing blocked for the Tool Owner')
+  assert.match(await text(master.locator('.write-blocked')), /^Tools from Azure DevOps are changed there/, 'nothing blocked for the Tool Owner but the tools of the query (TVL-30)')
   await master.getByRole('button', { name: '＋ Add tool…' }).click()
   const add = page.getByRole('dialog', { name: 'Add a tool' })
   await add.getByLabel('Tool name').fill('Excel Validator')
@@ -268,6 +271,7 @@ test('TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools la
   await addSource.locator('label', { hasText: /^Kind/ }).locator('select').selectOption('ondemand')
   await addSource.locator('label', { hasText: /^Table page/ }).locator('select').selectOption('tool-register')
   assert.equal(await addSource.locator('label', { hasText: /^Name/ }).locator('input').inputValue(), 'Tool register')
+  await addSource.getByRole('radio', { name: 'Tool List' }).check()
   await addSource.getByRole('button', { name: 'Add source' }).click()
   await addSource.waitFor({ state: 'detached' })
   const register = sources.locator('tbody tr', { hasText: 'Tool register' })
@@ -348,8 +352,8 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   assert.match(await text(page.locator('.tool-expiry-counts')), /Overdue 2 .*Due in the next 45 days 2 .*No due date 0/, 'the team default from Git: 45 days; SAS and R have a due date (default)')
   // TVL-06, TVL-08: the defaulted due date, the days left and "(default)" on the Expiry list.
   const defaulted = '24 \\(default\\)'
-  assert.match(await text(expiry.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^Overdue SAS 9\\.4 ${await longDate(page, sasDue)} Overdue / today ${-daysTo(sasDue)} days overdue validation date \\+ 24 months \\(default\\) .* ${defaulted}$`))
-  assert.match(await text(expiry.locator('tbody tr').filter({ has: page.getByRole('cell', { name: 'R', exact: true }) })), new RegExp(`^Due soon R 4\\.3 ${await longDate(page, rDue)} ≤ 30 days ${daysTo(rDue)} days left validation date \\+ 24 months \\(default\\) .* ${defaulted}$`))
+  assert.match(await text(expiry.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^Overdue SAS 9\\.4 ${await longDate(page, sasDue)} Overdue / today ${-daysTo(sasDue)} days overdue completion date \\+ 24 months \\(default\\) .*\\(completion date\\) ${defaulted}$`))
+  assert.match(await text(expiry.locator('tbody tr').filter({ has: page.getByRole('cell', { name: 'R', exact: true }) })), new RegExp(`^Due soon R 4\\.3 ${await longDate(page, rDue)} ≤ 30 days ${daysTo(rDue)} days left validation date \\+ 24 months \\(default\\) .* ${defaulted}$`), 'R was added by hand: its own validation date')
   // TVL-28 with TVL-06: the defaulted due dates are highlighted in the default bands — SAS overdue (red), R within 30 days (amber).
   const tint = async (row) => /\btvl-hl-(\w+)/.exec((await row.getAttribute('class')) ?? '')?.[1] ?? ''
   assert.deepEqual([await tint(expiry.locator('tbody tr', { hasText: 'SAS' })), await tint(expiry.locator('tbody tr').filter({ has: page.getByRole('cell', { name: 'R', exact: true }) }))], ['red', 'amber'])
@@ -372,12 +376,12 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   await master.locator('tbody tr', { hasText: 'LabVIEW' }).waitFor()
   assert.match(await text(master.locator('tbody tr', { hasText: 'LabVIEW' })), /Not in source now/)
   // TVL-06: the Master list shows the period as "24 (default)" and the due date worked out with it.
-  assert.match(await text(master.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^SAS 9\\.4 ${await longDate(page, sasValidated)} 24 \\(default\\) ${await longDate(page, sasDue)} Overdue / today \\(validation date \\+ 24 months \\(default\\)\\) In source`))
+  assert.match(await text(master.locator('tbody tr', { hasText: 'SAS' })), new RegExp(`^SAS 9\\.4 ${await longDate(page, sasValidated)} \\(completion date\\) 24 \\(default\\) ${await longDate(page, sasDue)} Overdue / today \\(completion date \\+ 24 months \\(default\\)\\) In source`), 'TVL-29: from the Tool Validations query, whose mapping names no validation date: the completion date')
   assert.equal(await text(master.locator('.write-blocked')), reason)
   const add = master.getByRole('button', { name: '＋ Add tool…' })
   assert.ok(await add.isDisabled())
   assert.equal(await add.getAttribute('title'), reason)
-  assert.ok(await master.getByRole('button', { name: 'Edit' }).first().isDisabled())
+  assert.ok(await master.getByRole('button', { name: 'Edit', exact: true }).first().isDisabled())
   assert.ok(await master.getByRole('button', { name: 'Remove' }).first().isDisabled())
   assert.deepEqual([await panelTitled(page, 'Sources').count(), await panelTitled(page, 'Team settings').count(), await panelTitled(page, 'Validation expiry').count(), await page.locator('.tool-expiry-counts').count()], [0, 0, 0, 0], 'only the master list on the Master list tab')
   await shot(page, 'read-only')
@@ -872,6 +876,97 @@ test('TC-TVL-25: the Tool Owner sets the due date highlights on Setup — saved 
   await tabs.getByRole('tab', { name: 'Master list' }).click()
   await rowOf(master, 'LabVIEW').waitFor()
   assert.deepEqual([await master.locator('tbody tr.tvl-hl').count(), await master.locator('.tvl-band').count(), await master.locator('.tvl-legend').count()], [0, 0, 0])
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// TVL-32: a table page of signed validation documents (no tool name or version column the master list reads).
+const signedDocs = () => JSON.stringify({ schema: 1, kind: 'on-demand-page', id: 'signed-docs', name: 'Signed documents register', description: '', keyPrefix: 'SD', insights: [],
+  columns: [{ id: 'c-doc', name: 'Document', type: 'text', options: [], required: true }, { id: 'c-tool', name: 'Tool', type: 'text', options: [], required: false }, { id: 'c-by', name: 'Signed by', type: 'text', options: [], required: false }, { id: 'c-on', name: 'Signed on', type: 'date', options: [], required: false }],
+  rows: [{ id: 'r-1', cells: { 'c-doc': 'Minitab 21 Validation Plan', 'c-tool': 'Minitab 21', 'c-by': 'Ana Costa', 'c-on': '2026-10-14' } }, { id: 'r-2', cells: { 'c-doc': 'Polyspace R2024a Validation Report', 'c-tool': 'Polyspace R2024a', 'c-by': 'Bo Li', 'c-on': '2026-10-21' } }] })
+
+test('TC-TVL-31: the Tool Owner adds a Validation Documents source — its tab lists its rows with every column, the master list unchanged — and a Tool List source whose tools are appended; changed to Validation Documents, its tools stay', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const files = { 'azure-views.json': sharedViews, 'tool-validations.json': listWith(), 'on-demand/tool-register.json': toolRegister(), 'on-demand/signed-docs.json': signedDocs() }
+  const { page, context, errors } = await openPage(app, { init: setupOwnTabs, width: 1440, height: 1000, scale: shots ? 2 : undefined })
+  page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const writes = await mock(context, files)
+  await page.reload()
+  const tabs = await openToolValidations(page)
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const sources = panelTitled(page, 'Sources')
+  await sources.locator('tbody tr').first().waitFor()
+  assert.match(await text(sources.locator('tbody tr', { hasText: 'Tool Validations' }).first()), /Tool List/, 'the Tool Validations query is a Tool List')
+
+  // ＋ Add source…: the Category is asked, nothing chosen; Validation Documents needs no field mapping.
+  await sources.getByRole('button', { name: '＋ Add source…' }).click()
+  const addSource = page.getByRole('dialog', { name: 'Add a source' })
+  const category = addSource.locator('fieldset', { has: page.locator('legend', { hasText: /^Category$/ }) })
+  assert.deepEqual(await category.getByRole('radio').evaluateAll((radios) => radios.map((radio) => [radio.parentElement.textContent.trim(), radio.checked, radio.required])), [['Tool List', false, true], ['Validation Documents', false, true]], 'required, nothing pre-selected')
+  await addSource.locator('label', { hasText: /^Kind/ }).locator('select').selectOption('ondemand')
+  await addSource.locator('label', { hasText: /^Table page/ }).locator('select').selectOption('signed-docs')
+  await addSource.getByRole('button', { name: 'Add source' }).click()
+  assert.equal(await addSource.isVisible(), true, 'not added without a category')
+  assert.equal(writes.length, 0)
+  await category.getByRole('radio', { name: 'Validation Documents' }).check()
+  await addSource.getByText('No field mapping is needed: its tab lists every column of its rows.').waitFor()
+  await shot(page, 'add-source-category')
+  await addSource.getByRole('button', { name: 'Add source' }).click()
+  await addSource.waitFor({ state: 'detached' })
+  const added = await until(() => savedList(writes, (entry) => entry.data.sources.some((source) => source.id === 'signed-documents-register')), 'the Validation Documents source saved')
+  const docsSource = added.data.sources.find((source) => source.id === 'signed-documents-register')
+  assert.deepEqual([docsSource.category, docsSource.kind, docsSource.ref], ['documents', 'ondemand', 'signed-docs'])
+  assert.deepEqual(added.data.tools.map((entry) => entry.name), ['JMP', 'LabVIEW', 'Minitab', 'Python'], 'the master list unchanged')
+  const docsRow = sources.locator('tbody tr', { hasText: 'Signed documents register' })
+  await docsRow.waitFor()
+  assert.match(await text(docsRow), /Validation Documents .*Not needed — every column is listed on its tab/)
+  assert.equal(await docsRow.getByRole('button', { name: 'Merge into master list…' }).count(), 0, 'never merged into the master list')
+
+  // Its tab: every column of its rows, in the page's order; nothing merged; the master list as it was.
+  await tabs.getByRole('tab', { name: 'Signed documents register' }).click()
+  const own = panelTitled(page, 'Signed documents register')
+  await own.locator('tbody tr').first().waitFor()
+  assert.deepEqual((await own.locator('thead th').allTextContents()).map((label) => label.replace(/[▴▾]/g, '').trim()).filter(Boolean), ['Document', 'Tool', 'Signed by', 'Signed on'])
+  assert.deepEqual(await rowsOf(own), ['Minitab 21 Validation Plan Minitab 21 Ana Costa 2026-10-14', 'Polyspace R2024a Validation Report Polyspace R2024a Bo Li 2026-10-21'])
+  assert.match(await text(own.locator('.record-count')), /^2 rows · not in the master list$/)
+  assert.equal(await own.getByRole('button', { name: 'Merge into master list…' }).count(), 0)
+  await shot(page, 'validation-documents-tab')
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  const master = panelTitled(page, 'Master list')
+  await master.locator('tbody tr').first().waitFor()
+  assert.equal((await rowsOf(master)).length, 4, 'no tool of the documents added')
+  assert.equal(await master.locator('tbody tr', { hasText: 'Polyspace' }).count(), 0)
+
+  // A Tool List source: merged, its tools appended.
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  await sources.getByRole('button', { name: '＋ Add source…' }).click()
+  await addSource.locator('label', { hasText: /^Kind/ }).locator('select').selectOption('ondemand')
+  await addSource.locator('label', { hasText: /^Table page/ }).locator('select').selectOption('tool-register')
+  await category.getByRole('radio', { name: 'Tool List' }).check()
+  await addSource.getByRole('button', { name: 'Add source' }).click()
+  await addSource.waitFor({ state: 'detached' })
+  const listRow = sources.locator('tbody tr', { hasText: 'Tool register' })
+  await listRow.getByRole('button', { name: 'Merge into master list…' }).click()
+  const merge = page.getByRole('dialog', { name: 'Merge Tool register into the master list' })
+  await merge.getByRole('button', { name: 'Merge into master list' }).click()
+  await merge.waitFor({ state: 'detached' })
+  const merged = await until(() => savedList(writes, (entry) => entry.data.tools.some((tool) => tool.name === 'Polyspace')), 'the Tool List merged')
+  assert.deepEqual(merged.data.tools.find((entry) => entry.name === 'Polyspace').sources, { 'tool-register': { inSource: true } }, 'appended from the Tool List')
+  assert.equal(merged.data.sources.find((source) => source.id === 'tool-register').category, 'tools')
+
+  // Changed to Validation Documents (Edit mapping…): it stops feeding the master list; its tools stay, not in source now.
+  await listRow.getByRole('button', { name: 'Edit mapping…' }).click()
+  const edit = page.getByRole('dialog', { name: 'Field mapping of Tool register' })
+  await edit.getByRole('radio', { name: 'Validation Documents' }).check()
+  await edit.getByText(/2 tools of the master list came from Tool register: they stay in the list, marked “Not in source now” for this source\./).waitFor()
+  await edit.getByRole('button', { name: 'Save to Git' }).click()
+  await edit.waitFor({ state: 'detached' })
+  const changed = await until(() => savedList(writes, (entry) => entry.data.sources.find((source) => source.id === 'tool-register')?.category === 'documents'), 'the category changed')
+  assert.match(changed.message, /^Tool Validations: Tool register is Validation Documents — 2 no longer in the source/)
+  assert.deepEqual(changed.data.tools.find((entry) => entry.name === 'Polyspace').sources, { 'tool-register': { inSource: false } }, 'kept, not in source now')
+  assert.deepEqual(changed.data.tools.find((entry) => entry.name === 'LabVIEW').sources, { stream: { inSource: true }, 'tool-register': { inSource: false } })
+  await tabs.getByRole('tab', { name: 'Master list' }).click()
+  await master.locator('tbody tr', { hasText: 'Polyspace' }).getByText('Not in source now').waitFor()
   assert.deepEqual(errors, [])
   await context.close()
 })

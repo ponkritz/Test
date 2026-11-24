@@ -275,13 +275,15 @@ export default function App() {
   const releaseSources = azure.connectionProfiles.filter((profile) => profile.role === 'release-source').length
   const toolData = toolProfile ? viewSource(store.state, toolProfile.id, toolProfile.role, toolProfile.query, releaseSources) : undefined
   const toolPatterns = useMemo(() => streamPatterns(store.state.releaseSourceSettings, toolStream.name), [store.state.releaseSourceSettings, toolStream.name])
-  const toolValidations = useToolValidations(git, { items: toolData?.items, fetchedAt: toolData?.fetchedAt, patterns: toolPatterns }, { viewer, blocked: access.viewingAs ? 'Viewing as someone else: read only, nothing is saved.' : gitReasonOf(git), by: my.self.me.name?.trim() || azure.creatorEmail.trim() })
+  // TVL-29: the completion date chosen in Stream mapping (TVL-20) dates the tools of the Azure DevOps sources.
+  const toolCompletionField = normalizeReleaseSourceSettings(store.state.releaseSourceSettings).toolValidations?.completionField
+  const toolValidations = useToolValidations(git, { items: toolData?.items, fetchedAt: toolData?.fetchedAt, patterns: toolPatterns, completionField: toolCompletionField }, { viewer, blocked: access.viewingAs ? 'Viewing as someone else: read only, nothing is saved.' : gitReasonOf(git), by: my.self.me.name?.trim() || azure.creatorEmail.trim() })
   const toolSources = useMemo((): SourceData => ({
-    streamItems: toolData?.items, patterns: toolPatterns,
+    streamItems: toolData?.items, patterns: toolPatterns, completionField: toolCompletionField,
     azure: azure.connectionProfiles.filter((profile) => profile.role !== 'time-tracking' && profile.id !== toolProfile?.id).map((profile) => { const data = viewSource(store.state, profile.id, profile.role, profile.query, releaseSources); return { id: profile.id, name: profile.viewName || profile.reason, items: data?.items, fetchedAt: data?.fetchedAt } }),
     windchill: windchill.views.filter((view) => view.exportFile).map((view) => { const data = windchill.sources.find((entry) => entry.viewId === view.id); return { id: view.id, name: view.name, columns: data?.columns ?? view.columns, rows: data?.rows } }),
     pages: onDemand.pages.filter((entry) => kindOf(menu.layout, entry.id) !== 'dashboard' && !entry.sample).map((entry) => ({ id: entry.id, name: entry.name, columns: entry.columns.map((column) => ({ id: column.id, name: column.name })), rows: entry.rows })),
-  }), [toolData?.items, toolPatterns, azure.connectionProfiles, toolProfile?.id, store.state, releaseSources, windchill.views, windchill.sources, onDemand.pages, menu.layout])
+  }), [toolData?.items, toolPatterns, toolCompletionField, azure.connectionProfiles, toolProfile?.id, store.state, releaseSources, windchill.views, windchill.sources, onDemand.pages, menu.layout])
   const toolDaysKey = 'tool-validations:expiry-days'
   // TVL-18: the master list and the expiry list as data sources of the On-Demand Dashboards (the owners' dashboard tabs
   // and every other dashboard), for the roles that see Release Details.

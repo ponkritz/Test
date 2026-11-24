@@ -120,18 +120,47 @@ export const toolQueryHowLabel: Record<ToolQueryHow, string> = {
   setting: 'chosen in Stream mapping → Tool Validations queries',
   name: 'found by its name (documents, signed)',
   columns: 'found by its columns (Parent and approver slots)',
-  none: 'no Signed documents query found: one query, counted as before',
+  none: 'no Validation Documents query found: one query, counted as before',
   off: 'set to none: one query, counted as before',
+}
+const documentsByName = (stream: Pick<StreamDef, 'name'>, names: (string | undefined)[]) => { const own = new Set(tokens(stream.name)); return names.some((name) => tokens(name).some((word) => !own.has(word) && documentWords.has(word))) }
+const documentsByColumns = (query: string | undefined) => /\bSystem\.Parent\b/i.test(query ?? '') && /approver\s*_?name\s*_?\d+/i.test(query ?? '')
+// TVL-33: the roles of the two queries as the UI names them — the Tools query is the **Tool List**, the Signed documents
+// query the **Validation Documents** (the internal keys stay tools / documents).
+export type ToolQueryRole = 'tools' | 'documents'
+export const toolRoleLabel: Record<ToolQueryRole, string> = { tools: 'Tool List', documents: 'Validation Documents' }
+// TVL-33: the category Add query pre-selects for a new Tool Validations connection — the automatic identification of
+// toolQueries (a name with documents / signed …, else a query selecting [System.Parent] and an ApproverName column);
+// the person confirms or changes it before saving.
+export function toolCategoryGuess(stream: Pick<StreamDef, 'name'>, input: { name?: string; viewName?: string; query?: string }): { role: ToolQueryRole; how: 'name' | 'columns' | 'default' } {
+  if (documentsByName(stream, [input.viewName, input.name])) return { role: 'documents', how: 'name' }
+  if (documentsByColumns(input.query)) return { role: 'documents', how: 'columns' }
+  return { role: 'tools', how: 'default' }
+}
+// TVL-33: the Validation Documents setting (releaseSourceSettings.toolValidations.documentsQuery) after a connection of
+// the stream was added with its category confirmed. Validation Documents: that connection, by its view name. Tool List:
+// unchanged, unless the automatic identification could take it for the Validation Documents query (its name or columns
+// say documents, now or once a second connection is added) — then the other one it would find, else none ("@none": one
+// query), so that a Tool List query never becomes the Validation Documents query.
+export function toolDocumentsSettingFor<P extends AzureConnectionProfileSummary>(stream: StreamDef, profiles: P[], setting: string | undefined, addedId: string, role: ToolQueryRole): string | undefined {
+  const added = profiles.find((profile) => profile.id === addedId)
+  if (!added) return setting
+  if (role === 'documents') return added.viewName?.trim() || added.reason
+  // Unchanged when the setting names another connection, or when Automatic would never take this one for documents.
+  const chosen = setting && setting !== noToolDocumentsQuery ? profiles.find((profile) => profile.id !== addedId && [profile.viewName, profile.reason].some((name) => sameStream(name, setting))) : undefined
+  if (chosen || toolCategoryGuess(stream, { name: added.reason, viewName: added.viewName, query: added.query }).role === 'tools') return setting
+  const others = profilesForStream(stream, profiles).filter((profile) => profile.id !== addedId)
+  const other = others.find((profile) => documentsByName(stream, [profile.viewName, profile.reason])) ?? others.find((profile) => documentsByColumns(profile.query))
+  return other ? other.viewName?.trim() || other.reason : noToolDocumentsQuery
 }
 export function toolQueries<P extends AzureConnectionProfileSummary>(stream: StreamDef, profiles: P[], setting: string | undefined = toolDocumentsSetting): { tools?: P; documents?: P; how: ToolQueryHow; all: P[] } {
   const all = sharedFirst(profilesForStream(stream, profiles))
   if (all.length < 2) return { tools: all[0], how: 'single', all }
   if (setting === noToolDocumentsQuery) return { tools: all[0], how: 'off', all }
   const names = (profile: P) => [profile.viewName, profile.reason]
-  const own = new Set(tokens(stream.name))
   const chosen = setting ? all.find((profile) => names(profile).some((name) => sameStream(name, setting))) : undefined
-  const byName = chosen ? undefined : all.find((profile) => names(profile).some((name) => tokens(name).some((word) => !own.has(word) && documentWords.has(word))))
-  const byColumns = chosen || byName ? undefined : all.find((profile) => /\bSystem\.Parent\b/i.test(profile.query ?? '') && /approver\s*_?name\s*_?\d+/i.test(profile.query ?? ''))
+  const byName = chosen ? undefined : all.find((profile) => documentsByName(stream, names(profile)))
+  const byColumns = chosen || byName ? undefined : all.find((profile) => documentsByColumns(profile.query))
   const documents = chosen ?? byName ?? byColumns
   if (!documents) return { tools: all[0], how: 'none', all }
   return { tools: all.find((profile) => profile !== documents), documents, how: chosen ? 'setting' : byName ? 'name' : 'columns', all }
