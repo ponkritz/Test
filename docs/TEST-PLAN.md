@@ -1000,6 +1000,9 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-QV-46 Time Writing Feature and hours on DP, CP and Windchill** — Req QV-65 — L1 `release-source.test.mjs` ("QV-65: the hours of a matched Feature are its Time Writing Tasks, all months, each once — as the releases matched by name (TC-QV-46)"); E2E ("TC-QV-43: …" — the columns of DP and S&S IT); browser check with the synthetic sample: a DP, CP or S&S IT release whose QMS-0025 match is a Feature at the threshold shows that Feature with its match % and the Planned (h) / Booked (h) of its Time Writing Tasks, the same hours as the Feature shows on Time Writing; a release matched only by a User Story, or not at all, shows — in all three; sorting and Export give the hours as numbers.
 
+**TC-QV-47 Pulse Check — streams not counted** — Req QV-66 — **UAT** — L1 `pulse-streams.test.mjs` ("QV-66: the streams not counted — names compared case-insensitively, unknown names ignored, a new stream counted (TC-QV-47)"; "QV-66: the filter keeps names not offered now when another stream is ticked, and reads only known shapes (TC-QV-47)"; "QV-66: a period’s total and Change leave out the streams not counted in both periods (TC-QV-47)"); E2E `pulse-streams.e2e.mjs` ("TC-QV-47: Pulse Check — S&S IT not counted: greyed and marked, left out of the Supported total, the Windchill exports table and the Quarter total and Change"); browser check at 1440 px (light and dark) and 390 px: with the S&S IT export imported, Streams not counted → S&S IT — its Supported line and Windchill exports row stay, greyed with “Not counted”, the Supported total drops by its releases, ⓘ reads “Not counted (Streams filter): S&S IT.”, Export → CSV has Counted = Not counted; Quarter: its row greyed with its releases, the Releases tile, Total and Change without it in both quarters; the Work closed and opened ⓘ says every Epic counts; Monthly pack says it counts every stream; Reset filters counts it again.
+
+**TC-QV-48 Streams not counted — team default and own choice** — Req QV-67, UI-23 — L1 `pulse-streams.test.mjs` ("QV-67: the team default and each person’s own choice are entries of the views files; own wins, removing it uses the team default (TC-QV-48)"); E2E `pulse-streams.e2e.mjs` ("TC-QV-48: the Tool Owner saves the streams not counted as the team default; another person sees it, changes it for themselves and goes back to it"); browser check with a mocked GitHub: the Tool Owner ticks CP and ECP, Save view for everyone writes `pulse-streams` with who and when to `personal-views-defaults.json`; a People Manager sees “2 selected” and “The view for everyone, saved by …”, no Save option; their own change is kept after a reload and **Use the view for everyone** goes back; with the sample or View as no Save option.
 
 **TC-QV-24 CP releases from the asset Titles** — *(Retired — see TC-QV-25)* Req QV-40 — L1 `streams.test.mjs` ("CP: the release from the asset Title "[Release name] [Release No] [Asset name]", each release once; fuzzy QMS-0025 match (TC-QV-24)"); browser check with a CP query holding three assets of one release in both namings ("Care Pathways 3.1 Test Report", "Care Pathways 3.1.0 SRS", "Risk Analysis v3.1 (Care Pathways)") and one of another (3.2), and a QMS-0025 Feature "CP | Care Pathways | v3.1": Release Details → CP lists two releases (3 and 1 assets), 3.1 with its Feature and %, 3.2 with Create Feature opening the New Feature form titled "Care Pathways | v3.2" (release name and number only) under the CP Epic, and found after it is created; Pulse Check's Releases and Supported summary show "CP [2]"; no page errors. **UAT**
 
@@ -2322,6 +2325,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QV-63 | TC-QV-44 |
 | QV-64 | TC-QV-45, TC-QV-43, TC-TVL-08 |
 | QV-65 | TC-QV-46, TC-QV-43 |
+| QV-66 | TC-QV-47 |
+| QV-67 | TC-QV-48 |
 | QV-38 | TC-CON-42 |
 | OVR-01…08 | retired (TC-OVR-01…03 retired) |
 | OV-11 | TC-OV-11 |
@@ -2838,7 +2843,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-23 | TC-QEM-01…08 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
-| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09 |
+| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09 |
 | UC-27 | TC-HIS-01…11 |
 | UC-28 | TC-ACT-01…12, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-ATM-21 |
 | UC-29 | TC-OVW-01…03 |

@@ -1179,3 +1179,10 @@ div.chart-grid:not(.od-insights){margin-bottom:18px}
 .tool-expiry-counts .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .tool-sources td:last-child button{white-space:nowrap}.tool-sources td:nth-child(3){min-width:220px}
 @media(max-width:700px){.tool-filter-bar .search{min-width:0;flex:1 1 100%}.tool-filter-bar .segmented{flex-wrap:wrap}.tool-expiry-counts .metric-grid{grid-template-columns:1fr}}
+/* QV-66: Pulse Check — a stream the Streams filter leaves out stays listed, greyed and marked "Not counted". */
+.pulse-period{flex-wrap:wrap;align-items:flex-end}
+.not-counted,.not-counted td,.not-counted strong,.not-counted a{color:var(--muted)}
+.release-quadrant.not-counted{background:var(--surface-2);border-style:dashed;box-shadow:none}
+.release-quadrant.not-counted .quadrant-counts strong{color:var(--muted)}
+.not-counted .pill{margin-right:4px}
+.not-counted .positive,.not-counted .negative{color:var(--muted)!important}

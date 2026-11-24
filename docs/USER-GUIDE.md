@@ -365,6 +365,10 @@ The tabs: **Capacity and workload**, **Streams**, **Plan quality**, **Utilizatio
 - **Current month releases**.
 - **Monthly pack** (below).
 
+**Streams not counted.** To leave a few streams out of the counts, tick them in **Streams not counted** in the filter bar (next to Period). They stay on the page, greyed and marked **Not counted**, and every release total, the Supported total and — for a quarter, half-year or year — the **Releases** and **Change** tiles leave them out (both periods, so the Change compares like with like). The ⓘ of each panel names them, and the Windchill exports export has a **Counted** column. A stream added later is counted. **Reset filters** counts every stream again. The **Work closed and opened** tables count every Epic, and the Monthly pack and other pages count every stream.
+
+The Tool Owner (and the Admin) can **Save view for everyone** beside the filter: that is the team default, kept in Git. Your own change is kept for you on every computer; **Use the view for everyone** goes back to the team default.
+
 ![Pulse Check → Last month](user-guide/images/pulse-check.png)
 
 ### Monthly pack
