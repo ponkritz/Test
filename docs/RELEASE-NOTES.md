@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.12.0 — 2026-11-24
+
+**Added**
+- **Pulse Check → Streams not counted** — a multi-select in Pulse Check's filter bar, for the Month tabs and the Quarter / Half-year / Year view, of every release stream (built-in, custom, each Windchill export). A stream ticked there stays on the page, greyed and marked "Not counted", and every release total ignores it: the Releases and Supported summaries, the All streams total, the period's Releases and Change tiles and Total, in both periods so the Change compares like with like; ⓘ names the streams not counted and the Windchill exports export has a Counted column. A stream added later is counted (QV-66).
+- **Team default and own choice** — the Tool Owner (and the Admin) saves the choice for everyone with Save view for everyone (entry `pulse-streams` in `personal-views-defaults.json`); each person's own change is kept in their personal views, with Use the view for everyone to go back (QV-67, UI-23).
+- Not in scope: the Work closed and opened tables count every Epic; the Monthly pack, Team overview, My dashboard and Release pages count every stream (LIM-65).
+
+DF-267, SM-149, LIM-65; TC-QV-47 (UAT), TC-QV-48.
+
+PR #389.
+
 ## v10.11.0 — 2026-11-24
 
 **Changed**
