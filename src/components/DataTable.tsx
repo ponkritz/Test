@@ -37,6 +37,8 @@ export interface DataColumn<T> {
   title?: (row: T) => string | undefined
   // Kept first and never hidden or moved (e.g. a selection tick box).
   fixed?: boolean
+  // Drawn in the heading instead of the label (e.g. the "select every row shown" tick box); the label stays its name.
+  heading?: ReactNode
 }
 
 export interface DataTableProps<T> {
@@ -71,9 +73,12 @@ export interface DataTableProps<T> {
   // rows in the order shown (sort and filter) for Previous / Next. A click on a button, link or field in the row does not open it.
   onRowOpen?: (row: T, shown: T[]) => void
   rowLabel?: (row: T) => string // the accessible name of an opening row
+  // CAP-60: rows ticked for a bulk action — a first column of tick boxes (kept first, never exported) with one in the
+  // heading that ticks or unticks every row shown; selected holds row keys (rowKey), kept while filters change.
+  selection?: { selected: string[]; onChange: (keys: string[]) => void; label?: (row: T) => string }
 }
 
-export function DataTable<T>({ id, columns, rows, rowKey, exportName, toolbar, status, limit, defaultSort, sort: controlledSort, onSort, rowClassName, empty, footer, className = '', caption, expand, group, totals, subRows, onRowOpen, rowLabel }: DataTableProps<T>) {
+export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName, toolbar, status, limit, defaultSort, sort: controlledSort, onSort, rowClassName, empty, footer, className = '', caption, expand, group, totals, subRows, onRowOpen, rowLabel, selection }: DataTableProps<T>) {
   const defaults = useTableDefaults()
   const widths = useColumnWidths(`table:${id}`, defaults.defaultWrap)
   const [layout, setLayoutState] = useState<TableLayout>(() => readLayout(id))
@@ -92,6 +97,19 @@ export function DataTable<T>({ id, columns, rows, rowKey, exportName, toolbar, s
     return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('keydown', escape) }
   }, [exporting])
 
+  const valueOf = (column: DataColumn<T>, row: T): CellValue => column.value ? column.value(row) : undefined
+  const sorted = useMemo(() => {
+    if (!sort || controlledSort !== undefined) return rows
+    const column = ownColumns.find((entry) => entry.id === sort.id)
+    if (!column?.value) return rows
+    return [...rows].sort((a, b) => { const order = compareCells(column.value!(a), column.value!(b)); return sort.desc ? -order : order })
+  }, [rows, sort, ownColumns, controlledSort])
+  const keyOf = (row: T) => rowKey(row, sorted.indexOf(row))
+  const shownKeys = selection ? sorted.map(keyOf) : []
+  const allTicked = Boolean(shownKeys.length) && shownKeys.every((key) => selection!.selected.includes(key))
+  const columns: DataColumn<T>[] = selection ? [{ id: '@select', label: 'Select', fixed: true, sortable: false, export: false,
+    heading: <input type="checkbox" aria-label={allTicked ? 'Clear the selection of every row shown' : 'Select every row shown'} checked={allTicked} disabled={!shownKeys.length} onChange={() => selection.onChange(allTicked ? selection.selected.filter((key) => !shownKeys.includes(key)) : [...new Set([...selection.selected, ...shownKeys])])} />,
+    render: (row: T) => { const key = keyOf(row), on = selection.selected.includes(key); return <input type="checkbox" aria-label={`Select ${selection.label?.(row) ?? key}`} checked={on} onChange={() => selection.onChange(on ? selection.selected.filter((entry) => entry !== key) : [...selection.selected, key])} /> } }, ...ownColumns] : ownColumns
   const fixed = columns.filter((column) => column.fixed)
   const movable = columns.filter((column) => !column.fixed)
   const order = defaults.reorder ? orderedIds(movable.map((column) => column.id), layout.order) : movable.map((column) => column.id)
@@ -100,13 +118,6 @@ export function DataTable<T>({ id, columns, rows, rowKey, exportName, toolbar, s
   const shownColumns = [...fixed, ...ordered.filter((column) => !hidden.includes(column.id))]
   const density: TableDensity = defaults.densityToggle ? layout.density ?? defaults.defaultDensity : defaults.defaultDensity
 
-  const valueOf = (column: DataColumn<T>, row: T): CellValue => column.value ? column.value(row) : undefined
-  const sorted = useMemo(() => {
-    if (!sort || controlledSort !== undefined) return rows
-    const column = columns.find((entry) => entry.id === sort.id)
-    if (!column?.value) return rows
-    return [...rows].sort((a, b) => { const order = compareCells(column.value!(a), column.value!(b)); return sort.desc ? -order : order })
-  }, [rows, sort, columns, controlledSort])
   const drawn = limit ? sorted.slice(0, limit) : sorted
 
   const toggleSort = (column: DataColumn<T>) => {
@@ -183,7 +194,7 @@ export function DataTable<T>({ id, columns, rows, rowKey, exportName, toolbar, s
       <thead><tr>{shownColumns.map((column) => {
         const active = sort?.id === column.id, canSort = column.sortable !== false && Boolean(column.value)
         return <th key={column.id} style={defaults.resize ? widths.style(column.id) : undefined} className={[column.align ? `align-${column.align}` : '', dragging && dragging !== column.id && !column.fixed ? 'drop-target' : ''].filter(Boolean).join(' ') || undefined} aria-sort={active ? (sort!.desc ? 'descending' : 'ascending') : canSort ? 'none' : undefined} {...dropProps(column)}>
-          {canSort ? <button type="button" className="sort-button" title={defaults.reorder && !column.fixed ? 'Click to sort; drag onto another heading to move the column' : 'Click to sort'} {...dragProps(column)} onClick={() => toggleSort(column)}>{column.label}{active ? (sort!.desc ? ' ▾' : ' ▴') : ''}</button>
+          {column.heading ? <>{column.heading}<span className="sr-only">{column.label}</span></> : canSort ? <button type="button" className="sort-button" title={defaults.reorder && !column.fixed ? 'Click to sort; drag onto another heading to move the column' : 'Click to sort'} {...dragProps(column)} onClick={() => toggleSort(column)}>{column.label}{active ? (sort!.desc ? ' ▾' : ' ▴') : ''}</button>
             : <span className="sort-button" title={defaults.reorder && !column.fixed ? 'Drag onto another heading to move the column' : undefined} {...dragProps(column)}>{column.label}</span>}
           {column.hint && <Info iconOnly label={`About ${column.label}`}>{column.hint}</Info>}
           {defaults.resize && widths.handle(column.id, column.label)}

@@ -420,7 +420,6 @@ table.resizable.wrap th,table.resizable.wrap td{white-space:pre-wrap;overflow-wr
 .jobs-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.jobs-panel ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}.job{border-left:3px solid var(--line);padding-left:8px}.job p{margin:2px 0 0;font-size:13px;overflow-wrap:anywhere}.job-running{border-color:var(--accent)}.job-done{border-color:var(--success)}.job-error{border-color:var(--danger)}
 
 .employment-dates{display:grid;gap:4px;min-width:150px}.employment-dates label{display:grid;gap:2px;font-size:12px}.employment-note{margin:0 0 8px}
-.default-joined{display:grid;gap:4px;margin:0 0 10px;max-width:520px}
 .until-target{display:grid;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0}.until-target legend{font-weight:600;padding:0 4px}
 /* Compact page actions (QV-48): small icon buttons and a "⋯" menu instead of a row of full buttons. */
 .view-actions{position:relative;display:inline-flex;align-items:center;gap:4px}
@@ -630,11 +629,22 @@ details.act-leave{border:1px solid var(--line);border-radius:10px;padding:8px 12
 .pack-plus:hover,.pack-plus:focus-visible{color:#773b93;border-color:#773b93;opacity:1}
 .pack-remove:hover,.pack-remove:focus-visible{color:#c62828;border-color:#c62828;opacity:1}
 .pack-add{justify-self:start;font-size:12px;padding:3px 10px;min-height:0;line-height:1.4}.pack-empty{margin:0;font-size:12.5px}
-/* CAP-51: People & access — names and emails from Azure DevOps. */
-.people-source{align-items:flex-start;justify-content:space-between;flex-wrap:nowrap}.people-source>span{font-size:13px;max-width:70ch}
-.people-count{margin:0;font-size:13px}
-.resource-table td:first-child{min-width:190px}.resource-table td.person-email{white-space:nowrap}
-@media(max-width:760px){.people-source{flex-wrap:wrap}}
+/* CAP-58…CAP-62: People & roles → People — one source line, one folded warning line, the filters, the bulk bar, the
+   read-only list and the person drawer. */
+.people-source{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;font-size:13px}
+.people-warnings{margin:0 0 10px}.people-warnings summary{cursor:pointer;font-weight:600}.people-warnings ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px}
+.people-warnings .people-incomplete{margin:4px 0 0;display:grid;gap:2px}
+.people-filters{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}.people-filters .search{min-width:180px;max-width:260px}
+.bulk-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:13px}
+.bulk-bar .write-blocked{flex-basis:100%}
+.people-table td{vertical-align:top}.people-table .person-note{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.people-table td.person-email{overflow-wrap:anywhere}
+.person-tags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.person-status-left,.person-status-not-team,.person-status-not-in-azure{color:var(--text-2)}
+.person-form{display:grid;gap:14px}.person-section{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
+.person-section:last-child{border-bottom:0}.person-section h3{margin:0;font-size:14px;color:var(--heading)}
+.person-section .od-row-values>div:last-child{border-bottom:0;padding-bottom:0}
+.person-drawer .drawer-actions .drawer-remove{display:inline-flex;gap:12px;flex-wrap:wrap}
 .pack-capabilities{display:grid;gap:8px;max-width:760px}.pack-capabilities label{display:grid;gap:4px;max-width:420px}
 /* CAP-54: the utilization formula builder — Top ÷ Bottom. */
 .formula-builder{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
