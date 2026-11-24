@@ -2,6 +2,29 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.16.0 — 2026-11-24
+
+**Added**
+- **Release Classification detected from the release number** — in Admin → Epic & Feature setup → Setup per Epic, an Epic's Release Classification List field now has, for each value, ticks for the part of the release number that changes for it: x.0 (first number only), x.y (second), x.y.z (third), x.y.z.w (fourth); the deepest non-zero part decides (e.g. Release ← x.0 and x.y, MLD ← x.y.z, PU ← x.y.z.w). A part may go to one value only: a part ticked twice is named and not saved. **Fill with the usual rules** proposes Major, Minor, MLD and Platform Update (or PU) where the values are named so. The rules are saved with the field in epic-setup.json (`classRules`, read strictly; older files keep working). Until a Tool Owner saves rules nothing changes: the value named like the release type is pre-filled, as before (DPF-10).
+- The DP and IOCC **Create Features** pop-ups pre-fill each row's Release Classification from these rules, with "detected from 5.2.1" under the drop-down; a release number that is not numeric gets none, and every row can still be changed (DPF-11, DPF-08).
+
+**Changed**
+- **Release name → Version → Release Classification** first: in Setup per Epic's field list, in the DP and IOCC Create Features columns, and as the first columns of the DP and IOCC release tables, which gain **Release Classification (detected)** from the rules of the mapped bulk Epic (— without one). The IOCC table's Release column is now named Version (DPF-12, DPF-04, DPF-09).
+
+DF-282, SM-163, LIM-69; TC-DPF-09, TC-DPF-10, TC-DPF-11.
+
+PR #394.
+
+**Changed**
+- **Tool Validations: Setup tab** — the Master list tab keeps the expiry tiles, the window "Expiring in the next N days", the Validation expiry table and the master list (＋ Add tool…); **Sources** (＋ Add source…, Edit mapping…, Merge into master list…, Remove) and **Team settings** (Edit…) move to a new **Setup** tab, the last one, after Azure and the source tabs. Everyone sees Setup; those who may not change it see the buttons disabled with the reason, as before. A source added there gets its tab at once; texts now point to Setup → Sources. Remembered tabs open as before (TVL-14, TVL-01, TVL-09, TVL-11).
+
+**Fixed**
+- **Table panels: controls lined up with the title** — the window of days, the filter rows, the Columns / Wrap text / density / Export row and the table's first column started at the panel's left border; inside every table panel they now line up with the panel's title, 32 px inside the panel (24 px on a phone), with more room between the rows of controls, above the table, and between the panels and the tiles above them (KB-93; UI-07).
+
+DF-275; TC-TVL-09, TC-TVL-07, TC-TVL-06, TC-TVL-05, TC-QV-43.
+
+PR #394.
+
 ## v10.15.1 — 2026-11-24
 
 **Fixed**
