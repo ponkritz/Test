@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { cachedRoles, loadSample, navigate, openPage, openPerson, peopleSource, profileItem, rolesFile, startApp, text, toggleFilter } from './helpers.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-NAV-52, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
-// TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-GIT-17, TC-SET-05), automated against the built web app.
+// TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-GIT-17, TC-GIT-20, TC-SET-05), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -331,6 +331,55 @@ test('TC-GIT-16, TC-GIT-17: a connection still saved to the old data repository 
   assert.equal(await page.locator('.notice.git-moved').count(), 0, 'no notice after the switch')
   assert.deepEqual(asked.filter((path) => path.startsWith('/repos/ponkritz/')), [], 'nothing is read from the old repository')
   assert.deepEqual(errors.filter((error) => !/404|Not Found/.test(error)), [])
+  await context.close()
+})
+
+test('TC-GIT-20: a data repository the token cannot read (404 for everything) — the custom streams, connection and PAT here stay, the error says the repository cannot be read, and Set up roles is not offered', async () => {
+  // Synthetic: Git storage points to a new repository this token cannot see; this browser has custom streams, a
+  // connection with its server's PAT (synced from the earlier repository) cached from before.
+  const streams = JSON.stringify({ schema: 1, kind: 'custom-streams', streams: [{ name: 'Lab Systems', rule: 'title', fuzzy: false }] })
+  const connection = { id: 'lab', url: 'https://dev.azure.com/example-org/Lab', reason: 'Lab Systems', viewName: 'Lab Systems', role: 'backlog-view', query: 'SELECT [System.Id] FROM WorkItems', showInMenu: true, token: '' }
+  const { page, context, errors } = await openPage(app, { init: ({ streams, connection }) => {
+    if (localStorage.getItem('demand-planning-git-storage-v1')) return
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example-org', repo: 'new-storage', branch: 'main', path: 'planning-data.json' }))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+    localStorage.setItem('demand-planning-custom-streams-v1', streams)
+    localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify([connection]))
+    localStorage.setItem('demand-planning-server-pats-v1', JSON.stringify({ 'https://dev.azure.com/example-org': 'synthetic-pat' }))
+    localStorage.setItem('demand-planning-views-git-baseline-v1', JSON.stringify({ lab: 'synced from the earlier repository' }))
+  }, initArg: { streams, connection } })
+  const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
+  await page.addLocatorHandler(guide, async () => { await guide.getByRole('button', { name: 'Close', exact: true }).last().click() })
+  await context.route('https://dev.azure.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"value":[],"workItems":[]}' }))
+  // GitHub answers 404 for everything in the repository, the branch included: the token cannot see it.
+  const asked = []
+  await context.route('https://api.github.com/**', (route) => { asked.push(new URL(route.request().url()).pathname); return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"Not Found"}' }) })
+  const viewsRead = page.waitForEvent('requestfinished', (request) => request.url().includes('/new-storage/contents/azure-views'))
+  await page.reload()
+  // The read-only notice says the repository cannot be read, not "no access roles yet", and offers no Set up roles.
+  const notice = page.locator('.notice.access-read-only')
+  await notice.filter({ hasText: 'the data repository cannot be read' }).waitFor()
+  assert.match(await text(notice), /Read-only: the data repository cannot be read, so the access roles \(access\.json\) cannot be loaded and no changes can be made: Repository example-org\/new-storage or branch main was not found, or the token cannot access it\. Nothing in this browser was cleared\./)
+  assert.equal(await notice.getByRole('button', { name: /Set up roles/ }).count(), 0)
+  assert.equal(await notice.getByRole('button', { name: 'Open Git storage →' }).count(), 1)
+  // The custom stream is still in the menu, the custom streams, the connection and its PAT are still in this browser.
+  await page.locator('.sidebar nav .nav-section', { hasText: 'RELEASE DETAILS' }).getByRole('button', { name: /Lab Systems/ }).first().waitFor()
+  // Admin → Data & sharing: the Git storage panel says why, also for the connection setup; People & roles offers no Set up roles.
+  await navigate(page, 'Data & sharing')
+  await page.locator('.notice', { hasText: 'Repository example-org/new-storage or branch main was not found, or the token cannot access it.' }).first().waitFor()
+  await page.locator('.notice.git-views-alert', { hasText: 'The connections were not synced from Git: Repository example-org/new-storage or branch main was not found, or the token cannot access it. The connections and PATs here are kept.' }).waitFor()
+  // The start-up sync of the connection setup has read from Git (and failed): what this browser had is all still there.
+  await viewsRead
+  const probes = asked.filter((path) => path === '/repos/example-org/new-storage/branches/main').length
+  const kept = await page.evaluate(() => ({ streams: localStorage.getItem('demand-planning-custom-streams-v1'), connections: JSON.parse(localStorage.getItem('demand-planning-azure-connection-profiles-v1') ?? '[]').map((entry) => entry.id), pat: JSON.parse(localStorage.getItem('demand-planning-server-pats-v1') ?? '{}')['https://dev.azure.com/example-org'] }))
+  assert.deepEqual(kept, { streams, connections: ['lab'], pat: 'synthetic-pat' })
+  await navigate(page, 'People & roles')
+  await page.locator('.notice', { hasText: 'access.json: Repository example-org/new-storage or branch main was not found' }).first().waitFor()
+  assert.equal(await page.getByRole('button', { name: /Set up roles/ }).count(), 0, 'no Set up roles while the repository cannot be read')
+  assert.equal(await page.getByText('No access roles yet').count(), 0)
+  // One probe of the branch for all the start-up reads (planning data, roles, custom streams, connection setup, …).
+  assert.equal(probes, 1, `one probe for ${asked.filter((path) => path.includes('/contents/')).length} reads`)
+  assert.deepEqual(errors.filter((error) => !/404|Not Found|cannot access it/.test(error)), [])
   await context.close()
 })
 
@@ -1234,6 +1283,7 @@ test('TC-GIT-08: while the app is open, newer planning data in Git loads by itse
   let accessRead = () => undefined
   const accessReadAgain = new Promise((resolve) => { accessRead = resolve })
   await context.route('https://api.github.com/**', (route) => {
+    if (/^\/repos\/[^/]+\/[^/]+\/branches\/[^/]+$/.test(new URL(route.request().url()).pathname)) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'main' }) }) // GIT-25: the branch can be read
     const url = new URL(route.request().url())
     if (url.pathname === '/repos/example/storage') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ permissions: { push: false } }) })
     const match = /^\/repos\/example\/storage\/contents\/?(.*)$/.exec(url.pathname)
@@ -1571,6 +1621,7 @@ test('TC-CON-61: Streams → Removed connections finds a connection dropped from
   } })
   await context.route('https://dev.azure.com/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
   await context.route('https://api.github.com/**', (route) => {
+    if (/^\/repos\/[^/]+\/[^/]+\/branches\/[^/]+$/.test(new URL(route.request().url()).pathname)) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'main' }) }) // GIT-25: the branch can be read
     const request = route.request(), url = new URL(request.url())
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
     if (url.pathname === '/repos/example/storage') return json({ permissions: { push: true } })
@@ -1635,6 +1686,8 @@ test('TC-CON-63: without a roles file the app is read-only — a notice says why
     const request = route.request(), url = new URL(request.url())
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
     if (url.pathname === '/repos/example/storage') return json({ permissions: { push: true } })
+    // GIT-25: the repository and branch are readable, so a 404 of access.json means it is missing.
+    if (url.pathname === '/repos/example/storage/branches/main') return json({ name: 'main' })
     const match = /^\/repos\/example\/storage\/contents\/(.*)$/.exec(url.pathname)
     if (match && request.method() === 'PUT') { const path = decodeURIComponent(match[1]); if (path === '.demand-planning-write-check') return json({ message: 'Invalid request' }, 422); writes.push([path, JSON.parse(Buffer.from(JSON.parse(request.postData()).content, 'base64').toString())]); return json({ content: { sha: 'new' }, commit: { html_url: 'https://github.com/example/storage/commit/new' } }) }
     return json({ message: 'Not Found' }, 404)

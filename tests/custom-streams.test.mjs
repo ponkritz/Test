@@ -1,5 +1,6 @@
 import test, { afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { addCustomStream, changeCustomStream, customStreamDefs, customStreamProblem, parseCustomStreams, removeCustomStream, ruleOf, ruleOptions, serializeCustomStreams } from '../src/customStreams.ts'
 import { allStreams, releaseMenuEntries, defaultStreams, exportForStream, isEcpExport, profileForStream, setCustomStreams, streamNamedBy, streamOfProfile, streamsVersion, windchillOptionsForView, windchillStreamExports } from '../src/streams.ts'
 import { defaultStreamReleases } from '../src/releaseOverview.ts'
@@ -138,4 +139,25 @@ test('NAV-52: Release Details is one list — every stream A–Z (case ignored),
   // Without exports: each Windchill stream is listed by its name (＋, not imported yet) and nothing is added after them.
   setCustomStreams([])
   assert.deepEqual(shown(releaseMenuEntries([])), ['azure:Content', 'azure:CP', 'azure:DP', 'windchill:ECP:+', 'azure:IOCC', 'windchill:S&S IT:+', 'azure:Tool Validations'])
+})
+
+import * as customStreamsModule from '../src/customStreams.ts'
+import { readTextFile as readGitText } from '../src/gitStorage.ts'
+// GIT-25 (KB-92): a repository the token cannot read (GitHub answers 404 for everything) keeps the custom streams cached
+// in this browser; only a file really missing in a readable repository clears them.
+test('GIT-25: the cached custom streams stay when the repository cannot be read; a missing file in a readable one clears them (TC-GIT-18)', async () => {
+  const { readCustomStreamsInto, cachedCustomStreams, customStreamsCacheKey } = customStreamsModule
+  const data = new Map(), storage = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)), removeItem: (key) => data.delete(key) }
+  const text = serializeCustomStreams([{ name: 'Lab Systems', rule: 'iocc', fuzzy: false }])
+  storage.setItem(customStreamsCacheKey, text)
+  const notFound = (readable) => async (url) => ({ ok: readable && url.includes('/branches/'), status: readable && url.includes('/branches/') ? 200 : 404, json: async () => ({}) })
+  const locked = { owner: 'example-org', repo: 'streams-locked', branch: 'main', path: 'custom-streams.json' }
+  await assert.rejects(readCustomStreamsInto(() => readGitText(locked, 't', notFound(false)), storage), /cannot access it/)
+  assert.equal(storage.getItem(customStreamsCacheKey), text, 'the cache is kept')
+  assert.deepEqual(cachedCustomStreams(storage).map((entry) => entry.name), ['Lab Systems'])
+  const open = { ...locked, repo: 'streams-open' }
+  const read = await readCustomStreamsInto(() => readGitText(open, 't', notFound(true)), storage)
+  assert.deepEqual([read.streams, read.sha, storage.getItem(customStreamsCacheKey)], [[], null, null], 'a file deleted in a readable repository: no custom streams')
+  const hook = readFileSync(new URL('../src/useCustomStreams.ts', import.meta.url), 'utf8')
+  assert.match(hook, /readCustomStreamsInto\(readCustomStreams\)/, 'the hook reads through it')
 })

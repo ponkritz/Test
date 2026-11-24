@@ -83,7 +83,10 @@ function readBaseline(storage: Pick<Storage, 'getItem'>): Record<string, string>
 export function markViewsSynced(views: AzureConnectionProfileSummary[], storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage) {
   try { storage.setItem(baselineKey, JSON.stringify({ ...readBaseline(storage), ...Object.fromEntries(views.map((view) => [view.id, fingerprint(view)])) })) } catch { /* next sync compares again */ }
 }
-export interface SyncResult { added: string[]; updated: string[]; kept: string[]; noPat: string[]; removed: string[]; removedIds: string[]; enforced: string[]; emailCleared: boolean }
+// repositoryChanged (GIT-26): the first sync from a repository other than the one this browser last synced with.
+// notHere: connections in Git that were not here (added); onlyHere: connections here that Git does not list (kept);
+// differ: connections here that differ from Git's version (kept as they are here).
+export interface SyncResult { added: string[]; updated: string[]; kept: string[]; noPat: string[]; removed: string[]; removedIds: string[]; enforced: string[]; emailCleared: boolean; repositoryChanged?: boolean; onlyHere?: string[]; differ?: string[] }
 
 // The emails an older shared file in Git still carries (before CON-80 every connection's email was written to it).
 export function sharedEmails(text: string): string[] {
@@ -106,6 +109,58 @@ export function clearSharedEmail(emails: string[], storage: Pick<Storage, 'getIt
   try { storage.setItem(emailFixKey, new Date().toISOString()) } catch { /* tried again next start */ }
   return cleared
 }
+// A PAT saved only on a connection that is removed stays in this browser as its server's PAT (as for a clean-up).
+function keepServerPat(profile: AzureConnectionProfileSummary, storage: Pick<Storage, 'getItem' | 'setItem'>) {
+  const full = loadAzureConnectionProfile(profile.id, storage), key = serverKey(profile)
+  if (full?.token && key && !loadServerPat(key, storage)) { try { saveServerPat(key, full.token, storage) } catch { /* the PAT goes with the connection */ } }
+}
+
+// GIT-26 (KB-92): the repository (owner/repo@branch, folder of the planning data) this browser last synced its
+// connections with. When Git storage points to another repository (Change connection, Switch, GIT-24) the connections
+// here came from the old one: its baseline says nothing about the new repository's file, and a clean-up marker there
+// was not meant for them. So the first sync from another repository changes nothing here and only adds what is new
+// (compareViewsWithGit); unknown (a browser from before this check, with connections from Git) counts as another one.
+const viewsRepoKey = 'demand-planning-views-repository-v1'
+export function viewsRepository(storage: Pick<Storage, 'getItem'> = localStorage) { try { return storage.getItem(viewsRepoKey) ?? '' } catch { return '' } }
+export function markViewsRepository(repository: string, storage: Pick<Storage, 'setItem'> = localStorage) { try { storage.setItem(viewsRepoKey, repository) } catch { /* compared again next time */ } }
+export function repositoryChanged(repository: string, storage: Pick<Storage, 'getItem'> = localStorage) {
+  const last = viewsRepository(storage)
+  if (last) return last !== repository
+  return Object.keys(readBaseline(storage)).length > 0
+}
+// The first sync after a repository change: connections in Git that are not here (by ID or as a duplicate) are added;
+// nothing here is removed or replaced, and no PAT is touched. The baseline then holds only the connections that match
+// the new repository's setup, so a later sync never removes or replaces one that came from the old repository.
+export function compareViewsWithGit(views: AzureConnectionProfileSummary[], storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): SyncResult {
+  const result: SyncResult = { added: [], updated: [], kept: [], noPat: [], removed: [], removedIds: [], enforced: [], emailCleared: false, repositoryChanged: true, onlyHere: [], differ: [] }
+  const here = listAzureConnectionProfiles(storage).filter((profile) => !profile.mine)
+  const add: AzureConnectionProfileSummary[] = [], same: AzureConnectionProfileSummary[] = []
+  for (const view of views) {
+    const local = here.find((entry) => entry.id === view.id)
+    if (local) { if (fingerprint(local) === fingerprint(view)) same.push(view); else result.differ!.push(local.viewName || local.reason); continue }
+    if (view.role !== 'time-tracking' && here.some((entry) => connectionKey(entry) === connectionKey(view))) { result.kept.push(view.viewName || view.reason); continue }
+    add.push(view)
+  }
+  const keys = new Set(views.filter((view) => view.role !== 'time-tracking').map(connectionKey))
+  result.onlyHere = here.filter((profile) => !views.some((view) => view.id === profile.id) && !(profile.role !== 'time-tracking' && keys.has(connectionKey(profile)))).map((profile) => profile.viewName || profile.reason)
+  const restored = restoreViews(add, '', storage)
+  for (const view of add) {
+    const name = view.viewName || view.reason
+    if (restored.added.includes(name)) { result.added.push(name); same.push(view) }
+  }
+  result.noPat = restored.noPat
+  try { storage.setItem(baselineKey, JSON.stringify(Object.fromEntries(same.map((view) => [view.id, fingerprint(view)])))) } catch { /* compared again next time */ }
+  return result
+}
+// The text shown after a first sync from another repository (GIT-26).
+export function repositoryChangeNote(repository: string, result: SyncResult | null, resetSkipped: boolean) {
+  const named = (names: string[]) => names.length ? `: ${names.join(', ')}` : ''
+  const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+  const setup = !result ? 'It has no connection setup yet; the connections here are kept.'
+    : `The connection setup there has ${plural(result.added.length, 'connection that was', 'connections that were')} not here (added${named(result.added)}) and lacks ${plural(result.onlyHere?.length ?? 0, 'that is', 'that are')} here (kept here${named(result.onlyHere ?? [])})${result.differ?.length ? `; ${plural(result.differ.length, 'connection differs', 'connections differ')} from here (kept as here${named(result.differ)})` : ''}.`
+  return `Git storage now uses another repository (${repository}). ${setup}${resetSkipped ? ' Its connection clean-up (azure-views-reset.json) was not applied here.' : ''} Nothing here was removed or replaced, and your PATs are kept: Save connections to Git adds yours to the new repository, Restore from Git takes its version, and a connection you no longer need is removed in Settings. `
+}
+
 export function syncViewsFromGit(views: AzureConnectionProfileSummary[], storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage, fileEmails: string[] = []): SyncResult {
   const result: SyncResult = { added: [], updated: [], kept: [], noPat: [], removed: [], removedIds: [], enforced: [], emailCleared: false }
   result.emailCleared = clearSharedEmail(fileEmails, storage)
@@ -135,7 +190,7 @@ export function syncViewsFromGit(views: AzureConnectionProfileSummary[], storage
     if (views.some((view) => view.id === id)) continue
     gone.push(id)
     const local = listAzureConnectionProfiles(storage).find((entry) => entry.id === id)
-    if (local && fingerprint(local) === print) { try { forgetAzureConnectionProfile(id, storage); result.removed.push(local.viewName || local.reason); result.removedIds.push(id) } catch { /* kept */ } }
+    if (local && fingerprint(local) === print) { try { keepServerPat(local, storage); forgetAzureConnectionProfile(id, storage); result.removed.push(local.viewName || local.reason); result.removedIds.push(id) } catch { /* kept */ } }
   }
   markViewsSynced(synced, storage)
   if (gone.length) { try { const next = readBaseline(storage); for (const id of gone) delete next[id]; storage.setItem(baselineKey, JSON.stringify(next)) } catch { /* compared again next time */ } }

@@ -1199,6 +1199,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-GIT-17 Change connection opens with the connection in use** — Req GIT-13, GIT-24 — E2E `shell.e2e.mjs` ("TC-GIT-16, TC-GIT-17": the Git storage panel is shown with the old connection, Switch moves it, then Change connection… shows owner philips-internal, repository InD_DemandPlanningStorage, branch main; KB-90).
 
+**TC-GIT-18 A repository the token cannot read is an error, not a missing file** — Req GIT-25 — L1 `git-storage.test.mjs` ("GIT-25: a 404 from a repository the token cannot read is an error, never a missing file — every reader (TC-GIT-18)", "GIT-25: a 404 in a readable repository is a missing file; the repository is probed once and the answer reused (TC-GIT-18)"), `custom-streams.test.mjs` ("GIT-25: the cached custom streams stay when the repository cannot be read; a missing file in a readable one clears them (TC-GIT-18)"); browser check: connect Git storage to a private repository the token cannot see — Data & sharing shows "Repository … or branch … was not found, or the token cannot access it.", the custom streams, connections and PATs of this browser stay, and GitHub is asked for the branch once.
+
+**TC-GIT-19 The first sync from another repository removes no connection** — Req GIT-26 — L1 `view-definitions.test.mjs` ("GIT-26: the first sync from another repository removes no connection or PAT, applies no clean-up, and says what differs (TC-GIT-19)", "GIT-26: the start sync checks for a repository change before any clean-up marker is applied; a failed sync is shown (TC-GIT-19)"); browser check: with connections synced from one repository, Change connection… to another whose azure-views.json lists other connections and holds an azure-views-reset.json — after the restart every connection and PAT is still here, the new ones are added, and Admin → Data & sharing (Git storage, and Shared setup in Git) names what was added, what is only here and what differs.
+
+**TC-GIT-20 An unreadable repository keeps what the browser has and offers no Set up roles** — Req GIT-25, CON-101 — E2E `shell.e2e.mjs` ("TC-GIT-20: a data repository the token cannot read (404 for everything) — the custom streams, connection and PAT here stay, the error says the repository cannot be read, and Set up roles is not offered"): GitHub answers 404 for everything in the new repository; the read-only notice says the data repository cannot be read (Open Git storage, no Set up roles), the custom stream stays in the menu, the connection and its server's PAT and the custom streams cache stay in this browser, Data & sharing names the repository, People & roles shows the error and no "No access roles yet", and the branch is probed once.
+
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
 - Steps:
@@ -2399,6 +2405,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-22 | TC-GIT-14 |
 | GIT-23 | TC-GIT-15 |
 | GIT-24 | TC-GIT-16 |
+| GIT-25 | TC-GIT-18, TC-GIT-20 |
+| GIT-26 | TC-GIT-19 |
 | GIT-19 | TC-GIT-12 |
 | GIT-17 (Tool Validations master list) | TC-TVL-01 |
 | GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
@@ -2839,7 +2847,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-CON-62 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |

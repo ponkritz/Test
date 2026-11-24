@@ -31,6 +31,8 @@ export function GitStoragePanel({ git }: { git: GitStorage }) {
         <div className="connection-actions"><button className="primary" disabled={git.status === 'loading' || git.status === 'saving'}>{git.connected ? 'Update & load' : 'Connect & load'}</button><button type="button" className="ghost" onClick={() => setOpen(false)}>Cancel</button></div>
       </form>
     </Modal>}
+    {/* GIT-25, GIT-26: the connection setup not synced (repository unreadable), or first synced from another repository. */}
+    {git.viewsAlert && <Notice tone="warning" className="git-views-alert">{git.viewsAlert}</Notice>}
     {git.message && <Notice tone={git.status === 'error' || git.status === 'conflict' ? 'error' : git.status === 'empty' ? 'warning' : 'info'}>{git.message}{git.history && git.connected && <> · <a href={git.history} target="_blank" rel="noreferrer">History in GitHub</a></>}</Notice>}
   </Panel>
 }

@@ -89,6 +89,7 @@ What the team shares lives in a private GitHub repository: the planning data, th
 - With a read-only token the app shows the shared data, but saving buttons are greyed out with the reason.
 - The token stays in your browser, like the PAT.
 - **The team's data moved** to `philips-internal/InD_DemandPlanningStorage`. If you connected before the move, a notice at the top of every page says so: press **Switch to philips-internal/InD_DemandPlanningStorage**. Your token must be allowed on the new repository; if it is not, ask for a new fine-grained token for it.
+- **"… was not found, or the token cannot access it."** means your token cannot read the repository (or the branch is wrong). The app then keeps everything you had — your streams, connections and PATs — and changes nothing until the token works; ask for access to the repository. After you change the repository, your connections are kept: the first start only adds the new repository's connections and Admin → Data & sharing (Git storage, and Shared setup in Git) tells you what differs.
 
 ### Your work email
 
