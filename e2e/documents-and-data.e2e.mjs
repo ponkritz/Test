@@ -502,7 +502,7 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   await context.close()
 })
 
-test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create Features is disabled with the reason and opens Bulk creation Epics; a shared mapping saved there is used', async () => {
+test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create Features is disabled with the reason and opens Bulk creation Epics; a mapping saved there is used', async () => {
   // The same synthetic DP, IOCC and Content release pages as TC-QV-43; nothing is fetched (Azure DevOps answers 401).
   const query = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] = 'Approved'"
   const view = (name) => ({ id: name.toLowerCase().replace(/\W+/g, '-'), url: `https://azure.example.com/tfs/Collection/${encodeURIComponent(name)}`, baseUrl: 'https://azure.example.com/tfs', token: 'e2e-token-0123456789', reason: name, viewName: name, role: 'release-source', query, showInMenu: true })
@@ -535,9 +535,10 @@ test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create
   assert.equal(await text(page.locator('header.topbar h1')), 'Stream options')
   const row = (stream) => panel.getByRole('row', { name: new RegExp(`^${stream}`) })
   for (const stream of ['DP', 'IOCC', 'Content']) { assert.match(await text(row(stream)), /not set/, `${stream}: not set`); assert.doesNotMatch(await text(row(stream)), /built in/, `${stream}: no built-in Epic`) }
-  await panel.getByLabel('DP shared bulk Epic').fill('15000')
+  // No Git storage is connected, so the shared Epic cannot be set here: map my own.
+  await panel.getByLabel('DP my bulk Epic').fill('15000')
   await row('DP').getByRole('button', { name: 'Save' }).click()
-  await row('DP').filter({ hasText: /#15000.*shared/ }).waitFor()
+  await row('DP').filter({ hasText: /#15000.*mine/ }).waitFor()
   // Mapped: the reason is gone, Create Features opens and works under the mapped Epic.
   await open('DP')
   await releases().getByRole('button', { name: 'Select all shown', exact: true }).click()

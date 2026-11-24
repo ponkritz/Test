@@ -28,3 +28,12 @@ export function loadMyBulkEpics(storage: Pick<Storage, 'getItem'> = localStorage
 export function saveMyBulkEpics(value: Partial<Record<BulkStream, number>>, storage: Pick<Storage, 'setItem' | 'removeItem'> = localStorage) {
   try { const clean = normalizeBulkEpics(value); if (clean) storage.setItem(mineKey, JSON.stringify(clean)); else storage.removeItem(mineKey) } catch { /* this visit only */ }
 }
+
+// QV-59: a shared bulk creation Epic is committed to Git straight away (no separate Save to Git); without a writable Git
+// connection the shared Save is disabled with this reason ('' = allowed).
+export function bulkSharedBlocked(git?: { connected: boolean; readOnly: boolean; isSample: boolean }) {
+  if (!git?.connected) return 'Connect Git storage first: the shared Epic is saved straight to Git.'
+  if (git.isSample) return 'Synthetic sample data is loaded: saving to Git is disabled.'
+  if (git.readOnly) return 'Your Git token can only read the data repository: the shared Epic cannot be saved.'
+  return ''
+}

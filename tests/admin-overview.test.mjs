@@ -9,7 +9,7 @@ test('Admin overview: open Get started steps and shared-setup checks, required f
   assert.deepEqual(adminHealth([], facts), [])
   const steps = [{ id: 'pat', title: 'PAT', why: 'needed', how: [], state: 'todo', required: true, tab: 'connections', section: 'servers' }, { id: 'streams', title: 'Streams', why: 'optional', how: [], state: 'todo', required: false, tab: 'connections', section: 'mapping' }, { id: 'git', title: 'Git', why: '', how: [], state: 'done', required: true }]
   const items = adminHealth(steps, { ...facts, policy: true, toolOwner: false, unsaved: true, bulkEpicsUnset: ['IOCC'], epicSetups: 0 })
-  assert.deepEqual(items.map((item) => [item.id, item.tone]), [['step:pat', 'todo'], ['unsaved', 'warn'], ['toolowner', 'warn'], ['step:streams', 'info'], ['bulk-epic:IOCC', 'info'], ['epic-setup', 'info']])
+  assert.deepEqual(items.map((item) => [item.id, item.tone]), [['step:pat', 'todo'], ['unsaved', 'warn'], ['toolowner', 'warn'], ['bulk-epic:IOCC', 'warn'], ['step:streams', 'info'], ['epic-setup', 'info']])
   assert.deepEqual(items.find((item) => item.id === 'bulk-epic:IOCC').fix, { tab: 'options', section: 'bulk', label: 'Bulk creation Epics' })
   assert.deepEqual(items[0].fix, { tab: 'connections', section: 'servers', label: 'Open' })
   assert.ok(adminHealth([], { ...facts, policy: false }).some((item) => item.id === 'access'), 'no access roles yet')
@@ -38,9 +38,9 @@ test('ADM-05: bulk creation Epics without a shared Feature setup, and shared set
   assert.deepEqual(items[1].fix, { tab: 'epics', section: 'setup', label: 'Feature setup' })
 })
 
-test('ADM-05, QV-59: every bulk stream without a mapped Epic (none built in) is listed, as IOCC was (TC-ADM-03)', () => {
+test('ADM-05, QV-59: every bulk stream without a mapped Epic (none built in) is listed for attention, as IOCC was (TC-ADM-03)', () => {
   const items = adminHealth([], { ...facts, bulkEpicsUnset: ['DP', 'IOCC', 'Content'] })
-  assert.deepEqual(items.map((item) => [item.id, item.title, item.tone]), [['bulk-epic:DP', 'DP bulk creation Epic is not set', 'info'], ['bulk-epic:IOCC', 'IOCC bulk creation Epic is not set', 'info'], ['bulk-epic:Content', 'Content bulk creation Epic is not set', 'info']])
+  assert.deepEqual(items.map((item) => [item.id, item.title, item.tone]), [['bulk-epic:DP', 'DP bulk creation Epic is not set', 'warn'], ['bulk-epic:IOCC', 'IOCC bulk creation Epic is not set', 'warn'], ['bulk-epic:Content', 'Content bulk creation Epic is not set', 'warn']], 'needs attention (Create Features is disabled), not optional')
   for (const item of items) assert.deepEqual(item.fix, { tab: 'options', section: 'bulk', label: 'Bulk creation Epics' })
   assert.deepEqual(adminHealth([], facts), [], 'all mapped: nothing listed')
 })

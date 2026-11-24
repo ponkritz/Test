@@ -63,7 +63,7 @@ This document lists every software component of the system: the in-house source 
 | NamingPatternsPanel | `src/components/NamingPatternsPanel.tsx` | Settings → Stream mapping → Release naming patterns: edit, try a Title, apply, reset. | QV |
 | FeatureEpicsPanel | `src/components/FeatureEpicsPanel.tsx` | Settings → Stream mapping → Epics to match Features in: per stream, the QMS-0025 Epics its releases are matched in (QV-57). | QV, SET |
 | ReleaseCounts | `src/components/ReleaseCounts.tsx` | Completed / Supported release counts of CP, DP and IOCC with entered placeholders, and the Admin entry of those counts (QV-58). | QV, SET |
-| BulkEpicsPanel | `src/components/BulkEpicsPanel.tsx` | Admin → Stream options → Bulk creation Epics: shared and personal Epic per stream, "not set" when neither; the not-set reason with Open Bulk creation Epics next to a disabled Create Features (QV-59). | QV, SET |
+| BulkEpicsPanel | `src/components/BulkEpicsPanel.tsx` | Admin → Stream options → Bulk creation Epics: shared (saved straight to Git) and personal Epic per stream, "not set" when neither; the not-set reason with Open Bulk creation Epics next to a disabled Create Features (QV-59). | QV, SET |
 | IoccBulkCreate | `src/components/IoccBulkCreate.tsx` | Create Features for the selected IOCC releases by the DP rules (QV-59). | QV, DPF |
 | ZoomControl | `src/components/ZoomControl.tsx` | The desktop app's zoom control: − / % / +, Auto, Ctrl keys. | UI |
 | LookAndFeel | `src/components/LookAndFeel.tsx` | Look & feel tabs: Page layout (margins and border), Theme and zoom, Start view and menu. | SET, NAV |
@@ -157,7 +157,7 @@ This document lists every software component of the system: the in-house source 
 | SettingsSearch | `src/components/SettingsSearch.tsx` | The Search settings pop-up (Ctrl K) (ADM-03). | ADM |
 | MyViewsPanel | `src/components/MyViewsPanel.tsx` | My settings → My views: list, add, fetch and remove your own read-only views (SET-17). | SET |
 | ScopeChip | `src/components/ScopeChip.tsx` | The chip saying whom a setting affects: only you, this computer, everyone, or the Tool Owner (SET-16). | SET |
-| bulkEpics | `src/bulkEpics.ts` | The bulk creation Epic per stream: personal over shared, none built in, and the reason Create Features is disabled without one (QV-59). | QV |
+| bulkEpics | `src/bulkEpics.ts` | The bulk creation Epic per stream: personal over shared, none built in, the reason Create Features is disabled without one, and why a shared Epic cannot be saved to Git (QV-59). | QV |
 | useDataLabels | `src/useDataLabels.ts` | The hook a chart uses for its Data labels switch (UI-17). | UI |
 | ScopeSwitch | `src/components/ScopeSwitch.tsx` | Team / Individual toggle with person picker, in the header or page top. | MON, OVR |
 | SectionTabs | `src/components/SectionTabs.tsx` | The section row of a Settings page: one section at a time, the last one remembered per page (SET-14). | SET, NAV |

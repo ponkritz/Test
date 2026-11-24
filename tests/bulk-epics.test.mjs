@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as bulkEpics from '../src/bulkEpics.ts'
-import { bulkEpicFor, bulkEpicMissing, loadMyBulkEpics, normalizeBulkEpics, saveMyBulkEpics } from '../src/bulkEpics.ts'
+import { bulkEpicFor, bulkEpicMissing, loadMyBulkEpics, normalizeBulkEpics, saveMyBulkEpics, bulkSharedBlocked } from '../src/bulkEpics.ts'
 import { normalizeReleaseSourceSettings } from '../src/releaseSource.ts'
 import { ioccPlan, qeForName } from '../src/dpBulk.ts'
 
@@ -57,4 +57,12 @@ test('QV-61: IOCC bulk creation uses the IOCC Epic\'s own Feature setup (DoD and
   // DPF-09: no built-in Release / PU sets — without a setup a release is skipped and says why.
   const bare = ioccPlan([release('2.0.0.0')], { setup: undefined, qeMapping, board, epicId: 21000, featureTitle: () => 't', featureMatch: () => undefined })
   assert.deepEqual([bare[0].set, bare[0].baseSkip], [undefined, 'the IOCC bulk Epic has no Feature setup (Admin → Epic & Feature setup)'])
+})
+
+test('QV-59: a shared bulk creation Epic is saved straight to Git — only with a writable Git connection, else the reason (TC-QV-40)', () => {
+  assert.equal(bulkSharedBlocked({ connected: true, readOnly: false, isSample: false }), '', 'connected and writable: Save to Git')
+  assert.match(bulkSharedBlocked(undefined), /Connect Git storage first/)
+  assert.match(bulkSharedBlocked({ connected: false, readOnly: false, isSample: false }), /Connect Git storage first/)
+  assert.match(bulkSharedBlocked({ connected: true, readOnly: false, isSample: true }), /Synthetic sample data is loaded/)
+  assert.match(bulkSharedBlocked({ connected: true, readOnly: true, isSample: false }), /can only read/)
 })

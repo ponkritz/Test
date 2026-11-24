@@ -843,7 +843,7 @@ The **Team tree** tab shows the reporting lines. **Capacity roles** sets which t
 
 ![Admin → Streams (here read only, with server names replaced by made-up ones)](user-guide/images/streams.png)
 
-**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream options** sets the Epics Features are matched in, the bulk creation Epics (the Epic each of DP, IOCC and Content creates its Features under — none built in, so map each one the team uses) and the release counts.
+**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream options** sets the Epics Features are matched in, the bulk creation Epics (the Epic each of DP, IOCC and Content creates its Features under — none built in, so map each one the team uses; **Save to Git** on a shared one commits it straight to Git, and Admin → Overview shows a stream without one under Attention) and the release counts.
 
 Your own read-only views are in **My settings → My views**: they appear under **Other views** in your menu only, and never change a stream.
 

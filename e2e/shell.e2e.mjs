@@ -1,6 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { cachedRoles, loadSample, navigate, openPage, openPerson, peopleSource, profileItem, rolesFile, startApp, text, toggleFilter } from './helpers.mjs'
+import { fakeGitHub } from './fakeGitHub.mjs'
 
 // Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-NAV-52, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
 // TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-GIT-17, TC-GIT-20, TC-SET-05), automated against the built web app.
@@ -1507,13 +1508,48 @@ test('TC-QV-40: Stream mapping → Bulk creation Epics — shared and my own Epi
   // No Epic is built in: every stream is "not set" until it is mapped.
   for (const stream of ['DP', 'IOCC', 'Content']) assert.match(await text(row(stream)), /not set/, `${stream}: not set`)
   assert.doesNotMatch(await text(panel), /built in|13946|22919/, 'no built-in Epic hint')
-  await panel.getByLabel('IOCC shared bulk Epic').fill('21000')
-  await row('IOCC').getByRole('button', { name: 'Save' }).click()
-  assert.match(await text(row('IOCC')), /#21000.*shared/)
+  // The shared Epic is saved straight to Git: without a Git connection it cannot be set, and says why.
+  assert.equal(await panel.getByLabel('IOCC shared bulk Epic').isDisabled(), true, 'shared: disabled without a writable Git')
+  assert.equal(await text(panel.getByRole('note')), 'Connect Git storage first: the shared Epic is saved straight to Git.')
   await panel.getByLabel('IOCC my bulk Epic').fill('21001')
   await row('IOCC').getByRole('button', { name: 'Save' }).click()
-  assert.match(await text(row('IOCC')), /#21001.*mine/)
+  await row('IOCC').filter({ hasText: /#21001.*mine/ }).waitFor()
   assert.equal(await page.evaluate(() => localStorage.getItem('demand-planning-bulk-epics-v1')), '{"IOCC":21001}', 'mine stays in this browser')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-QV-40: Admin → Overview flags a stream without a bulk creation Epic for attention; Save to Git on a shared Epic commits it straight to Git', async () => {
+  const gh = fakeGitHub({ files: { 'access.json': cachedRoles('Tool Owner') } })
+  const { page, context, errors } = await openPage(app, { roles: true, init: () => {
+    localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
+    localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+    localStorage.setItem('demand-planning-work-email-v1', 'owner@example.com')
+  } })
+  await context.route('https://api.github.com/**', gh.route)
+  await context.route(/dev\.azure\.com|azure\.example\.com/, (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  for (const title of ['Get started', 'Could not fetch from Azure DevOps']) {
+    const dialog = page.getByRole('dialog').filter({ hasText: title })
+    await page.addLocatorHandler(dialog, () => dialog.getByRole('button', { name: 'Close', exact: true }).last().click())
+  }
+  await page.reload()
+  await page.locator('.sidebar nav').waitFor()
+  await navigate(page, /Overview$/)
+  const health = page.locator('.admin-overview')
+  const item = (stream) => health.locator('li', { hasText: `${stream} bulk creation Epic is not set` })
+  for (const stream of ['DP', 'IOCC', 'Content']) assert.equal(await text(item(stream).locator('.pill')), 'Attention', `${stream}: needs attention, not optional`)
+  await item('DP').getByRole('button').click()
+  const panel = page.locator('.bulk-epics')
+  await panel.waitFor()
+  const row = (stream) => panel.getByRole('row', { name: new RegExp(`^${stream}`) })
+  await panel.getByLabel('DP shared bulk Epic').fill('21000')
+  await row('DP').getByRole('button', { name: 'Save to Git' }).click()
+  await panel.locator('.notice', { hasText: 'Saved to example/storage · planning-data.json' }).waitFor()
+  assert.equal(JSON.parse(gh.read('planning-data.json')).releaseSourceSettings.bulkEpics.DP, 21000, 'committed to Git, no separate Save to Git')
+  assert.match(await text(row('DP')), /#21000.*shared/)
+  await navigate(page, /Overview$/)
+  await item('IOCC').waitFor()
+  assert.equal(await item('DP').count(), 0, 'DP is no longer listed once mapped')
   assert.deepEqual(errors, [])
   await context.close()
 })
