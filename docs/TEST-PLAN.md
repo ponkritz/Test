@@ -1107,7 +1107,7 @@ TC-OVR-01 to TC-OVR-03 tested the earlier Overview and are **retired** with OVR-
 
 **TC-CAP-34 Team tree tab** — Req CAP-62, SET-13 — E2E `people.e2e.mjs` ("TC-CAP-33 / TC-CAP-34: …": the Team tree tab with the reporting lines, apart from the list); E2E `shell.e2e.mjs` ("TC-SET-05": the outside manager at the top of the Team tree tab); browser check: a role without "Edit people" sees no Team tree tab.
 
-**TC-CAP-01 Capacity calculation** — Req CAP-01…09, OVR-09 — L1 `capacity.test.mjs`, `monthly-hours.test.mjs`, `azure-insights.test.mjs`. Plus L3 analysis (A) with one person in October 2026:
+**TC-CAP-01 Capacity calculation** — Req CAP-01…09, OVR-09 — L1 `capacity.test.mjs`, `monthly-hours.test.mjs`, `azure-insights.test.mjs` (incl. "CAP-03, KB-94: absence is read under the Absence Epic of the capacity settings, not a fixed Epic 37778"). Plus L3 analysis (A) with one person in October 2026:
 - 22 working days × 8 = 176 h funded.
 - An India holiday of 8 h gives 168 h available.
 - 84 h booked gives utilization 50%, status "Has capacity".
