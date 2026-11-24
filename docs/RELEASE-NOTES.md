@@ -2,6 +2,20 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.7.0 — 2026-11-24
+
+**Added**
+- **Save view for everyone** — the Tool Owner (the right "Table, chart and page defaults") saves a table's column order, shown and hidden columns, widths, Wrap text, density and sort in its **Columns** panel as the view everyone starts with, kept once per table in the shared views defaults in Git with who saved it and when, queued and listed under Background jobs; **Clear the view for everyone** removes it (UI-20). A viewer's own changes win, then the view for everyone, then the table's built-in view; the Columns panel says which view is shown and offers **Use the view for everyone** (UI-21). Columns that no longer exist are ignored and new ones come at the end, shown (UI-22).
+- **Page filters for everyone** — the Team overview, On-Demand Dashboard pages, an Insights page's filter row and the People filters offer the same Save / Clear beside the filters, with the same order (UI-23); the People filters are now remembered per person (MYD-08).
+
+**Changed**
+- A table's sort is remembered per table like its widths and order; Reset layout goes back to the view for everyone when one is saved (UI-08).
+- QMS-0025 **Column Options**: "Save for everyone" now reads **Save view for everyone**, with **Clear the view for everyone** and who / when kept beside the order (BKL-47).
+
+DF-255, DF-256, SM-143, LIM-62; TC-UI-13…TC-UI-17, TC-BKL-36.
+
+PR #383.
+
 ## v10.6.0 — 2026-11-24
 
 **Changed**
