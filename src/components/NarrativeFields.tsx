@@ -5,7 +5,8 @@ import { factoryOf, sizeFromOptions, withSizeOptions } from '../chartSize'
 import { SizeFields } from './ChartSize'
 import { Info } from './ui'
 
-// CHT-66 The Narrative part of the chart pop-up (Insights) and the block pop-up (Dashboard): Group by, the period's
+// CHT-66 The Narrative part of the chart pop-up (Insights) and the block pop-up (Dashboard) — Group by on the Data tab,
+// the rest on the Narrative tab (CHT-70): Group by, the period's
 // Date column and length, the automatic sentences to show, the threshold, the rules (add, edit, ↑ ↓, remove; at most
 // 20), every rule or the first that matches, the Else sentence and the width. The measure, its column and the filters
 // are the pop-up's own fields, as for a chart. onChange gets the whole insight.
@@ -13,7 +14,7 @@ const metricOrder: NarrativeMetric[] = ['total', 'count', 'top_value', 'share', 
 const opsFor = (metric: NarrativeMetric): NarrativeOp[] => metric === 'top' ? ['is_top'] : metric === 'change' ? ['gt', 'ge', 'lt', 'le', 'eq', 'changed'] : ['gt', 'ge', 'lt', 'le', 'eq']
 const blankRule = (): NarrativeRule => ({ metric: 'total', op: 'gt', value: '', template: '', tone: 'info' })
 
-export function NarrativeFields({ page, insight, onChange }: { page: OnDemandPage; insight: Insight; onChange: (next: Insight) => void }) {
+export function NarrativeFields({ page, insight, onChange, part }: { page: OnDemandPage; insight: Insight; onChange: (next: Insight) => void; part: 'data' | 'narrative' }) {
   const narrative: Narrative = insight.narrative ?? { auto: [], rules: [] }
   const set = (change: Partial<Narrative>) => onChange({ ...insight, narrative: { ...narrative, ...change } })
   const groups = categoryColumns(page, 'narrative')
@@ -27,16 +28,17 @@ export function NarrativeFields({ page, insight, onChange }: { page: OnDemandPag
   const options = insight.options ?? {}
   const size = { ...factoryOf(kind), ...sizeFromOptions(options, kind) }
   const addReason = narrative.rules.length >= maxNarrativeRules ? `At most ${maxNarrativeRules} rules.` : ''
-  return <fieldset className="narrative-fields"><legend>Narrative <Info label="Narrative">Sentences in plain text about the measure above, over the rows the narrative counts — the filter row or the dashboard’s period and filters, then its own filters, as for a chart. Tick the automatic sentences to show; add rules of your own: If a number compares with a value, then show your sentence, with a tone (Info, Good, Warning, Bad). Placeholders in a sentence are replaced by the numbers: {narrativePlaceholders.map((key) => `{${key}}`).join(' ')}. No AI and no request: the same rows always give the same sentences.</Info></legend>
+  // CHT-70: Group by is on the Data tab; the period, the sentences, the rules and the width on the Narrative tab.
+  if (part === 'data') return <label>Group by (optional)
+    <select aria-label="Group by" value={insight.category} onChange={(event) => onChange({ ...insight, category: event.target.value })}>
+      <option value="">— None —</option>
+      {insight.category && !groups.some((column) => column.id === insight.category) && <option value={insight.category}>(not available)</option>}
+      {groups.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
+    </select>
+    <small>For the highest and lowest value, the share and the biggest mover.</small>
+  </label>
+  return <fieldset className="narrative-fields"><legend>Narrative <Info label="Narrative">Sentences in plain text about the measure (on the Data tab), over the rows the narrative counts — the filter row or the dashboard’s period and filters, then its own filters, as for a chart. Tick the automatic sentences to show; add rules of your own: If a number compares with a value, then show your sentence, with a tone (Info, Good, Warning, Bad). Placeholders in a sentence are replaced by the numbers: {narrativePlaceholders.map((key) => `{${key}}`).join(' ')}. No AI and no request: the same rows always give the same sentences.</Info></legend>
     <div className="form-row">
-      <label>Group by (optional)
-        <select aria-label="Group by" value={insight.category} onChange={(event) => onChange({ ...insight, category: event.target.value })}>
-          <option value="">— None —</option>
-          {insight.category && !groups.some((column) => column.id === insight.category) && <option value={insight.category}>(not available)</option>}
-          {groups.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
-        </select>
-        <small>For the highest and lowest value, the share and the biggest mover.</small>
-      </label>
       <label>Period on (optional)
         <select aria-label="Period on" value={narrative.period ?? ''} onChange={(event) => { const { period: _old, ...rest } = narrative; onChange({ ...insight, narrative: event.target.value ? { ...rest, period: event.target.value } : rest }) }}>
           <option value="">— None —</option>
@@ -45,12 +47,12 @@ export function NarrativeFields({ page, insight, onChange }: { page: OnDemandPag
         </select>
         <small>{dates.length ? 'A Date column: the latest period against the one before.' : 'The change needs a Date column on the page.'}</small>
       </label>
+      {hasPeriod && <label>Period length
+        <select aria-label="Period length" value={narrative.grain ?? 'month'} onChange={(event) => { const { grain: _old, ...rest } = narrative; const grain = event.target.value as NarrativeGrain; onChange({ ...insight, narrative: grain === 'month' ? rest : { ...rest, grain } }) }}>
+          {narrativeGrains.map((grain) => <option key={grain} value={grain}>{grainLabels[grain]}</option>)}
+        </select>
+      </label>}
     </div>
-    {hasPeriod && <label>Period length
-      <select aria-label="Period length" value={narrative.grain ?? 'month'} onChange={(event) => { const { grain: _old, ...rest } = narrative; const grain = event.target.value as NarrativeGrain; onChange({ ...insight, narrative: grain === 'month' ? rest : { ...rest, grain } }) }}>
-        {narrativeGrains.map((grain) => <option key={grain} value={grain}>{grainLabels[grain]}</option>)}
-      </select>
-    </label>}
     <fieldset className="narrative-checks" aria-label="Automatic sentences"><legend>Automatic sentences</legend>
       {narrativeAutoKeys.map((key) => { const reason = needs(key); return <label key={key} className="check" title={reason || autoLabels[key].hint}><input type="checkbox" disabled={Boolean(reason) && !narrative.auto.includes(key)} checked={narrative.auto.includes(key)} onChange={(event) => tick(key, event.target.checked)} />{autoLabels[key].label}{reason ? ` (${reason.replace(/\.$/, '').toLowerCase()})` : ''}</label> })}
     </fieldset>

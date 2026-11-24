@@ -1122,6 +1122,20 @@ div.chart-grid:not(.od-insights){margin-bottom:18px}
 .od-insight-editor{grid-template-columns:minmax(300px,1fr) minmax(320px,1.15fr)}
 .od-insight-fields,.od-insight-fields fieldset,.od-display,.od-insight-preview{min-width:0}
 @container (max-width:860px){.od-insight-editor{grid-template-columns:minmax(0,1fr)}}
+/* CHT-70…CHT-73: the chart editor in tabs — the form and the preview scroll between the heading and the buttons, which
+   stay visible and the pop-up keeps its height from tab to tab; on a wide pop-up the preview stays beside the tabs,
+   under them on a narrow one; the tab row scrolls sideways on a phone. */
+.modal:has(.od-insight-editor){display:flex;flex-direction:column;overflow:hidden;height:min(90vh,920px)}
+.modal:has(.od-insight-editor)>.od-insight-form{display:flex;flex-direction:column;gap:10px;min-height:0;flex:1 1 auto}
+.od-insight-form>.od-insight-editor{flex:1 1 auto;min-height:0;overflow:auto;padding:2px}
+.od-tab-panel{display:grid;gap:10px;min-width:0}
+.overview-tabs.editor-tabs{flex-wrap:nowrap;overflow-x:auto;margin:0 0 2px;gap:4px 18px;scrollbar-width:thin}
+.editor-tabs .backlog-tab{white-space:nowrap;flex-shrink:0}
+.editor-tab-count{color:var(--text-3);font-weight:400}
+.editor-tab-error{display:inline-grid;place-items:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:var(--danger);color:var(--surface);font-size:11px;font-weight:700;line-height:1}
+.overview-tabs .editor-tab-invalid,.overview-tabs .editor-tab-invalid.backlog-tab-active{color:var(--danger-text)}
+.od-editor-footer{flex:0 0 auto;display:grid;gap:8px}.od-editor-footer>.muted{margin:0}.od-editor-footer .notice{margin:0}
+@container (min-width:861px){.od-insight-preview{position:sticky;top:0}}
 .od-preview-title{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 /* CHT-36, KB-84: KPI cards — at least 180 px wide, wrapping to further rows; the number never cut, the caption 2 lines. */
 .metric-grid.od-kpi-cards,.metric-grid.od-kpi{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}

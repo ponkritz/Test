@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
-import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
+import { editorTab, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // The chart grid (CHT-43…CHT-50) and the chart follow-ups (CHT-40…CHT-42) against a mocked GitHub, named after UAT
 // case TC-CHT-37: on CoNQ's Insights tab the owner arranges the charts — the grid's lines and each chart's size shown,
@@ -225,6 +225,7 @@ test('TC-CHT-33: the owner picks an own colour with the hex field — the contra
   await page.getByRole('button', { name: 'More actions: Average cost by site' }).click()
   await page.getByRole('menuitem', { name: 'Edit…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit the chart or table' })
+  await editorTab(dialog, 'Format')
   assert.equal(await dialog.getByLabel('Series', { exact: true }).inputValue(), 'grouped')
   assert.equal(await dialog.getByLabel('Colour of Berlin', { exact: true }).inputValue(), 'custom')
   const hex = dialog.getByLabel('#rrggbb for Lyon')

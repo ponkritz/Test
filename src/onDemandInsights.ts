@@ -89,7 +89,7 @@ export function insightProblems(page: OnDemandPage, insight: Insight): string[] 
   if (!additive(insight.measure) && insight.type === 'pie') problems.push('A pie shows shares of a total: choose Count of rows or Sum.')
   if (!additive(insight.measure) && insight.type === 'pareto') problems.push('A Pareto adds its categories up to 100%: choose Count of rows or Sum.')
   // CHT-40: grouped bars (side by side) take every measure; stacked ones add their parts up.
-  if (!additive(insight.measure) && insight.type === 'bar' && insight.second && !isGrouped(insight)) problems.push(`Stacked bars add their parts up: ${insight.measure === 'average' ? 'an Average' : `a ${measureWord[insight.measure]}`} cannot be stacked. Choose Count or Sum, Grouped (side by side) under Display, or no stack.`)
+  if (!additive(insight.measure) && insight.type === 'bar' && insight.second && !isGrouped(insight)) problems.push(`Stacked bars add their parts up: ${insight.measure === 'average' ? 'an Average' : `a ${measureWord[insight.measure]}`} cannot be stacked. Choose Count or Sum, Grouped (side by side) under Format, or no stack.`)
   for (const filter of insight.filters) {
     const column = columnOf(page, filter.column)
     if (!column) problems.push('A filter’s column is no longer on the page (removed).')

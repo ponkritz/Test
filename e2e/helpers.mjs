@@ -133,3 +133,12 @@ export async function toggleFilter(page, label, option) {
   await page.keyboard.press('Escape')
   await list.waitFor({ state: 'detached' })
 }
+
+// CHT-70: the chart and block pop-ups hold their fields in tabs (Data, Filters, Format, Elements, Narrative): open one
+// before using its fields; it returns once that tab is the chosen one. Its name may carry a count, "Filters (2)".
+export async function editorTab(dialog, name) {
+  const tab = dialog.getByRole('tablist').getByRole('tab', { name: new RegExp(`^${name}\\b`) })
+  await tab.click()
+  await dialog.locator('[role="tab"][aria-selected="true"]', { hasText: name }).waitFor()
+  return tab
+}

@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
-import { loadSample, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
+import { editorTab, loadSample, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // Chart sizes (CHT-15…CHT-22), long labels (CHT-23, KB-83) and axis titles (CHT-24) against a mocked GitHub: on CoNQ's
 // Insights tab the owner sets a chart to ⅔ × Large with its own axis names in the Edit pop-up and another to ⅓ with
@@ -128,14 +128,16 @@ test('TC-CHT-13: the owner sets a chart to ⅔ × Large with its own axis names 
   await menu.waitFor({ state: 'detached' })
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'More actions: page CoNQ')
 
-  // The chart's ⋯ → Edit…: Display — Width ⅔, Height Large, the axis titles (placeholders: the automatic ones).
+  // The chart's ⋯ → Edit…: Format — Width ⅔, Height Large; Elements — the axis titles (placeholders: the automatic ones).
   await page.getByRole('button', { name: 'More actions: Cost by category' }).click()
   assert.deepEqual(await page.getByRole('menu', { name: 'Cost by category' }).getByRole('menuitem').allInnerTexts(), ['Move up', 'Move down', 'Edit…', 'Size…', 'Remove…'])
   await page.getByRole('menuitem', { name: 'Edit…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit the chart or table' })
+  await editorTab(dialog, 'Elements')
   assert.equal(await dialog.getByLabel('X axis name').getAttribute('placeholder'), 'Sum of Cost (EUR)')
   assert.equal(await dialog.getByLabel('Y axis name').getAttribute('placeholder'), 'Category')
   await dialog.getByLabel('X axis name').fill('Cost of non-quality (EUR)')
+  await editorTab(dialog, 'Format')
   await dialog.getByLabel('Width', { exact: true }).selectOption('twothirds')
   await dialog.getByLabel('Height', { exact: true }).selectOption('large')
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()

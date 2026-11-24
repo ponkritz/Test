@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { infoText, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
+import { editorTab, infoText, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // Chart elements (CHT-26…CHT-35) and KPI cards (CHT-36…CHT-39) against a mocked GitHub: on CoNQ's Insights tab the owner
 // sets a pie's data labels to Outside End with Value and Percentage, and a bar chart's legend Right, a major horizontal
@@ -83,6 +83,7 @@ test('TC-CHT-29: the owner sets a pie’s data labels to Outside End with value 
     await page.getByRole('menuitem', { name: 'Edit…' }).click()
     const dialog = page.getByRole('dialog', { name: 'Edit the chart or table' })
     await dialog.waitFor()
+    await editorTab(dialog, 'Elements')
     return { dialog, elements: dialog.getByRole('group', { name: /^Chart elements/ }) }
   }
   // The pie: only what a pie takes (no axes, gridlines, data table or trendline), Excel's four positions.
@@ -185,6 +186,8 @@ test('TC-CHT-31: KPI charts are a row of cards — the value never cut, the pop-
   // KB-84: the whole number is visible at every width, the caption at most two lines.
   for (const width of [1440, 1024, 390]) {
     await page.setViewportSize({ width, height: 900 })
+    // Wait for the layout to settle at the new width before measuring (no fixed waits).
+    await page.waitForFunction((w) => window.innerWidth === w && [...document.querySelectorAll('.od-kpi-card')].every((card) => card.getBoundingClientRect().width >= 180), width)
     const value = cards.first().locator('.od-kpi strong')
     assert.equal(await value.getAttribute('title'), '12,397,506.05 EUR')
     const box = await value.evaluate((element) => ({ cut: element.scrollWidth > element.clientWidth + 1, card: element.closest('article').getBoundingClientRect().width }))
@@ -214,6 +217,7 @@ test('TC-CHT-31: KPI charts are a row of cards — the value never cut, the pop-
     assert.equal(await preview.getByText('Filtered').count(), 1, 'its own filters narrow it')
     if (width === 390) {
       // Show as: Panel keeps the old look.
+      await editorTab(dialog, 'Format')
       await dialog.getByRole('combobox', { name: 'Show as' }).selectOption('panel')
       await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     } else await dialog.getByRole('button', { name: 'Cancel' }).click()

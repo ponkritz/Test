@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { infoText, menuOf, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
+import { editorTab, infoText, menuOf, navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 
 // Narratives (CHT-60…CHT-69) against a mocked GitHub: on CoNQ's Insights tab the owner adds a Narrative with the total,
 // the highest category and a warning rule "if Sum of Cost > 20000 then 'CoNQ cost above budget: {value}'", saved to Git;
@@ -101,6 +101,7 @@ test('TC-CHT-56: the owner adds a Narrative with the total, the highest category
   await dialog.getByLabel('Measure').selectOption('sum')
   await dialog.getByLabel('Of the Number column').selectOption({ label: 'Cost (Currency)' })
   await dialog.getByLabel('Group by', { exact: true }).selectOption({ label: 'Department' })
+  await editorTab(dialog, 'Narrative')
   const sentences = dialog.getByRole('group', { name: 'Automatic sentences' })
   assert.equal(await sentences.getByRole('checkbox', { name: 'Total' }).isChecked(), true)
   assert.equal(await sentences.getByRole('checkbox', { name: 'Highest category' }).isChecked(), true)
