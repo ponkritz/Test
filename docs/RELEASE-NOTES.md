@@ -2,6 +2,21 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.9.0 — 2026-11-24
+
+**Added**
+- **User guide** — `docs/USER-GUIDE.md`, for end users: getting started (browser and desktop, one PAT per server, Git storage, work email, the synthetic sample), the menu and Home, roles and rights (the reason line, View as), daily work, reports, Release Details, On-Demand pages, Insights, On-Demand Dashboards, PDF and interactive HTML, Admin and troubleshooting, each as short tasks with steps. It covers editing My dashboard (MYD-14…MYD-24), Save view for everyone for tables and page filters (UI-20…UI-23) and the chart editor's tabs Data, Filters, Format, Elements and Narrative (CHT-70…CHT-73) (DOC-12).
+- **Screenshots and short clips in the guide** — 60 screenshots and 7 silent how-to clips (WebM with a poster), shown on the Documentation page from the build's own files; every clip has a caption and its steps written out next to it (DOC-13).
+- **Made from synthetic data by a script** — `pnpm docs:shots` and `pnpm docs:videos` (`scripts/user-guide-shots.mjs`) remake them from the built app with the synthetic sample and made-up pages and people, and stop if a real host, organisation, repository, token or an email outside example.com would be captured (DOC-14).
+
+**Changed**
+- **Documentation** shows the **User guide** as its first tab; the profile menu has **User guide**, which opens it (DOC-01, NAV-48).
+- The Content-Security-Policy names `media-src 'self'`: video only from the app's own files (NFR-09).
+
+DF-261, SM-146, LIM-51; TC-DOC-04, TC-DOC-01, TC-NAV-48, TC-CSP-01.
+
+PR #385.
+
 ## v10.8.0 — 2026-11-24
 
 **Added**
