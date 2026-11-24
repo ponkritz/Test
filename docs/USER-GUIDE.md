@@ -638,7 +638,14 @@ What feeds each line and KPI row is set in **Admin → Reports → Monthly pack*
 
 ### PI Review
 
-**Data Insights → PI Review** is planned: a PI summary (Features and Stories planned against closed, hours planned against booked, open work in the PI's Sprints). The page holds a placeholder for now.
+**Data Insights → PI Review** shows the Features of a PI and what was discussed on them in Azure DevOps — the starting point for the PI Review meeting. It reads only: nothing is written to Azure DevOps or Git.
+
+1. **Choose the PI.** The **PI** list in the table's filter bar holds the PIs of your Time Writing connection and of the fetched data, newest first. The **current PI** (its Sprint's dates cover today, in UTC) is chosen for you and marked **Current PI**. If two PIs are current at the same time nothing is chosen: pick one. If the iterations cannot be read, the latest PI with Features is shown and a warning says why. Your choice is remembered in this browser.
+2. **Look at the Features.** The table lists the Features whose Iteration is in the PI (not Removed ones, not those under the absence Epic), by ID. Tick **Also Features with User Stories in this PI** to add Features that stayed in an older PI while their stories moved on. Filter by **Epic** and **State**, search, **Reset filters**, and **Export** (with the Export data right).
+3. **Read a Discussion.** Click a Feature: a drawer opens with its details and its **Discussion** — every comment (up to the newest 1,000), newest first, as plain text. Formatting is not kept: a mention shows as **@Name** and an image as **[image]**. Use **↻ Read again** after new comments, ‹ › to go to the next Feature, and **Open in Azure DevOps →** to see the work item.
+4. **Read them all.** **↻ Read all Discussions** reads every Feature's Discussion in the background (the top bar shows "Reading Discussions · x of n"). If Azure DevOps asks the app to slow down it waits and tries again once; if it keeps asking, the job stops with "x of n read" — click again later to read the rest. The **Comments** column shows each Feature's count.
+
+The Discussions are read with your own PAT (Work Items, Read) and kept only until you reload the page. Tagging struggles and learnings, saving them to Git and the Move to next PI decision come in later releases.
 
 ### Planning Overview and Capacity vs Actual (Testing)
 
