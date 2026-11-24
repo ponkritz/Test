@@ -97,7 +97,7 @@ test('TC-STR-06: as Tool Owner add a stream “Labeling” (Azure DevOps, Like C
   assert.match(saved.message, /^Add stream: Labeling \(Like Content\)( \[by [^\]]+\])?$/)
   assert.match(await text(panel.locator('tbody')), /Labeling Custom Azure DevOps query connection “Labeling” Like Content — each document is a release by its title/)
 
-  // The menu lists Labeling under Release Details → Azure DevOps Server, not set up yet (＋).
+  // The menu lists Labeling under Release Details (one list A–Z, NAV-52), not set up yet (＋).
   const missing = releaseDetails(page).locator('button.nav-missing', { hasText: 'Labeling' })
   await missing.waitFor()
   assert.equal(await missing.getAttribute('title'), 'Not set up: add a connection named “Labeling”')

@@ -144,3 +144,18 @@ export function windchillStreamExports<T extends SetupView & { id: string }>(vie
     return mine.length ? mine.map((view) => ({ stream, name: view.name, view })) : [{ stream, name: stream.name }]
   })
 }
+
+// NAV-52: Release Details in the menu is one list — every stream's entry (the Azure DevOps streams and the Windchill
+// exports, built-in and custom; a stream not set up yet with its ＋) sorted A–Z by its label, ignoring case — followed by
+// the "＋ <stream> export" entries of the streams read by project (another ECP export, CON-87). BRITE stays above it and
+// "Import Windchill export" below it (App). Pure, so the order is tested (tests/streams.test.mjs).
+export type ReleaseMenuEntry<T> = { kind: 'azure'; stream: StreamDef; label: string } | { kind: 'windchill'; stream: StreamDef; label: string; view?: T } | { kind: 'add-export'; stream: StreamDef; label: string }
+export const byLabel = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' }) || a.localeCompare(b, 'en')
+export function releaseMenuEntries<T extends SetupView & { id: string }>(views: T[]): ReleaseMenuEntry<T>[] {
+  const azure: ReleaseMenuEntry<T>[] = allStreams().filter((stream) => stream.source === 'azure').map((stream) => ({ kind: 'azure', stream, label: stream.name }))
+  const exports = windchillStreamExports(views)
+  const windchill: ReleaseMenuEntry<T>[] = exports.map(({ stream, name, view }) => ({ kind: 'windchill', stream, label: name, view }))
+  // After the last export of a stream read by project, one entry adds another (only once it has an export).
+  const adds: ReleaseMenuEntry<T>[] = exports.filter(({ stream, view }, index) => view && stream.project && exports[index + 1]?.stream !== stream).map(({ stream }) => ({ kind: 'add-export', stream, label: `${stream.name} export` }))
+  return [...[...azure, ...windchill].sort((a, b) => byLabel(a.label, b.label)), ...adds]
+}

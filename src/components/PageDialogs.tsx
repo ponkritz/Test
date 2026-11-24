@@ -20,10 +20,11 @@ export function PageNameField({ value, onChange, clash }: { value: string; onCha
 // shown, the work email kept. Co-owners not in that list stay chosen ("not in Azure DevOps"); people without a work
 // email are listed disabled with the reason; at most 50.
 const ownersHelp = 'Pick people from Admin → People & roles → People (Azure DevOps team members and assignees); their work email is kept.'
-function OwnersField({ label, value, onChange, help }: { label: string; value: string[]; onChange: (value: string[]) => void; help: string }) {
+// TVL-11: also the co-owners of the Tool Validations master list (disabled with its reason for anyone but a Tool Owner).
+export function OwnersField({ label, value, onChange, help, disabled = '' }: { label: string; value: string[]; onChange: (value: string[]) => void; help: string; disabled?: string }) {
   const options = ownerOptions(useContext(OwnerPeopleContext), value)
   const reasons = new Map(options.map((option) => [option.key, option.disabled]))
-  return <div className="pgb-owners"><MultiSelect label={label} search selectAll={false} emptyLabel="Nobody" options={options.map((option) => [option.key, option.label])} value={value} onChange={(keys) => onChange(ownersFromList(keys))} disabledReason={(key) => reasons.get(key) ?? ''} /><small>{help} {ownersHelp}</small></div>
+  return <div className="pgb-owners"><MultiSelect label={label} search selectAll={false} emptyLabel="Nobody" disabled={Boolean(disabled)} title={disabled || undefined} options={options.map((option) => [option.key, option.label])} value={value} onChange={(keys) => onChange(ownersFromList(keys))} disabledReason={(key) => reasons.get(key) ?? ''} /><small>{disabled || help} {disabled ? '' : ownersHelp}</small></div>
 }
 // DSH-01: an On-Demand Dashboard holds blocks, a table page rows — a page keeps its family: Edit offers Table and Table + Insights
 // for a table page and On-Demand Dashboard only for a dashboard; the other choice is disabled with the reason.

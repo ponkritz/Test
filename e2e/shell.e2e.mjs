@@ -2,7 +2,7 @@ import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { cachedRoles, loadSample, navigate, openPage, openPerson, peopleSource, profileItem, rolesFile, startApp, text, toggleFilter } from './helpers.mjs'
 
-// Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
+// Shell, navigation and first-run scenarios of the UAT (TC-NAV-01, TC-NAV-03, TC-NAV-37, TC-NAV-52, TC-HIS-01, TC-ACC-04, TC-NAV-31, TC-NAV-33, TC-UI-01, TC-SMP-01,
 // TC-UPD-02, TC-GIT-06, TC-GIT-16, TC-GIT-17, TC-SET-05), automated against the built web app.
 let app
 before(async () => { app = await startApp() })
@@ -125,6 +125,22 @@ test('TC-NAV-37: Expand all and Collapse all open and close every menu heading, 
   assert.ok((await states()).every((state) => state === 'true'), 'every heading open')
   assert.ok(await page.locator('.sidebar nav button', { hasText: 'My Tasks [Board]' }).isVisible(), 'pages are shown again')
   assert.ok(await expandAll.isDisabled())
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-NAV-52: Release Details is one list — BRITE, every stream A–Z, then Import Windchill export; no sub-headings, and old collapsed sub-lists are forgotten', async () => {
+  // An earlier version kept its two Release Details sub-lists collapsed in this browser: the keys are dropped.
+  const { page, context, errors } = await openPage(app, { roles: 'Tool Owner', init: () => { localStorage.setItem('demand-planning-nav-collapsed-v1', JSON.stringify(['release:ads', 'release:windchill'])) } })
+  const section = page.locator('.sidebar nav .nav-section', { hasText: 'RELEASE DETAILS' })
+  await section.locator('.nav-items button', { hasText: 'Tool Validations' }).waitFor()
+  assert.equal(await section.locator('.nav-subgroup, .nav-subsection').count(), 0, 'no Azure DevOps Server / Windchill exports sub-headings')
+  const labels = (await section.locator('.nav-items button').allInnerTexts()).map((entry) => entry.replace(/^\s*\S+\s*/u, '').replace(/\s+/g, ' ').trim())
+  assert.deepEqual(labels, ['BRITE', 'Content', 'CP', 'DP', 'ECP', 'IOCC', 'S&S IT', 'Tool Validations', 'Import Windchill export'])
+  assert.ok(await page.getByRole('button', { name: 'Expand all', exact: true }).isDisabled(), 'nothing is collapsed: the old keys do not count')
+  // A stream not set up yet still leads to its setup: ＋ ECP opens the import named after it (CON-85).
+  await section.locator('button.nav-missing', { hasText: 'ECP' }).click()
+  await page.getByText('Import the ECP export').first().waitFor()
   assert.deepEqual(errors, [])
   await context.close()
 })

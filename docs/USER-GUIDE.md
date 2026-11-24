@@ -122,6 +122,7 @@ The menu on the left groups the pages: **Data Insights**, **My Work**, **I&D Boa
 
 ![The menu](user-guide/images/menu.png)
 
+- **Release Details** is one list: **BRITE**, then every stream — Azure DevOps and Windchill exports alike — from A to Z, then **＋ ECP export** and **Import Windchill export**.
 - Click a group heading to fold or unfold it; **Expand all** / **Collapse all** do every group at once. The app remembers your choice.
 - **«** in the menu header folds the menu to icons; **»** shows the names again.
 - **Customize menu** (profile menu) pins or hides pages in your own menu.
@@ -414,7 +415,7 @@ The **KPI tracker** (from the Team Insights tile on Home) shows the team's KPI w
 
 ### Release pages per stream
 
-**Release Details** has one page per stream: **DP**, **CP**, **IOCC**, **Content** and **Tool Validations** from Azure DevOps Server, and **S&S IT** and **ECP** from Windchill exports. A stream that is not set up yet shows **＋** in the menu and leads to its setup.
+**Release Details** has one page per stream: **DP**, **CP**, **IOCC**, **Content** and **Tool Validations** from Azure DevOps Server, and **S&S IT** and **ECP** from Windchill exports. The menu lists them in one list from A to Z. A stream that is not set up yet shows **＋** in the menu and leads to its setup.
 
 Every Release page looks the same, top to bottom:
 
@@ -436,6 +437,30 @@ A Windchill search exported to CSV becomes a Release page.
 ![An imported Windchill export (made-up file)](user-guide/images/windchill.png)
 
 The import is saved to Git so the team sees it; **Load from Git** reads the team's latest one. Pulse Check counts the releases per stream.
+
+### Tool Validations: master list and expiry
+
+The **Tool Validations** page has two more tabs next to **Releases**: **Validation expiry** and **Master list**. The master list keeps every tool the team has validated in Git; a tool stays listed after it leaves its source and is marked **Not in source now**.
+
+**See what is due**
+
+1. Open **Release Details → Tool Validations** and choose **Validation expiry**.
+2. The tiles count the tools **Overdue**, **Due in the next N days** and with **No due date**. The table lists them in that order, with the days left.
+3. Change **Expiring in the next … days** to look further or nearer. The window is yours and is kept for you; **Use the team default** goes back to the team's window (60 days unless changed).
+4. **Export** writes the list to Excel or CSV.
+
+The due date is the source's own due date (or one entered by hand) when there is one; otherwise the validation date plus the validity period in months.
+
+**Keep the master list (Tool Owner and the list's co-owners)**
+
+1. Fetch the Tool Validations query (**↻**): its tools are added to the master list by themselves.
+2. On **Master list**, **＋ Add tool…** adds a tool validated elsewhere; **Edit** corrects its dates or notes — a date changed by hand is kept when the sources are read again; **Remove** takes it off the list.
+3. Under **Sources**, **＋ Add source…** adds another Azure DevOps query, a Windchill export or a Table page you keep by hand (add one with **＋ Add page…**, with columns such as Tool, Version, Validation date, Validity period and Due date).
+4. Check **Edit mapping…**: which column gives the tool name, version and dates. The app's guesses are marked **Guessed** until you save the mapping.
+5. **Merge into master list…** shows what changes, then saves it to Git.
+6. **Team settings → Edit…** sets the team's window and names the list's co-owners (a Tool Owner names them).
+
+Everyone else sees both tabs read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
 
 ## On-Demand pages
 

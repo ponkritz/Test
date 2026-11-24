@@ -16,6 +16,13 @@ import { AzureWorkItemTree } from '../components/AzureWorkItemTree'
 import { QueryView } from '../components/QueryView'
 import { ResultTabs } from '../components/ResultTabs'
 import { ReleaseView } from '../components/ReleaseView'
+import { ToolExpiry, ToolMasterList } from '../components/ToolValidations'
+import type { ExtraTab } from '../components/ResultTabs'
+
+const toolValidationTabs: ExtraTab[] = [
+  { key: 'tool-expiry', label: 'Validation expiry', node: <ToolExpiry /> },
+  { key: 'tool-master', label: 'Master list', node: <ToolMasterList /> },
+]
 import { SupportedReleasesTable } from '../components/DpMonthCounts'
 import { matchedFeatureColumns } from '../components/matchedFeatureColumns'
 import { PeriodSelect, ReleaseCounts, ReleaseSourceBar, type CountValue, type ReleaseScope } from '../components/ReleasePage'
@@ -221,14 +228,18 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // (3) and (4): the Releases | Source data tabs with the Releases table, else why there is nothing to show.
   const raw = (rows: AzureWorkItem[]) => <TablePanel><QueryView name={name} items={rows} columns={columns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   const dpBulk = <><span className="muted">{picked.length} selected</span><button type="button" className="ghost" disabled={!items.length} onClick={() => setPicked(items.filter((item) => !fullMatch(featureMatch(item))).map((item) => item.id))}>Select all shown</button><button type="button" className="ghost" disabled={!picked.length} onClick={() => setPicked([])}>Clear</button><WriteBlocked reason={bulkWhy} /><button type="button" className="primary" disabled={!picked.length || !assign?.canChoose || !can('work.bulk')} title={bulkWhy ? bulkWhy : assign?.canChoose ? 'Create a Feature for each selected release, assigned to its QE' : 'Needs the right to create work items for other people (Admin → People & roles → Role rights)'} onClick={() => setBulkOpen(true)}>Create Features ({picked.length})</button></>
-  const body = !source || !config ? <Panel><EmptyState title={config ? `“${name}” has not been fetched yet.` : `The connection for “${name}” is not saved in this browser.`} detail={config ? 'Fetch it read-only with ↻; nothing is written to Azure DevOps. Its items stay on this page and are not counted in Overview, Time Writing or My Tasks [Board].' : 'Add it again in Admin → Streams.'} /></Panel>
-    : !items.length && source.items.length ? <TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose Show: All months. The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose Show: All months.`} />}</TablePanel>
+  // TVL-08: the built-in Tool Validations stream adds its Validation expiry and Master list tabs, also before a fetch
+  // and in a month without documents (the master list is kept in Git, not in the fetch).
+  const toolTabs = stream?.rule === 'tool' && !stream.custom ? toolValidationTabs : undefined
+  const withTools = (node: ReactNode, rows?: AzureWorkItem[]) => toolTabs ? <ResultTabs id={`azure:${name}`} main={node} extra={toolTabs} {...(rows ? { raw: raw(rows), rawCount: rows.length } : {})} /> : node
+  const body = !source || !config ? withTools(<Panel><EmptyState title={config ? `“${name}” has not been fetched yet.` : `The connection for “${name}” is not saved in this browser.`} detail={config ? 'Fetch it read-only with ↻; nothing is written to Azure DevOps. Its items stay on this page and are not counted in Overview, Time Writing or My Tasks [Board].' : 'Add it again in Admin → Streams.'} /></Panel>)
+    : !items.length && source.items.length ? withTools(<TablePanel title={stream ? 'Releases' : undefined}>{isDp ? <EmptyState title={`No release has its DDT Date — or, without one, a planned milestone — in ${monthName(month)}.`} detail="Pick another month in the header, or choose Show: All months. The counts above still include milestones Done in the month." /> : <EmptyState title={`No items in ${monthName(month)}.`} detail={`${source.items.length} items have an approval date (else a changed date) in other months. Pick another month in the header, or choose Show: All months.`} />}</TablePanel>, source.items)
     : isDp ? <ResultTabs id={`azure:${id}`} rawCount={items.length} main={<TablePanel title="Releases">
         {bulkOpen && <DpBulkCreate rows={(source?.items ?? []).filter((item) => picked.includes(item.id))} azure={azure} featureSetup={featureSetup} qeMapping={qeMapping} featureMatch={featureMatch} onClose={() => { setBulkOpen(false); setPicked([]) }} />}
         <QueryView name={name} items={items} columns={columns} orderBy={orderBy} unresolved={unresolved} queryOnly choose more={dpColumns} extra={boardColumn} actions={dpBulk} />
       </TablePanel>} raw={raw(items)} />
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={cp.report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
-    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
+    : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} extra={toolTabs} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   return <Page className="release-page">
     {/* (1) QV-48: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}

@@ -317,7 +317,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-NAV-32 Other views in the menu** — Req NAV-32, NAV-17 — L1 `connections.test.mjs` ("Other views: read-only views and Windchill exports that are not a default stream, from the cloud or on-prem"); browser check: add an on-prem connection named e.g. "Risk register" with Show in menu on: it appears under Other views (not under Release Details), opens its view, and the heading is highlighted while it is collapsed and the view is open; with Show in menu off it disappears, and the heading is hidden when empty. **UAT**
 
-**TC-NAV-37 Expand all / Collapse all in the menu** — Req NAV-37, NAV-17 — E2E `shell.e2e.mjs` ("TC-NAV-37: Expand all and Collapse all open and close every menu heading, and are remembered"); browser check: with a page pinned, Collapse all closes every heading and the Release Details lists while the pinned page stays; Expand all opens them; at 900px the buttons are hidden; on a phone (off-canvas menu) they work.
+**TC-NAV-37 Expand all / Collapse all in the menu** — Req NAV-37, NAV-17 — E2E `shell.e2e.mjs` ("TC-NAV-37: Expand all and Collapse all open and close every menu heading, and are remembered"); browser check: with a page pinned, Collapse all closes every heading while the pinned page stays; Expand all opens them; at 900px the buttons are hidden; on a phone (off-canvas menu) they work.
 
 **TC-NAV-33 Get started pop-up** — Req NAV-33 — L1 `setup-guide.test.mjs` ("release streams: DP's Pedestal and DHFI data sets count, and the missing ones are named"; "a first-time user: Git first, the rest waits for the step it depends on"; "partly set up: Git and the connection done, the PAT is next, then Fetch"; "fully set up: nothing required left; region and streams follow the facts and who may change them"); browser check: a new browser without data opens the pop-up by itself with "Connect the shared Git storage" as the next step and the PAT and fetch steps "After the step above"; "Open Storage settings" closes it and shows Settings → Storage; the top bar shows "Setup · 0/4" and reopens it; a reload opens it again; after "Don't show again automatically" a reload does not, the Setup button still does; at 390 × 844 nothing overflows. **UAT**
 
@@ -338,6 +338,8 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-NAV-48 Profile menu and footer** — Req NAV-48, NAV-49, NAV-15 — E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages"); browser check: the profile button at the top right opens My settings, Classic / Tile view, View as… (Admin), Search settings, Customize menu, User guide; the footer shows only the desktop app download, “v{x.y.z} (Build n)” and Force Update, whose window shows the build ID, build time and where data is saved; scrolled to the end, the last row of a long table is fully visible above it; in Admin → Epic & Feature setup the Unsaved changes bar sits above the footer; every My settings section has the same width and starts under the tabs (KB-61).
 
 **TC-NAV-51 Business time is UTC** — Req NAV-51, NAV-11, NAV-12, QV-18, MON-06, MON-07, ATM-08, BKL-43 — L1 `business-time.test.mjs` ("NAV-51: the business helpers work in UTC; a plain date never shifts by a day (TC-NAV-51)"; "NAV-51: months of dates, new month Tasks, the current Sprint and the locks change at midnight UTC (TC-NAV-51)"; "NAV-51: the same months, Sprint and locks with TZ=Pacific/Auckland / America/Los_Angeles / Asia/Kolkata at month boundaries (TC-NAV-51)"), `planning-lock.test.mjs`, `azure-devops.test.mjs` ("release naming and UTC month rollover …"; "current dates resolve PI and nested Sprint with inclusive UTC-day boundaries (NAV-51)"), `azure-insights.test.mjs`, `release-source.test.mjs`, `release-overview.test.mjs`; the whole unit suite also passes with `TZ=Pacific/Auckland` and `TZ=America/Los_Angeles`; E2E `backlog.e2e.mjs` (New Feature and ＋ Time Writing Task months are the UTC month); browser check with the computer set to America/New_York on the last day of a month after 19:00 (20:00 in winter): the header month is already the next month, a new month Task is titled for the next month, the Period control shows the month's plan locked from midnight UTC, and the fetched-at times in the header and the view bars still show local time (EST / EDT).
+
+**TC-NAV-52 Release Details is one list, A–Z** — Req NAV-52, NAV-17, NAV-37, CON-84, CON-85, CON-87, STR-02 — L1 `custom-streams.test.mjs` ("NAV-52: Release Details is one list — every stream A–Z (case ignored), built-in and custom, Azure and Windchill alike; \"＋ ECP export\" after them (TC-NAV-52)"); E2E `shell.e2e.mjs` ("TC-NAV-52: Release Details is one list — BRITE, every stream A–Z, then Import Windchill export; no sub-headings, and old collapsed sub-lists are forgotten"); browser check at 1440 and 390 px: with two ECP exports and a custom stream "labeling", Release Details shows BRITE, then Content, CP, DP, ECP - Type 1, ECP - Type 2, IOCC, labeling, S&S IT, Tool Validations, then ＋ ECP export and Import Windchill export; no "Azure DevOps Server" or "Windchill exports" sub-heading; a stream not set up yet (＋) still opens Stream mapping or its import; the Home tile lists the streams in the same order.
 
 **TC-NAV-50 Pages fill the width inside a border, with set margins** — Req NAV-50 — L1 `page-layout.test.mjs` ("NAV-50: the page margins default to 10 / 20 / 10 / 20 px with a border"; "NAV-50: each side is kept between 0 and 64 px; anything else falls back to its default"; "NAV-50: a saved layout is read back; a broken saved value gives the defaults"; "NAV-50: applying sets one CSS variable per side and turns the border off only when asked"); E2E `shell.e2e.mjs` ("TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded"); browser check in the desktop app: fold the menu — the page widens; set Left to 40 — the gap grows at once.
 
@@ -393,7 +395,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-25 Configurable Time Writing story** — Req CON-57 — L1 `azure-devops.test.mjs` (a setup file without it keeps “{feature} - Time Writing”; a configured title, Area Path, Iteration Path and assignee are used and the month Task goes under that story). **UAT**
 
-**TC-NAV-17 Menu groups and collapsing** — Req NAV-17, NAV-18, OV-10 — L1 `format.test.mjs` (Data Insights holds Overview, Pulse Check, PI Review; My Work order My Tasks [Board], Monthly Time Writing, Bulk actions); browser check on sample data: the menu shows the five headings; Pulse Check shows the month's releases (Overview keeps This month and Trends); collapsing My Work and Windchill exports hides them and stays so after a reload; at 900 px width every page is still reachable. **UAT**
+**TC-NAV-17 Menu groups and collapsing** — Req NAV-17, NAV-18, OV-10 — L1 `format.test.mjs` (Data Insights holds Overview, Pulse Check, PI Review; My Work order My Tasks [Board], Monthly Time Writing, Bulk actions); browser check on sample data: the menu shows the five headings; Pulse Check shows the month's releases (Overview keeps This month and Trends); collapsing My Work and Release Details hides them and stays so after a reload; at 900 px width every page is still reachable. **UAT**
 
 **TC-CON-23 Feature setup per Epic** — Req CON-52, CON-53 — L1 `azure-devops.test.mjs` (placeholders, plain text, unknown braces kept, missing values; the file is parsed and written clean; a Feature from its Epic setup gets the chosen stories, the Time Writing story and the Task with title, Original Estimate, Area Path, Iteration Path and assignee; completing again creates nothing; a placeholder the title cannot fill stops it); browser check with GitHub and Azure DevOps mocked: Settings → Feature setup, add “US 1 ({service})” and “US 4”, Original Estimate 6 → preview shows “US 1 (Service)”; Save to Git writes feature-setup.json; ＋ Feature under that Epic with “CP | Care Pathways | v3.1” lists “US 1 (Care Pathways)” and “US 4” ticked, the Task “October 2026 | CP | Care Pathways | v3.1” with 6 h, and no PU / Full Release choice. **UAT**
 
@@ -823,7 +825,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-50 Work email as its own setting** — Req CON-82 — L1 `work-email.test.mjs` ("your work email is its own setting: saved and read, never taken from the first connection or changed by a Git sync (TC-CON-50)"; "first start: the email on the Time Writing connection becomes the setting only after the shared-email clean-up ran (TC-CON-50)"); E2E `shell.e2e.mjs` (TC-SET-06: *Your work email* is the first section of Azure DevOps); browser check (desktop app): enter the email under Settings → Azure DevOps → Your work email, Force Update and restart — the email is still there, My Tasks [Board] shows your work and the access role is yours; edit and save the Time Writing connection (no email field) — the email is unchanged; Get started points to Your work email while it is empty.
 
-**TC-CON-51 ECP projects from Windchill** — Req CON-83 — L1 `windchill-releases.test.mjs` ("ECP: each release is the second Location folder, \"<project number> <project name>\", with everything under it (TC-CON-51)"), `streams.test.mjs` ("default streams in order; connections and exports found by name"); browser check: import a Windchill export through "＋ ECP" (an export still named "QRE" also shows as ECP) — Release Details → Windchill exports → ECP lists each second folder of the Location ("Parent folder/<number> <name>/Phase") once as "<number> <name>" with every document under it, phases and deeper folders included, and the months its documents are dated in; the month filter follows the header month; Pulse Check → Supported shows "ECP [n] : 123456 Name, …"; Create Feature proposes "ECP | 123456 Name".
+**TC-CON-51 ECP projects from Windchill** — Req CON-83 — L1 `windchill-releases.test.mjs` ("ECP: each release is the second Location folder, \"<project number> <project name>\", with everything under it (TC-CON-51)"), `streams.test.mjs` ("default streams in order; connections and exports found by name"); browser check: import a Windchill export through "＋ ECP" (an export still named "QRE" also shows as ECP) — Release Details → ECP lists each second folder of the Location ("Parent folder/<number> <name>/Phase") once as "<number> <name>" with every document under it, phases and deeper folders included, and the months its documents are dated in; the month filter follows the header month; Pulse Check → Supported shows "ECP [n] : 123456 Name, …"; Create Feature proposes "ECP | 123456 Name".
 
 **TC-CON-52 BRITE placeholder** — Req CON-84 — inspection: Release Details shows BRITE at its root; it opens "BRITE is not set up yet."; Pulse Check and the Monthly pack have no BRITE line.
 
@@ -1866,7 +1868,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 ### 6.29 Custom streams
 
-**TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details → Azure DevOps Server, on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
+**TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details (in A–Z order, NAV-52), on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
 
 **TC-STR-02 The file read from Git is validated** — Req STR-05 — L1 `custom-streams.test.mjs` ("STR-05: the file read from Git — round trip, each stream checked on its own (unknown rule, CP, built-in names refused with why), a broken file refused whole (TC-STR-02)"); E2E `custom-streams.e2e.mjs` ("TC-STR-07: …": a stream with CP's rule listed as not used, with why); browser check: a hand-edited `custom-streams.json` with a stream named "Content", one with rule "formula" and one valid — the valid one is used, the panel lists the other two with their reasons; a file that is not JSON leaves the streams of the last read in use with a warning
 
@@ -2054,6 +2056,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-CHT-59 The Dashboard block pop-up in the same tabs: data source, period and tab on Data; a KPI tile only Data and Filters** — Req CHT-70, CHT-71, CHT-72, CHT-73 — E2E `chart-editor-tabs.e2e.mjs` ("TC-CHT-59: the Dashboard block pop-up has the same tabs — data source, period and tab on Data; a KPI tile only Data and Filters"); browser check at 1440 and 390 px, light and dark: ＋ Add block… on a dashboard with tabs shows Data · Filters for a KPI tile (Data source, Period filter on, Opens the tab on Data), Data · Filters · Format · Elements for a bar chart; Width Full on Format reads "Format (1)"; an empty title marks Data and Save to Git opens it; the block is saved as before.
 
+### 6.33 Tool Validations master list
+
+**TC-TVL-01 The master list file in Git: validated when read, merged when saved** — Req TVL-02, GIT-17, GIT-18 — L1 `tool-validations.test.mjs` ("TVL-02: the master list read from Git — round trip, each source and tool checked on its own, a broken file refused whole (TC-TVL-01)", "GIT-17, TVL-02: two saves of the master list are merged — tools by tool, sources by id, co-owners as sets; the file is mapped for “Newer data in Git” (TC-TVL-01)"); browser check with Git storage: a hand-edited `tool-validations.json` with a tool dated "2026-02-30", one without a name and a source of kind "formula" — the Master list says "Not used — tool-validations.json in Git: …" for each with why and lists the others; a file that is not JSON keeps the list last read, with the warning, and every change disabled with the reason; two browsers each adding a tool at the same time both keep their tool (two commits, each "[saved …] [by …]").
+
+**TC-TVL-02 The same tool from two sources; appended, kept, marked** — Req TVL-03, TVL-04, TVL-05 — L1 `tool-validations.test.mjs` ("TVL-03: the same tool is the same name (case, spaces and punctuation ignored) and version; other versions are other entries (TC-TVL-02)", "TVL-04, TVL-05: a source merged in — new tools appended, values updated (not those changed by hand), a tool gone from its source kept as “not in source now”; nothing changed gives the same file (TC-TVL-02)"); E2E `tool-validations.e2e.mjs` ("TC-TVL-07: …": the fetch saves four tools; the Table page's LabVIEW is linked to the query's entry); browser check: change the query so that one tool is no longer returned and fetch again — the tool stays, marked **Not in source now**, with its dates; a tool named "Lab-VIEW 2020.0" in a Windchill export joins "LabVIEW 2020"; "LabVIEW 2021" is a new entry.
+
+**TC-TVL-03 Due dates and the expiry view** — Req TVL-06, TVL-08 — L1 `tool-validations.test.mjs` ("TVL-06: validation date, validity period (months) and due date — an explicit due date wins; else validation date + period (TC-TVL-03)", "TVL-08, TVL-09: the expiry view — overdue first, then due within N days with days left, then no due date; later ones left out; N 1 to 730 (TC-TVL-03)"); E2E `tool-validations.e2e.mjs` ("TC-TVL-07: …": Overdue 1, Due in the next 60 days 1, No due date 1, the rows in that order with "10 days overdue" and "30 days left"; `documents-and-data.e2e.mjs` "TC-QV-43: …": the Tool Validations tabs are Releases, Validation expiry, Master list, Source data (n)); browser check at 1440 and 390 px, light and dark: the tiles, the table and its filter bar; Export → CSV holds the rows shown, a tool named "=1+1" is written as text.
+
+**TC-TVL-04 Field mapping: guesses marked, saved for everyone** — Req TVL-07, TVL-01 — L1 `tool-validations.test.mjs` ("TVL-07: each source is read with its field mapping — the guesses until it is saved (TC-TVL-04)"); E2E `tool-validations.e2e.mjs` ("TC-TVL-07: …": a Table page added as a source shows "Guessed Tool name: Tool · Version: Version · Due date: Due date"); browser check as Tool Owner: Edit mapping… on the Tool Validations query shows the guesses (Tool, Version by the Tool Validations rule, Author Approval Date, DueDate) and "These are the app's guesses"; choose another field for the due date and Save to Git — the Sources panel says **Saved**, another browser reads the same mapping, and the due dates follow it at the next fetch.
+
+**TC-TVL-05 The window of days: the team default and my own** — Req TVL-09 — E2E `tool-validations.e2e.mjs` ("TC-TVL-07: …": 10 days drops the tool due in 30 days, Use the team default (60) brings it back; Team settings → 30 saved to Git; "TC-TVL-06: …": a Team Member keeps 20 days of their own while the team default is 45); browser check: my window survives a reload and is the same on a second computer with my work email (personal views); a colleague still sees the team default.
+
+**TC-TVL-06 Read only without the right; corrections by hand kept** — Req TVL-10, TVL-11, TVL-12 — L1 `tool-validations.test.mjs` ("TVL-10, TVL-11: tools added, corrected and removed by hand; only the Tool Owner and the co-owners, never without the roles (TC-TVL-06)"); E2E `tool-validations.e2e.mjs` ("TC-TVL-06: a Team Member reads the master list and the expiry view — every change disabled with the reason — and keeps a window of their own"); browser check: as a co-owner named in Team settings, correct a tool's validation date and fetch again — the date stays ("(entered)"); empty it — the source's date comes back; Remove a tool still in the query — the pop-up warns that it comes back; in View as, with the sample, a read-only token and before the roles are loaded every button is disabled with the reason; each save is listed under Background jobs.
+
+**TC-TVL-07 The Tool Owner keeps the master list of validated tools** — Req TVL-01, TVL-04, TVL-05, TVL-08, TVL-09, TVL-10 — **UAT** — E2E `tool-validations.e2e.mjs` ("TC-TVL-07: the Tool Owner maps the Tool Validations query — its tools land in the master list in Git, Validation expiry lists overdue, due soon and no due date; a tool added by hand, the team default changed and a manual list merged in"); UAT with Git storage and the Tool Validations query: fetch it — the master list in Git gets every tool (one per tool and version); open Release Details → Tool Validations → **Validation expiry**: the overdue tools first, then the ones due in the next 60 days with the days left, then those without a due date; set your own window and go back to the team default; **Master list** → ＋ Add tool… for a tool validated outside Azure DevOps; add a Table page "Tool register" as a source, check its mapping and **Merge into master list…** — the preview names the new tools before saving; export the expiry list to CSV for the review meeting.
+
+**TC-TVL-08 The release counts do not change** — Req TVL-13, QV-64 — L1 `streams.test.mjs` ("Tool Validations: one entry per tool, whatever the number of its documents (QV-34)"); browser check: with the master list holding tools added by hand and from a Windchill export, the Tool Validations tiles (Releases in {month}, Supported), Pulse Check's lines and the Monthly pack count only the tools of the query for the month, as before.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2091,6 +2111,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | NAV-49 | TC-NAV-48 |
 | NAV-50 | TC-NAV-50 |
 | NAV-51 | TC-NAV-51, TC-NAV-03, TC-MON-03 |
+| NAV-52 | TC-NAV-52 |
 | CON-01…03 | TC-CON-01 |
 | CON-04…08, CON-19 | TC-CON-02 |
 | CON-09 | TC-CON-03 |
@@ -2299,7 +2320,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QV-61 | TC-QV-42 |
 | QV-62 | TC-QV-43 |
 | QV-63 | TC-QV-44 |
-| QV-64 | TC-QV-45, TC-QV-43 |
+| QV-64 | TC-QV-45, TC-QV-43, TC-TVL-08 |
 | QV-65 | TC-QV-46, TC-QV-43 |
 | QV-38 | TC-CON-42 |
 | OVR-01…08 | retired (TC-OVR-01…03 retired) |
@@ -2366,6 +2387,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-23 | TC-GIT-15 |
 | GIT-24 | TC-GIT-16 |
 | GIT-19 | TC-GIT-12 |
+| GIT-17 (Tool Validations master list) | TC-TVL-01 |
 | GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
 | GIT-05, GIT-07, GIT-11 | TC-GIT-03 |
 | GIT-09, GIT-10 | TC-GIT-04 |
@@ -2766,6 +2788,17 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CHT-71 | TC-CHT-58, TC-CHT-59 |
 | CHT-72 | TC-CHT-58, TC-CHT-59 |
 | CHT-73 | TC-CHT-58, TC-CHT-59 |
+| TVL-01 | TC-TVL-04, TC-TVL-07 |
+| TVL-02 | TC-TVL-01 |
+| TVL-03 | TC-TVL-02 |
+| TVL-04, TVL-05 | TC-TVL-02, TC-TVL-07 |
+| TVL-06 | TC-TVL-03 |
+| TVL-07 | TC-TVL-04 |
+| TVL-08 | TC-TVL-03, TC-TVL-07 |
+| TVL-09 | TC-TVL-05, TC-TVL-07 |
+| TVL-10 | TC-TVL-06, TC-TVL-07 |
+| TVL-11, TVL-12 | TC-TVL-06 |
+| TVL-13 | TC-TVL-08 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2780,7 +2813,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 | Use case | Test cases |
 |---|---|
-| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51 |
+| UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51, TC-NAV-52 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
@@ -2818,6 +2851,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…97, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59 |
+| UC-39 | TC-TVL-01…08 |
 
 ## 8. Result record
 

@@ -446,7 +446,9 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
     await tabs.waitFor()
     const labels = (await tabs.getByRole('tab').allInnerTexts()).map((label) => label.trim())
     assert.equal(labels[0], 'Releases', `${name}: the Releases tab first`)
-    assert.match(labels[1], /^Source data \(\d+\)$/, `${name}: Source data (n)`)
+    assert.match(labels.at(-1), /^Source data \(\d+\)$/, `${name}: Source data (n)`)
+    // TVL-08: Tool Validations adds its Validation expiry and Master list tabs between the two.
+    assert.deepEqual(labels.slice(1, -1), name === 'Tool Validations' ? ['Validation expiry', 'Master list'] : [], `${name}: the tabs between`)
   }
   // The common end of the Releases table (QV-65): the Time Writing Feature, its hours, then the QMS-0025 match.
   const commonEnd = ['time writing feature', 'planned (h)', 'booked (h)', 'qms-0025 match']
