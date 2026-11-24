@@ -2,6 +2,20 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.24.0 — 2026-11-24
+
+**Changed**
+- **Tool Validations: Tool List [TFS] and Validation Documents [TFS] tabs** — the Azure tab gives way to two tabs after Master list, each with one table of its query's rows and every column in SELECT order: **Tool List [TFS]** (the Tools query) and **Validation Documents [TFS]** (with two queries: every document with Tool, Parent ID and Tool List (Azure), retired Parents read by ID). The **Releases** table is removed, and with it Show: {month} / All months on this page; with one query only Tool List [TFS] is shown. A tab remembered as Azure opens Tool List [TFS] (TVL-14, TVL-31).
+- **Tool Validations counts from the master list** — the Master list cards (Validations in {Month}, Completed validations, Supported validations), Pulse Check, the Monthly pack and the cumulative chart count the master list's tools by their Current Month Status, with one shared rule; Pulse Check's Tool Validations quadrant lists those tools with name, version, ID and status (TVL-22, TVL-36).
+
+**Added**
+- **Master list: ID, Used by, Validated and Type** — from the Tool List [TFS] query: the work item ID and its Source, State and Type columns, guessed by column name and editable in Setup → Edit mapping…, kept in tool-validations.json and locked like the other Azure DevOps values (TVL-34).
+- **Master list: Current Month Status** — Completed (completion date in the header month), Supported (a document with a Quality signature in the month) or Completed, Supported as two pills, else blank; also on the Expiry list, sortable, filterable and exported (TVL-35).
+
+DF-296, DF-297, SM-174, LIM-81, LIM-82; TC-TVL-32, TC-TVL-33, TC-TVL-09, TC-TVL-18, TC-TVL-28, TC-QV-43. A deliberate exception to UI-STANDARDS §10 (1) and (3): the Tool Validations page has no Releases table and no Show.
+
+PR #404.
+
 ## v10.23.0 — 2026-11-24
 
 - **Release pages: a Selected month / All months toggle** (QV-71). DP, IOCC, Content, Tool Validations, S&S IT, ECP, the Windchill pages and custom streams show the period as a toggle **Selected month | All months** instead of a drop-down that repeated the month already shown in the top bar.
