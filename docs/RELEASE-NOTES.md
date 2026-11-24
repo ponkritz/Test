@@ -2,6 +2,47 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.5.0 — 2026-11-24
+
+**Changed**
+- **Publish interactive HTML…** replaces Publish standalone HTML…: the published file is now an **interactive offline dashboard** — the page's KPI cards and charts drawn by the app's own chart code (tooltips, Table view, Data labels, drill-down to the rows behind a bar), its own filter row to narrow further, a Rows tab with sort, Columns, search and Export, Light / Dark, on a phone too — instead of a static snapshot (OND-90, OND-93, OND-95, OND-97).
+- **Only the filtered data is published**: a table page's file holds only the rows that pass the publisher's Insights filter row, a dashboard's only the rows its blocks count with the publisher's period and filters; hidden rows never; the file's header says "Data published: {filters} · {n} of {m} rows" and the pop-up "This file contains the {n} rows of {page} that pass your filters." (OND-91, OND-93, OND-99).
+- A **schedule** keeps the filters it was saved with; Publish now uses the current filters (OND-96, OND-78).
+- The file allows only its own script and styles by their SHA-256 hashes and makes no request; the data is an escaped JSON block, rows without their update log (OND-94).
+
+**Added**
+- **On-Demand Dashboards** can be published as an interactive HTML file too — tabs, KPI tiles, blocks, filter row and the rows of each data source; blocks over the Time Writing hours are not published (OND-73, OND-92).
+- The file's viewer is built with the app (`vite build`, `dist/standalone-viewer.js` / `.css`, about 540 KB) and loaded only when publishing (OND-98).
+
+OND-73, OND-75, OND-78…OND-80 changed or retired (OND-74, OND-77, OND-80 retired); DF-220, DF-221, DF-250…DF-253; SM-120, SM-121, SM-140…SM-142; LIM-44, LIM-60; TC-OND-60 and TC-OND-63 retired, TC-OND-90…TC-OND-97.
+
+PR #381.
+
+**Added**
+- **Resizable KPI cards** — the KPI cards of an Insights tab sit on the 12-column chart grid, 3 × 3 each in a row above the charts as before; the owners size them with Size… or in Arrange charts (saved to Git) and move them among the charts, every viewer resizes them for themselves, and the number grows with the card (CHT-51, CHT-52, CHT-54).
+- **Match heights in this row** — in Arrange charts and Arrange on the page a chart's ⋯ gives every chart starting on its row the tallest height; Size… offers "Same height as the other charts in its row" (CHT-55).
+
+**Changed**
+- **A tidy KPI card header** — the title in at most two lines with ⓘ at its end, "Filtered" and ⋯ on the right in one row (CHT-53).
+
+**Fixed**
+- **⋯ menus were clipped inside a KPI card** — every ⋯ menu now opens in its own layer on top of the page, under its ⋯, above it near the bottom of the window (KB-88).
+- **Charts in one row had different heights and a height set did not show** — a chart fills the rows of its grid area, so the charts of a row are equally tall; a bar chart of few bars spreads its bars (KB-89, CHT-56).
+
+DF-226, DF-227, SM-125, LIM-46, LIM-47; TC-CHT-38…TC-CHT-42.
+
+PR #381.
+
+**Added**
+- **Narratives** — a new chart type **Narrative (text)** on the Insights tab and block type on On-Demand Dashboards: sentences in plain text about a measure (Count, Sum, Average … of a column, one currency at a time), over the same rows as the charts (the filter row or the dashboard's period, then its own filters), deterministic, without AI or any request (CHT-60, CHT-69).
+- **Automatic sentences** the owners tick — the total, the highest and lowest Group by value with its share, above / below a threshold, the change against the previous month, quarter or year (counted outside the period chosen in the filter row) and the biggest mover (CHT-61, CHT-62).
+- **Rules** — up to 20, in order: If Total, Rows counted, Top value, Top share or Change is >, ≥, <, ≤ or = a number, changed by more than x %, or the top category is a name, then show a sentence with placeholders ({value}, {total}, {top}, {share}, {change}, {period} …) and a tone (Info, Good, Warning, Bad: a coloured border, an icon and the tone in words); every match or the first, and an Else sentence (CHT-63, CHT-64, CHT-65).
+- Edited in the chart and block pop-ups with a live preview; shown in Export PDF… and Publish standalone HTML… as escaped text; stored as an optional `narrative` field, validated when read and merged per chart (CHT-66, CHT-67, CHT-68). An app version without narratives (10.3 and earlier) drops them and removes them when it saves the page (LIM-50).
+
+DF-240…DF-243, SM-130, LIM-50; TC-CHT-50…TC-CHT-57.
+
+PR #381.
+
 ## v10.4.0 — 2026-11-24
 
 **Changed**
