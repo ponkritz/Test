@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.14.0 — 2026-11-24
+
+**Changed**
+- **Tool Validations page: Master list first, Azure, then a tab per source** — the page's tabs are now **Master list** (opens first, with **Validation expiry** on top: the Overdue / Due in the next N days / No due date tiles, your own window of days with Use the team default, the expiry table; then the master list, Sources and Team settings), **Azure** (the Tool Validations query: its Releases table of the month and, below it, the query's rows as **Source data**; before a fetch the usual fetch message) and **one tab per other source** added under Sources, named after it in the order added: its rows as read with its field mapping (Merged / Not merged yet), with **Edit mapping…** and **Merge into master list…**, or how to load its data when it is not in this browser. Removing a source removes its tab. The separate Releases, Validation expiry and Source data tabs are gone; a tab remembered from before opens where its content is now (Releases, Source data → Azure; Validation expiry → Master list), and a tab that no longer exists opens the Master list. The tiles above the tabs, Pulse Check and the Monthly pack count as before; every right and behaviour of the master list is kept (TVL-14; TVL-05, TVL-08, TVL-10, QV-47, QV-62 changed).
+- UI-STANDARDS §10 (3) exception: the Tool Validations Release page has Master list | Azure | a tab per source instead of Releases | Source data (n), with its Releases table and the query's rows together on the Azure tab.
+
+DF-275; TC-TVL-09, TC-TVL-07 (UAT), TC-TVL-03, TC-QV-43, TC-QV-27.
+
+PR #391.
+
 ## v10.13.0 — 2026-11-24
 
 **Fixed**
