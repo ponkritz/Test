@@ -188,7 +188,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   })
   const refresh = <button type="button" className="primary" aria-label={refreshLabel} title={refreshLabel} disabled={busy} onClick={() => inBackground(refreshLabel, () => azure.fetchConnection(id))}>↻{busy ? <small>{status?.message || 'Fetching…'}</small> : !source ? <small>Fetch</small> : null}</button>
   const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => inBackground('Load from Git', () => azure.loadFromGit(id)) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
-  // Information about the view sits behind the ⓘ next to its name, not as banners; only errors and warnings stay on the page.
+  // Information about the view sits behind ⋯ → About this source… (QV-70), not as banners; only errors and warnings stay on the page.
   const notes = [
     source && isDp ? `Month filter: by DDT Date in UTC; a release without one is listed in the months of its Planned / ToBePlanned milestones (not counted).${undated > 0 ? ` ${undated} of ${source.items.length} releases have no DDT Date and no Planned / ToBePlanned milestone date: they show only with Show: All months.` : ''}` : '',
     source && isCp ? `CP: the whole release-folder tree is read; the month is the QA/QE signature date in UTC (header month). ${cp!.enrichmentName ? `Release names come from “${cp!.enrichmentName}”.` : 'Add a second CP connection (e.g. “CP Releases”, with Release and Content) for the release names.'}` : '',
@@ -254,10 +254,10 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} qeMapping={qeMapping} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} layout={toolPage ? toolTabs : undefined} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
   return <Page className="release-page">
-    {/* (1) QV-48: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}
-    <ReleaseSourceBar name={name} source={<>{config ? `${config.organization} / ${config.project}` : 'connection not found'}{profile?.query ? ' · query' : config?.team ? ` · team ${config.team}` : ''}</>}
+    {/* (1) QV-48, QV-70: the source bar; Show (not on CP, whose report is always the header month), ↻ and ⋯. */}
+    <ReleaseSourceBar name={name} source={`${config ? `${config.organization} / ${config.project}` : 'connection not found'}${profile?.query ? ' · query' : config?.team ? ` · team ${config.team}` : ''}`}
       fetched={source ? `fetched ${formatDateTime(source.fetchedAt)}${'fromGit' in source && source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}
-      info={notes.length > 0 ? notes.map((note) => <p key={note}>{note}</p>) : undefined}
+      about={notes.length > 0 ? notes.map((note) => <p key={note}>{note}</p>) : undefined}
       period={source && !isCp ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu}>
       {source && status?.state === 'error' && <Notice tone="warning">Not refreshed: {status.message} The data shown is from {formatDateTime(source.fetchedAt)}.</Notice>}
       {!azure.isSample && gitNote?.tone === 'error' && <Notice tone="error">{gitNote.text}</Notice>}

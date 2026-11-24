@@ -427,7 +427,10 @@ table.resizable.wrap th,table.resizable.wrap td{white-space:pre-wrap;overflow-wr
 /* Release pages (UI-STANDARDS §10, QV-62): source bar, counts, Releases | Source data tabs, Releases table. */
 .release-page{display:flex;flex-direction:column;gap:14px}
 .release-page>.panel,.release-page .metric-grid,.release-page .result-tabs{margin:0}
-.release-source .view-source-bar{margin:0}
+.release-source .view-source-bar{margin:0;justify-content:flex-end}
+/* QV-70: the first line of the source bar's ⋯ menu — where the data comes from and when it was fetched; not an action. */
+.view-actions-menu .view-actions-note{margin:0 0 4px;padding:6px 10px 8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--text-2);max-width:340px;overflow-wrap:anywhere}
+.release-source-about p{margin:0 0 8px}
 .release-source .notice,.release-source .windchill-import{margin:12px 0 0}
 .release-counts{display:grid;gap:8px}
 .release-counts .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}

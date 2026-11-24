@@ -422,15 +422,22 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   const guide = page.getByRole('dialog').filter({ hasText: 'Get started' })
   if (await guide.waitFor({ timeout: 10000 }).then(() => true, () => false)) await guide.getByRole('button', { name: 'Close', exact: true }).last().click()
   await loadSample(page)
-  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source', { hasText: name }).waitFor() }
+  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source').getByRole('button', { name: `More actions: ${name}`, exact: true }).waitFor() }
   const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
   const headers = async () => (await releases().locator('thead').waitFor(), await releases().locator('thead th').allTextContents()).map((header) => header.replace(/[▴▾▲▼↑↓]/g, '').trim().toLowerCase())
   const show = page.getByLabel('Show', { exact: true })
   // counts: the tiles after Releases in {Month} (QV-58, QV-64; at most three, UI-STANDARDS §9).
   const parts = async (name, { counts }) => {
     const bar = page.locator('.release-source')
-    // (1) Source bar: name · source · when fetched, then Show: {month} / All months, ↻ and ⋯.
-    assert.match(await text(bar.locator('.view-source-bar > div').first()), new RegExp(`^${name} · .+ · .*(fetched|imported) `), `${name}: name · source · when fetched`)
+    // (1) Source bar (QV-70): only Show: {month} / All months, ↻ and ⋯ — no name, source or ⓘ Info; where the data
+    // comes from and when it was fetched is the first line of ⋯ (not an action).
+    assert.equal(await text(bar.locator('.view-source-bar')).then((shown) => shown.includes(' · ')), false, `${name}: no name · source · fetched in the bar`)
+    assert.equal(await bar.getByRole('button', { name: 'Info', exact: true }).count(), 0, `${name}: no ⓘ Info in the bar`)
+    await bar.getByRole('button', { name: `More actions: ${name}`, exact: true }).click()
+    const menu = page.getByRole('menu', { name })
+    assert.match(await text(menu.locator('.view-actions-note')), /^.+ · .*(fetched|imported) /, `${name}: ⋯ starts with source · when fetched`)
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'detached' })
     const monthLabel = await show.locator('option').first().innerText()
     assert.match(monthLabel, /^\w+ \d{4}$/, `${name}: Show offers the header month`)
     assert.deepEqual(await show.locator('option').allInnerTexts(), [monthLabel, 'All months'], `${name}: Show: {month} / All months`)
@@ -462,6 +469,14 @@ test('TC-QV-43: every Release page has the source bar, counts, Releases | Source
   const rightAligned = async (label) => { const index = (await headers()).indexOf(label) + 1; return releases().locator(`tbody tr td:nth-child(${index})`).first().evaluate((cell) => getComputedStyle(cell).textAlign) }
   await open('DP')
   await parts('DP', { counts: ['completed', 'supported'] })
+  // QV-70: what ⓘ Info held — the month filter rule, the items fetched, the milestone names — is behind ⋯ → About this source….
+  await page.getByRole('button', { name: 'More actions: DP', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'About this source…' }).click()
+  const about = page.getByRole('dialog', { name: 'About this source' })
+  assert.match(await text(about), /RELEASE PAGE · DP/i, 'About: the eyebrow names the page')
+  assert.match(await text(about), / · fetched .*Month filter: by DDT Date in UTC.*items fetched/, 'About: source · fetched, then the details')
+  await about.getByRole('button', { name: 'Close', exact: true }).last().click()
+  await about.waitFor({ state: 'detached' })
   // (4) DP: its query's rows are the releases — Select first (bulk Create Features), the QMS-0025 match last.
   let shown = await headers()
   assert.equal(shown[0], 'select', 'DP: Select first')
@@ -514,7 +529,7 @@ test('TC-QV-40: no bulk creation Epic is built in — without one mapped, Create
     await page.addLocatorHandler(dialog, () => dialog.getByRole('button', { name: 'Close', exact: true }).last().click())
   }
   await loadSample(page)
-  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source', { hasText: name }).waitFor(); await page.getByLabel('Show', { exact: true }).selectOption('all') }
+  const open = async (name) => { await page.locator('.sidebar nav button').filter({ hasText: new RegExp(`(^|[^A-Za-z])${name}$`) }).first().click(); await page.locator('.page-loading').waitFor({ state: 'detached' }); await page.locator('.release-source').getByRole('button', { name: `More actions: ${name}`, exact: true }).waitFor(); await page.getByLabel('Show', { exact: true }).selectOption('all') }
   const releases = () => page.locator('.panel', { has: page.locator('h2', { hasText: /^Releases/ }) }).first()
   const note = (stream) => releases().getByRole('note').filter({ hasText: `No ${stream} bulk creation Epic is set` })
   const create = () => releases().getByRole('button', { name: /^Create Features \(\d+\)$/ })
@@ -576,7 +591,11 @@ test('TC-QV-44: the result of an action on a Release page — a Windchill import
   const failed = panel.locator('li.job-error', { hasText: 'Import Windchill export · S&S IT' })
   assert.match(await text(failed), /Needs a look .*This is a web page \(HTML\), not a CSV export\./)
   assert.equal(await notices.filter({ hasText: /web page|could not be read/ }).count(), 0, 'no error notice on the page')
-  assert.equal(await page.locator('.release-source').getByText('7 results · imported').count(), 1, 'the data shown is unchanged')
+  await panel.getByRole('button', { name: 'Close', exact: true }).click()
+  await panel.waitFor({ state: 'detached' })
+  await page.getByRole('button', { name: 'More actions: S&S IT', exact: true }).click()
+  assert.match(await text(page.getByRole('menu', { name: 'S&S IT' }).locator('.view-actions-note')), /7 results · imported/, 'the data shown is unchanged')
+  await page.keyboard.press('Escape')
   assert.deepEqual(errors, [])
   await context.close()
 })

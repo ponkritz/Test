@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { monthName } from '../format'
-import { Info, Metric, Metrics, Panel } from './ui'
+import { Info, Metric, Metrics, Modal } from './ui'
 import { ViewActions, type ViewAction } from './ViewActions'
 
 // UI-STANDARDS §10 (QV-62): the parts every stream's Release page (DP, CP, IOCC, Content, Tool Validations, S&S IT,
@@ -13,16 +13,27 @@ export function PeriodSelect({ month, value, onChange }: { month: string; value:
   return <label className="inline-field">Show<select aria-label="Show" value={value} onChange={(event) => onChange(event.target.value === 'all' ? 'all' : 'month')}><option value="month">{monthName(month)}</option><option value="all">All months</option></select></label>
 }
 
-// (1) The source bar: view name, source (server / project, or export file), when fetched, ⓘ, Show, ↻ and ⋯. Warnings
-// about the data shown (fetch failed, other columns) follow as children.
-export function ReleaseSourceBar({ name, source, fetched, info, period, primary, menu, children }: { name: string; source: ReactNode; fetched?: ReactNode; info?: ReactNode; period?: ReactNode; primary?: ReactNode; menu: ViewAction[]; children?: ReactNode }) {
-  return <Panel className="release-source">
-    <div className="view-source-bar">
-      <div><strong>{name}</strong><span className="muted"> · {source}{fetched ? <> · {fetched}</> : null}</span>{info && <Info>{info}</Info>}</div>
-      <div className="button-row">{period}<ViewActions label={name} primary={primary} items={menu} /></div>
-    </div>
+// (1) The source bar (QV-62, QV-70): only the controls, right-aligned — Show, ↻ and ⋯ (the page title already names
+// the view). Where the data comes from and when it was fetched or imported is the first line of the ⋯ menu (not an
+// action); the details of the view (month filter rule, items fetched, milestone names, the Git copy) are behind
+// ⋯ → About this source…, a pop-up with the same source line. Warnings about the data shown (fetch failed, other
+// columns) follow as children.
+export function ReleaseSourceBar({ name, source, fetched, about, period, primary, menu, children }: { name: string; source: string; fetched?: string; about?: ReactNode; period?: ReactNode; primary?: ReactNode; menu: ViewAction[]; children?: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const line = fetched ? `${source} · ${fetched}` : source
+  const items: ViewAction[] = [
+    { key: 'source', label: line, render: () => <p className="view-actions-note">{line}</p> },
+    ...menu,
+    ...(about ? [{ key: 'about', label: 'About this source…', onClick: () => setOpen(true) }] : []),
+  ]
+  return <div className="release-source">
+    <div className="view-source-bar"><div className="button-row">{period}<ViewActions label={name} primary={primary} items={items} /></div></div>
     {children}
-  </Panel>
+    {open && <Modal eyebrow={`RELEASE PAGE · ${name.toUpperCase()}`} title="About this source" form={false} onClose={() => setOpen(false)}>
+      <div className="release-source-about"><p className="muted">{line}</p>{about}</div>
+      <div className="modal-actions"><button type="button" className="primary" onClick={() => setOpen(false)}>Close</button></div>
+    </Modal>}
+  </div>
 }
 
 // (2) The counts of the header month: Releases in the month (as the Releases table lists them), Completed and
