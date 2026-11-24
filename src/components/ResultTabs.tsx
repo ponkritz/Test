@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react'
 // the bottom. The Releases tab opens first; the choice is kept per page in this browser tab.
 // TVL-08: a page may add tabs of its own after the main one; a page without source data leaves its tab out.
 // TVL-14: a page may name its main tab's key and choose which tab a remembered key opens (open) — the Tool Validations
-// page opens its Master list and maps the tabs it had before.
+// page opens its Expiry list and maps the tabs it had before.
 const storageKey = 'demand-planning-result-tab-v1'
 export interface ExtraTab { key: string; label: string; node: ReactNode }
 function remembered(id: string): string { try { const value = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')[id]; return typeof value === 'string' ? value : '' } catch { return '' } }

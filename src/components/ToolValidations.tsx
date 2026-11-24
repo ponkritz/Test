@@ -2,17 +2,17 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { utcToday } from '../businessTime'
 import { formatDate, formatDateTime } from '../format'
 import { windchillCell } from '../windchillViews'
-import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
+import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
 import { useToolValidationsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
 import { OwnersField } from './PageDialogs'
 import { ResultTabs } from './ResultTabs'
 import { EmptyState, Metric, Metrics, Modal, Notice, Panel, Pill, SaveQueueStatus, SettingsSummary, TablePanel, WriteBlocked } from './ui'
 
-// TVL-08…TVL-12, TVL-14: the Tool Validations Release page's tabs — Master list (on top the Validation expiry: what is
-// overdue or due soon in the viewer's own window of N days; then every tool kept in Git), Azure (the Tool Validations
-// query: the month's releases and its rows), one tab per other source (its rows as mapped, Edit mapping…, Merge into
-// master list…) and Setup last (the sources and the team settings). Everyone reads them; the Tool Owner and the list's
+// TVL-08…TVL-12, TVL-14: the Tool Validations Release page's tabs — Expiry list (what is overdue or due soon in the
+// viewer's own window of N days: the tiles, then the expiry table; the owners set the team default there too), Master
+// list (every tool kept in Git), Azure (the Tool Validations query: the month's releases and its rows), one tab per
+// other source (its rows as mapped, Edit mapping…, Merge into master list…) and Setup last (the sources and the team settings). Everyone reads them; the Tool Owner and the list's
 // co-owners change them (TVL-11), each change saved to Git (GIT-17) with its result under Background jobs (UI-STANDARDS §8).
 
 
@@ -24,21 +24,28 @@ const periodText = (months?: number) => months ? `${months}` : ''
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
 function Missing() { return <Panel><EmptyState title="The Tool Validations master list is not available here." /></Panel> }
 
-// ---- TVL-14: the tabs — Master list first, Azure (this query), one per other source in the order added, Setup last ----
+// ---- TVL-14: the tabs — Expiry list first, Master list, Azure (this query), one per other source in the order added, Setup last ----
 export function ToolValidationsTabs({ id, azure }: { id: string; azure: ReactNode }) {
   const env = useToolValidationsEnv()
-  const extra = toolTabs(env?.store.shown ?? { sources: [] }).filter((tab) => tab.key !== toolTabMaster)
-    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : <Missing /> }))
-  return <ResultTabs id={id} mainKey={toolTabMaster} mainLabel="Master list" main={<ToolMasterList />} extra={extra} open={openToolTab} />
+  const extra = toolTabs(env?.store.shown ?? { sources: [] }).filter((tab) => tab.key !== toolTabExpiry)
+    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <ToolMasterList /> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : <Missing /> }))
+  return <ResultTabs id={id} mainKey={toolTabExpiry} mainLabel="Expiry list" main={<ToolExpiryTab />} extra={extra} open={openToolTab} />
 }
 
-// ---- TVL-08, TVL-09: Validation expiry ----
+// ---- TVL-08, TVL-09, TVL-14: the Expiry list tab — the tiles, then the Validation expiry table ----
+export function ToolExpiryTab() {
+  const env = useToolValidationsEnv()
+  if (!env) return <Missing />
+  return <ToolExpiry env={env} />
+}
 type StatusFilter = 'all' | 'overdue' | 'due' | 'none'
 function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
   const [status, setStatus] = useState<StatusFilter>('all')
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<string | null>(null)
-  const file = env.store.shown
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const file = env.store.shown, why = env.store.reason
   const teamDays = file.defaultDays, days = env.personalDays ?? teamDays
   const today = utcToday()
   const all = expiryRows(file.tools, today, days)
@@ -60,10 +67,23 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
     { id: 'notes', label: 'Notes', value: (row) => row.entry.notes ?? '', defaultHidden: true },
   ]
   const reset = () => { setStatus('all'); setSearch('') }
+  // TVL-09: the owners make the window shown the team default here, saved as Setup → Team settings saves it.
+  const setDefault = async () => {
+    const base = env.store.file
+    setSaving(true); setSaveError('')
+    try {
+      await env.store.save(setTeam(base, days, base.owners), `Tool Validations: team default ${days} days, ${base.owners.length} co-owner${base.owners.length === 1 ? '' : 's'}`, 'Tool Validations · team settings')
+      setDraft(null); env.setPersonalDays(undefined)
+    } catch (failure) { setSaveError(failure instanceof Error ? failure.message : String(failure)) } finally { setSaving(false) }
+  }
+  const sameAsTeam = days === teamDays
   const windowField = <div className="tool-expiry-window">
     <label className="inline-field">Expiring in the next<input type="number" aria-label="Days ahead" min={1} max={maxExpiryDays} step={1} value={typed} onChange={(event) => { setDraft(event.target.value); const next = cleanDays(event.target.value); if (next !== undefined) env.setPersonalDays(next === teamDays ? undefined : next) }} onBlur={() => setDraft(null)} />days</label>
     <button type="button" className="ghost" disabled={env.personalDays === undefined} title={env.personalDays === undefined ? `You use the team default (${teamDays} days)` : `Back to the team default (${teamDays} days)`} onClick={() => { setDraft(null); env.setPersonalDays(undefined) }}>Use the team default ({teamDays})</button>
+    <button type="button" className="ghost" disabled={Boolean(why) || saving || sameAsTeam || typedDays === undefined} title={why || (sameAsTeam ? `${days} days is the team default` : `Make ${days} days the team default for everyone (saved to Git)`)} onClick={() => void setDefault()}>{saving ? 'Saving to Git…' : `Set ${days} days as team default`}</button>
     <small className="muted" role="status">{typedDays === undefined ? `Enter a whole number of days from 1 to ${maxExpiryDays}.` : env.personalDays !== undefined ? `Your own window (${env.personalDays} days), kept for you; the team default is ${teamDays} days.` : `The team default: ${teamDays} days.`}</small>
+    <WriteBlocked reason={why} />
+    {saveError && <Notice tone="error">{saveError}</Notice>}
   </div>
   return <>
     <div className="tool-expiry-counts"><Metrics>
@@ -72,14 +92,14 @@ function ToolExpiry({ env }: { env: ToolValidationsEnv }) {
       <Metric label="No due date" value={count('none')} hint="No due date and no validation date + validity period" />
     </Metrics></div>
     <TablePanel title="Validation expiry" count={`${rows.length} of ${all.length} tools`}
-      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are in the master list below.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months). Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set.</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
+      info={<ul><li>Every tool of the master list that is <strong>overdue</strong> (its due date has passed), <strong>due</strong> within the next {days} days, or has <strong>no due date</strong> — never hidden. Tools due later are on the Master list tab.</li><li>The due date is the source's own due date (or one entered by hand) when there is one; else the validation date plus the validity period (months). Days are counted in UTC.</li><li>The window is yours: change it here and it is kept for you on every computer (your views); <strong>Use the team default</strong> goes back to the {teamDays} days the list's owners set. The Tool Owner and the list's co-owners make the window shown the team default with <strong>Set … days as team default</strong> (saved to Git, as Setup → Team settings).</li><li>Export writes the rows shown (Excel or CSV; a value that could be read as a formula is written as text).</li></ul>}>
       <DataTable id="tool-validations:expiry" rows={rows} rowKey={(row) => row.entry.key} columns={columns} exportName="Tool validation expiry" defaultSort={{ id: 'days' }}
         toolbar={<div className="tool-filter-bar">{windowField}
           <div className="segmented" role="group" aria-label="Status">{([['all', 'All'], ['overdue', `Overdue (${count('overdue')})`], ['due', `Due soon (${count('due')})`], ['none', `No due date (${count('none')})`]] as [StatusFilter, string][]).map(([key, label]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => setStatus(key)}>{label}</button>)}</div>
           <input className="search" type="search" aria-label="Search tools" placeholder="Search tool, version or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className="ghost" disabled={status === 'all' && !search} onClick={reset}>Reset filters</button>
         </div>}
-        empty={<EmptyState title={all.length ? 'No tools match the filters.' : file.tools.length ? `No tool is overdue, due within ${days} days or without a due date.` : 'The master list has no tools yet.'} detail={all.length ? 'Reset filters to see every tool listed here.' : file.tools.length ? 'Widen the window, or see every tool in the master list below.' : 'Fetch the Tool Validations query (↻), or add a tool to the master list below.'} />} />
+        empty={<EmptyState title={all.length ? 'No tools match the filters.' : file.tools.length ? `No tool is overdue, due within ${days} days or without a due date.` : 'The master list has no tools yet.'} detail={all.length ? 'Reset filters to see every tool listed here.' : file.tools.length ? 'Widen the window, or see every tool on the Master list tab.' : 'Fetch the Tool Validations query (↻), or add a tool on the Master list tab.'} />} />
     </TablePanel>
   </>
 }
@@ -148,7 +168,6 @@ export function ToolMasterList() {
   return <>
     <StoreNotices env={env} />
     {store.pending && why && <Notice tone="info">{mergeSummary(store.pending)} in the latest fetch of the Tool Validations query — shown here, saved to Git by the next Tool Owner or co-owner who opens the app.</Notice>}
-    <ToolExpiry env={env} />
     <TablePanel title="Master list" count={`${rows.length} of ${file.tools.length} tools`}
       info={<ul><li>Every tool the team has validated, kept in Git ({toolValidationsFile}). A tool <strong>stays</strong> once it is listed: when it leaves its source it is marked <strong>Not in source now</strong> until someone removes it.</li><li>The tools of the <strong>Tool Validations</strong> query are added whenever its data is fetched; the other sources are merged with <strong>Merge into master list</strong> (on the source's own tab, or Setup → Sources).</li><li>The same tool from two sources is one entry: the same name (letter case, spaces and punctuation ignored) and version. A date or period changed by hand is kept when the sources are read again.</li><li>The Tool Owner and the list's co-owners change it; everyone else reads it.</li></ul>}
       action={<button type="button" className="primary" disabled={Boolean(why)} title={why || 'Add a tool by hand'} onClick={() => setDialog({ kind: 'tool' })}>＋ Add tool…</button>}>
@@ -177,7 +196,7 @@ export function ToolSetup() {
   return <>
     <StoreNotices env={env} />
     <SourcesPanel env={env} why={why} open={setDialog} />
-    <Panel title="Team settings" info="The team default of the expiry window and the co-owners of the list, kept in the master list's file in Git. Each person may look at their own window in Validation expiry on the Master list tab."
+    <Panel title="Team settings" info="The team default of the expiry window and the co-owners of the list, kept in the master list's file in Git. Each person may look at their own window on the Expiry list tab, where the owners may also set the team default."
       action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || 'Change the team default and the co-owners'} onClick={() => setDialog({ kind: 'team' })}>Edit…</button>}>
       <SettingsSummary rows={[['Expiry window (team default)', `${file.defaultDays} days`], ['Co-owners', file.owners.length ? file.owners.join(', ') : 'Nobody yet — only Tool Owners change the list']]} />
       <WriteBlocked reason={why} />
@@ -326,7 +345,7 @@ function TeamDialog({ env, onClose }: { env: ToolValidationsEnv; onClose: () => 
   }
   return <Modal title="Team settings" eyebrow="TOOL VALIDATIONS · SETTINGS" onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={submit}>
-      <label>Expiry window, team default (days)<input type="number" required min={1} max={maxExpiryDays} step={1} value={days} onChange={(event) => setDays(event.target.value)} /><small>What everyone sees on Validation expiry until they choose their own window. 60 days unless changed.</small></label>
+      <label>Expiry window, team default (days)<input type="number" required min={1} max={maxExpiryDays} step={1} value={days} onChange={(event) => setDays(event.target.value)} /><small>What everyone sees on the Expiry list until they choose their own window. 60 days unless changed.</small></label>
       <OwnersField label="Co-owners of the list (optional)" value={owners} onChange={setOwners} disabled={env.ownersReason} help="They may add, correct and remove tools, set the team default and the sources and their mapping — as the Tool Owner does." />
       {error && <Notice tone="error">{error}</Notice>}
       <Actions busy={busy} onCancel={onClose} label="Save to Git" why={env.store.reason} />
