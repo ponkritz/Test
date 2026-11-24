@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.18.0 — 2026-11-24
+
+**Added**
+- **Tool Validations: tabs of your own** — under **Setup → Tabs** the Tool Owner and the list's co-owners **＋ Add tab…**: a **Table**, **Table + Insights** or **On-Demand Dashboard** page, kept in Git like every On-Demand page but shown only as a tab of Tool Validations, between the source tabs and Setup (not in the menu, on Home or in search). On the tab the page works as anywhere else (columns, rows, Insights, dashboard blocks); everyone else reads it. **← →** move a tab, **Rename…** renames it and its page, **Remove…** asks first: the page is kept in Git, hidden — or, by a Tool Owner, deleted with its data. The tabs are kept in `tool-validations.json` as `tabs`, validated when read and merged by page id (TVL-14, TVL-15, TVL-16, TVL-17, TVL-02).
+- **The master list and the expiry list as dashboard sources** — the On-Demand Dashboards (the dashboard tabs and every other dashboard) and My dashboard can chart the Tool Validations **master list** and **expiry list**: Tool, Version, Validation date, Validity (months), Due date, Due date from, Status (Overdue / Due soon / No due date / OK, with the team default window), Days left, Sources and In source now — for roles that see Release Details (TVL-18, DSH-03, DSH-04, MYD-15).
+
+Older app versions drop the tabs and such dashboard blocks when they save (LIM-70); the dashboards' Status uses the team default window (LIM-71). DF-283, DF-284; SM-164; TC-TVL-10…TC-TVL-13.
+
+PR #397.
+
 ## v10.17.0 — 2026-11-24
 
 **Changed**
