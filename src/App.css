@@ -300,6 +300,9 @@ body:has(.modal-backdrop){overflow:hidden}
 .markdown ul,.markdown ol{margin:6px 0 10px;padding-left:22px}
 .markdown li{margin:3px 0}
 .markdown li>ul,.markdown li>ol{margin:3px 0}
+.markdown-image{display:block;max-width:100%;height:auto;margin:10px 0;border:1px solid var(--line-soft);border-radius:8px}
+.markdown-video{margin:10px 0}
+.markdown-video video{display:block;max-width:100%;height:auto;border:1px solid var(--line-soft);border-radius:8px;background:#000}
 .markdown code{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:4px;padding:1px 5px;font-size:12.5px;overflow-wrap:anywhere}
 .markdown a{color:var(--link)}
 .markdown hr{border:0;border-top:1px solid var(--line);margin:20px 0}

@@ -17,13 +17,15 @@ const metadata = { app: 'demandplanning', formatVersion: 1, version: pkg.version
 // SEC-CSP (NFR-09): the built page carries a Content-Security-Policy. Scripts only from the app itself (file: for the
 // desktop app, which loads dist/index.html from disk); requests to any https host (dev.azure.com, on-premises servers,
 // GitHub, Microsoft Graph); the Microsoft sign-in in a frame; no plugins, no foreign forms or base URL. Inline style
-// attributes stay allowed (React style props). Not added to the dev server (its hot reload injects inline scripts).
+// attributes stay allowed (React style props). Video and audio only from the app's own files (the user guide's clips,
+// DOC-13), never from another host. Not added to the dev server (its hot reload injects inline scripts).
 export const contentSecurityPolicy = [
   "default-src 'self' file:",
   "script-src 'self' file:",
   "style-src 'self' 'unsafe-inline' file:",
   "img-src 'self' data: blob: https: file:",
   "font-src 'self' data: file:",
+  "media-src 'self' file:",
   "connect-src 'self' https: file:",
   "frame-src 'none'",
   "worker-src 'self' blob:",

@@ -290,6 +290,9 @@ export default function App() {
   const [viewId, setViewId] = useState(loadBacklogTab)
   const view = views.find((entry) => entry.id === viewId) ?? views[0] ?? timeWriting
   const openView = (id: string) => { setViewId(id); saveBacklogTab(id); setPage('board') }
+  // DOC-12: the profile menu's User guide opens the Documentation page on the user guide (a new mount picks the tab).
+  const [docsVisit, setDocsVisit] = useState(0)
+  const openUserGuide = () => { try { localStorage.setItem('demand-planning-docs-tab-v1', 'USER-GUIDE.md') } catch { /* the guide is the first tab anyway */ } setDocsVisit((visit) => visit + 1); setPage('docs') }
   const openOnDemand = (id: string) => { setOnDemandId(id); try { localStorage.setItem('demand-planning-on-demand-page-v1', id) } catch { /* this visit only */ } setPage('ondemand') }
   // Access roles: each menu entry belongs to an area; Settings is always there (each person's own connections and tokens).
   // A page the viewer's roles do not include falls back to the first one they do.
@@ -448,6 +451,7 @@ export default function App() {
     ...(access.canViewAs ? [{ key: 'viewas', label: 'View as…', icon: '👁', onClick: () => setViewAsOpen(true) }] : []),
     { key: 'search', label: 'Search settings', icon: '⌕', detail: 'Ctrl K', onClick: () => setSearchOpen(true) },
     { key: 'menu', label: 'Customize menu', icon: '☰', onClick: () => setMenuEditor(true) },
+    ...(allowed('docs') ? [{ key: 'guide', label: 'User guide', icon: '?', detail: 'How to use the app, with screenshots and short clips', onClick: openUserGuide }] : []),
   ]
   // GIT-18: newer data in Git, shown on the page in use only when that page's data changed (the others keep theirs for
   // when they are opened); the menu layout and the views are loaded quietly. A page key: the page's id, 'admin:<tab>',
@@ -614,7 +618,7 @@ export default function App() {
       {page === 'snapshots' && <SnapshotsPage {...pageProps} git={git} who={my.me.email || my.me.name || 'unknown'} />}
       {page === 'admin' && settingsTab === 'pages' && <PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />}
       {page === 'admin' && settingsTab !== 'pages' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
-      {page === 'docs' && <DocsPage />}
+      {page === 'docs' && <DocsPage key={docsVisit} />}
       </Fragment></Suspense>
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>

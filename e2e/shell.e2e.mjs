@@ -29,7 +29,7 @@ test('TC-NAV-48: the profile at the top right holds My settings, the view switch
   // NAV-48: the profile menu.
   await page.locator('header.topbar').getByRole('button', { name: /^Profile/ }).click()
   const menu = page.getByRole('menu', { name: 'Profile' })
-  assert.deepEqual((await menu.getByRole('menuitem').allInnerTexts()).map((entry) => entry.replace(/^\S+\s*/, '').trim()), ['My settings', 'Look & feel', 'Classic view', 'Search settings', 'Customize menu'])
+  assert.deepEqual((await menu.getByRole('menuitem').allInnerTexts()).map((entry) => entry.replace(/^\S+\s*/, '').trim()), ['My settings', 'Look & feel', 'Classic view', 'Search settings', 'Customize menu', 'User guide'])
   await page.keyboard.press('Escape')
   assert.equal(await menu.count(), 0, 'Escape closes it')
   // NAV-49: the footer — version and build — at the end of the page; the page content ends where the footer starts.

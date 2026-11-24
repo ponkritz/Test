@@ -335,7 +335,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-NAV-47 Person picker on the person-based pages** — Req NAV-47, MYD-01, ACT-14 — L1 `app-frame.test.mjs` ("NAV-47: My dashboard always shows you — your work email, else the name you chose before an email; never the Person picked on other pages (TC-NAV-47)"); E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages", "TC-ACT-10: Time Writing can show another person, chosen at the top right"); browser check: Person in the top bar on Time Writing, My Tasks [Board] and Sprint check only; choosing someone changes those pages and not My dashboard.
 
-**TC-NAV-48 Profile menu and footer** — Req NAV-48, NAV-49, NAV-15 — E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages"); browser check: the profile button at the top right opens My settings, Classic / Tile view, View as… (Admin), Search settings, Customize menu; the footer shows only the desktop app download, “v{x.y.z} (Build n)” and Force Update, whose window shows the build ID, build time and where data is saved; scrolled to the end, the last row of a long table is fully visible above it; in Admin → Epic & Feature setup the Unsaved changes bar sits above the footer; every My settings section has the same width and starts under the tabs (KB-61).
+**TC-NAV-48 Profile menu and footer** — Req NAV-48, NAV-49, NAV-15 — E2E `shell.e2e.mjs` ("TC-NAV-48: the profile at the top right holds My settings, the view switch and the tools; the footer shows the version and ends the page without covering it; Person only on person-based pages"); browser check: the profile button at the top right opens My settings, Classic / Tile view, View as… (Admin), Search settings, Customize menu, User guide; the footer shows only the desktop app download, “v{x.y.z} (Build n)” and Force Update, whose window shows the build ID, build time and where data is saved; scrolled to the end, the last row of a long table is fully visible above it; in Admin → Epic & Feature setup the Unsaved changes bar sits above the footer; every My settings section has the same width and starts under the tabs (KB-61).
 
 **TC-NAV-51 Business time is UTC** — Req NAV-51, NAV-11, NAV-12, QV-18, MON-06, MON-07, ATM-08, BKL-43 — L1 `business-time.test.mjs` ("NAV-51: the business helpers work in UTC; a plain date never shifts by a day (TC-NAV-51)"; "NAV-51: months of dates, new month Tasks, the current Sprint and the locks change at midnight UTC (TC-NAV-51)"; "NAV-51: the same months, Sprint and locks with TZ=Pacific/Auckland / America/Los_Angeles / Asia/Kolkata at month boundaries (TC-NAV-51)"), `planning-lock.test.mjs`, `azure-devops.test.mjs` ("release naming and UTC month rollover …"; "current dates resolve PI and nested Sprint with inclusive UTC-day boundaries (NAV-51)"), `azure-insights.test.mjs`, `release-source.test.mjs`, `release-overview.test.mjs`; the whole unit suite also passes with `TZ=Pacific/Auckland` and `TZ=America/Los_Angeles`; E2E `backlog.e2e.mjs` (New Feature and ＋ Time Writing Task months are the UTC month); browser check with the computer set to America/New_York on the last day of a month after 19:00 (20:00 in winter): the header month is already the next month, a new month Task is titled for the next month, the Period control shows the month's plan locked from midnight UTC, and the fetched-at times in the header and the view bars still show local time (EST / EDT).
 
@@ -1378,7 +1378,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   1. Open Documentation.
   2. Open each tab.
 - Expected:
-  - There is one tab per file in `docs/` (thirteen in this build), in the order of DOC-01, Validation package first.
+  - There is one tab per file in `docs/`, in the order of DOC-01, User guide first.
   - Headings, tables, nested lists, bold text and code display formatted, with no raw Markdown characters such as `|---|` or `**`.
   - The panel shows "docs/{file} · this build".
   - Inspection: the Markdown component builds React elements and does not use `dangerouslySetInnerHTML`.
@@ -1406,6 +1406,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - The matrix header shows 0 requirements in force without a test case and 0 trace gaps; §8 says "None".
   - Every document opens, rendered; the Known issues register has the KB, OI, residual-risk and limitation tables; the components inventory lists the in-house files by layer, the SOUP table with versions and licences, and the audit result.
   - The IDs resolve: the requirement row exists and the test case exists and names that requirement.
+
+**TC-DOC-04 User guide with screenshots and clips** — Req DOC-12, DOC-13, DOC-14 — L1 `user-guide.test.mjs` ("DOC-13: every screenshot, clip and poster the guide shows is a file of docs/user-guide, and every file there is shown"; "DOC-13: every clip has a poster, a title and a caption, and its steps are written out next to it"; "DOC-13: the guide's pictures and clips stay small"; "DOC-12: every chapter is listed in Contents, and every link in the guide lands on a heading"; "DOC-12: the guide describes the features of its build: no placeholder is left, and My dashboard editing, Save view for everyone and the chart editor's tabs have their sections"; "DOC-12, DOC-14: the user guide is the first document of the Documentation page, and every picture is made by the screenshot script"), `markdown.test.mjs` ("DOC-13: images are inline parts with their alt text, and a video line is a block of plain values, never markup"), `csp.test.mjs` (media-src); E2E `documents-and-data.e2e.mjs` ("TC-DOC-04: the user guide is the first tab and the profile menu's User guide opens it; its screenshots load from the build and its clips play from the build"); inspection: `pnpm build:web && pnpm docs:shots && pnpm docs:videos` remakes every picture and clip and stops on anything but made-up data.
+- Steps:
+  1. Open the profile menu and choose **User guide**.
+  2. Scroll through the guide; open a section from "On this page".
+  3. Play a clip.
+  4. Read "Edit My dashboard", "Save view for everyone" and "Add a chart or table".
+- Expected:
+  - Documentation opens on the **User guide** tab, the first tab.
+  - Every screenshot shows (no broken image); every picture shows only made-up names (example.com emails, the synthetic sample).
+  - The clip plays from the build without sound; the steps next to it describe the same task in full.
+  - No section is a placeholder: My dashboard editing, Save view for everyone and the chart editor's tabs are described with their steps and screenshots.
 
 ### 6.19 User interface
 
@@ -2384,6 +2396,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | DOC-01…03, DOC-05 | TC-DOC-01 |
 | DOC-04, DOC-06…08 | TC-DOC-02 |
 | DOC-09…11 | TC-DOC-03 |
+| DOC-12…14 | TC-DOC-04 |
 | UI-01, UI-02 | TC-UI-01 |
 | UI-03, UI-04 | TC-INS-03 |
 | UI-05 | TC-UI-02 |
@@ -2781,7 +2794,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-17 | TC-DSK-01…03, TC-INS-02 |
 | UC-18 | TC-SMP-01, TC-ATM-06, TC-GIT-04, TC-SMP-02 |
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
-| UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03 |
+| UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01 |
 | UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07 |
 | UC-23 | TC-QEM-01…08 |

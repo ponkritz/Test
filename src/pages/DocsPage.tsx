@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Page, Panel } from '../components/ui'
 import { Markdown } from '../components/Markdown'
 import { parseMarkdown, plainText } from '../markdown'
-import { projectDocs } from '../docs'
+import { mediaUrl, projectDocs } from '../docs'
 import { downloadMarkdown } from '../download'
 
 // Documentation: the requirements, test plan and other project documents of this build, read in the app. The chosen
@@ -27,7 +27,7 @@ export function DocsPage() {
     <div className="docs-layout">
       {sections.length > 1 && <nav className="docs-toc" aria-label="Sections"><p className="eyebrow">ON THIS PAGE</p><ul>{sections.map((section) => section.kind === 'heading' && <li key={section.id}><a href={`#${section.id}`} onClick={(event) => { event.preventDefault(); go(null, section.id) }}>{plainText(section.text)}</a></li>)}</ul></nav>}
       <Panel className="docs-panel" action={<div className="button-row"><span className="muted">docs/{doc.file} · this build</span><button type="button" className="ghost" onClick={() => downloadMarkdown(doc.source, doc.file)}>Download .md</button></div>}>
-        <Markdown blocks={blocks} docs={files} onLink={go} />
+        <Markdown blocks={blocks} docs={files} onLink={go} media={mediaUrl} />
       </Panel>
     </div>
   </Page>
