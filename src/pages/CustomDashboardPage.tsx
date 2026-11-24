@@ -62,7 +62,10 @@ function readViewed(id: string, stored: unknown): Viewed {
 // see Team overview (the menu area "Team insights").
 export interface DashboardHours { items: AzureWorkItem[]; settings: CapacitySettings; allowed: boolean }
 // OND-90: publisherName — the name a published interactive HTML file says it was published by.
-export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, onOpen, addPageReason = '', onAddPage, hours, publisherName = '' }: { git: GitStorage; store: OnDemandStore; pageId: string; menu: MenuLayoutStore; viewer: Viewer; views?: PersonalViewsStore; onOpen: (id: string) => void; addPageReason?: string; onAddPage: () => void; hours?: DashboardHours; publisherName?: string }) {
+// TVL-15: embedded — the dashboard shown as an owners' tab of Tool Validations (no page frame, nothing of the menu).
+// TVL-18: tools — the Tool Validations master list and expiry list offered as data sources (their datasets, built by
+// the caller with the viewer's read rights); absent: not offered.
+export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, onOpen, addPageReason = '', onAddPage, hours, publisherName = '', embedded = false, tools = [] }: { git: GitStorage; store: OnDemandStore; pageId: string; menu: MenuLayoutStore; viewer: Viewer; views?: PersonalViewsStore; onOpen: (id: string) => void; addPageReason?: string; onAddPage: () => void; hours?: DashboardHours; publisherName?: string; embedded?: boolean; tools?: Dataset[] }) {
   const page = store.pages.find((entry) => entry.id === pageId)
   const dash = useDashboardPage(git, pageId)
   const dashboard = dash.dashboard
@@ -118,7 +121,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   const today = utcToday(), counting = hoursAllowed && usesHours
   const lines = counting && hoursItems && hoursSettings ? hoursLinesCached(hoursItems, monthsKey ? monthsKey.split(',') : [], today, hoursSettings) : []
   const hoursDataset = hoursFor(hoursAllowed, lines)
-  const datasets = [...dataSources(store.pages, visibleStored, (id) => isDashboard(menu.layout, id), pageId), ...(hours ? [hoursDataset] : [])]
+  const datasets = [...dataSources(store.pages, visibleStored, (id) => isDashboard(menu.layout, id), pageId), ...(hours ? [hoursDataset] : []), ...tools]
   // OND-65: the table pages read by a block or a filter that the viewer shows in Sample (their sample rows are used).
   const usedPages = new Set([...dashboard.blocks.map((entry) => pageOfSource(entry.source)), ...dashboard.filters.map((filter) => pageOfSource(filter.source))])
   const sampleSources = store.pages.filter((entry) => entry.sample && usedPages.has(entry.id)).map((entry) => entry.name)
@@ -173,7 +176,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   }
   const run = (action: () => Promise<void>) => { void action().catch(() => undefined) }
 
-  if (!page) return <Page><EmptyState title="This page is no longer there." detail="It was removed, or Git has not been read yet." /></Page>
+  if (!page) return <Page embedded={embedded}><EmptyState title="This page is no longer there." detail="It was removed, or Git has not been read yet." /></Page>
   const firstSource = datasets.find((entry) => !entry.problem)
   const addBlock = () => setEditing({ block: blankBlock(firstSource!, dashId('b'), 'kpi', activeTab && activeTab.id !== tabs[0]?.id ? activeTab.id : ''), isNew: true })
   // CHT-15…CHT-18: each block's size — the viewer's own, else the owners' (the dashboard file), else half width.
@@ -215,20 +218,22 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
   }
   const addReason = buildReason || (dashboard.blocks.length >= maxBlocks ? `A dashboard holds at most ${maxBlocks} blocks: remove one first.` : '') || (firstSource ? '' : 'There is no data source yet: add a table page with rows first.')
 
-  return <ExportNoteContext.Provider value={sampleSources.length ? sampleExportNote : null}><Page className="dashboard-page" intro={page.description || 'An On-Demand Dashboard of KPI tiles, charts and summary tables — read only, the same for everyone.'}
+  return <ExportNoteContext.Provider value={sampleSources.length ? sampleExportNote : null}><Page className="dashboard-page" embedded={embedded} intro={embedded ? page.description || undefined : page.description || 'An On-Demand Dashboard of KPI tiles, charts and summary tables — read only, the same for everyone.'}
     // DSH-13: one main action — ＋ Add block… for the dashboard's builders, else ＋ Add page… for those who may add
     // pages — and the rest in the page's ⋯ menu, each disabled item with its reason as its tooltip.
     actions={<ViewActions label={`page ${page.name}`} primary={!buildReason
       ? <button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={addBlock}>＋ Add block…</button>
-      : !(gitReason || addPageReason) ? <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button> : undefined} items={[
+      : !(embedded || gitReason || addPageReason) ? <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button> : undefined} items={[
       ...(buildReason ? [{ key: 'add-block', label: '＋ Add block…', disabled: true, title: addReason }] : []),
       { key: 'arrange', label: 'Arrange blocks…', disabled: Boolean(buildReason), title: buildReason || undefined, onClick: () => setArranging(true) },
       { key: 'sizes', label: arrangingSizes ? 'Done arranging' : 'Arrange on the page', disabled: Boolean(buildReason), title: buildReason || 'Drag a block by ⠿ to move it, or its corner to size it, for everyone', onClick: () => setArrangingSizes(!arrangingSizes) },
       { key: 'setup', label: 'Tabs and filters…', disabled: Boolean(buildReason), title: buildReason || undefined, onClick: () => setSetup(true) },
-      ...(!buildReason || gitReason || addPageReason ? [{ key: 'add-page', label: '＋ Add page…', disabled: Boolean(gitReason || addPageReason), title: gitReason || addPageReason || undefined, onClick: onAddPage }] : []),
-      { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
-      { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
-      { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
+      ...(embedded ? [] : [
+        ...(!buildReason || gitReason || addPageReason ? [{ key: 'add-page', label: '＋ Add page…', disabled: Boolean(gitReason || addPageReason), title: gitReason || addPageReason || undefined, onClick: onAddPage }] : []),
+        { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
+        { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
+        { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
+      ]),
       { key: 'pdf', label: 'Export PDF…', disabled: !dashboard.blocks.length, title: dashboard.blocks.length ? undefined : 'No blocks to export yet.', onClick: () => setExporting(true) },
       { key: 'publish', label: 'Publish interactive HTML…', disabled: Boolean(publishReason) || !dashboard.blocks.length, title: publishReason || (dashboard.blocks.length ? undefined : 'No blocks to publish yet.'), onClick: () => setPublishing(true) },
       ...(git.connected ? [{ key: 'reload', label: '↻ Reload from Git', onClick: () => { void dash.reload(); void store.reload() } }] : []),

@@ -1,11 +1,17 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { recordJob } from '../backgroundJobs'
+import { outcomeText } from '../gitSaveQueue'
+import { defaultIcon, deleteReason, gitReasonOf, isHidden, kindLabel as pageKindLabel, kindOf, onDemandGroup, placementOf, removePlacement, setHidden, type MenuLayout, type PageKind } from '../menuLayout'
+import { onDemandPath, renamePage } from '../onDemand'
+import { createPage, type MenuLayoutStore } from '../useMenuLayout'
+import { usePageNameClash } from '../usePageNames'
 import { utcToday } from '../businessTime'
 import { formatDate, formatDateTime } from '../format'
 import { windchillCell } from '../windchillViews'
-import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
-import { useToolValidationsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
+import { addSource, azureFieldOptions, azureValue, cleanDays, daysLeftText, dueFromLabel, dueOf, editOf, editProblem, entryState, entryStateLabel, expiryRows, guessMapping, inputsFromRows, kindLabel, mappingFields, mappingFor, markMerged, maxExpiryDays, mergeSource, mergeSummary, nameLocked, removeSource, removeTool, saveTool, setMapping, setTeam, sourceKinds, sourceProblem, statusLabel, openToolTab, toolKey, toolTabAzure, toolTabExpiry, toolTabMaster, toolTabSetup, toolTabs, toolValidationsFile, addTab, addTabReason, customToolTabs, listReason, maxCustomTabs, maxTabName, moveTab, removeTab, renameTab, tabNameProblem, type CustomTab, type EntryState, type ExpiryRow, type ExpiryStatus, type ToolEdit, type ToolEntry, type ToolInput, type ToolMapping, type ToolSource, type ToolSourceKind, type ToolValidationsFile } from '../toolValidations'
+import { useToolValidationsEnv, type CustomTabsEnv, type SourceData, type ToolValidationsEnv } from '../useToolValidations'
 import { DataTable, type DataColumn } from './DataTable'
-import { OwnersField } from './PageDialogs'
+import { KindField, OwnersField, PageNameField } from './PageDialogs'
 import { ResultTabs } from './ResultTabs'
 import { EmptyState, Metric, Metrics, Modal, Notice, Panel, Pill, SaveQueueStatus, SettingsSummary, TablePanel, WriteBlocked } from './ui'
 
@@ -24,11 +30,13 @@ const periodText = (months?: number) => months ? `${months}` : ''
 // Without the app's provider (never in the app itself) the tabs say so instead of failing.
 function Missing() { return <Panel><EmptyState title="The Tool Validations master list is not available here." /></Panel> }
 
-// ---- TVL-14: the tabs — Expiry list first, Master list, Azure (this query), one per other source in the order added, Setup last ----
+// ---- TVL-14, TVL-15: the tabs — Expiry list first, Master list, Azure (this query), one per other source in the order
+// added, the owners' tabs in their order, Setup last ----
 export function ToolValidationsTabs({ id, azure }: { id: string; azure: ReactNode }) {
   const env = useToolValidationsEnv()
-  const extra = toolTabs(env?.store.shown ?? { sources: [] }).filter((tab) => tab.key !== toolTabExpiry)
-    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <ToolMasterList /> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : <Missing /> }))
+  const file = env?.store.shown ?? { sources: [], tabs: [] }
+  const extra = toolTabs(file, customToolTabs(file)).filter((tab) => tab.key !== toolTabExpiry)
+    .map((tab) => ({ key: tab.key, label: tab.label, node: tab.key === toolTabMaster ? <ToolMasterList /> : tab.key === toolTabAzure ? azure : tab.key === toolTabSetup ? <ToolSetup /> : env && tab.source ? <SourceTab env={env} source={tab.source} /> : env && tab.custom ? <CustomTabView env={env} tab={tab.custom} /> : <Missing /> }))
   return <ResultTabs id={id} mainKey={toolTabExpiry} mainLabel="Expiry list" main={<ToolExpiryTab />} extra={extra} open={openToolTab} />
 }
 
@@ -186,7 +194,7 @@ export function ToolMasterList() {
 }
 
 // ---- TVL-01, TVL-07, TVL-09, TVL-11, TVL-14: the Setup tab — the sources and the team settings ----
-type Dialog = { kind: 'team' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource }
+type Dialog = { kind: 'team' } | { kind: 'add-source' } | { kind: 'mapping'; source: ToolSource } | { kind: 'merge'; source: ToolSource } | { kind: 'remove-source'; source: ToolSource } | { kind: 'add-tab' } | { kind: 'rename-tab'; tab: CustomTab } | { kind: 'remove-tab'; tab: CustomTab }
 export function ToolSetup() {
   const env = useToolValidationsEnv()
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -196,6 +204,7 @@ export function ToolSetup() {
   return <>
     <StoreNotices env={env} />
     <SourcesPanel env={env} why={why} open={setDialog} />
+    <TabsPanel env={env} why={why} open={setDialog} />
     <Panel title="Team settings" info="The team default of the expiry window and the co-owners of the list, kept in the master list's file in Git. Each person may look at their own window on the Expiry list tab, where the owners may also set the team default."
       action={<button type="button" className="ghost" disabled={Boolean(why)} title={why || 'Change the team default and the co-owners'} onClick={() => setDialog({ kind: 'team' })}>Edit…</button>}>
       <SettingsSummary rows={[['Expiry window (team default)', `${file.defaultDays} days`], ['Co-owners', file.owners.length ? file.owners.join(', ') : 'Nobody yet — only Tool Owners change the list']]} />
@@ -206,6 +215,9 @@ export function ToolSetup() {
     {dialog?.kind === 'mapping' && <MappingDialog env={env} source={dialog.source} onClose={close} />}
     {dialog?.kind === 'merge' && <MergeDialog env={env} source={dialog.source} onClose={close} />}
     {dialog?.kind === 'remove-source' && <RemoveSourceDialog env={env} source={dialog.source} onClose={close} />}
+    {dialog?.kind === 'add-tab' && env.pages && <AddTabDialog env={env} pages={env.pages} onClose={close} />}
+    {dialog?.kind === 'rename-tab' && env.pages && <RenameTabDialog env={env} pages={env.pages} tab={dialog.tab} onClose={close} />}
+    {dialog?.kind === 'remove-tab' && env.pages && <RemoveTabDialog env={env} pages={env.pages} tab={dialog.tab} onClose={close} />}
   </>
 }
 
@@ -440,4 +452,192 @@ function RemoveSourceDialog({ env, source, onClose }: { env: ToolValidationsEnv;
       <Actions busy={busy} onCancel={onClose} label={`Remove ${source.name}`} why={env.store.reason} danger />
     </form>
   </Modal>
+}
+
+// ---- TVL-15…TVL-17: the owners' tabs — each an On-Demand page (Table, Table + Insights or On-Demand Dashboard) that
+// lives only as a tab of this page: saved in Git as every On-Demand page (on-demand/<page-id>.json, a dashboard's blocks
+// in dashboards/<page-id>.json), placed hidden in the menu layout (not in the menu, on Home or in search), and listed with
+// its name and order in tool-validations.json (`tabs`). Set up on Setup → Tabs by the Tool Owner and the list's
+// co-owners (TVL-11); everyone else reads them. ----
+// Why the viewer cannot add, rename, reorder or remove a tab ('' when they can): the list's rights (TVL-11), and the
+// pages and the menu layout read from Git (a tab is a page and its hidden place in the menu).
+function tabsReason(env: ToolValidationsEnv) {
+  const pages = env.pages
+  if (env.store.reason) return env.store.reason
+  if (!pages) return 'The pages are not available here.'
+  const git = gitReasonOf(pages.git)
+  if (git) return git
+  if (pages.menu.error) return `menu-layout.json could not be read from Git, so no tab can be added or removed: ${pages.menu.error}`
+  if (!pages.menu.loaded || !pages.onDemand.loaded) return 'The pages are still being read from Git.'
+  return ''
+}
+function TabsPanel({ env, why: listWhy, open }: { env: ToolValidationsEnv; why: string; open: (dialog: Dialog) => void }) {
+  const file = env.store.shown
+  const why = listWhy || tabsReason(env)
+  const full = addTabReason(file)
+  const [moving, setMoving] = useState(false)
+  const move = (tab: CustomTab, by: -1 | 1) => {
+    setMoving(true)
+    void env.store.save(moveTab(env.store.file, tab.pageId, by), `Tool Validations: move the tab ${tab.name} ${by < 0 ? 'left' : 'right'}`, `Tool Validations · move the tab ${tab.name}`).catch(() => undefined).finally(() => setMoving(false))
+  }
+  const pageOf = (tab: CustomTab) => env.pages?.onDemand.pages.find((page) => page.id === tab.pageId)
+  const layout = env.pages?.menu.layout
+  return <Panel title="Tabs" info={<ul><li>The tabs the Tool Owner and the list's co-owners add to this page, between the source tabs and Setup: a <strong>Table</strong>, a <strong>Table + Insights</strong> or an <strong>On-Demand Dashboard</strong> — each an On-Demand page kept in Git like every other, set up and edited as that page type is, but shown only here (not in the menu, on Home or in search).</li><li>A dashboard tab can read the <strong>Tool Validations master list</strong> and <strong>expiry list</strong> as data sources, besides the table pages.</li><li><strong>←</strong> <strong>→</strong> move a tab; <strong>Rename…</strong> renames the tab and its page; <strong>Remove…</strong> asks first: the page is kept in Git, hidden — or, by a Tool Owner, deleted with its data.</li></ul>}
+    action={<button type="button" className="ghost" disabled={Boolean(why || full)} title={why || full || 'Add a tab of your own: a Table, Table + Insights or On-Demand Dashboard page'} onClick={() => open({ kind: 'add-tab' })}>＋ Add tab…</button>}>
+    <WriteBlocked reason={why} />
+    {file.tabs.length ? <div className="azure-table tool-tabs"><table><thead><tr><th>Tab</th><th>Page type</th><th>Page in Git</th><th>Actions</th></tr></thead><tbody>
+      {file.tabs.map((tab, index) => { const page = pageOf(tab); return <tr key={tab.pageId}>
+        <td><strong>{tab.name}</strong></td>
+        <td><small className="plain">{pageKindLabel(layout?.pages[tab.pageId] ? kindOf(layout, tab.pageId) : tab.kind)}</small></td>
+        <td><small className="plain">{page ? `${onDemandPath(tab.pageId)}${page.rows.length ? ` · ${page.rows.length} row${page.rows.length === 1 ? '' : 's'}` : ''}` : env.pages?.onDemand.loaded ? 'Not in Git (deleted)' : '—'}</small></td>
+        <td><div className="button-row nowrap">
+          <button type="button" className="ghost" aria-label={`Move ${tab.name} left`} disabled={Boolean(why) || moving || index === 0} title={why || (index === 0 ? 'Already the first of the added tabs' : `Move ${tab.name} one tab to the left`)} onClick={() => move(tab, -1)}>←</button>
+          <button type="button" className="ghost" aria-label={`Move ${tab.name} right`} disabled={Boolean(why) || moving || index === file.tabs.length - 1} title={why || (index === file.tabs.length - 1 ? 'Already the last of the added tabs' : `Move ${tab.name} one tab to the right`)} onClick={() => move(tab, 1)}>→</button>
+          <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Rename the tab ${tab.name}`} onClick={() => open({ kind: 'rename-tab', tab })}>Rename…</button>
+          <button type="button" className="text-button danger-text" disabled={Boolean(why)} title={why || `Remove the tab ${tab.name}`} onClick={() => open({ kind: 'remove-tab', tab })}>Remove…</button>
+        </div></td>
+      </tr> })}
+    </tbody></table></div> : <EmptyState title="No tabs added yet." detail={why ? undefined : `＋ Add tab… adds a Table, a Table + Insights or an On-Demand Dashboard as a tab of this page (at most ${maxCustomTabs}).`} />}
+  </Panel>
+}
+
+function AddTabDialog({ env, pages, onClose }: { env: ToolValidationsEnv; pages: CustomTabsEnv; onClose: () => void }) {
+  const [kind, setKind] = useState<PageKind>('table')
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const clash = usePageNameClash(name)
+  const why = tabsReason(env) || addTabReason(env.store.file)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    const problem = tabNameProblem(env.store.file, name)
+    if (problem) { setError(problem); return }
+    if (clash) return
+    const clean = name.replace(/\s+/g, ' ').trim()
+    setBusy(true); setError('')
+    try {
+      // The page file, then its hidden place in the menu (createPage, PGB-05), then the tab in tool-validations.json.
+      const id = await createPage(pages.onDemand, pages.menu, { kind, name: clean, description, icon: defaultIcon, group: onDemandGroup, newGroup: null, owners: [], hidden: true })
+      await env.store.save(addTab(env.store.file, { pageId: id, name: clean, kind }), `Tool Validations: add the tab ${clean} (${pageKindLabel(kind)}, page ${id})`, `Tool Validations · add the tab ${clean}`)
+      onClose()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
+  }
+  return <Modal title="Add a tab" eyebrow="TOOL VALIDATIONS · TABS" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={(event) => void submit(event)} className="pgb-form">
+      <KindField value={kind} onChange={setKind} hideStreamNote />
+      <PageNameField value={name} clash={clash} onChange={(value) => { setName(value); setError('') }} />
+      <small className="muted">The name of the tab and of its page, up to {maxTabName} characters.</small>
+      <label>Description (optional)<input maxLength={300} value={description} onChange={(event) => setDescription(event.target.value)} /><small>Shown at the top of the tab.</small></label>
+      <small className="muted">The page is created in Git at once (on-demand/page-id.json{kind === 'dashboard' ? '; its blocks in dashboards/page-id.json when the first one is added' : ''}), placed hidden in menu-layout.json — not in the menu, on Home or in search — and added to {toolValidationsFile} as the last of the added tabs, before Setup. The Tool Owner and the list's co-owners set it up and edit it; everyone else reads it.</small>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions">{why && <WriteBlocked reason={why} />}<button type="button" className="ghost" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || Boolean(clash) || Boolean(why)}>{busy ? 'Saving to Git…' : 'Add tab'}</button></div>
+    </form>
+  </Modal>
+}
+
+function RenameTabDialog({ env, pages, tab, onClose }: { env: ToolValidationsEnv; pages: CustomTabsEnv; tab: CustomTab; onClose: () => void }) {
+  const [name, setName] = useState(tab.name)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const clash = usePageNameClash(name, `ondemand:${tab.pageId}`)
+  const why = tabsReason(env)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    const problem = tabNameProblem(env.store.file, name, tab.pageId)
+    if (problem) { setError(problem); return }
+    if (clash) return
+    const clean = name.replace(/\s+/g, ' ').trim()
+    setBusy(true); setError('')
+    try {
+      await env.store.save(renameTab(env.store.file, tab.pageId, clean), `Tool Validations: rename the tab ${tab.name} to ${clean}`, `Tool Validations · rename the tab ${tab.name}`)
+      // The page keeps the tab's name (its title on the tab, its name as a data source of the dashboards).
+      const stored = pages.onDemand.stored(tab.pageId)
+      if (stored && stored.name !== clean) { const saved = await pages.onDemand.save(renamePage(stored, clean, stored.description), `Pages & menu: rename ${stored.name} to ${clean} (a tab of Tool Validations)`); recordJob(`pages:${tab.pageId}`, `Rename page · ${stored.name}`, { text: `${outcomeText(saved)} ${onDemandPath(tab.pageId)}` }) }
+      onClose()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
+  }
+  return <Modal title={`Rename the tab ${tab.name}`} eyebrow="TOOL VALIDATIONS · TABS" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={(event) => void submit(event)} className="pgb-form">
+      <PageNameField value={name} clash={clash} onChange={(value) => { setName(value); setError('') }} />
+      <small className="muted">The tab and its page are renamed for everyone (saved to Git).</small>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions">{why && <WriteBlocked reason={why} />}<button type="button" className="ghost" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || Boolean(clash) || Boolean(why)}>{busy ? 'Saving to Git…' : 'Save to Git'}</button></div>
+    </form>
+  </Modal>
+}
+
+// Remove asks first and says what happens to the page: kept in Git, hidden (anyone who may change the list), or deleted
+// with its data (the Tool Owner only, PGB-20).
+function RemoveTabDialog({ env, pages, tab, onClose }: { env: ToolValidationsEnv; pages: CustomTabsEnv; tab: CustomTab; onClose: () => void }) {
+  const [remove, setRemove] = useState<'keep' | 'delete'>('keep')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const why = tabsReason(env)
+  const deleting = deleteReason(pages.viewer)
+  const page = pages.onDemand.stored(tab.pageId)
+  const layout = pages.menu.layout
+  const dashboard = (layout.pages[tab.pageId] ? kindOf(layout, tab.pageId) : tab.kind) === 'dashboard'
+  const rows = page?.rows.length ?? 0
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true); setError('')
+    try {
+      await env.store.save(removeTab(env.store.file, tab.pageId), `Tool Validations: remove the tab ${tab.name}${remove === 'delete' ? ' and delete its page' : ' (its page kept, hidden)'}`, `Tool Validations · remove the tab ${tab.name}`)
+      const ids = pages.onDemand.pages.map((entry) => entry.id)
+      if (remove === 'delete' && !deleting) {
+        if (page) await pages.onDemand.remove(tab.pageId, `Pages & menu: delete the page ${tab.name} (a tab of Tool Validations)`)
+        const removed = dashboard ? await pages.git.removeDashboard(tab.pageId, `Pages & menu: remove the dashboard ${tab.name} (a tab of Tool Validations)`) : false
+        if (pages.menu.layout.pages[tab.pageId]) await pages.menu.save(removePlacement(pages.menu.layout, tab.pageId), `Pages & menu: remove the page ${tab.name}`)
+        recordJob(`pages:${tab.pageId}`, `Delete page · ${tab.name}`, { text: `Deleted ${onDemandPath(tab.pageId)}${removed ? ` and dashboards/${tab.pageId}.json` : ''}; its history stays in GitHub.` })
+      } else if (page && !isHidden(pages.menu.layout, tab.pageId)) {
+        await pages.menu.save(setHidden(pages.menu.layout, tab.pageId, true, ids), `Pages & menu: hide the page ${tab.name} (its tab removed from Tool Validations)`)
+      }
+      onClose()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
+  }
+  return <Modal title={`Remove the tab ${tab.name}`} eyebrow="TOOL VALIDATIONS · TABS" onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={(event) => void submit(event)}>
+      <p>Remove the tab <strong>{tab.name}</strong> from Tool Validations for everyone? Its page — {dashboard ? 'an On-Demand Dashboard' : `${rows} row${rows === 1 ? '' : 's'}`} — is:</p>
+      <fieldset className="pgb-kinds"><legend>The page</legend>
+        <div className="pgb-kind"><label className="check"><input type="radio" name="remove-tab" checked={remove === 'keep'} onChange={() => setRemove('keep')} />Kept in Git, hidden</label><small>Its data stays; it is not in the menu, on Home or in search. A Tool Owner can open, show or delete it in Admin → Pages & menu.</small></div>
+        <div className="pgb-kind"><label className="check" title={deleting || undefined}><input type="radio" name="remove-tab" disabled={Boolean(deleting)} checked={remove === 'delete'} onChange={() => setRemove('delete')} />Deleted with its data</label><small>{deleting || `${onDemandPath(tab.pageId)}${dashboard ? ` and dashboards/${tab.pageId}.json are` : ' is'} deleted from Git; the history stays in GitHub. A dashboard that reads the page says it is no longer there.`}</small></div>
+      </fieldset>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions">{why && <WriteBlocked reason={why} />}<button type="button" className="ghost" disabled={busy} onClick={onClose}>Cancel</button><button className="danger-button" disabled={busy || Boolean(why)}>{busy ? 'Saving to Git…' : remove === 'delete' ? `Remove ${tab.name} and delete its page` : `Remove ${tab.name}`}</button></div>
+    </form>
+  </Modal>
+}
+
+// TVL-15, TVL-17: an owners' tab — the page as its page type shows it anywhere (rows, row files and locks, Hide row,
+// Insights, dashboard blocks), framed as a tab. The Tool Owner and the list's co-owners count as the page's co-owners
+// here (set up, edit rows, build the dashboard); everyone else has the page's usual rights (the role rights) — read only
+// for most, every change disabled with its reason. Fail closed without the roles file (CON-101).
+const OnDemandPage = lazy(() => import('../pages/OnDemandPage').then((module) => ({ default: module.OnDemandPage })))
+const CustomDashboardPage = lazy(() => import('../pages/CustomDashboardPage').then((module) => ({ default: module.CustomDashboardPage })))
+const noop = () => undefined
+// The menu layout as the tab's page sees it: the viewer counted as a co-owner of the page when they may change the list;
+// a save of the layout from the page keeps the page's own co-owners as they were.
+function ownedMenu(menu: MenuLayoutStore, pageId: string, email: string, fallback: PageKind): MenuLayoutStore {
+  if (!email) return menu
+  const current = placementOf(menu.layout, pageId)
+  const owners = menu.layout.pages[pageId]?.owners ?? []
+  const layout: MenuLayout = { ...menu.layout, pages: { ...menu.layout.pages, [pageId]: { type: menu.layout.pages[pageId]?.type ?? fallback, group: current.group, order: current.order, icon: current.icon, owners: [...owners, email], ...(current.hidden ? { hidden: true } : {}) } } }
+  const save = (next: MenuLayout, message: string) => menu.save(next.pages[pageId] ? { ...next, pages: { ...next.pages, [pageId]: { ...next.pages[pageId], owners: next.pages[pageId].owners.filter((entry) => owners.includes(entry)) } } } : next, message)
+  return { ...menu, layout, save }
+}
+function CustomTabView({ env, tab }: { env: ToolValidationsEnv; tab: CustomTab }) {
+  const pages = env.pages
+  if (!pages) return <Missing />
+  const page = pages.onDemand.pages.find((entry) => entry.id === tab.pageId)
+  if (!page) return <Panel><EmptyState title={pages.onDemand.loaded ? `The page of the tab ${tab.name} is not in Git (it was deleted).` : `Reading ${tab.name} from Git…`} detail={pages.onDemand.loaded ? 'A Tool Owner or a co-owner of the list removes the tab on Setup → Tabs.' : undefined} /></Panel>
+  const layout = pages.menu.layout
+  const kind = layout.pages[tab.pageId] ? kindOf(layout, tab.pageId) : tab.kind
+  const owns = !pages.viewer.readOnly && !listReason(pages.viewer, env.store.shown)
+  const menu = owns ? ownedMenu(pages.menu, tab.pageId, pages.viewer.email.trim().toLowerCase(), tab.kind) : pages.menu
+  return <Suspense fallback={<Panel><EmptyState title={`Opening ${tab.name}…`} /></Panel>}>
+    {kind === 'dashboard'
+      ? <CustomDashboardPage key={tab.pageId} embedded git={pages.git} store={pages.onDemand} pageId={tab.pageId} menu={menu} viewer={pages.viewer} views={pages.views} onOpen={noop} onAddPage={noop} hours={pages.hours} publisherName={pages.publisherName} tools={env.datasets} />
+      : <OnDemandPage key={tab.pageId} embedded git={pages.git} store={pages.onDemand} pageId={tab.pageId} me={pages.me} onOpen={noop} onAddPage={noop} kind={kind} menu={menu} viewer={pages.viewer} views={pages.views} dataMode={pages.dataMode} publisherName={pages.publisherName} />}
+  </Suspense>
 }

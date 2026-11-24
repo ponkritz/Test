@@ -53,13 +53,14 @@ export function dashId(prefix: 'b' | 't' | 'f', random: () => number = Math.rand
 const clean = (value: unknown, max: number) => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, max) : ''
 
 // ---- data sources (DSH-03, DSH-04) ----
-// A data source is a table page, named 'page:<page id>', or (DSH-16) the Time Writing hours, 'hours:time-writing'
-// (src/dashboardHours.ts); the pattern is the one place where a kind of source is added. A file naming another kind is
+// A data source is a table page, named 'page:<page id>', (DSH-16) the Time Writing hours, 'hours:time-writing'
+// (src/dashboardHours.ts), or (TVL-18) the Tool Validations master list 'tools:master' and expiry list 'tools:expiry'
+// (src/dashboardSources.ts); the pattern is the one place where a kind of source is added. A file naming another kind is
 // dropped block by block (DSH-08).
 export const pageSource = (pageId: string) => `page:${pageId}`
 export const hoursSource = 'hours:time-writing'
 export const hoursSourceName = 'Time Writing hours'
-export const sourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing)$/
+export const sourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|tools:master|tools:expiry)$/
 export const pageOfSource = (source: string) => source.startsWith('page:') ? source.slice(5) : ''
 
 // A data source as the blocks see it: rows in the shape of an On-Demand page, so the On-Demand aggregation applies.
@@ -241,7 +242,10 @@ export function blankBlock(dataset: Dataset, id: string, type: BlockType = 'kpi'
   const chart = type === 'kpi' ? undefined : type
   // DSH-16: the Time Writing hours are measured in hours (Sum of the first hours column), never counted.
   const hours = dataset.key === hoursSource
-  return { id, title: '', type, source: dataset.key, category: chart ? categoryColumns(page, chart)[0]?.id ?? '' : '', second: '', measure: hours ? 'sum' : 'count', value: hours ? valueColumns(page)[0]?.id ?? '' : '', filters: [], sort: type === 'line' ? 'label' : 'value', period: periodColumns(page)[0]?.id ?? '', tab, ...(type === 'narrative' ? { narrative: blankNarrative() } : {}) }
+  // TVL-18: a Tool Validations source counts every tool, whatever the period (its dates are validation and due dates);
+  // a builder may still pick a Date column for the period.
+  const timeless = dataset.key.startsWith('tools:')
+  return { id, title: '', type, source: dataset.key, category: chart ? categoryColumns(page, chart)[0]?.id ?? '' : '', second: '', measure: hours ? 'sum' : 'count', value: hours ? valueColumns(page)[0]?.id ?? '' : '', filters: [], sort: type === 'line' ? 'label' : 'value', period: timeless ? '' : periodColumns(page)[0]?.id ?? '', tab, ...(type === 'narrative' ? { narrative: blankNarrative() } : {}) }
 }
 // The block after its type or data source changed: fields that no longer fit are cleared or replaced by the first that fits.
 export function withBlockType(dataset: Dataset, block: DashboardBlock, type: BlockType): DashboardBlock {

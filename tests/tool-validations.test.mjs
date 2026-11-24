@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addMonths, addSource, aggregate, azureFieldOptions, azureValue, cleanDays, dayOf, daysLeftText, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile } from '../src/toolValidations.ts'
+import { addMonths, addSource, aggregate, azureFieldOptions, azureValue, cleanDays, dayOf, daysLeftText, dueOf, editOf, editProblem, emptyFile, entryState, expiryRows, guessMapping, inputsFromRows, listReason, mappingFor, markMerged, mergeSource, mergeToolValidationsText, monthsOf, nameKey, openToolTab, toolTabs, ownersReason, parseToolValidations, removeSource, removeTool, saveTool, serializeToolValidations, setMapping, setTeam, sourceProblem, streamSourceId, toolKey, toolValidationsFile, addTab, addTabReason, customTabKey, customToolTabs, maxCustomTabs, moveTab, removeTab, renameTab, tabNameProblem } from '../src/toolValidations.ts'
 import { pagesOfFile, fileLabel } from '../src/gitWatch.ts'
 
 // TVL-01…TVL-13: the Tool Validations master list (tool-validations.json in Git), its sources, merges and expiry view.
@@ -198,4 +198,73 @@ test('TVL-14: the tabs — Expiry list first, Master list, Azure, then one per o
   assert.equal(openToolTab('something-else', fewer), 'tool-expiry')
   assert.deepEqual(toolTabs(file, [{ key: 'tool-page:checklist', label: 'Checklist' }]).map((tab) => tab.key).slice(-3), ['tool-source:lab-tools', 'tool-page:checklist', 'tool-setup'], 'later tabs go after the sources, before Setup')
   assert.equal(toolTabs(file).filter((tab) => tab.label === 'Setup').length, 1, 'one Setup tab')
+})
+
+test('TVL-15, TVL-16: the owners’ tabs in tool-validations.json — validated strictly (page id, name, page type; twice refused), written only when there are some; after the source tabs and before Setup, in their order; add, rename, move ← →, remove (TC-TVL-10)', () => {
+  const tab = (pageId, name, kind = 'table') => ({ pageId, name, kind })
+  const read = parseToolValidations(fileWith([], { tabs: [tab('checklist', 'Checklist'), tab('tool-dash', 'Tool dashboard', 'dashboard'), tab('Bad Id', 'Bad'), tab('notes', '', 'table'), tab('notes', 'Notes', 'release'), tab('checklist', 'Again'), tab('other', 'checklist', 'table-insights'), 'nope'] }))
+  assert.deepEqual(read.file.tabs, [tab('checklist', 'Checklist'), tab('tool-dash', 'Tool dashboard', 'dashboard')])
+  assert.deepEqual(read.refused.map((entry) => `${entry.name}: ${entry.reason}`), [
+    'Tab “Bad”: its page id is missing or not lower-case letters, digits and hyphens',
+    'Tab “”: its name is missing or longer than 40 characters',
+    'Tab “Notes”: unknown page type “release”',
+    'Tab “Again”: the page “checklist” is a tab twice',
+    'Tab “checklist”: another tab has this name',
+    'Tab “?”: not an object',
+  ])
+  assert.ok(!serializeToolValidations(parseToolValidations(fileWith([])).file).includes('"tabs"'), 'a file without tabs is written as before')
+  const text = serializeToolValidations(read.file)
+  assert.deepEqual(JSON.parse(text).tabs, [tab('checklist', 'Checklist'), tab('tool-dash', 'Tool dashboard', 'dashboard')], 'written in their order')
+  assert.deepEqual(parseToolValidations(text).file.tabs, read.file.tabs, 'round trip')
+  // TVL-15: the tab row — Expiry list · Master list · Azure · source tabs · the owners' tabs · Setup.
+  let file = addSource(read.file, { kind: 'windchill', name: 'Windchill tools', ref: 'wc-1', mapping: guessMapping('windchill', []) })
+  assert.deepEqual(toolTabs(file, customToolTabs(file)).map((entry) => entry.label), ['Expiry list', 'Master list', 'Azure', 'Windchill tools', 'Checklist', 'Tool dashboard', 'Setup'])
+  assert.equal(customToolTabs(file)[1].key, customTabKey('tool-dash'))
+  assert.equal(customToolTabs(file)[1].custom.kind, 'dashboard')
+  assert.equal(openToolTab(customTabKey('tool-dash'), toolTabs(file, customToolTabs(file)).map((entry) => entry.key)), 'tool-tab:tool-dash', 'a remembered owners’ tab opens')
+  assert.equal(openToolTab(customTabKey('gone'), toolTabs(file, customToolTabs(file)).map((entry) => entry.key)), 'tool-expiry', 'a removed one opens the Expiry list')
+  // Names: 1 to 40 characters, not the name of another tab of the page (fixed tabs, sources, owners' tabs; case ignored).
+  assert.equal(tabNameProblem(file, 'Open items'), '')
+  for (const name of ['expiry list', 'SETUP', 'Azure', 'windchill tools', 'checklist']) assert.match(tabNameProblem(file, name), /already has a tab named/, name)
+  assert.equal(tabNameProblem(file, 'Checklist', 'checklist'), '', 'its own name when renamed')
+  assert.match(tabNameProblem(file, ' '), /Enter a tab name of up to 40 characters/)
+  assert.match(tabNameProblem(file, 'x'.repeat(41)), /up to 40/)
+  // Add (last), rename, move, remove.
+  file = addTab(file, tab('open-items', '  Open   items '))
+  assert.deepEqual(file.tabs.map((entry) => entry.name), ['Checklist', 'Tool dashboard', 'Open items'])
+  file = moveTab(file, 'open-items', -1)
+  assert.deepEqual(file.tabs.map((entry) => entry.pageId), ['checklist', 'open-items', 'tool-dash'])
+  assert.equal(moveTab(file, 'checklist', -1), file, 'the first cannot move left')
+  assert.equal(moveTab(file, 'tool-dash', 1), file, 'the last cannot move right')
+  file = renameTab(file, 'checklist', 'Release checklist')
+  assert.equal(file.tabs[0].name, 'Release checklist')
+  file = removeTab(file, 'open-items')
+  assert.deepEqual(file.tabs.map((entry) => entry.pageId), ['checklist', 'tool-dash'])
+  assert.equal(addTabReason(file), '')
+  let full = file
+  for (let index = file.tabs.length; index < maxCustomTabs; index++) full = addTab(full, tab(`t${index}`, `Tab ${index}`))
+  assert.match(addTabReason(full), /^At most 10 tabs/)
+  const eleven = JSON.parse(serializeToolValidations(full)); eleven.tabs.push(tab('t-more', 'One more'))
+  assert.match(parseToolValidations(JSON.stringify(eleven)).refused[0].reason, /more than 10 tabs/)
+})
+
+test('GIT-17, TVL-16: two saves of the tabs merged — by page id, a rename and an add both kept, a removal kept, the order of the save that moved them (TC-TVL-10)', () => {
+  const tab = (pageId, name, kind = 'table') => ({ pageId, name, kind })
+  const base = serializeToolValidations(parseToolValidations(fileWith([], { tabs: [tab('a', 'A'), tab('b', 'B'), tab('c', 'C')] })).file)
+  const file = parseToolValidations(base).file
+  // Mine: B renamed and D added; theirs: C removed and A moved after B.
+  const mine = serializeToolValidations(addTab(renameTab(file, 'b', 'Bee'), tab('d', 'D', 'dashboard')))
+  const theirs = serializeToolValidations(moveTab(removeTab(file, 'c'), 'a', 1))
+  const merged = parseToolValidations(mergeToolValidationsText(base, mine, theirs, false)).file
+  assert.deepEqual(merged.tabs.map((entry) => `${entry.pageId}:${entry.name}`), ['b:Bee', 'a:A', 'd:D'], 'theirs is later: their order; my rename and my new tab kept (after the others); their removal kept')
+  const mineLater = parseToolValidations(mergeToolValidationsText(base, mine, theirs, true)).file
+  assert.deepEqual(mineLater.tabs.map((entry) => entry.pageId), ['a', 'b', 'd'], 'mine is later: my order; C stays removed')
+  // Only one side touched the tabs: its change is taken, the other side's tools kept.
+  const tools = serializeToolValidations(saveTool(file, { name: 'JMP', version: '17', validationDate: '', validityMonths: '', dueDate: '', notes: '' }, at, 'me'))
+  const both = parseToolValidations(mergeToolValidationsText(base, tools, theirs, true)).file
+  assert.deepEqual([both.tabs.map((entry) => entry.pageId), both.tools.map((entry) => entry.name)], [['b', 'a'], ['JMP']])
+  // A file read without tabs merged with a save that added one: the added tab stays.
+  const older = serializeToolValidations(parseToolValidations(fileWith([])).file)
+  const added = serializeToolValidations(addTab(parseToolValidations(older).file, tab('x', 'X')))
+  assert.deepEqual(parseToolValidations(mergeToolValidationsText(older, older, added, true)).file.tabs.map((entry) => entry.pageId), ['x'])
 })

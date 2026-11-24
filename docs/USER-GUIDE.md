@@ -466,7 +466,8 @@ The **Tool Validations** page has these tabs:
 - **Master list** — the master list of every tool, with **＋ Add tool…**, its filters and **Export** — nothing else on the tab.
 - **Azure** — the Tool Validations query: its releases of the month (the Releases table) and, below, the query's rows (**Source data**). Before a fetch it says to fetch the query with **↻**.
 - **One tab per other source** — every source added under **Setup → Sources** (another Azure DevOps query, a Windchill export, a Table page) gets a tab named after it, in the order added: its rows as the app reads them with the source's field mapping, with **Edit mapping…** and **Merge into master list…**. When its data is not in this browser, the tab says how to load it. Removing the source removes its tab.
-- **Setup** — last: **Sources** (**＋ Add source…**, and per source **Edit mapping…**, **Merge into master list…** and **Remove**) and **Team settings** (**Edit…**). Everyone sees it; those who may not change it see the buttons greyed out with the reason.
+- **Your team's own tabs** — tabs the Tool Owner and the list's co-owners add under **Setup → Tabs**: a Table, a Table + Insights or an On-Demand Dashboard, in the order they set.
+- **Setup** — last: **Sources** (**＋ Add source…**, and per source **Edit mapping…**, **Merge into master list…** and **Remove**), **Tabs** (**＋ Add tab…**, and per tab **←**, **→**, **Rename…** and **Remove…**) and **Team settings** (**Edit…**). Everyone sees it; those who may not change it see the buttons greyed out with the reason.
 
 The tiles above the tabs (Releases in {month}, Supported) are the same as before. The page remembers the last tab you chose in this browser tab.
 
@@ -489,6 +490,15 @@ The due date is the source's own due date (or one entered by hand) when there is
 4. Check **Edit mapping…** (on Setup or on the source's tab): which column gives the tool name, version and dates. The app's guesses are marked **Guessed** until you save the mapping.
 5. Open the source's own tab to see its rows as read; **Merge into master list…** (on that tab or under **Setup → Sources**) shows what changes, then saves it to Git.
 6. **Setup → Team settings → Edit…** sets the team's window (also possible on the Expiry list, see above) and names the list's co-owners (a Tool Owner names them).
+
+**Add a tab of your own (Tool Owner and the list's co-owners)**
+
+1. Open **Setup** and, under **Tabs**, choose **＋ Add tab…**.
+2. Choose the **Page type** — **Table** (a table you set up yourself), **Table + Insights** (the table and an Insights tab of charts) or **On-Demand Dashboard** (tiles and charts over table pages, the master list and the expiry list) — give it a name and choose **Add tab**. The tab appears before Setup.
+3. Open the tab: set up the table (**Set up columns…**, **＋ Add row**) or the dashboard (**＋ Add block…**) as on any other On-Demand page. For a chart of the tools, choose the data source **Tool Validations master list** or **Tool Validations expiry list** — for example a bar chart of the tools by **Status** (Overdue, Due soon, No due date, OK; due soon is within the team default window).
+4. Under **Setup → Tabs**, **←** and **→** move a tab, **Rename…** renames it, and **Remove…** asks first: the page is **kept in Git, hidden** — or, for a Tool Owner, **deleted with its data**.
+
+These tabs are pages of their own in Git, but they are not in the menu, on Home or in search: they live on the Tool Validations page only (Admin → Pages & menu lists them as hidden, **Tab of Tool Validations**). Everyone else reads them.
 
 Everyone else sees every tab read only; the buttons say why they are greyed out. The release counts of Tool Validations, Pulse Check and the Monthly pack are not changed by the master list.
 

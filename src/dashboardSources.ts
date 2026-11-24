@@ -12,6 +12,7 @@ import type { OnDemandColumn, OnDemandRow, OnDemandType } from './onDemand.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 import { completedCount, supportedCount, type ReleaseStream } from './releaseOverview.ts'
 import { completedRows, monthCounts, windchillLinesOf, type StreamMonthCount, type WindchillInput } from './cumulativeReleases.ts'
+import { daysBetween, dueFromLabel, dueOf, entryState, entryStateLabel, type ToolValidationsFile } from './toolValidations.ts'
 
 // MYD-15…MYD-22 The data sources of My dashboard's blocks, as one registry so that more can be added: each kind of
 // source declares its fields (text, category, date, number, currency), the menu area a role needs to see it
@@ -48,7 +49,10 @@ export interface SourceInput {
   windchill: { viewId: string; name: string; fetchedAt: string; columns: string[]; rows: Record<string, unknown>[] }[]
   pages: Dataset[] // the table pages as saved in Git (DSH-03), built by the page
   hours: (allowed: boolean) => HoursLine[] // DSH-16: the Time Writing lines over the months (worked out only when allowed)
+  // TVL-18: the Tool Validations master list as last read from Git (connected: Git storage is set up); absent: not offered.
+  tools?: ToolSourceInput
 }
+export interface ToolSourceInput { file: ToolValidationsFile; connected: boolean; loaded: boolean }
 
 export interface SourceKind {
   id: string; label: string; areas: Area[]; describe: string
@@ -243,6 +247,51 @@ export function historyRows(file: HistoryFile): SourceRow[] {
   } }))
 }
 
+// ---- TVL-18 Tool Validations: the master list and the expiry list ----
+// Every tool of the master list (tool-validations.json) with its dates and its status on the UTC day `today`: Overdue
+// (due date passed), Due soon (due within the team default window of N days), No due date, or OK (due later) — the
+// Expiry list's rules (TVL-08) with the team default window, the same for every viewer (a dashboard is the same for
+// everyone). The expiry list is the same rows without OK.
+export const toolMasterSource = 'tools:master', toolExpirySource = 'tools:expiry'
+export const toolMasterName = 'Tool Validations master list', toolExpiryName = 'Tool Validations expiry list'
+export const toolStatusLabels = ['Overdue', 'Due soon', 'No due date', 'OK'] as const
+export const toolFields: SourceField[] = [
+  { id: 'tv-tool', name: 'Tool', type: 'category' }, { id: 'tv-version', name: 'Version', type: 'category' },
+  { id: 'tv-validated', name: 'Validation date', type: 'date' }, { id: 'tv-months', name: 'Validity (months)', type: 'number' },
+  { id: 'tv-due', name: 'Due date', type: 'date' }, { id: 'tv-from', name: 'Due date from', type: 'category' },
+  { id: 'tv-status', name: 'Status', type: 'category' }, { id: 'tv-days', name: 'Days left', type: 'number' },
+  { id: 'tv-sources', name: 'Sources', type: 'multi' }, { id: 'tv-state', name: 'In source now', type: 'category' },
+]
+export function toolRows(file: ToolValidationsFile, today: string, expiryOnly = false): SourceRow[] {
+  const sourceName = (id: string) => file.sources.find((source) => source.id === id)?.name ?? id
+  return file.tools.flatMap((entry) => {
+    const { due, from } = dueOf(entry)
+    const days = due ? daysBetween(today, due) : undefined
+    const status = days === undefined ? 'No due date' : days < 0 ? 'Overdue' : days <= file.defaultDays ? 'Due soon' : 'OK'
+    if (expiryOnly && status === 'OK') return []
+    return [{ key: `${entry.name}${entry.version ? ` ${entry.version}` : ''}`, cells: {
+      'tv-tool': entry.name, 'tv-version': entry.version, 'tv-validated': entry.validationDate ?? '', 'tv-months': entry.validityMonths ? String(entry.validityMonths) : '',
+      'tv-due': due ?? '', 'tv-from': from === 'none' ? '' : dueFromLabel[from], 'tv-status': status, 'tv-days': days === undefined ? '' : String(days),
+      'tv-sources': Object.keys(entry.sources).map(sourceName), 'tv-state': entryStateLabel[entryState(entry)],
+    } }]
+  })
+}
+const toolKind = 'Tool Validations'
+// The two datasets as a viewer gets them: "Not available for your role." without the menu area Release Details (where
+// the Tool Validations page is); what to do while Git storage is not connected; else the rows (worked out only when wanted).
+export function toolDatasets(tools: ToolSourceInput | undefined, allowed: boolean, today: string, wanted: (key: string) => boolean = () => true): Dataset[] {
+  const pairs: [string, string, boolean, string][] = [
+    [toolMasterSource, toolMasterName, false, 'Every tool of the Tool Validations master list (tool-validations.json in Git) with its dates; Status is Overdue, Due soon (within the team default window), No due date or OK, as on the Expiry list'],
+    [toolExpirySource, toolExpiryName, true, 'The tools of the Tool Validations master list that are overdue, due within the team default window or without a due date, as the Expiry list shows them'],
+  ]
+  return pairs.map(([key, name, expiryOnly, note]) => {
+    if (!allowed) return blocked(key, name, toolKind, notAvailable)
+    if (!tools?.connected) return blocked(key, name, toolKind, 'Connect Git storage (Admin → Data & sharing) to see the Tool Validations master list.')
+    const file = tools.file
+    return fieldsDataset(key, name, toolKind, `${note}; the team default window is ${file.defaultDays} days`, toolFields, wanted(key) ? toolRows(file, today, expiryOnly) : [])
+  })
+}
+
 // ---- the registry ----
 const cellText = (value: unknown) => value == null ? '' : typeof value === 'object' ? JSON.stringify(value).slice(0, 200) : String(value).slice(0, 500)
 export const sourceKinds: SourceKind[] = [
@@ -301,6 +350,8 @@ export const sourceKinds: SourceKind[] = [
       if (!input.history.file) return [entry(blocked(historySource, name, kind, input.history.loaded ? 'No historical hours are imported.' : 'Load the historical hours to see this.'), name, input.history.loaded ? undefined : 'history')]
       return [entry(fieldsDataset(historySource, name, kind, `The imported planned and recorded hours before ${input.history.file.cutoff}, as written in the import`, historyFields, wanted(historySource) ? historyRows(input.history.file) : []), name)]
     } },
+  { id: 'tools', label: 'Tool Validations', areas: ['release'], describe: 'The Tool Validations master list and its expiry list (tool-validations.json, TVL-18).',
+    entries: (input, wanted) => input.tools ? toolDatasets(input.tools, input.sees('release'), input.today, wanted).map((dataset) => entry(dataset, toolKind)) : [] },
   { id: 'windchill', label: 'Windchill exports', areas: ['release'], describe: 'The rows of each Windchill export.',
     entries: (input) => {
       const name = 'Windchill export', kind = 'Windchill export'
@@ -313,7 +364,7 @@ export const sourceKinds: SourceKind[] = [
 // stream, the Pulse Check rules) and the utilization (Capacity and utilization) — see MYD-22.
 
 // The source keys a stored block may name (MYD-23): the table pages and the Time Writing hours (DSH-04) and each kind above.
-export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|releases:completed|capacity:people|kpi:tracker|history:hours|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54})$/
+export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|releases:completed|capacity:people|kpi:tracker|history:hours|tools:master|tools:expiry|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54})$/
 export const kindOfKey = (key: string) => key === hoursSource ? 'hours' : key === completedSource ? 'completed' : key.split(':')[0] === 'page' ? 'page' : key.split(':')[0] === 'releases' ? 'releases' : key.split(':')[0] === 'capacity' ? 'capacity' : key.split(':')[0]
 
 // Every source entry in the registry's order; wanted: the keys whose rows are worked out.

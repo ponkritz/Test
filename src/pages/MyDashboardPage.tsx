@@ -32,6 +32,7 @@ import { hoursLinesCached } from '../dashboardHours'
 import { defaultStreamReleases } from '../releaseOverview'
 import { pulseStreamsKey, readPulseStreams } from '../pulseStreams'
 import { entryOf, sourceEntries, type LoadAction, type SourceInput } from '../dashboardSources'
+import { useToolValidationsEnv } from '../useToolValidations'
 import { arrangeMyItems, isSection, maxMyBlocks, myBlankBlock, myDashboardKey, myDashboardOut, myDashboardPage, myDashboardViewKey, mySections, parseMyDashboard, sectionKindSize, withBlock, withoutBlock, type MyDashboard } from '../myDashboard'
 import { cleanOptions, insightKindOf as kindOf, withoutHidden } from '../onDemand'
 import { parseTracker, type KpiTracker } from '../kpiTracker'
@@ -87,6 +88,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
   const usedKey = wantAll ? '*' : [...used].sort().join(',')
   const onDemand = sources?.onDemand, qe = sources?.qe, history = sources?.history, items = sources?.items ?? azure.items
   const settings = sources?.settings
+  const toolStore = useToolValidationsEnv()?.store
   // MYD-25: the person's own Pulse Check Streams filter, for the Completed releases source's Counted in Pulse Check.
   const excludedKey = (views.filter(pulseStreamsKey, readPulseStreams)?.excluded ?? []).join('\u0000')
   const entries = useMemo(() => {
@@ -99,10 +101,12 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
       windchill: store.state.windchillSources ?? [],
       pages: dataSources(onDemand!.pages, visibleStored, sources.isDashboard, ''),
       hours: (allowed) => allowed ? hoursLinesCached(items, monthsKey ? monthsKey.split(',') : [], utcToday(), settings) : [],
+      // TVL-18: the Tool Validations master list and expiry list (the app's copy of tool-validations.json).
+      ...(toolStore ? { tools: { file: toolStore.shown, connected: toolStore.connected, loaded: toolStore.loaded } } : {}),
     }
     return sourceEntries(input, (key) => usedKey === '*' || usedKey.split(',').includes(key))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, my.me.email, my.me.name, sources?.git.connected, windchill?.views, windchill?.sources, excludedKey])
+  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, toolStore?.shown, toolStore?.connected, toolStore?.loaded, my.me.email, my.me.name, sources?.git.connected, windchill?.views, windchill?.sources, excludedKey])
   const sourceOf = (key: string) => entryOf(entries, key, sees)
   const narrow = (dataset: Dataset, block: DashboardBlock) => dataset.problem ? null : narrowRows(dataset, block, months)
   const datasets = entries.map((entry) => entry.dataset)

@@ -75,7 +75,8 @@ import { ProfileMenu, type ProfileAction } from './components/ProfileMenu'
 import { backlogViews, loadBacklogTab, otherMenuViews, saveBacklogTab, timeWritingView } from './backlogViews'
 import { detectWorkEmail, fetchTeamMembers, mergeAzureWorkItems } from './azureDevOps'
 import { formatDateTime } from './format'
-import { utcMonthKey } from './businessTime'
+import { utcMonthKey, utcToday } from './businessTime'
+import { toolDatasets } from './dashboardSources'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
@@ -279,7 +280,11 @@ export default function App() {
     pages: onDemand.pages.filter((entry) => kindOf(menu.layout, entry.id) !== 'dashboard' && !entry.sample).map((entry) => ({ id: entry.id, name: entry.name, columns: entry.columns.map((column) => ({ id: column.id, name: column.name })), rows: entry.rows })),
   }), [toolData?.items, toolPatterns, azure.connectionProfiles, toolProfile?.id, store.state, releaseSources, windchill.views, windchill.sources, onDemand.pages, menu.layout])
   const toolDaysKey = 'tool-validations:expiry-days'
-  const toolEnv: ToolValidationsEnv = { store: toolValidations, ownersReason: toolValidations.reason || toolOwnersReason(viewer), who: my.self.me.name?.trim() || azure.creatorEmail.trim(), personalDays: personalViews.filter(toolDaysKey, cleanDays), setPersonalDays: (days) => days === undefined ? personalViews.clearFilter(toolDaysKey) : personalViews.setFilter(toolDaysKey, days), sources: toolSources }
+  // TVL-18: the master list and the expiry list as data sources of the On-Demand Dashboards (the owners' dashboard tabs
+  // and every other dashboard), for the roles that see Release Details.
+  const toolsReadable = access.sees('release')
+  const toolDatasetList = useMemo(() => toolDatasets({ file: toolValidations.shown, connected: toolValidations.connected, loaded: toolValidations.loaded }, toolsReadable, utcToday()), [toolValidations.shown, toolValidations.connected, toolValidations.loaded, toolsReadable])
+  const toolEnv: ToolValidationsEnv = { store: toolValidations, ownersReason: toolValidations.reason || toolOwnersReason(viewer), who: my.self.me.name?.trim() || azure.creatorEmail.trim(), personalDays: personalViews.filter(toolDaysKey, cleanDays), setPersonalDays: (days) => days === undefined ? personalViews.clearFilter(toolDaysKey) : personalViews.setFilter(toolDaysKey, days), sources: toolSources, datasets: toolDatasetList, pages: { git, onDemand, menu, viewer, me: azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || '', views: personalViews, dataMode, publisherName: my.self.me.name?.trim() || azure.creatorEmail.trim(), hours: { items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') } } }
   // OND-73, OND-78, OND-90: who an interactive HTML file is published by; the publish schedules of this computer run while the app
   // is open, each only while the person may still publish the page (the Tool Owner or its co-owners).
   const publisherName = my.self.me.name?.trim() || azure.creatorEmail.trim()
@@ -632,7 +637,7 @@ export default function App() {
       {page === 'pireview' && <PiReviewPage />}
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
-      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} publisherName={publisherName} />}
+      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} publisherName={publisherName} tools={toolDatasetList} />}
       {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} dataMode={dataMode} publisherName={publisherName} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}

@@ -6,6 +6,12 @@ import type { AzureWorkItem } from './domain'
 import type { NamingPattern } from './namingPatterns'
 import type { GitStorage } from './useGitStorage'
 import type { Viewer } from './menuLayout'
+import type { Dataset } from './dashboardPages'
+import type { DataModeStore } from './useDataMode'
+import type { MenuLayoutStore } from './useMenuLayout'
+import type { OnDemandStore } from './useOnDemand'
+import type { PersonalViewsStore } from './usePersonalViews'
+import type { DashboardHours } from './pages/CustomDashboardPage'
 
 // TVL-02: the Tool Validations master list from Git (tool-validations.json), read when Git storage is connected; the last
 // good file read is kept in this browser so the list is shown while Git cannot be reached. A file that cannot be read
@@ -100,7 +106,14 @@ export interface ToolValidationsEnv {
   personalDays?: number
   setPersonalDays: (days: number | undefined) => void
   sources: SourceData
+  // TVL-15…TVL-17: what the owners' tabs need — the On-Demand pages and the menu layout (each tab is an On-Demand page,
+  // hidden from the menu), the viewer and their views, and the Time Writing hours of the dashboards.
+  pages?: CustomTabsEnv
+  // TVL-18: the master list and the expiry list as data sources of the dashboards (blocked with the reason for a role
+  // that may not see Release Details).
+  datasets: Dataset[]
 }
+export interface CustomTabsEnv { git: GitStorage; onDemand: OnDemandStore; menu: MenuLayoutStore; viewer: Viewer; me: string; views?: PersonalViewsStore; dataMode?: DataModeStore; publisherName: string; hours?: DashboardHours }
 // The data of the sources other than the stream's query: Azure DevOps connections fetched here, imported Windchill
 // exports and the table pages of the app.
 export interface SourceData {

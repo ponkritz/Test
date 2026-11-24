@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { toolDatasets, toolExpirySource, toolFields, toolMasterSource, toolRows } from '../src/dashboardSources.ts'
+import { parseToolValidations } from '../src/toolValidations.ts'
+import { parseDashboard } from '../src/dashboardPages.ts'
 import { azureWorkFields, azureWorkRows, azureWorkSource, completedFields, completedSource, capacityFields, capacityRows, capacitySource, enteredRelease, entryOf, fieldsDataset, headingMonth, historyRows, historySource, kindOfKey, kpiRows, kpiSource, mySourcePattern, releaseCountsOf, releaseFields, releaseRows, releasesSource, sourceEntries, sourceKinds } from '../src/dashboardSources.ts'
 import { notAvailable } from '../src/dashboardHours.ts'
 import { blankBlock, blockData, hoursSource, kpiValue, narrowRows } from '../src/dashboardPages.ts'
@@ -22,7 +25,7 @@ const items = [epic, feature, story, task, bug, history]
 const everyone = () => true
 
 test('MYD-15: the registry — every kind declares its fields and the area it needs; keys follow one pattern; a role without the area gets “Not available for your role.” and no rows (TC-MYD-08)', () => {
-  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'completed', 'capacity', 'qe', 'kpi', 'history', 'windchill'])
+  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'completed', 'capacity', 'qe', 'kpi', 'history', 'tools', 'windchill'])
   for (const kind of sourceKinds) assert.ok(kind.areas.length && kind.label && kind.describe, kind.id)
   for (const key of ['page:conq', hoursSource, azureWorkSource, releasesSource, completedSource, capacitySource, kpiSource, historySource, 'qe:s1', 'windchill:abc123']) assert.ok(mySourcePattern.test(key), key)
   for (const key of ['other:x', 'page:Bad Id', 'qe:', 'azure:all']) assert.equal(mySourcePattern.test(key), false, key)
@@ -169,4 +172,44 @@ test('MYD-25: Completed releases per stream per month — the Month tabs’ coun
   // Fail closed: no Release Details and no Team insights, no rows.
   assert.equal(entryOf(sourceEntries({ ...input, sees: () => false }), completedSource, () => false).dataset.problem, notAvailable)
   assert.equal(entryOf(sourceEntries({ ...input, sees: (area) => area === 'insights' }), completedSource, (area) => area === 'insights').dataset.problem, undefined, 'Team insights sees it too')
+})
+
+test('TVL-18: the Tool Validations master list and expiry list as data sources — every tool with its dates, Status and Days left as the Expiry list counts them (team default window), the expiry list without OK; closed without Release Details; usable by My dashboard and the On-Demand Dashboards (TC-TVL-12)', () => {
+  const at = '2026-01-05T10:00:00Z'
+  const file = parseToolValidations(JSON.stringify({ schema: 1, kind: 'tool-validations', defaultDays: 30, owners: [], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: false } }, { id: 'register', kind: 'ondemand', name: 'Tool register', ref: 'tool-register', mapping: { periodUnit: 'months', confirmed: true, name: 'c-tool' } }],
+    tools: [
+      { name: 'LabVIEW', version: '2020', dueDate: '2026-08-05', sources: { stream: { inSource: true }, register: { inSource: false } }, addedAt: at },
+      { name: 'Minitab', version: '21', validationDate: '2024-09-01', validityMonths: 24, sources: { stream: { inSource: false } }, addedAt: at },
+      { name: 'Python', version: '3.11', sources: {}, addedAt: at },
+      { name: 'JMP', version: '17', validationDate: '2026-07-01', validityMonths: 36, sources: { stream: { inSource: true } }, addedAt: at },
+    ] })).file
+  assert.equal(new Set(toolFields.map((field) => field.id)).size, toolFields.length, 'unique field ids')
+  assert.deepEqual(toolFields.map((field) => field.name), ['Tool', 'Version', 'Validation date', 'Validity (months)', 'Due date', 'Due date from', 'Status', 'Days left', 'Sources', 'In source now'])
+  const rows = toolRows(file, '2026-08-15')
+  const byTool = Object.fromEntries(rows.map((row) => [row.cells['tv-tool'], row.cells]))
+  assert.deepEqual([byTool.LabVIEW['tv-status'], byTool.LabVIEW['tv-days'], byTool.LabVIEW['tv-from'], byTool.LabVIEW['tv-sources'], byTool.LabVIEW['tv-state']], ['Overdue', '-10', 'from the source', ['Tool Validations', 'Tool register'], 'In source'])
+  assert.deepEqual([byTool.Minitab['tv-status'], byTool.Minitab['tv-due'], byTool.Minitab['tv-days'], byTool.Minitab['tv-from'], byTool.Minitab['tv-state']], ['Due soon', '2026-09-01', '17', 'validation date + validity period', 'Not in source now'], 'due within the team default of 30 days')
+  assert.deepEqual([byTool.Python['tv-status'], byTool.Python['tv-days'], byTool.Python['tv-due'], byTool.Python['tv-state']], ['No due date', '', '', 'Added by hand'])
+  assert.deepEqual([byTool.JMP['tv-status'], byTool.JMP['tv-months']], ['OK', '36'], 'due later: OK')
+  assert.deepEqual(toolRows(file, '2026-08-15', true).map((row) => row.cells['tv-tool']).sort(), ['LabVIEW', 'Minitab', 'Python'], 'the expiry list leaves OK out')
+  // The datasets: blocked without Release Details or without Git; else rows in the shape of a table page.
+  const input = { file, connected: true, loaded: true }
+  const [master, expiry] = toolDatasets(input, true, '2026-08-15')
+  assert.deepEqual([master.key, expiry.key, master.name, expiry.name], [toolMasterSource, toolExpirySource, 'Tool Validations master list', 'Tool Validations expiry list'])
+  assert.deepEqual([master.page.rows.length, expiry.page.rows.length], [4, 3])
+  assert.deepEqual(master.page.columns.find((column) => column.name === 'Status').options, ['Due soon', 'No due date', 'OK', 'Overdue'])
+  assert.match(master.note, /team default window is 30 days/)
+  for (const dataset of toolDatasets(input, false, '2026-08-15')) { assert.equal(dataset.problem, notAvailable); assert.equal(dataset.page.rows.length, 0) }
+  assert.match(toolDatasets({ ...input, connected: false }, true, '2026-08-15')[0].problem, /^Connect Git storage/)
+  assert.equal(toolDatasets(input, true, '2026-08-15', () => false)[0].page.rows.length, 0, 'rows only when wanted')
+  // My dashboard: the registry offers both for a role with Release Details; the keys are valid block sources.
+  const registry = { sees: (area) => area === 'release', months: [], today: '2026-08-15', me: { name: 'Ana' }, items: [], settings: capacityContext({}), releases: { state: {}, profiles: [], streamsOf: () => [] }, qe: { file: null, loaded: true }, kpi: undefined, history: { file: null, loaded: true, connected: true }, windchill: [], pages: [], hours: () => [], tools: input }
+  assert.equal(entryOf(sourceEntries(registry), toolMasterSource, registry.sees).dataset.page.rows.length, 4)
+  assert.equal(entryOf(sourceEntries(registry), toolExpirySource, () => false).dataset.problem, notAvailable, 'closed for a role without Release Details')
+  for (const key of [toolMasterSource, toolExpirySource]) { assert.ok(mySourcePattern.test(key), key); assert.equal(kindOfKey(key), 'tools') }
+  // An On-Demand Dashboard file may name them (DSH-08); a new block on them counts every tool (no period).
+  const dashboard = parseDashboard(JSON.stringify({ schema: 1, kind: 'dashboard', id: 'tool-dash', tabs: [], filters: [], blocks: [{ id: 'b1', title: 'By status', type: 'bar', source: toolMasterSource, category: 'tv-status', second: '', measure: 'count', value: '', filters: [], sort: 'value', period: '' }] }), 'tool-dash')
+  assert.deepEqual(dashboard.dashboard.blocks.map((entry) => entry.source), [toolMasterSource])
+  assert.equal(blankBlock(master, 'b2', 'bar').period, '', 'no period column by default')
+  assert.equal(narrowRows(master, blankBlock(master, 'b3', 'kpi'), ['2026-08']).page.rows.length, 4, 'every tool counted whatever the period')
 })

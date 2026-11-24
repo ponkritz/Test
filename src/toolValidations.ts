@@ -5,6 +5,7 @@ import { releaseFor } from './releasePath.ts'
 import { approvalDateFrom, normalizeVersion } from './releaseSource.ts'
 import { parseExportDate } from './windchillReleases.ts'
 import type { NamingPattern } from './namingPatterns.ts'
+import type { PageKind } from './menuLayout.ts'
 import type { AzureWorkItem } from './domain'
 
 // TVL-01…TVL-14 Tool Validations master list: every tool the team has validated, kept in the Git data repository next to
@@ -57,7 +58,10 @@ export interface ToolSource { id: string; kind: ToolSourceKind; name: string; re
 export interface ToolLink { inSource: boolean }
 export type ManualField = 'name' | 'validationDate' | 'validityMonths' | 'dueDate'
 export interface ToolEntry { key: string; name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string; manual: ManualField[]; notes?: string; sources: Record<string, ToolLink>; addedAt: string; addedBy?: string; changedAt?: string; changedBy?: string }
-export interface ToolValidationsFile { schema: 1; kind: 'tool-validations'; defaultDays: number; owners: string[]; sources: ToolSource[]; tools: ToolEntry[] }
+// TVL-15, TVL-16: a tab the owners added — an On-Demand page (Table, Table + Insights or On-Demand Dashboard) shown only
+// as a tab of this page, by its page id, with the tab's name and the page type it was created as.
+export interface CustomTab { pageId: string; name: string; kind: PageKind }
+export interface ToolValidationsFile { schema: 1; kind: 'tool-validations'; defaultDays: number; owners: string[]; sources: ToolSource[]; tools: ToolEntry[]; tabs: CustomTab[] }
 
 // ---- matching (TVL-03) ----
 // The same tool: the same name, ignoring letter case and every run of spaces and punctuation, and the same version
@@ -144,7 +148,7 @@ export const entryStateLabel: Record<EntryState, string> = { 'in-source': 'In so
 // ---- the file: empty, parse (strict), serialize (TVL-02) ----
 export const emptyMapping = (): ToolMapping => ({ periodUnit: 'months', confirmed: false })
 export const streamSource = (): ToolSource => ({ id: streamSourceId, kind: 'stream', name: 'Tool Validations', mapping: emptyMapping() })
-export const emptyFile = (): ToolValidationsFile => ({ schema: 1, kind, defaultDays: defaultExpiryDays, owners: [], sources: [streamSource()], tools: [] })
+export const emptyFile = (): ToolValidationsFile => ({ schema: 1, kind, defaultDays: defaultExpiryDays, owners: [], sources: [streamSource()], tools: [], tabs: [] })
 export interface Refused { name: string; reason: string }
 export interface Parsed { file: ToolValidationsFile; refused: Refused[] }
 
@@ -199,6 +203,21 @@ function cleanTool(value: unknown, sources: Set<string>): ToolEntry | string {
     manual, ...(notes ? { notes } : {}), sources: linked, addedAt, ...(addedBy ? { addedBy } : {}), ...(changedAt ? { changedAt } : {}), ...(changedBy ? { changedBy } : {}),
   }
 }
+// TVL-16: a tab — the page id (as On-Demand page ids), a name of 1 to 40 characters and a known page type.
+export const maxCustomTabs = 10, maxTabName = 40
+const pageIdPattern = /^[a-z0-9][a-z0-9-]{0,39}$/
+const customKinds: PageKind[] = ['table', 'table-insights', 'dashboard']
+function cleanTab(value: unknown): CustomTab | string {
+  const raw = record(value)
+  if (!raw) return 'not an object'
+  const pageId = typeof raw.pageId === 'string' && pageIdPattern.test(raw.pageId) ? raw.pageId : ''
+  if (!pageId) return 'its page id is missing or not lower-case letters, digits and hyphens'
+  const name = typeof raw.name === 'string' ? raw.name.replace(/\s+/g, ' ').trim() : ''
+  if (!name || name.length > maxTabName) return `its name is missing or longer than ${maxTabName} characters`
+  const tabKind = customKinds.find((entry) => entry === raw.kind)
+  if (!tabKind) return `unknown page type “${String(raw.kind)}”`
+  return { pageId, name, kind: tabKind }
+}
 // TVL-02: a file that is not JSON or not a tool-validations file of schema 1 is refused whole (an Error: the list last
 // read stays in use); each source and tool is checked on its own and a bad one is refused with why, the others used.
 // The Tool Validations query (source "stream") is always there.
@@ -228,8 +247,18 @@ export function parseToolValidations(input: string | null | undefined): Parsed {
     if (tools.length >= maxTools) { refused.push({ name: label, reason: `more than ${maxTools} tools` }); continue }
     seen.add(tool.key); tools.push(tool)
   }
+  const tabs: CustomTab[] = []
+  for (const value of Array.isArray(top.tabs) ? top.tabs : []) {
+    const tab = cleanTab(value)
+    const label = `Tab “${String(record(value)?.name ?? record(value)?.pageId ?? '?')}”`
+    if (typeof tab === 'string') { refused.push({ name: label, reason: tab }); continue }
+    if (tabs.some((entry) => entry.pageId === tab.pageId)) { refused.push({ name: label, reason: `the page “${tab.pageId}” is a tab twice` }); continue }
+    if (tabs.some((entry) => entry.name.toLowerCase() === tab.name.toLowerCase())) { refused.push({ name: label, reason: 'another tab has this name' }); continue }
+    if (tabs.length >= maxCustomTabs) { refused.push({ name: label, reason: `more than ${maxCustomTabs} tabs` }); continue }
+    tabs.push(tab)
+  }
   const days = cleanDays(top.defaultDays)
-  return { file: { schema: 1, kind, defaultDays: days ?? defaultExpiryDays, owners: ownersOf(top.owners), sources, tools: sortTools(tools) }, refused }
+  return { file: { schema: 1, kind, defaultDays: days ?? defaultExpiryDays, owners: ownersOf(top.owners), sources, tools: sortTools(tools), tabs }, refused }
 }
 const sortTools = (tools: ToolEntry[]) => [...tools].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.version.localeCompare(b.version) || a.key.localeCompare(b.key))
 // The key is worked out from the name and version, never stored; fields in a fixed order so a change is a small diff.
@@ -240,7 +269,8 @@ function sourceJson(source: ToolSource) {
   const mapping = { ...Object.fromEntries(mappingFields.filter((field) => source.mapping[field.key]).map((field) => [field.key, source.mapping[field.key]])), periodUnit: source.mapping.periodUnit, confirmed: source.mapping.confirmed }
   return { id: source.id, kind: source.kind, name: source.name, ...(source.ref ? { ref: source.ref } : {}), mapping, ...(source.mergedAt ? { mergedAt: source.mergedAt } : {}), ...(source.mergedBy ? { mergedBy: source.mergedBy } : {}) }
 }
-export const serializeToolValidations = (file: ToolValidationsFile) => `${JSON.stringify({ schema: 1, kind, defaultDays: file.defaultDays, owners: file.owners, sources: file.sources.map(sourceJson), tools: sortTools(file.tools).map(toolJson) }, null, 2)}\n`
+// The tabs are written only when there are some (in their order), so a file without tabs stays as it was.
+export const serializeToolValidations = (file: ToolValidationsFile) => `${JSON.stringify({ schema: 1, kind, defaultDays: file.defaultDays, owners: file.owners, sources: file.sources.map(sourceJson), ...(file.tabs?.length ? { tabs: file.tabs.map((tab) => ({ pageId: tab.pageId, name: tab.name, kind: tab.kind })) } : {}), tools: sortTools(file.tools).map(toolJson) }, null, 2)}\n`
 
 // ---- reading a source (TVL-07) ----
 export interface ToolInput { name: string; version: string; validationDate?: string; validityMonths?: number; dueDate?: string }
@@ -402,7 +432,10 @@ export function removeSource(file: ToolValidationsFile, id: string): ToolValidat
 // custom pages of the owners) go in `between`: after the source tabs, before Setup.
 export const toolTabExpiry = 'tool-expiry', toolTabMaster = 'tool-master', toolTabAzure = 'tool-azure', toolTabSetup = 'tool-setup'
 export const toolSourceTab = (id: string) => `tool-source:${id}`
-export interface ToolTab { key: string; label: string; source?: ToolSource }
+export const customTabKey = (pageId: string) => `tool-tab:${pageId}`
+export interface ToolTab { key: string; label: string; source?: ToolSource; custom?: CustomTab }
+// TVL-15: the owners' tabs in their order — passed to toolTabs as `between`.
+export const customToolTabs = (file: Pick<ToolValidationsFile, 'tabs'>): ToolTab[] => (file.tabs ?? []).map((tab) => ({ key: customTabKey(tab.pageId), label: tab.name, custom: tab }))
 export const toolTabs = (file: Pick<ToolValidationsFile, 'sources'>, between: ToolTab[] = []): ToolTab[] => [
   { key: toolTabExpiry, label: 'Expiry list' }, { key: toolTabMaster, label: 'Master list' }, { key: toolTabAzure, label: 'Azure' },
   ...file.sources.filter((source) => source.id !== streamSourceId).map((source) => ({ key: toolSourceTab(source.id), label: source.name, source })),
@@ -417,6 +450,27 @@ export function openToolTab(chosen: string, keys: string[]): string {
   const key = oldToolTabs[chosen] ?? chosen
   return keys.includes(key) ? key : toolTabExpiry
 }
+// ---- TVL-15, TVL-16: the owners' tabs — add, rename, reorder (← →), remove ----
+const fixedTabNames = ['expiry list', 'master list', 'azure', 'setup']
+// Why a tab name cannot be used ('' when it can): 1 to 40 characters, not the name of another tab of the page.
+export function tabNameProblem(file: Pick<ToolValidationsFile, 'tabs' | 'sources'>, name: string, except = '') {
+  const clean = name.replace(/\s+/g, ' ').trim()
+  if (!clean || clean.length > maxTabName) return `Enter a tab name of up to ${maxTabName} characters.`
+  const lower = clean.toLowerCase()
+  if (fixedTabNames.includes(lower) || file.sources.some((source) => source.id !== streamSourceId && source.name.toLowerCase() === lower) || file.tabs.some((tab) => tab.pageId !== except && tab.name.toLowerCase() === lower)) return `The page already has a tab named “${clean}”.`
+  return ''
+}
+export const addTabReason = (file: Pick<ToolValidationsFile, 'tabs'>) => file.tabs.length >= maxCustomTabs ? `At most ${maxCustomTabs} tabs: remove one first.` : ''
+export const addTab = (file: ToolValidationsFile, tab: CustomTab): ToolValidationsFile => ({ ...file, tabs: [...file.tabs.filter((entry) => entry.pageId !== tab.pageId), { pageId: tab.pageId, name: tab.name.replace(/\s+/g, ' ').trim(), kind: tab.kind }] })
+export const renameTab = (file: ToolValidationsFile, pageId: string, name: string): ToolValidationsFile => ({ ...file, tabs: file.tabs.map((tab) => tab.pageId === pageId ? { ...tab, name: name.replace(/\s+/g, ' ').trim() } : tab) })
+export function moveTab(file: ToolValidationsFile, pageId: string, by: -1 | 1): ToolValidationsFile {
+  const from = file.tabs.findIndex((tab) => tab.pageId === pageId), to = from + by
+  if (from < 0 || to < 0 || to >= file.tabs.length) return file
+  const tabs = [...file.tabs]; const [moved] = tabs.splice(from, 1); tabs.splice(to, 0, moved)
+  return { ...file, tabs }
+}
+export const removeTab = (file: ToolValidationsFile, pageId: string): ToolValidationsFile => ({ ...file, tabs: file.tabs.filter((tab) => tab.pageId !== pageId) })
+
 export const setTeam = (file: ToolValidationsFile, days: number, owners: string[]): ToolValidationsFile => ({ ...file, defaultDays: cleanDays(days) ?? file.defaultDays, owners: ownersOf(owners) })
 export const sourceProblem = (file: ToolValidationsFile, kindKey: ToolSourceKind, ref: string, name: string) => !name.trim() || name.trim().length > 80 ? 'Enter a name of up to 80 characters.' : !ref ? 'Choose what to read.' : file.sources.length >= maxSources ? `At most ${maxSources} sources.` : file.sources.some((source) => source.kind === kindKey && source.ref === ref) ? 'This one is already a source.' : ''
 
@@ -432,13 +486,23 @@ export function listReason(viewer: Pick<Viewer, 'email' | 'readOnly' | 'manager'
 export const ownersReason = (viewer: Pick<Viewer, 'readOnly' | 'manager'>) => viewer.readOnly ? readOnlyListReason : viewer.manager ? '' : 'Only a Tool Owner (“Manage pages and menu groups”) can name the co-owners of the Tool Validations list.'
 
 // ---- merging two saves (GIT-17) ----
-// Tools by tool (name + version), sources by id; an entry both saves changed takes the later save's. The co-owners are
+// Tools by tool (name + version), sources by id, tabs by page id (TVL-16); an entry both saves changed takes the later save's. The co-owners are
 // merged as sets (an email either save added stays, one either removed goes); the team default as one value.
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : []
 const parse = (input: string | null) => { if (!input) return null; try { return record(JSON.parse(input)) } catch { return null } }
 const keyedTools = (value: unknown) => Object.fromEntries(list(value).flatMap((tool) => { const raw = record(tool); return raw && typeof raw.name === 'string' ? [[toolKey(raw.name, typeof raw.version === 'string' ? raw.version : ''), raw]] : [] }))
 const keyedSources = (value: unknown) => Object.fromEntries(list(value).flatMap((source) => { const raw = record(source); return raw && typeof raw.id === 'string' ? [[raw.id, raw]] : [] }))
 const emails = (value: unknown) => list(value).filter((entry): entry is string => typeof entry === 'string')
+const keyedTabs = (value: unknown) => Object.fromEntries(list(value).flatMap((tab) => { const raw = record(tab); return raw && typeof raw.pageId === 'string' ? [[raw.pageId, raw]] : [] }))
+const tabIds = (value: unknown) => list(value).flatMap((tab) => { const raw = record(tab); return raw && typeof raw.pageId === 'string' ? [raw.pageId] : [] })
+// TVL-16: the tabs by page id (a name both saves changed: the later save's); their order is the order of the save that
+// changed it (both: the later save's), a tab missing from that order after the others.
+function mergeTabs(base: Record<string, unknown> | null, mine: Record<string, unknown>, theirs: Record<string, unknown>, mineLater: boolean) {
+  const entries = mergeKeyed(base ? keyedTabs(base.tabs) : null, keyedTabs(mine.tabs), keyedTabs(theirs.tabs), mineLater)
+  const order = merge3(base ? tabIds(base.tabs) : undefined, tabIds(mine.tabs), tabIds(theirs.tabs), mineLater) ?? tabIds(mine.tabs)
+  const rank = (id: string) => { const at = order.indexOf(id); return at < 0 ? order.length : at }
+  return Object.keys(entries).map((id, index) => ({ id, index })).sort((a, b) => rank(a.id) - rank(b.id) || a.index - b.index).map(({ id }) => entries[id])
+}
 export const mergeToolValidationsText: Merge = (baseText, mineText, theirsText, mineLater) => {
   const base = parse(baseText), mine = parse(mineText), theirs = parse(theirsText)
   if (!mine || !theirs || theirs.kind !== kind) return mineText
@@ -447,7 +511,8 @@ export const mergeToolValidationsText: Merge = (baseText, mineText, theirsText, 
   const baseOwners = emails(base?.owners), mineOwners = emails(mine.owners), theirOwners = emails(theirs.owners)
   const owners = [...new Set([...theirOwners.filter((email) => mineOwners.includes(email) || !baseOwners.includes(email)), ...mineOwners.filter((email) => !baseOwners.includes(email))])]
   const defaultDays = merge3(base?.defaultDays, mine.defaultDays, theirs.defaultDays, mineLater) ?? mine.defaultDays
+  const tabs = mergeTabs(base, mine, theirs, mineLater)
   // Written through the parser, so the merged file is as valid as the ones it came from.
-  const merged = JSON.stringify({ schema: 1, kind, defaultDays, owners, sources, tools })
+  const merged = JSON.stringify({ schema: 1, kind, defaultDays, owners, sources, tools, tabs })
   try { return serializeToolValidations(parseToolValidations(merged).file) } catch { return mineText }
 }

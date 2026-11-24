@@ -10,6 +10,10 @@ import { navigate, openPage, rolesFile, startApp, text } from './helpers.mjs'
 // sources and the team settings; a tool is added by hand, the team default is changed (Expiry list, then Setup) and a manual list (a Table page) is added as a source (Setup → Sources) — its own tab — merged in from
 // that tab and removed again, with its tab (TC-TVL-07, UAT; TC-TVL-09). A Team Member reads it all, Setup included, with
 // the buttons disabled and the reason shown, and keeps a window of their own (TC-TVL-05, TC-TVL-06).
+// TVL-15…TVL-18: the Tool Owner adds a Table tab and an On-Demand Dashboard tab (Setup → Tabs), renames and reorders
+// them, adds a row on the Table tab and a chart of the master list on the dashboard tab, and removes both — one page
+// deleted, one kept hidden; the pages are never in the menu (TC-TVL-11, UAT). A Team Member reads the tabs with every
+// change disabled and the reason shown (TC-TVL-13).
 // GitHub and Azure DevOps are mocked; nothing leaves the machine.
 let app
 before(async () => { app = await startApp() })
@@ -70,6 +74,13 @@ async function mock(context, files, role = 'Tool Owner') {
     const match = /^\/repos\/example\/storage\/contents\/(.*)$/.exec(url.pathname)
     if (!match) return json({ message: 'Not Found' }, 404)
     const path = decodeURIComponent(match[1])
+    // TVL-16: a Tool Owner deletes the page of a removed tab.
+    if (request.method() === 'DELETE') {
+      if (files[path] == null) return json({ message: 'Not Found' }, 404)
+      delete files[path]
+      writes.push({ path, message: JSON.parse(request.postData()).message, deleted: true })
+      return json({ commit: { sha: `d${writes.length}` } })
+    }
     if (request.method() === 'PUT') {
       if (path === '.demand-planning-write-check') return json({ message: 'Invalid request' }, 422)
       const body = JSON.parse(request.postData())
@@ -372,6 +383,214 @@ test('TC-TVL-06: a Team Member reads the master list and the expiry view — eve
   await tabs.getByRole('tab', { name: 'Azure' }).click()
   await page.getByText('“Tool Validations” has not been fetched yet.').waitFor()
   assert.equal(writes.filter((write) => write.path === 'tool-validations.json').length, 0, 'nothing written to the master list')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// TVL-15…TVL-18: the master list both scenarios below start from (Git), with the Tool Validations connection of the first.
+const listWith = (extra = {}) => JSON.stringify({ schema: 1, kind: 'tool-validations', defaultDays: 60, owners: [], sources: [{ id: 'stream', kind: 'stream', name: 'Tool Validations', mapping: { periodUnit: 'months', confirmed: true, name: '@tool-name', version: '@tool-version', dueDate: 'Microsoft.VSTS.Scheduling.DueDate' } }],
+  tools: [
+    { name: 'LabVIEW', version: '2020', dueDate: day(-3), sources: { stream: { inSource: true } }, addedAt: '2026-01-05T10:00:00Z' },
+    { name: 'Minitab', version: '21', dueDate: day(20), sources: { stream: { inSource: true } }, addedAt: '2026-01-05T10:00:00Z' },
+    { name: 'Python', version: '3.11', sources: {}, addedAt: '2026-01-05T10:00:00Z' },
+    { name: 'JMP', version: '17', dueDate: day(400), sources: { stream: { inSource: true } }, addedAt: '2026-01-05T10:00:00Z' },
+  ], ...extra })
+const setupOwnTabs = () => {
+  localStorage.setItem('demand-planning-git-storage-v1', JSON.stringify({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }))
+  localStorage.setItem('demand-planning-git-token-v1', 'test-token')
+}
+const lastWrite = (writes, path, test = () => true) => [...writes].reverse().find((entry) => entry.path === path && test(entry))
+const openToolValidations = async (page) => {
+  const entry = releaseDetails(page).locator('button:not(.nav-missing)', { hasText: 'Tool Validations' })
+  await entry.waitFor()
+  await entry.click()
+  await page.locator('.page-loading').waitFor({ state: 'detached' })
+  const tabs = page.getByRole('tablist', { name: 'Result' }).first()
+  await tabs.waitFor()
+  return tabs
+}
+const enabled = (locator) => locator.and(locator.page().locator(':enabled')).waitFor()
+
+test('TC-TVL-11: the Tool Owner adds a Table tab and an On-Demand Dashboard tab, renames and reorders them, adds a row and a chart of the master list, and removes them — the pages are never in the menu', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const files = { 'azure-views.json': sharedViews, 'tool-validations.json': listWith() }
+  const { page, context, errors } = await openPage(app, { init: setupOwnTabs, width: 1440, height: 1000 })
+  page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const writes = await mock(context, files)
+  await page.reload()
+  const tabs = await openToolValidations(page)
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+
+  // TVL-15: Setup → Tabs → ＋ Add tab… — a Table page named Open items.
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const tabsPanel = panelTitled(page, 'Tabs')
+  await tabsPanel.getByText('No tabs added yet.').waitFor()
+  assert.ok((await panelTitled(page, 'Sources').boundingBox()).y < (await tabsPanel.boundingBox()).y && (await tabsPanel.boundingBox()).y < (await panelTitled(page, 'Team settings').boundingBox()).y, 'Sources, Tabs, Team settings')
+  const addButton = tabsPanel.getByRole('button', { name: '＋ Add tab…' })
+  await enabled(addButton)
+  await addButton.click()
+  let dialog = page.getByRole('dialog', { name: 'Add a tab' })
+  assert.deepEqual((await dialog.locator('.pgb-kind label').allInnerTexts()).map((label) => label.trim()), ['Table', 'Table + Insights', 'On-Demand Dashboard'])
+  assert.equal(await dialog.getByRole('radio', { name: 'Table', exact: true }).isChecked(), true, 'Table first')
+  await dialog.getByLabel('Page name', { exact: true }).fill('Open items')
+  await dialog.getByLabel('Description (optional)').fill('Actions on the tools')
+  await shot(page, 'custom-tabs-add-dialog')
+  await dialog.getByRole('button', { name: 'Add tab' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  let saved = await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.length === 1), 'the tab in tool-validations.json')
+  assert.deepEqual(saved.data.tabs, [{ pageId: 'open-items', name: 'Open items', kind: 'table' }])
+  assert.match(saved.message, /^Tool Validations: add the tab Open items \(Table, page open-items\)/)
+  assert.equal(lastWrite(writes, 'on-demand/open-items.json').data.name, 'Open items', 'the page is in Git as every On-Demand page')
+  assert.deepEqual(lastWrite(writes, 'menu-layout.json').data.pages['open-items'], { type: 'table', group: 'on-demand', order: 1, icon: '▦', owners: [], hidden: true }, 'placed hidden: not in the menu')
+  await tabs.getByRole('tab', { name: 'Open items' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Open items', 'Setup'], 'after the source tabs, before Setup')
+  assert.equal(await selectedTab(tabs), 'Setup', 'Setup stays open')
+
+  // An On-Demand Dashboard tab.
+  await enabled(addButton)
+  await addButton.click()
+  dialog = page.getByRole('dialog', { name: 'Add a tab' })
+  await dialog.getByRole('radio', { name: 'On-Demand Dashboard' }).check()
+  await dialog.getByLabel('Page name', { exact: true }).fill('Tool dashboard')
+  await dialog.getByRole('button', { name: 'Add tab' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  saved = await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.length === 2), 'the second tab')
+  assert.deepEqual(saved.data.tabs.map((tab) => `${tab.pageId}:${tab.kind}`), ['open-items:table', 'tool-dashboard:dashboard'])
+  await tabs.getByRole('tab', { name: 'Tool dashboard' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Open items', 'Tool dashboard', 'Setup'])
+
+  // TVL-16: Rename… renames the tab and its page; ← moves the dashboard first.
+  await tabsPanel.locator('tbody tr', { hasText: 'Open items' }).getByRole('button', { name: 'Rename…' }).click()
+  dialog = page.getByRole('dialog', { name: 'Rename the tab Open items' })
+  await dialog.getByLabel('Page name', { exact: true }).fill('Open actions')
+  await dialog.getByRole('button', { name: 'Save to Git' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.[0]?.name === 'Open actions'), 'the tab renamed')
+  await until(() => lastWrite(writes, 'on-demand/open-items.json', (entry) => entry.data.name === 'Open actions'), 'the page renamed')
+  await tabs.getByRole('tab', { name: 'Open actions' }).waitFor()
+  const left = tabsPanel.getByRole('button', { name: 'Move Tool dashboard left' })
+  await enabled(left)
+  await left.click()
+  await until(() => lastWrite(writes, 'tool-validations.json', (entry) => entry.data.tabs?.[0]?.pageId === 'tool-dashboard'), 'the tabs reordered')
+  await tabsPanel.locator('tbody tr').first().filter({ hasText: 'Tool dashboard' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Tool dashboard', 'Open actions', 'Setup'])
+  assert.ok(await tabsPanel.getByRole('button', { name: 'Move Tool dashboard left' }).isDisabled(), 'the first cannot move left')
+  await shot(page, 'custom-tabs-setup')
+
+  // TVL-17: the Table tab is the page as everywhere — columns, then a row saved to Git from the row drawer.
+  await tabs.getByRole('tab', { name: 'Open actions' }).click()
+  const setUp = page.getByRole('button', { name: 'Set up columns…' })
+  await enabled(setUp)
+  await setUp.click()
+  const columns = page.getByRole('dialog', { name: 'Set up columns' })
+  await columns.getByRole('button', { name: '＋ Add column' }).click()
+  await columns.getByLabel('Column 1 name').fill('Action')
+  await columns.getByRole('button', { name: 'Save', exact: true }).click()
+  await columns.waitFor({ state: 'detached' })
+  await until(() => lastWrite(writes, 'on-demand/open-items.json', (entry) => entry.data.columns?.length === 1), 'the column saved')
+  const addRow = page.getByRole('button', { name: '＋ Add row' })
+  await enabled(addRow)
+  await addRow.click()
+  const row = page.getByRole('dialog', { name: 'New row' })
+  await row.getByLabel('Action').fill('Re-validate LabVIEW 2020')
+  await row.getByRole('button', { name: 'Save to Git' }).click()
+  const withRow = await until(() => lastWrite(writes, 'on-demand/open-items.json', (entry) => entry.data.rows?.length === 1), 'the row saved to Git')
+  assert.equal(Object.values(withRow.data.rows[0].cells)[0], 'Re-validate LabVIEW 2020')
+  await page.locator('.od-panel tbody tr', { hasText: 'Re-validate LabVIEW 2020' }).waitFor()
+  await page.keyboard.press('Escape')
+  await page.locator('aside.drawer').waitFor({ state: 'detached' })
+  assert.equal(await page.getByRole('button', { name: '＋ Add page…' }).count(), 0, 'nothing of the menu on the tab')
+  await shot(page, 'custom-tabs-table')
+
+  // TVL-18: the dashboard tab — a bar chart of the master list by Status.
+  await tabs.getByRole('tab', { name: 'Tool dashboard' }).click()
+  const addBlock = page.getByRole('button', { name: '＋ Add block…' })
+  await enabled(addBlock)
+  await addBlock.click()
+  dialog = page.getByRole('dialog', { name: 'Add a block' })
+  await dialog.getByLabel('Title').fill('Tools by status')
+  await dialog.getByRole('radio', { name: 'Bar chart' }).check()
+  await dialog.getByLabel('Data source').selectOption('tools:master')
+  await dialog.getByLabel('Categories by').selectOption({ label: 'Status (Dropdown)' })
+  await dialog.getByRole('button', { name: 'Add block' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const chart = panelTitled(page, 'Tools by status')
+  await chart.locator('.viz-root').waitFor()
+  const block = await until(() => lastWrite(writes, 'dashboards/tool-dashboard.json'), 'the dashboard saved')
+  assert.deepEqual(block.data.blocks.map((entry) => [entry.type, entry.source, entry.category, entry.period ?? 'none']), [['bar', 'tools:master', 'tv-status', 'none']], 'no period column')
+  await page.mouse.move(0, 0)
+  await shot(page, 'custom-tabs-dashboard')
+  await chart.getByRole('button', { name: 'Table', exact: true }).click()
+  await chart.locator('table').waitFor()
+  assert.match(await text(chart.locator('table')), /Overdue 1/)
+  assert.match(await text(chart.locator('table')), /Due soon 1/)
+
+  // Never in the menu (nor in the On-Demand group).
+  const menu = await text(page.locator('.sidebar nav'))
+  for (const name of ['Open actions', 'Tool dashboard']) assert.equal(menu.includes(name), false, `${name} is not in the menu`)
+
+  // TVL-16: Remove… asks first; the Tool Owner deletes Open actions with its data, keeps Tool dashboard hidden.
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  await tabsPanel.locator('tbody tr', { hasText: 'Open actions' }).getByRole('button', { name: 'Remove…' }).click()
+  dialog = page.getByRole('dialog', { name: 'Remove the tab Open actions' })
+  assert.match(await text(dialog), /Its page — 1 row — is:/)
+  assert.equal(await dialog.getByRole('radio', { name: 'Kept in Git, hidden' }).isChecked(), true, 'kept unless chosen')
+  await dialog.getByRole('radio', { name: 'Deleted with its data' }).check()
+  await dialog.getByRole('button', { name: 'Remove Open actions and delete its page' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await until(() => writes.find((entry) => entry.deleted && entry.path === 'on-demand/open-items.json'), 'the page deleted')
+  await until(() => lastWrite(writes, 'menu-layout.json', (entry) => !entry.data.pages['open-items']), 'its place removed')
+  assert.deepEqual(lastWrite(writes, 'tool-validations.json').data.tabs.map((tab) => tab.pageId), ['tool-dashboard'])
+  await tabs.getByRole('tab', { name: 'Open actions' }).waitFor({ state: 'detached' })
+  await tabsPanel.locator('tbody tr', { hasText: 'Tool dashboard' }).getByRole('button', { name: 'Remove…' }).click()
+  dialog = page.getByRole('dialog', { name: 'Remove the tab Tool dashboard' })
+  await dialog.getByRole('button', { name: 'Remove Tool dashboard', exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await until(() => lastWrite(writes, 'tool-validations.json', (entry) => !entry.data.tabs), 'no tabs left')
+  await tabs.getByRole('tab', { name: 'Tool dashboard' }).waitFor({ state: 'detached' })
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Setup'])
+  assert.ok(files['dashboards/tool-dashboard.json'] && files['on-demand/tool-dashboard.json'], 'the kept page and its blocks stay in Git')
+  assert.equal(JSON.parse(files['menu-layout.json']).pages['tool-dashboard'].hidden, true, 'hidden')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-TVL-13: a Team Member reads the owners’ tabs — the Table and the dashboard shown, every change disabled with the reason; Setup → Tabs read only', async () => {
+  assert.ok(sharedViews, 'the first scenario shared the connection setup')
+  const table = { schema: 1, kind: 'on-demand-page', id: 'open-actions', name: 'Open actions', description: '', keyPrefix: 'OA', insights: [], columns: [{ id: 'c-action', name: 'Action', type: 'text', options: [], required: false }], rows: [{ id: 'r-1', cells: { 'c-action': 'Re-validate LabVIEW 2020' } }] }
+  const dashboardPage = { schema: 1, kind: 'on-demand-page', id: 'tool-dashboard', name: 'Tool dashboard', description: '', keyPrefix: 'TD', insights: [], columns: [], rows: [] }
+  const blocks = { schema: 1, kind: 'dashboard', id: 'tool-dashboard', tabs: [], filters: [], blocks: [{ id: 'b1', title: 'Tools by status', type: 'bar', source: 'tools:master', category: 'tv-status', second: '', measure: 'count', value: '', filters: [], sort: 'value', period: '' }] }
+  const layout = { schema: 1, kind: 'menu-layout', groups: {}, pages: { 'open-actions': { type: 'table', group: 'on-demand', order: 1, icon: '▦', owners: [], hidden: true }, 'tool-dashboard': { type: 'dashboard', group: 'on-demand', order: 2, icon: '▦', owners: [], hidden: true } } }
+  const files = { 'azure-views.json': sharedViews, 'tool-validations.json': listWith({ tabs: [{ pageId: 'tool-dashboard', name: 'Tool dashboard', kind: 'dashboard' }, { pageId: 'open-actions', name: 'Open actions', kind: 'table' }] }), 'on-demand/open-actions.json': JSON.stringify(table), 'on-demand/tool-dashboard.json': JSON.stringify(dashboardPage), 'dashboards/tool-dashboard.json': JSON.stringify(blocks), 'menu-layout.json': JSON.stringify(layout) }
+  const { page, context, errors } = await openPage(app, { init: setupOwnTabs })
+  page.addLocatorHandler(page.getByRole('dialog', { name: /Could not fetch from Azure DevOps/ }), async (dialog) => { await dialog.getByRole('button', { name: /Close|Not now|Dismiss/ }).first().click() })
+  const writes = await mock(context, files, 'Team Member')
+  await page.reload()
+  const tabs = await openToolValidations(page)
+  await tabs.getByRole('tab', { name: 'Open actions' }).waitFor()
+  assert.deepEqual(await tabLabels(tabs), ['Expiry list', 'Master list', 'Azure', 'Tool dashboard', 'Open actions', 'Setup'])
+  const menu = await text(page.locator('.sidebar nav'))
+  for (const name of ['Open actions', 'Tool dashboard']) assert.equal(menu.includes(name), false, `${name} is not in the menu`)
+  // The dashboard tab: the chart of the master list, built by the owners; the builder's buttons disabled with the reason.
+  await tabs.getByRole('tab', { name: 'Tool dashboard' }).click()
+  await panelTitled(page, 'Tools by status').locator('.viz-root').waitFor()
+  assert.equal(await page.getByRole('button', { name: '＋ Add block…' }).count(), 0, 'no ＋ Add block… as the main action')
+  assert.match(await text(page.locator('.dashboard-page .write-blocked').first()), /Build On-Demand Dashboards/)
+  // The Table tab: the row shown; ＋ Add row and Set up columns… disabled with the reason.
+  await tabs.getByRole('tab', { name: 'Open actions' }).click()
+  await page.locator('.od-panel tbody tr', { hasText: 'Re-validate LabVIEW 2020' }).waitFor()
+  for (const name of ['＋ Add row', 'Set up columns…']) assert.ok(await page.getByRole('button', { name }).isDisabled(), name)
+  assert.match(await text(page.locator('.od-panel .write-blocked').first()), /Edit On-Demand data/)
+  // Setup → Tabs read only, with the list's reason (TVL-11).
+  await tabs.getByRole('tab', { name: 'Setup' }).click()
+  const tabsPanel = panelTitled(page, 'Tabs')
+  await tabsPanel.locator('tbody tr', { hasText: 'Open actions' }).waitFor()
+  const reason = 'Only a Tool Owner (“Manage pages and menu groups”) or a co-owner of the Tool Validations list can change it. A Tool Owner names the co-owners in Team settings.'
+  assert.equal(await text(tabsPanel.locator('.write-blocked')), reason)
+  assert.ok(await tabsPanel.getByRole('button', { name: '＋ Add tab…' }).isDisabled())
+  assert.equal(await tabsPanel.getByRole('button', { name: '＋ Add tab…' }).getAttribute('title'), reason)
+  for (const name of ['Move Open actions left', 'Rename…', 'Remove…']) assert.ok(await tabsPanel.locator('tbody tr', { hasText: 'Open actions' }).getByRole('button', { name }).isDisabled(), name)
+  assert.equal(writes.length, 0, 'nothing written')
   assert.deepEqual(errors, [])
   await context.close()
 })
