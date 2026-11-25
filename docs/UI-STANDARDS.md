@@ -101,6 +101,10 @@ Approved by the product owner on 2026-11-23.
   (text button, danger colour).
 - **Count**: "{shown} of {total} {items}" (e.g. "12 of 40 releases"); a cut list always says so.
 - Headers stay visible when the table scrolls (sticky) when it can be longer than the screen.
+- **Sticky horizontal scroll bar** (approved 2026-11-25): a table wider than its box keeps a horizontal scroll bar at
+  the bottom of the screen, right above the sticky footer, while the table's own bottom is out of view; it goes when the
+  bottom shows (never two bars). It comes with `DataTable` (UI-24) — no page builds its own; a hand-built wide table
+  moves onto `DataTable` to get it.
 - Inside a `TablePanel` the table's toolbar (filters, search, Columns, Export), its first column and the read-only
   reason line up with the panel's title; the table's lines run the full width (one shared rule, KB-93).
 
@@ -268,6 +272,7 @@ wrong for a real case as an Improvement to the standard.
 
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-25 | §5 Tables: **sticky horizontal scroll bar** — a table wider than its box keeps its horizontal scroll bar at the bottom of the screen right above the sticky footer while its own bottom is out of view, and it goes when the bottom shows; built once into `DataTable` for every table ("The horizontal scrolling should be sticky to above the footer", UI-24). | Product owner, 2026-11-25 |
 | 2026-11-25 | §6 Buttons: **⚙** added to the symbols as "open the setup of this page" — an icon-only `ghost` button in the page actions, `aria-label` and title the setup page's name, shown exactly when that Admin page is in the viewer's menu; first used by My PI Review and PI Review for Admin → PI Review Setup (PIR-29, PIR-30). | Product owner, 2026-11-25 |
 | 2026-11-25 | §12 Pre-selected — **an exception**: in the PI review form (Write review…, PIR-13) and the Close pop-up's PI review (PIR-18) **Move to next PI = No is pre-selected**, although the answer is posted to the Feature's Discussion for others to read ("Default Move to next PI = No"). The Review meeting advice keeps no default and must be chosen; the pre-selected No shows in the form and in the Preview before posting. | Product owner, 2026-11-25 |
 | 2026-11-24 | §7 Period: **Show: Selected month / All months** is a segmented toggle, no longer a drop-down repeating the month ("Month is repeating … make it as a Toggle", QV-71). | Product owner, 2026-11-24 |

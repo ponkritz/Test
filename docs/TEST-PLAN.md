@@ -1502,6 +1502,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - The choice is kept after a reload, with no flash of the wrong theme.
   - The parameter's theme is kept after the reload.
 
+**TC-UI-18 A wide table's scroll bar stays above the footer** — Req UI-24 — **UAT** — E2E `table-sticky-scroll.e2e.mjs` ("TC-UI-18: a wide table’s horizontal scroll bar stays above the footer while the table’s bottom is out of view, moves with the table both ways and goes when the bottom shows", "TC-UI-18: at phone width the footer scrolls with the page, so the bar sits at the bottom of the window"); browser check: PI Review with the synthetic sample (or real data), Wrap text on, most columns shown, at the top of the page — a horizontal scroll bar right above the footer, in line with the table; drag it — the table scrolls; Shift + wheel or a trackpad on the table — the bar follows; hide a column, switch Wrap text and density, fold the side menu, resize the window — the bar follows; scroll to the table's end — only the table's own bar remains; dark theme and the desktop app's zoom (TC-UI-07) — the bar in the theme's colours, still right above the footer; a screen reader does not announce it and Tab never lands on it.
+- L3 steps:
+  1. Open PI Review with many Features, tick Wrap text and show the wide columns; stay at the top of the page.
+  2. Drag the bar above the footer to the right, then scroll the table back with Shift + wheel or the trackpad.
+  3. Scroll the page down to the table's end, then back up.
+- Expected:
+  - Step 1: a horizontal scroll bar shows right above the footer (Desktop app, version, Force Update), as wide as the table.
+  - Step 2: the table follows the bar, and the bar follows the table.
+  - Step 3: at the table's end the sticky bar is gone and the table's own bar shows — never two bars; it comes back higher up.
+
+**TC-UI-19 Where the sticky scroll bar goes** — Req UI-24 — L1 `sticky-scrollbar.test.mjs` ("UI-24: the sticky scroll bar of a wide table sits right above the footer while the table’s bottom is out of view (TC-UI-19)", "UI-24: no sticky bar when the table fits, its bottom is in view or it has not scrolled into view yet; never two bars (TC-UI-19)", "UI-24: without a sticky footer (none, or a phone where it scrolls with the page) the bar sits at the window’s bottom; a clipping panel’s edge wins when higher (TC-UI-19)").
+
 **TC-INS-03 Accessibility markup** — Req UI-03, UI-04
 - Inspect the components.
 - Expected:
@@ -2622,6 +2634,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-21 | TC-UI-13, TC-UI-16 |
 | UI-22 | TC-UI-14, TC-UI-16 |
 | UI-23 | TC-UI-15, TC-UI-17 |
+| UI-24 | TC-UI-18, TC-UI-19 |
 | CI-01…04 | TC-INS-04, TC-CI-01 |
 | CI-05 | TC-UPD-01 |
 | CI-06 | TC-CI-02 |
@@ -3071,7 +3084,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |

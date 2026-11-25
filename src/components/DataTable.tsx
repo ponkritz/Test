@@ -12,12 +12,15 @@ import { useViewsForEveryone } from '../useViewsForEveryone'
 import { downloadCsv, downloadXlsx } from '../download'
 import { writeXlsx } from '../xlsx'
 import { Info } from './ui'
+import { StickyScrollbar } from './StickyScrollbar'
 
 // The one table of the app (UI-07…12). Every table is built on it and follows the design default (Settings → Table
 // defaults): resizable columns, columns moved by dragging a heading or with ↑ ↓ in the Columns list, columns ticked on
 // or off, Wrap text, Compact / Comfortable, and one Export that offers Excel or CSV — dates written as real date-times.
 // A table's own choices (widths, order, hidden columns, wrap, density, sort) are kept per table in the viewer's browser;
 // UI-20…UI-23: a Tool Owner can save a table's view for everyone, which a viewer sees until they change their own.
+// UI-24: a table wider than its box keeps a horizontal scroll bar at the bottom of the screen, above the footer, while
+// its own bottom is out of view (StickyScrollbar).
 
 export interface DataColumn<T> {
   id: string
@@ -112,6 +115,7 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
   const [dragging, setDragging] = useState('')
   const [exporting, setExporting] = useState(false)
   const menu = useRef<HTMLDivElement>(null)
+  const scrollBox = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!exporting) return
     const outside = (event: MouseEvent) => { if (menu.current && !menu.current.contains(event.target as Node)) setExporting(false) }
@@ -214,7 +218,7 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
         {defaults.reorder && <span className="column-move"><button type="button" className="text-button" aria-label={`Move ${column.label} up`} disabled={index === 0} onClick={() => setLayout({ order: moveId(order, column.id, -1) })}>↑</button><button type="button" className="text-button" aria-label={`Move ${column.label} down`} disabled={index === ordered.length - 1} onClick={() => setLayout({ order: moveId(order, column.id, 1) })}>↓</button></span>}
       </li>)}</ol>
     </fieldset>}
-    {rows.length || !empty ? <div className="azure-table data-table-scroll"><table className={defaults.resize ? widths.tableClass : wrap ? 'wrap' : 'no-wrap'}>
+    {rows.length || !empty ? <><div className="azure-table data-table-scroll" ref={scrollBox}><table className={defaults.resize ? widths.tableClass : wrap ? 'wrap' : 'no-wrap'}>
       {caption && <caption className="sr-only">{caption}</caption>}
       <thead><tr>{shownColumns.map((column) => {
         const active = sort?.id === column.id, canSort = column.sortable !== false && Boolean(column.value)
@@ -226,7 +230,7 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
         </th>
       })}</tr></thead>
       <tbody>{group ? group(drawn, (row) => rowLines(row, drawn.indexOf(row)), shownColumns.length) : drawn.flatMap(rowLines)}{totals && <tr className="matrix-total">{shownColumns.map((column, index) => <td key={column.id} className={column.align ? `align-${column.align}` : undefined}>{column.id in totals.values ? totals.values[column.id] : index === shownColumns.findIndex((entry) => !(entry.id in totals.values)) ? totals.label ?? 'Total' : ''}</td>)}</tr>}{footer}</tbody>
-    </table></div> : empty}
+    </table></div><StickyScrollbar target={scrollBox} /></> : empty}
     {limit && sorted.length > limit && <p className="muted">Showing the first {limit} of {sorted.length} rows; search or filter to narrow{exportName ? ', or Export for all' : ''}.</p>}
   </div>
 }
