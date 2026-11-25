@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.46.0 — 2026-11-25
+
+**Changed**
+- **PI Review reads your own Features' Discussions when it opens** (product owner, 25 Nov 2026: "Should the PI Review page read your own Features' Discussions when it opens, so Edit review… shows straight away?" — "Yes") — when PI Review opens, and when you choose another PI, the Discussions of the Features assigned to you in that PI (by your work email, else your name, as My PI Review) are read the same way My PI Review reads them (3 at a time, slowing down when Azure DevOps asks, only comments from "PI Review starts from"), so **Edit review…** shows on your reviewed Features without opening them; the table's status line says "Reading your n Features’ Discussions…" meanwhile. Other people's Features are still read only in the drawer or with ↻ Read all Discussions; nothing is read by itself with the synthetic sample, without a PAT or in View as. A Discussion is read once per page load: the drawer, Read all Discussions and Write review… reuse a read done or in progress (PIR-35, PIR-34, PIR-17).
+
+DF-337; SM-194; LIM-113; TC-PIR-37.
+
+PR #429.
+
 ## v10.45.0 — 2026-11-25
 
 **Added**
