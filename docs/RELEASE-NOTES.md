@@ -2,6 +2,20 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.29.0 — 2026-11-25
+
+**Added**
+- **Remove or delete a shared view for everyone** (Tool Owner): Admin → Data & sharing → Other views, ⋯ of a shared view → **Remove for everyone…** or **Delete for everyone…**. A confirmation says whom it affects (everyone who uses the shared setup in Git) and, for Delete, which data files in Git are deleted; a backup of the view's definition (never a PAT) is saved to Git first and a removal marker is written to `azure-views-removed.json` (CON-109, CON-110).
+- **Git wins for removed shared views**: at their next start every browser and desktop app removes a view the Tool Owner removed — also when it was changed there — once, with its saved data, and shows "The Tool Owner removed N shared views: …"; My views and PATs are never touched, and no computer adds it back from the shared setup or its on-prem data, or merges it back into Git (CON-111, CON-110, CON-98, SET-17). The first sync from another repository still changes nothing (GIT-26).
+- **Removed connections** lists the views removed for everyone first, with who removed them; **Restore** takes the marker away so the view comes back for everyone (CON-112, CON-99).
+
+**Fixed**
+- A shared view removed in Other views came back at the next start, from the shared setup in Git, from another computer's save or from its on-prem data in Git (KB-95).
+
+DF-304, DF-305, R-21, SM-178, LIM-90; TC-CON-68 (UAT), TC-CON-69.
+
+PR #410.
+
 ## v10.28.0 — 2026-11-25
 
 **Added**
