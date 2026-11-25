@@ -1558,6 +1558,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-QEM-08 Nested grouping** — Req QEM-11 — L1 `qe-mapping.test.mjs` ("nested grouping: groups within groups, keys unique per path, counts per level (QEM-11)"); browser check: Group by Area, then by Owner — each Area row holds its Owner groups, indented, with their counts; collapse one Owner group under one Area (the same Owner under another Area stays open); Collapse all closes every level and Expand all opens them; change the first level (the second is dropped); in a column menu, Then group by this adds a level and Remove from grouping removes it; a fourth level is the last (no fifth select).
 **TC-QEM-09 Add a row in a pop-up, saved to Git, QE Name from Resources** — Req QEM-12 — L1 `qe-mapping.test.mjs` ("add a row: the QE Name column is found for the Resources list, the row comes first with its values (TC-QEM-09)"); browser check (Git connected with a token that can write): QE Mapping → ＋ Add row opens "Add a row" with a field per column, the QE Name a list of the Resources; fill it and Save — the row appears first and "Row added and the QE Mapping saved to Git" links the commit; clicking a QE Name cell offers the same list; with Git refusing (e.g. a concurrent change), the row stays as an unsaved change with the reason.
 
+**TC-QEM-10 Replace a QE in the QE Mapping: preview, Replace, saved to Git** — Req QEM-13 — **UAT** — L1 `replace-values.test.mjs` ("Replace: a cell matches as a whole, ignoring case and the spaces around it (TC-QEM-10, TC-OND-98)", "Replace: the distinct values of a column with their row counts, most rows first, spellings merged (TC-QEM-10)", "QEM-13: the QE Mapping replace — preview count and rows, every row of the tab changed, the others kept, the commit message (TC-QEM-10)"); E2E `replace-values.e2e.mjs` ("TC-QEM-10: on QE Mapping, Replace… hands Alex Example’s rows over to Sam Example — preview count, Replace, saved to Git"); browser check (Git connected with a token that can write, also on a 4x slower CPU): QE Mapping with a QE column named in an Epic's Feature setup → **Replace…** opens "Replace a value" with that column chosen; Find lists "Alex Example (2 rows)" (one cell written "alex example ") — choose it, type "Sam Example": the preview says "2 rows will change" and lists both rows with old and new value; **Replace** saves at once — the notice "Replaced “Alex Example” with “Sam Example” in QE Name: 2 rows of …" with View commit, and qe-mapping.json in Git holds Sam Example in those rows, "Alex Example Jr" unchanged. With a read-only token, the synthetic sample, View as, or a role without "Edit the QE Mapping", Replace… is greyed out with the reason.
+
 
 ### 6.22 Monthly pack
 
@@ -1892,6 +1894,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-OND-96 A schedule publishes with the filters saved with it** — Req OND-96, OND-78 — L1 `standalone-html.test.mjs` ("OND-96: a schedule keeps the filters saved with it, read back strictly (TC-OND-96)"); E2E `interactive-html.e2e.mjs` ("TC-OND-94: the Tool Owner publishes CoNQ cut to Q3 and QRE; the file holds only those rows and works offline — header, filter row, charts, drill-down, Rows search, phone"); browser check: the pop-up says "A scheduled run publishes the rows that pass the filters saved with the schedule …"; Save schedule shows "Saved with the schedule: {filters}."; the filter row changed afterwards, the next scheduled run still publishes with the saved filters (the file's header says so).
 
 **TC-OND-97 The viewer's size** — Req OND-98 — browser check (inspection): after `pnpm build:web`, `dist/standalone-viewer.js` and `dist/standalone-viewer.css` together are under 600 KB; a published file of CoNQ is that size plus its data; the main app's start-up chunks do not contain the viewer (it loads with the first publish).
+
+**TC-OND-98 Replace a value on an On-Demand Table page: preview, locked and hidden rows, History, Background jobs** — Req OND-100, OND-101, OND-102, OND-21 — **UAT** — L1 `replace-values.test.mjs` ("Replace: a cell matches as a whole, ignoring case and the spaces around it (TC-QEM-10, TC-OND-98)", "OND-100, OND-101: the On-Demand replace — locked rows skipped and counted, hidden rows left, a History entry per changed row (TC-OND-98)", "OND-100: Multi-select values are replaced one by one; Dropdown and Multi-select take only an option; Number, Currency and Date are not offered (TC-OND-98)", "OND-101: on a page of row files the replace writes every changed row file in one commit, applied to the rows as they are in Git (TC-OND-98)"); E2E `replace-values.e2e.mjs` ("TC-OND-98: on an On-Demand Table page, Replace… in the ⋯ menu replaces the QE in every row — preview, Replace, saved to Git with a History entry per row"); browser check (also on a 4x slower CPU): on a Table page with a QE column, ⋯ → **Replace…**, Column QE, Find "Alex Example (2 rows)", Replace with "Sam Example": "2 rows will change" with their IDs; **Replace** — Background jobs "Replace · {page} · QE": "Replaced “Alex Example” with “Sam Example” in QE: 2 rows"; each row's History shows the entry with the comment; a hidden row holding Alex Example is unchanged. On a page of row files, a second person editing one of the rows: the preview says "1 matching row is being edited by someone else and is skipped" and that row stays. In Sample, with View as, a read-only token or without "Edit On-Demand data", Replace… is greyed out with the reason as its tooltip; a Dropdown replaced with a value outside its options is refused with the reason.
 
 ### 6.29 Custom streams
 
@@ -2563,6 +2567,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QEM-10 | TC-QEM-07 |
 | QEM-11 | TC-QEM-08 |
 | QEM-12 | TC-QEM-09 |
+| QEM-13 | TC-QEM-10 |
 | PCK-01, PCK-06 | TC-PCK-01, TC-PCK-04 |
 | PCK-02 | TC-PCK-01, TC-PCK-04 |
 | PCK-03 | TC-PCK-03 |
@@ -2714,7 +2719,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-18 | TC-OND-15 |
 | OND-19 | TC-OND-16 |
 | OND-20 | TC-OND-16, TC-OND-17 |
-| OND-21 | TC-OND-16, TC-OND-17 |
+| OND-21 | TC-OND-16, TC-OND-17, TC-OND-98 |
 | OND-22 | TC-OND-16, TC-OND-18 |
 | OND-23 | TC-OND-16, TC-OND-18 |
 | OND-24 | TC-OND-19 |
@@ -2775,6 +2780,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-97 | TC-OND-94, TC-OND-95 |
 | OND-98 | TC-OND-97 |
 | OND-99 | TC-OND-94 |
+| OND-100 | TC-OND-98 |
+| OND-101 | TC-OND-98 |
+| OND-102 | TC-OND-98 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -2967,7 +2975,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01 |
 | UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07 |
-| UC-23 | TC-QEM-01…08 |
+| UC-23 | TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
 | UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09, TC-QV-49, TC-MYD-10 |
@@ -2981,7 +2989,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…97, TC-CHT-01…42, TC-CHT-50…59 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…98, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…06 |

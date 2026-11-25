@@ -836,9 +836,20 @@ Large pages can be converted to **row files** (see below). On such a page **Edit
 
 ### The page menu (⋯)
 
-The **⋯** next to the page's main action holds **Rename page…**, **Hide page**, **Delete page…** (Tool Owner), **Convert to row files…** (Tool Owner), **Publish interactive HTML…** and **↻ Reload from Git**.
+The **⋯** next to the page's main action holds **Rename page…**, **Hide page**, **Delete page…** (Tool Owner), **Replace…**, **Convert to row files…** (Tool Owner), **Publish interactive HTML…** and **↻ Reload from Git**.
 
 ![The page menu of CoNQ](user-guide/images/page-menu.png)
+
+### Replace a value in a column
+
+When one person hands their work over to another — a QE leaves and their releases go to a colleague — **Replace…** changes the name in every row at once. It is in the page's **⋯** menu on a Table or Table + Insights page, and in the toolbar of **QE Mapping**.
+
+1. Choose the **Column** (on QE Mapping the QE column of the Epic & Feature setup is already chosen).
+2. Choose the value in **Find** — each value shows how many rows hold it — or **Another value (type it)…**. A cell matches only as a whole; upper and lower case and spaces around it do not matter.
+3. Type the new value in **Replace with** (the column's values are suggested). In a Dropdown or Multi-select column it must be one of the column's options.
+4. Check the preview — **"N rows will change"** and the first rows with the old and new value — and choose **Replace**.
+
+The change is saved to Git at once. On an On-Demand page each changed row gets an entry in its **History** ("Replaced “Alex Example” with “Sam Example” in QE") and the result is in **Background jobs**; hidden rows are not changed, and rows someone else is editing are skipped (the preview says how many). On QE Mapping every row of the tab is changed, also rows a search or filter hides; the commit names the change. Without the right to edit the page or QE Mapping, without Git storage that can save, with sample data, or while viewing as someone else, **Replace…** is greyed out with the reason.
 
 ### Convert to row files
 
