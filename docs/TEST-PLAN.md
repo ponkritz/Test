@@ -2308,6 +2308,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-36 Edit review… on PI Review** — Req PIR-34, PIR-13, PIR-26, CON-113 — L1 `pi-review-edit.test.mjs` ("PIR-34: PI Review offers Edit review… by the same rule — …": `ownReviewOf` on a Feature with Rita's review and a newer one by Lena, a lead — each edits only their own, Lena none on Rita's; not read or the PI dates still read → none; a review for another PI → none; Closed and reviewed after its Closed Date → Edit); E2E `pi-review-form.e2e.mjs` ("TC-PIR-36: PI Review offers Edit review… on my own review — …": after ↻ Read all Discussions Rita's Feature 205 with her review has Edit review… and no Write review…, Feature 202 with Lena's review has Write review… (disabled for Rita) and no Edit; the drawer's footer offers Edit review…, the pop-up is prefilled, saved → "Edit review · #205 … Edited the review of #205 and read back", one PATCH of comment 41, no POST, Review mode updated; Lena (a lead) sees Write review… enabled and no Edit on 205, and Edit review… on 202, her own review); browser check (1440 px, light): the row with Edit review….
 
+**TC-PIR-37 PI Review reads my own Features' Discussions when it opens** — Req PIR-35, PIR-34, PIR-17, PIR-24, PIR-06, PIR-33 — L1 `pi-review-edit.test.mjs` ("PIR-35: my own Features are those assigned to me — …": by my work email where the Feature has one (the same name with another email is not mine), else by my name ignoring case and spaces; nothing known about me → none; "PIR-35: the automatic read is skipped with sample data, without a PAT, in View as and when who I am is not known — …": each skip with its reason, an on-premises server not skipped, the same reason as My PI Review when nothing can be read; "PIR-35: a Discussion being read is not requested again — …": two reads at once send one request, a fresh read and a read after the first finished ask again); E2E `pi-review-form.e2e.mjs` ("TC-PIR-37: PI Review reads my own Features’ Discussions when it opens — …": Rita opens PI Review and Feature 205 shows Edit review… without opening it or Read all; the fake dev.azure.com recorded one comments read each of her Features 201 and 205 and none of Ben's 202 (Comments "—"); opening 205's drawer sends no request; ↻ Read all Discussions reads only 202 ("1 of 1 read"), so each Discussion is read once; Lena, a lead with no Feature of her own, has nothing read until she opens 202); browser check (1440 px, light): PI Review right after opening, Edit review… on Feature 205.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 ### 6.35 Built-in lists
@@ -3163,7 +3165,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-31 | TC-PIR-24, TC-PIR-30, TC-PIR-31, TC-CON-71 |
 | PIR-32 | TC-PIR-33 |
 | PIR-33 | TC-PIR-34 |
-| PIR-34 | TC-PIR-35, TC-PIR-36 |
+| PIR-34 | TC-PIR-35, TC-PIR-36, TC-PIR-37 |
+| PIR-35 | TC-PIR-37 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
@@ -3233,7 +3236,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…36 |
+| UC-40 | TC-PIR-01…37 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record
