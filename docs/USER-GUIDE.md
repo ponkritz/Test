@@ -564,6 +564,7 @@ The data sources are what the app has already loaded:
 - **Completed releases per stream per month** — each stream's Completed releases in each month up to this one, as Pulse Check's Month tabs count them, with **Counted in Pulse Check** (Yes / No, from your own Streams not counted). A line chart by Month, split by Stream, with **Running total** is Pulse Check's Year chart.
 - **Capacity and utilization** — Team overview's figures per person and month.
 - **The On-Demand table pages**, the **Time Writing hours**, the **QE Mapping** sheets, the **KPI tracker** values, the **historical hours** and each **Windchill export**.
+- **Azure DevOps queries** — each Release Details stream's query, the Tool Validations Tool List and Validation Documents queries and your own My views, with all their columns, as last fetched.
 
 A source your role may not see is offered as "(not available)", and a block over it says "Not available for your role." A source whose data is not loaded yet offers the action that loads it (for example **Load the KPI tracker**).
 
@@ -1198,6 +1199,13 @@ An **On-Demand Dashboard** is a read-only page of KPI tiles, charts and summary 
 - **Copy to…** in a block's ⋯ copies it to this or another dashboard.
 
 Each change is saved to Git at once. Blocks over the Time Writing hours show only to people who may see Team overview.
+
+**Azure DevOps queries as data sources.** In **＋ Add block…** the Data source list also offers:
+
+- each Release Details stream's query (for example *DP (Release Details stream query)*), **Tool Validations · Tool List** and **· Validation Documents**, and your own **My views** — as the app last fetched them;
+- any saved query the dashboard's owners added: **⋯ → ＋ Add Azure query…** → pick a connection and **List the saved queries** (choose one under *Shared Queries*), or paste the query's address from Azure DevOps → give it a name → **Add data source**. Only the reference is saved in Git, never a PAT or rows. **Remove Azure query…** removes one that no block uses.
+
+Every column of the query is a field: people by display name (never an email), **Tags** as Multi-select, dates for the period. Each viewer reads a saved query with **their own PAT** when the dashboard opens; **⋯ → ↻ Refresh Azure queries** reads it again. Without a PAT for the server (My settings → Servers and PATs), without access to the query, or without Release Details for a stream's query, the block says why. A query of more than 5,000 rows or 30 columns is **Capped** — the block, its ⓘ and its exports say so.
 
 ## Sharing: PDF and interactive HTML
 

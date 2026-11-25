@@ -30,7 +30,9 @@ import { allStreams, dataSets, defaultMatchThreshold, defaultStreams, profileFor
 import { CustomStreamsContext, useCustomStreams, useStreamsVersion } from './useCustomStreams'
 import { connectionPresets } from './connectionPresets'
 import { gitSyncedIds, markViewsSynced, removeDuplicateConnections } from './viewDefinitions'
-import { listAzureConnectionProfiles } from './azureCredentials'
+import { listAzureConnectionProfiles, listKnownServers, collectionUrlFrom, splitAzureUrl } from './azureCredentials'
+import { connectionDatasets } from './azureQuerySources'
+import type { DashboardAzure } from './pages/CustomDashboardPage'
 import { useAzureWorkspace, type FetchListener, type GitDataSource } from './useAzureWorkspace'
 import { sharedThroughGit } from './gitSnapshots'
 import { useGitStorage } from './useGitStorage'
@@ -307,7 +309,31 @@ export default function App() {
   // and every other dashboard), for the roles that see Release Details.
   const toolsReadable = access.sees('release')
   const toolDatasetList = useMemo(() => toolDatasets({ file: toolValidations.shown, connected: toolValidations.connected, loaded: toolValidations.loaded }, toolsReadable, utcToday()), [toolValidations.shown, toolValidations.connected, toolValidations.loaded, toolsReadable])
-  const toolEnv: ToolValidationsEnv = { store: toolValidations, ownersReason: toolValidations.reason || toolOwnersReason(viewer), who: my.self.me.name?.trim() || azure.creatorEmail.trim(), personalDays: personalViews.filter(toolDaysKey, cleanDays), setPersonalDays: (days) => days === undefined ? personalViews.clearFilter(toolDaysKey) : personalViews.setFilter(toolDaysKey, days), sources: toolSources, datasets: toolDatasetList, pages: { git, onDemand, menu, viewer, me: azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || '', views: personalViews, dataMode, publisherName: my.self.me.name?.trim() || azure.creatorEmail.trim(), hours: { items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') } } }
+  // DSH-17…DSH-19: the Azure DevOps queries as data sources of the dashboards — the app's own queries with the viewer's
+  // rights (the View as role; no My views while viewing as someone else), and the servers and projects of the connections
+  // from which a builder adds a saved query (each read with the viewer's own PAT).
+  const viewingAsSomeone = Boolean(access.viewingAs)
+  const releaseSees = access.sees('release')
+  const dashboardAzure = useMemo((): DashboardAzure => {
+    const profiles = azure.connectionProfiles
+    const connections = new Map<string, { server: string; project: string }>(), servers = new Map<string, string>()
+    for (const profile of profiles) {
+      let server = ''
+      try { server = profile.baseUrl ? profile.baseUrl.replace(/\/+$/, '') : (() => { const url = new URL(profile.url); return `${url.origin}/${url.pathname.split('/').filter(Boolean)[0] ?? ''}` })() } catch { server = '' }
+      const project = splitAzureUrl(profile.url, profile.baseUrl).project
+      if (!server) continue
+      servers.set(server.toLowerCase(), server)
+      if (project) connections.set(`${server.toLowerCase()}|${project.toLowerCase()}`, { server, project })
+    }
+    for (const known of listKnownServers()) { try { const server = collectionUrlFrom(known.serverUrl, known.organization); servers.set(server.toLowerCase(), server) } catch { /* not a server */ } }
+    return {
+      connections: (wanted) => connectionDatasets({ profiles, state: store.state, sees: (area) => area === 'release' ? releaseSees : access.sees(area), viewingAs: viewingAsSomeone }, wanted).map((found) => found.dataset),
+      profiles, viewingAs: viewingAsSomeone, servers: [...servers.values()],
+      queryConnections: [...connections.values()].sort((a, b) => `${a.server} ${a.project}`.localeCompare(`${b.server} ${b.project}`)),
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [azure.connectionProfiles, store.state.azureSources, store.state.releaseSource, releaseSees, viewingAsSomeone])
+  const toolEnv: ToolValidationsEnv = { store: toolValidations, ownersReason: toolValidations.reason || toolOwnersReason(viewer), who: my.self.me.name?.trim() || azure.creatorEmail.trim(), personalDays: personalViews.filter(toolDaysKey, cleanDays), setPersonalDays: (days) => days === undefined ? personalViews.clearFilter(toolDaysKey) : personalViews.setFilter(toolDaysKey, days), sources: toolSources, datasets: toolDatasetList, pages: { git, onDemand, menu, viewer, me: azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || '', views: personalViews, dataMode, publisherName: my.self.me.name?.trim() || azure.creatorEmail.trim(), hours: { items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }, azure: dashboardAzure } }
   // OND-73, OND-78, OND-90: who an interactive HTML file is published by; the publish schedules of this computer run while the app
   // is open, each only while the person may still publish the page (the Tool Owner or its co-owners).
   const publisherName = my.self.me.name?.trim() || azure.creatorEmail.trim()
@@ -689,7 +715,7 @@ export default function App() {
       {page === 'pireview' && <PiReviewPage azure={azure} store={store} self={my.self} />}
       {page === 'brite' && <BritePage />}
       {page === 'kpitracker' && <KpiTrackerPage git={git} canManage={access.can('storage.shared')} who={my.me.name || 'Admin'} />}
-      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} publisherName={publisherName} tools={toolDatasetList} />}
+      {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) === 'dashboard' && <CustomDashboardPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} menu={menu} viewer={viewer} views={personalViews} onOpen={openOnDemand} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} hours={{ items: reportAzure.items, settings: dashboardHoursSettings, allowed: access.sees('insights') }} publisherName={publisherName} tools={toolDatasetList} azure={dashboardAzure} />}
       {page === 'ondemand' && onDemandPage && kindOf(menu.layout, onDemandPage.id) !== 'dashboard' && <OnDemandPage key={onDemandPage.id} git={git} store={onDemand} pageId={onDemandPage.id} me={azure.isSample ? '' : azure.creatorEmail.trim().toLowerCase() || my.self.me.name?.trim() || ''} onOpen={openOnDemand} kind={kindOf(menu.layout, onDemandPage.id)} menu={menu} viewer={viewer} addPageReason={addPageReason(viewer, menu.layout, placementOf(menu.layout, onDemandPage.id).group)} onAddPage={() => setAddPageFor(placementOf(menu.layout, onDemandPage.id).group)} views={personalViews} dataMode={dataMode} publisherName={publisherName} />}
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} viewOnly={Boolean(access.viewingAs)} qeColumnNames={[...new Set([featureSetup.setups?.shared, featureSetup.setups?.personal].flatMap((file) => file?.epics ?? []).flatMap((epic) => epic.qeColumns?.qeColumn ? [epic.qeColumns.qeColumn] : []))]} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}

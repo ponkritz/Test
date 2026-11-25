@@ -12,6 +12,7 @@ import type { OnDemandColumn, OnDemandRow, OnDemandType } from './onDemand.ts'
 import type { QeMappingFile } from './qeMapping.ts'
 import { completedCount, supportedCount, type ReleaseStream } from './releaseOverview.ts'
 import { completedRows, monthCounts, windchillLinesOf, type StreamMonthCount, type WindchillInput } from './cumulativeReleases.ts'
+import { connectionDatasets, isConnectionSource, missingConnection, type ConnectionInput } from './azureQuerySources.ts'
 import { completionDated, daysBetween, dueFromText, dueOf, entryState, entryStateLabel, validityOf, type ToolValidationsFile } from './toolValidations.ts'
 
 // MYD-15…MYD-22 The data sources of My dashboard's blocks, as one registry so that more can be added: each kind of
@@ -51,6 +52,8 @@ export interface SourceInput {
   hours: (allowed: boolean) => HoursLine[] // DSH-16: the Time Writing lines over the months (worked out only when allowed)
   // TVL-18: the Tool Validations master list as last read from Git (connected: Git storage is set up); absent: not offered.
   tools?: ToolSourceInput
+  // MYD-26 (DSH-17): the Azure DevOps queries the app reads — the streams' and Tool Validations' queries, the viewer's My views.
+  connections?: Omit<ConnectionInput, 'sees'>
 }
 export interface ToolSourceInput { file: ToolValidationsFile; connected: boolean; loaded: boolean }
 
@@ -354,6 +357,10 @@ export const sourceKinds: SourceKind[] = [
     } },
   { id: 'tools', label: 'Tool Validations', areas: ['release'], describe: 'The Tool Validations master list and its expiry list (tool-validations.json, TVL-18).',
     entries: (input, wanted) => input.tools ? toolDatasets(input.tools, input.sees('release'), input.today, wanted).map((dataset) => entry(dataset, toolKind)) : [] },
+  // MYD-26: each query of the app's own connections (azureQuerySources.ts), its area right checked per query (the
+  // streams and Tool Validations: Release Details; a My view: its owner only), so the kind itself needs no area.
+  { id: 'azv', label: 'Azure DevOps queries', areas: [], describe: 'Each Release Details stream query, the Tool Validations Tool List and Validation Documents queries and your own My views, with all their columns, as last fetched.',
+    entries: (input, wanted) => input.connections ? connectionDatasets({ ...input.connections, sees: input.sees }, wanted).map((found) => entry(found.dataset, found.dataset.kind ?? 'Azure DevOps query', found.load)) : [] },
   { id: 'windchill', label: 'Windchill exports', areas: ['release'], describe: 'The rows of each Windchill export.',
     entries: (input) => {
       const name = 'Windchill export', kind = 'Windchill export'
@@ -366,8 +373,8 @@ export const sourceKinds: SourceKind[] = [
 // stream, the Pulse Check rules) and the utilization (Capacity and utilization) — see MYD-22.
 
 // The source keys a stored block may name (MYD-23): the table pages and the Time Writing hours (DSH-04) and each kind above.
-export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|releases:completed|capacity:people|kpi:tracker|history:hours|tools:master|tools:expiry|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54})$/
-export const kindOfKey = (key: string) => key === hoursSource ? 'hours' : key === completedSource ? 'completed' : key.split(':')[0] === 'page' ? 'page' : key.split(':')[0] === 'releases' ? 'releases' : key.split(':')[0] === 'capacity' ? 'capacity' : key.split(':')[0]
+export const mySourcePattern = /^(page:[a-z0-9][a-z0-9-]{0,39}|hours:time-writing|azure:work|releases:streams|releases:completed|capacity:people|kpi:tracker|history:hours|tools:master|tools:expiry|qe:[\w.-]{1,60}|windchill:[\w.-]{1,54}|azv:[A-Za-z0-9_-]{1,80}|azm:[A-Za-z0-9_-]{1,80})$/
+export const kindOfKey = (key: string) => isConnectionSource(key) ? 'azv' : key === hoursSource ? 'hours' : key === completedSource ? 'completed' : key.split(':')[0] === 'page' ? 'page' : key.split(':')[0] === 'releases' ? 'releases' : key.split(':')[0] === 'capacity' ? 'capacity' : key.split(':')[0]
 
 // Every source entry in the registry's order; wanted: the keys whose rows are worked out.
 export const sourceEntries = (input: SourceInput, wanted: (key: string) => boolean = () => true) => sourceKinds.flatMap((kind) => kind.entries(input, wanted))
@@ -375,9 +382,11 @@ export const sourceEntries = (input: SourceInput, wanted: (key: string) => boole
 // role." whatever the key; a source no longer there says so.
 export function entryOf(entries: SourceEntry[], key: string, sees: (area: Area) => boolean): SourceEntry {
   const kind = sourceKinds.find((entry) => entry.id === kindOfKey(key))
-  if (kind && !kind.areas.some((area) => sees(area))) return { dataset: { ...missingDataset(key, notAvailable), name: kind.label }, kind: kind.label }
+  if (kind && kind.areas.length && !kind.areas.some((area) => sees(area))) return { dataset: { ...missingDataset(key, notAvailable), name: kind.label }, kind: kind.label }
   const found = entries.find((candidate) => candidate.dataset.key === key)
   if (found) return found
+  // MYD-26: a query that is not among the viewer's (someone else's My view, a removed connection) says why.
+  if (isConnectionSource(key)) return { dataset: missingConnection(key), kind: kind?.label ?? '' }
   // A sheet or export of a kind that is not loaded yet takes that kind's load entry.
   const pending = entries.find((candidate) => kindOfKey(candidate.dataset.key) === kindOfKey(key) && candidate.load)
   if (pending) return pending

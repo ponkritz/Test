@@ -1671,6 +1671,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-MYD-10 Completed releases per stream per month as a data source** — Req MYD-25, MYD-15 — L1 `dashboard-sources.test.mjs` ("MYD-25: Completed releases per stream per month — the Month tabs’ counts by stream and month, Windchill exports included, Counted in Pulse Check per my filter; a line with Running total is the Year chart (TC-MYD-10)", "MYD-15: the registry — …"), `cumulative-releases.test.mjs` ("MYD-25: Completed releases rows — one per stream and month up to the current one, with Counted in Pulse Check (TC-MYD-10)"); browser check with the synthetic sample and the S&S IT export: My dashboard → ＋ Add block → source **Completed releases per stream per month**, a line chart by Month split by Stream with Running total and the period Year — its values at the current month equal Pulse Check's Year chart; a column chart of the Sum by Month equals the panel's Month total; a filter Counted in Pulse Check = Yes leaves out the streams of my Streams not counted filter; a role without Release Details and Team insights sees “Not available for your role.”.
 
+**TC-MYD-11 The app’s Azure DevOps queries on My dashboard** — Req MYD-26, MYD-15, MYD-23 — L1 `azure-query-sources.test.mjs` ("DSH-17, MYD-26: the app’s own queries — one source per query, named by its stream, tab or view, from the fetched data (TC-DSH-17)", "DSH-23, MYD-26: rights and why not — Release Details for the streams and Tool Validations, a My view its owner only; no PAT, viewing as (TC-DSH-23)"), `dashboard-sources.test.mjs` ("MYD-15: the registry — …"); browser check: My dashboard → ＋ Add block → the Data source list offers each stream’s query, the Tool Validations queries and your My views; a bar chart over your My view by State; before the first fetch the source says "Not fetched yet …" with Fetch from Azure DevOps; a role without Release Details sees the stream queries "(not available)".
+
 **TC-HIS-01 Historical hours page** — Req HIS-01 — E2E `shell.e2e.mjs` ("TC-HIS-01: Settings → Historical hours explains the import and needs Git storage to upload"); browser check with Git storage and the real planning workbook: Upload Excel… reads TransformedData; the counts (rows May–Sep 2026, people, recorded hours, rows not imported with their reasons) match the workbook; Save to Git writes `history-hours.json` to the data repository (not to the app's repository); the page shows the source, cut-off and the Azure DevOps Tasks left out; Remove history removes the file.
 
 **TC-HIS-02 Reading the workbook** — Req HIS-02, HIS-03 — L1 `history.test.mjs` ("historical hours: the TransformedData sheet read before the cut-off; every other row listed with its reason (HIS-02, HIS-03)").
@@ -2070,6 +2072,20 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-DSH-15 Copy a block to another dashboard** — Req DSH-15, DSH-13, DSH-12 — L1 `dashboard-pages.test.mjs` ("DSH-15: a block copied to another dashboard — a new id, its settings and data source, the tab of the same name or the first tab (said); a duplicate here (TC-DSH-15)"); E2E `dashboard-pages.e2e.mjs` ("TC-DSH-15: Copy to… copies a block to another dashboard (the first tab when no tab has its name, said) and duplicates it here — each saved to the dashboard’s file"); browser check: a KPI tile is copied from Arrange blocks… → Copy to…; the list holds only the dashboards you may build; a target with 40 blocks refuses the copy with "A dashboard holds at most 40 blocks: remove one first." in the pop-up and in Background jobs.
 
 **TC-DSH-16 Time Writing hours as a data source** — Req DSH-16, DSH-03, DSH-04, DSH-05 — **UAT** — L1 `dashboard-hours.test.mjs` ("DSH-16: the Time Writing hours are Team overview’s figures by team member, region, role, stream, Feature and month — the totals unchanged (TC-DSH-16)", "DSH-16: the hours as a data source — Sum / Average of planned or booked hours, grouped by its fields, the period by month; not available without Team overview (TC-DSH-16)"); E2E `dashboard-pages.e2e.mjs` ("TC-DSH-16: the Time Writing hours as a data source — planned and booked hours by team member over the period; “Not available for your role” without Team overview", "TC-DSH-16: a builder adds a block over the Time Writing hours in the block pop-up — only its settings are saved"); UAT: with the Time Writing data fetched and a role that sees Team overview, on an On-Demand Dashboard you may build: ＋ Add block… → **Data source: Time Writing hours (as in Team overview)** → a KPI tile **Sum of Planned hours** (Period filter on: Month) — the tile equals Team overview's planned hours for the same period with no filter; add a **Summary table** of Sum of **Booked hours** by **Team member** with columns by **Stream** — each person's total equals Team overview's actual hours of that person; a **Bar chart** by **Feature**; tick a quarter in **Quarter** — the blocks follow by month; Export the table — the last row is Total; a colleague without Team insights (e.g. Team Member) sees "This block cannot be shown: Not available for your role." on these blocks while the other blocks are drawn; Team overview shows exactly what it showed before.
+
+**TC-DSH-17 The app’s own Azure DevOps queries as data sources** — Req DSH-17, DSH-03, DSH-04, DSH-20 — **UAT** — L1 `azure-query-sources.test.mjs` ("DSH-17, MYD-26: the app’s own queries — one source per query, named by its stream, tab or view, from the fetched data (TC-DSH-17)"); E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); UAT: with the Release Details streams fetched, on an On-Demand Dashboard you may build: ＋ Add block… → the **Data source** list shows each stream’s query (e.g. **DP (Release Details stream query)**), **Tool Validations · Tool List** and **· Validation Documents (Tool Validations query)** and your own My views (**My view**), each line under Data source saying when it was fetched; a **Bar chart** of the DP query by **State** — the counts equal the DP Releases table; every column of the query is offered as a field; the dashboard file in Git names only `azv:<connection id>`.
+
+**TC-DSH-18 A saved Azure DevOps query added by its owners — only the reference in Git** — Req DSH-18, DSH-08, DSH-15, DSH-04 — **UAT** — L1 `azure-query-sources.test.mjs` ("DSH-18: the stored reference — only server, project, query id and name in the dashboard file; never a PAT, never rows (TC-DSH-18)", "DSH-18: a query’s address — cloud and on premises; only a server the app already reads (TC-DSH-18)"); E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); UAT: as a co-owner of a dashboard, ⋯ → **＋ Add Azure query…** → **Pick a saved query of a connection** → List the saved queries → choose one under Shared Queries — its name is filled in; Cancel; again with **Paste the query’s address** (copied from the browser on the query in Azure DevOps) and a name → **Add data source**; open the dashboard file in GitHub — `queries` holds the id, name, server, project and query id only, no PAT and no rows; an address on a server the app does not read is refused with the reason; **Remove Azure query…** refuses while a block reads it, naming the block; **Copy to…** another dashboard takes the reference along; a person without the right sees both actions disabled with the reason.
+
+**TC-DSH-19 A saved query read with the viewer’s own PAT — reads only** — Req DSH-19, DSH-18 — L1 `azure-query-sources.test.mjs` ("DSH-19: a saved query is read by its id with the viewer’s PAT — reads only, items in batches of 200, capped at 5,000 rows (TC-DSH-19)", "DSH-19, SM-200: the saved-query reads are guarded — a GUID id only, GET, in the web transport and in the desktop proxy (TC-DSH-19)", "DSH-18: the stored reference — only server, project, query id and name in the dashboard file; never a PAT, never rows (TC-DSH-18)"); E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); browser check in the desktop app with an on-premises connection: a saved query of the on-premises project is read (the proxy answers), nothing is written; Publish interactive HTML… of a dashboard with such a block notes "… over an Azure DevOps query is not published …".
+
+**TC-DSH-20 Field types of a query source — identities by name, tags as Multi-select** — Req DSH-20, DSH-05 — L1 `azure-query-sources.test.mjs` ("DSH-20: the field types of a query — Azure DevOps types to chart types; tags Multi-select, identities and picklists Dropdown-like, the ID text (TC-DSH-20)", "DSH-20: a query result as a source — all its columns as fields, identities by display name and never an email, tags as Multi-select, dates by day (TC-DSH-20)"); E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); browser check: a block over a query with Assigned To, Severity, Story Points, Tags and Target Date offers Assigned To and Severity as Dropdown, Tags as Multi-select, Target Date for the period and Story Points for Sum; no email is shown anywhere, Rows behind included.
+
+**TC-DSH-21 Capped query sources** — Req DSH-21 — L1 `azure-query-sources.test.mjs` ("DSH-21: caps — at most 5,000 rows and 30 columns; a capped source says so (and is marked in its exports) (TC-DSH-21)", "DSH-19: a saved query is read by its id with the viewer’s PAT — reads only, items in batches of 200, capped at 5,000 rows (TC-DSH-19)"); browser check with a saved query returning more than 5,000 work items: the block shows **Capped** in its header and the reason above the chart, in ⓘ, on a KPI tile and under Data source in the block pop-up; a Pivot table’s **Export** and a bar’s **Rows behind** export are named "Capped-…" and start with the reason.
+
+**TC-DSH-22 Refreshing the Azure queries** — Req DSH-22, DSH-19 — E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); browser check: the dashboard reads its saved queries when it opens and not again while it stays open (no requests in the browser’s network panel over a few minutes); ⋯ → **↻ Refresh Azure queries** reads them again — the blocks keep their figures until the new ones are there and ⓘ shows the new read time.
+
+**TC-DSH-23 Who sees an Azure query block — the reason otherwise** — Req DSH-23, DSH-10, DSH-17, DSH-19 — **UAT** — L1 `azure-query-sources.test.mjs` ("DSH-23, MYD-26: rights and why not — Release Details for the streams and Tool Validations, a My view its owner only; no PAT, viewing as (TC-DSH-23)"); E2E `azure-query-sources.e2e.mjs` ("TC-DSH-17, TC-DSH-18, TC-DSH-22, TC-DSH-23: a block over a stream’s query; a saved query added by its address with a Pivot table and a bar chart on its fields, only its reference in Git; a viewer without a PAT sees the reason"); UAT: a colleague **without a PAT** for the server opens the dashboard — the saved-query blocks show "This block cannot be shown: Add your PAT for … in My settings → Servers and PATs …" while the other blocks are drawn, and nothing is sent to Azure DevOps; a colleague whose PAT has **no access** to the query sees "Azure DevOps did not return the query with your PAT: …"; a role **without Release Details** sees "Not available for your role." on the stream-query blocks; a block over **your own My view** shows "This is someone else’s own My view …" to everyone else; an Admin **viewing as** someone sees "Not read while viewing as someone else …".
 
 ### 6.32 Chart options
 
@@ -2815,7 +2831,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | MYD-12 | TC-MYD-05 |
 | MYD-13 | TC-MYD-06 |
 | MYD-14 | TC-MYD-07, TC-MYD-09 |
-| MYD-15 | TC-MYD-07, TC-MYD-08, TC-MYD-10, TC-TVL-12 |
+| MYD-15 | TC-MYD-07, TC-MYD-08, TC-MYD-10, TC-TVL-12, TC-MYD-11 |
 | MYD-16 | TC-MYD-07, TC-MYD-08 |
 | MYD-17 | TC-MYD-07, TC-MYD-08 |
 | MYD-18 | TC-MYD-07, TC-MYD-08 |
@@ -2823,9 +2839,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | MYD-20 | TC-MYD-08 |
 | MYD-21 | TC-MYD-08 |
 | MYD-22 | TC-MYD-08 |
-| MYD-23 | TC-MYD-07, TC-MYD-09 |
+| MYD-23 | TC-MYD-07, TC-MYD-09, TC-MYD-11 |
 | MYD-24 | TC-MYD-07 |
 | MYD-25 | TC-MYD-10 |
+| MYD-26 | TC-MYD-11 |
 | HIS-01 | TC-HIS-01 |
 | HIS-02 | TC-HIS-02 |
 | HIS-03 | TC-HIS-02 |
@@ -3059,20 +3076,27 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PGB-21 | TC-PGB-16 |
 | DSH-01 | TC-DSH-01, TC-DSH-02, TC-DSH-10 |
 | DSH-02 | TC-DSH-01, TC-DSH-09 |
-| DSH-03 | TC-DSH-01, TC-DSH-08, TC-DSH-11, TC-DSH-16, TC-TVL-12 |
-| DSH-04 | TC-DSH-08, TC-DSH-16, TC-TVL-12 |
-| DSH-05 | TC-DSH-01, TC-DSH-06, TC-DSH-07, TC-DSH-16 |
+| DSH-03 | TC-DSH-01, TC-DSH-08, TC-DSH-11, TC-DSH-16, TC-TVL-12, TC-DSH-17 |
+| DSH-04 | TC-DSH-08, TC-DSH-16, TC-TVL-12, TC-DSH-17, TC-DSH-18 |
+| DSH-05 | TC-DSH-01, TC-DSH-06, TC-DSH-07, TC-DSH-16, TC-DSH-20 |
 | DSH-06 | TC-DSH-01, TC-DSH-06, TC-DSH-10, TC-DSH-14 |
 | DSH-07 | TC-DSH-01, TC-DSH-05 |
-| DSH-08 | TC-DSH-01, TC-DSH-03, TC-DSH-04, TC-OND-137 |
+| DSH-08 | TC-DSH-01, TC-DSH-03, TC-DSH-04, TC-OND-137, TC-DSH-18 |
 | DSH-09 | TC-DSH-09, TC-DSH-12, TC-DSH-13 |
-| DSH-10 | TC-DSH-01, TC-DSH-07, TC-DSH-11 |
+| DSH-10 | TC-DSH-01, TC-DSH-07, TC-DSH-11, TC-DSH-23 |
 | DSH-11 | TC-DSH-01 |
 | DSH-12 | TC-DSH-01, TC-DSH-10, TC-DSH-15 |
 | DSH-13 | TC-DSH-12, TC-CHT-15, TC-CHT-21, TC-DSH-15 |
 | DSH-14 | TC-DSH-14 |
-| DSH-15 | TC-DSH-15 |
+| DSH-15 | TC-DSH-15, TC-DSH-18 |
 | DSH-16 | TC-DSH-16 |
+| DSH-17 | TC-DSH-17, TC-DSH-23 |
+| DSH-18 | TC-DSH-18, TC-DSH-19 |
+| DSH-19 | TC-DSH-19, TC-DSH-21, TC-DSH-22, TC-DSH-23 |
+| DSH-20 | TC-DSH-17, TC-DSH-20 |
+| DSH-21 | TC-DSH-21 |
+| DSH-22 | TC-DSH-22 |
+| DSH-23 | TC-DSH-23 |
 | CHT-01 | TC-CHT-01, TC-CHT-02, TC-CHT-11, TC-CHT-12 |
 | CHT-02 | TC-CHT-07 |
 | CHT-03 | TC-CHT-04 |
@@ -3274,7 +3298,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-23 | TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
-| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09, TC-QV-49, TC-MYD-10 |
+| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09, TC-QV-49, TC-MYD-10, TC-MYD-11 |
 | UC-27 | TC-HIS-01…11 |
 | UC-28 | TC-ACT-01…12, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-ATM-21 |
 | UC-29 | TC-OVW-01…03 |
@@ -3286,7 +3310,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
-| UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
+| UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…37 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |

@@ -954,7 +954,7 @@ function CustomTabView({ env, tab }: { env: ToolValidationsEnv; tab: CustomTab }
   const menu = owns ? ownedMenu(pages.menu, tab.pageId, pages.viewer.email.trim().toLowerCase(), tab.kind) : pages.menu
   return <Suspense fallback={<Panel><EmptyState title={`Opening ${tab.name}…`} /></Panel>}>
     {kind === 'dashboard'
-      ? <CustomDashboardPage key={tab.pageId} embedded git={pages.git} store={pages.onDemand} pageId={tab.pageId} menu={menu} viewer={pages.viewer} views={pages.views} onOpen={noop} onAddPage={noop} hours={pages.hours} publisherName={pages.publisherName} tools={env.datasets} />
+      ? <CustomDashboardPage key={tab.pageId} embedded git={pages.git} store={pages.onDemand} pageId={tab.pageId} menu={menu} viewer={pages.viewer} views={pages.views} onOpen={noop} onAddPage={noop} hours={pages.hours} publisherName={pages.publisherName} tools={env.datasets} azure={pages.azure} />
       : <OnDemandPage key={tab.pageId} embedded git={pages.git} store={pages.onDemand} pageId={tab.pageId} me={pages.me} onOpen={noop} onAddPage={noop} kind={kind} menu={menu} viewer={pages.viewer} views={pages.views} dataMode={pages.dataMode} publisherName={pages.publisherName} />}
   </Suspense>
 }

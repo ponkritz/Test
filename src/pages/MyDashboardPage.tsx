@@ -103,10 +103,12 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
       hours: (allowed) => allowed ? hoursLinesCached(items, monthsKey ? monthsKey.split(',') : [], utcToday(), settings) : [],
       // TVL-18: the Tool Validations master list and expiry list (the app's copy of tool-validations.json).
       ...(toolStore ? { tools: { file: toolStore.shown, connected: toolStore.connected, loaded: toolStore.loaded } } : {}),
+      // MYD-26: the Azure DevOps queries the app reads (streams, Tool Validations, the person's own My views).
+      connections: { profiles: azure.connectionProfiles, state: store.state, viewingAs: readOnly },
     }
     return sourceEntries(input, (key) => usedKey === '*' || usedKey.split(',').includes(key))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, toolStore?.shown, toolStore?.connected, toolStore?.loaded, my.me.email, my.me.name, sources?.git.connected, windchill?.views, windchill?.sources, excludedKey])
+  }, [areaKey, usedKey, monthsKey, items, settings, store.state, azure.connectionProfiles, qe?.file, qe?.loaded, kpi, history?.file, history?.loaded, onDemand?.pages, toolStore?.shown, toolStore?.connected, toolStore?.loaded, my.me.email, my.me.name, sources?.git.connected, windchill?.views, windchill?.sources, excludedKey, readOnly])
   const sourceOf = (key: string) => entryOf(entries, key, sees)
   const narrow = (dataset: Dataset, block: DashboardBlock) => dataset.problem ? null : narrowRows(dataset, block, months)
   const datasets = entries.map((entry) => entry.dataset)

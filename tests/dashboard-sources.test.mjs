@@ -25,8 +25,9 @@ const items = [epic, feature, story, task, bug, history]
 const everyone = () => true
 
 test('MYD-15: the registry — every kind declares its fields and the area it needs; keys follow one pattern; a role without the area gets “Not available for your role.” and no rows (TC-MYD-08)', () => {
-  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'completed', 'capacity', 'qe', 'kpi', 'history', 'tools', 'windchill'])
-  for (const kind of sourceKinds) assert.ok(kind.areas.length && kind.label && kind.describe, kind.id)
+  assert.deepEqual(sourceKinds.map((kind) => kind.id), ['page', 'hours', 'azure', 'releases', 'completed', 'capacity', 'qe', 'kpi', 'history', 'tools', 'azv', 'windchill'])
+  // MYD-26: the Azure DevOps queries check their area per query (Release Details; a My view: its owner), not per kind.
+  for (const kind of sourceKinds) assert.ok((kind.areas.length || kind.id === 'azv') && kind.label && kind.describe, kind.id)
   for (const key of ['page:conq', hoursSource, azureWorkSource, releasesSource, completedSource, capacitySource, kpiSource, historySource, 'qe:s1', 'windchill:abc123']) assert.ok(mySourcePattern.test(key), key)
   for (const key of ['other:x', 'page:Bad Id', 'qe:', 'azure:all']) assert.equal(mySourcePattern.test(key), false, key)
   assert.deepEqual(['page:x', hoursSource, 'qe:s1', 'windchill:w', capacitySource, completedSource, releasesSource].map(kindOfKey), ['page', 'hours', 'qe', 'windchill', 'capacity', 'completed', 'releases'])
