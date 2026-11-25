@@ -863,8 +863,29 @@ On-Demand pages are tables the team sets up itself, without a new release of the
 ![CoNQ with made-up rows](user-guide/images/conq-table.png)
 
 - Search, sort by a heading, choose **Columns**, and **Export** to Excel or CSV.
+- **Group by** and **Filter by column** (see below) narrow and organise the rows.
 - Every row gets a **key** when it is added (for example `CONQ-261124-K7Q2`) and a readable **ID** (`CONQ-0001`) when it is saved.
 - **Every save goes straight to Git**, as its own commit. There is no separate save step; progress and results are in Background jobs.
+
+### Group by and Filter by column
+
+The row under the search box groups and filters the table.
+
+![CoNQ grouped by State, then by Assignee, with one group closed](user-guide/images/table-group-by.png)
+
+1. Choose a column in **Group by**. Each group row shows ▸ / ▾, the column, the value and how many rows it has; "(blank)" comes last.
+2. Choose another column in **then by** for a second level (up to four). The rows inside a group keep the table's sort.
+3. Click a group row to close or open it. **Collapse all** leaves only the outermost groups; **Expand all** opens every level. A button is greyed out when there is nothing to do.
+4. Press **Filter by column**. A field appears under each heading: type part of a value (any case), or pick a value for a Dropdown or Multi-select column. The filters work together with the search, and the count shows how many rows are left.
+
+![The filter row under the headings](user-guide/images/table-filter-row.png)
+
+- A **Multi-select** row appears under **each** of its options, so the counts of one level can add up to more than the rows. It is still one row: the count, the selection and Export hold it once.
+- Dates and amounts are grouped as shown, so "1,200.00 EUR" and "1,200.00 USD" are two groups. The ID and Key are not offered in Group by (one group per row) but can be filtered.
+- While a filter is set, a line says how many rows match and on which columns, also a column you have hidden. **Clear column filters** removes them; **Hide filters** too.
+- **Export** writes the rows that match the search and filters, in the order of the groups — also rows in a closed group. A grouped-by column is in the file even when it is hidden.
+- Your grouping and filters are part of **your own view** and kept in your browser. Which groups are open is for this visit only.
+- The Tool Owner can save the grouping and filters **for everyone** (see [Save view for everyone](#save-view-for-everyone)), with **Start collapsed** if the page should open with only the outermost groups.
 
 ### Set up columns
 
@@ -972,7 +993,10 @@ The Tool Owner (and anyone with the right *Table, chart and page defaults*, such
 
 1. Set the table up as it should look: the columns, their order and widths, Wrap text, the density and the sort.
 2. Open **Columns** and press **Save view for everyone**. The view is saved to Git; Background jobs shows the result, and the panel says who saved it and when.
-3. To remove it again, press **Clear the view for everyone** and confirm.
+3. On an On-Demand Table page a pop-up first lists what is saved — also **Group by** and the **column filters** — and offers **Start collapsed**: tick it to open the page with only the outermost groups (off: the groups open expanded). Press **Save view for everyone**.
+4. To remove it again, press **Clear the view for everyone** and confirm.
+
+![Save view for everyone with Start collapsed](user-guide/images/save-view-collapsed.png)
 
 ![The Columns panel with the view line and Save view for everyone](user-guide/images/save-view.png)
 
@@ -981,6 +1005,7 @@ Which view you see:
 - Your own view when you changed the table, else the **view for everyone**, else the table's built-in view.
 - With your own view the panel reads "Your own view · **Use the view for everyone**". When a newer view for everyone has been saved since, it reads "A new view for everyone is available — **Use it**". **Reset layout** also goes back to the view for everyone.
 - Columns that no longer exist are ignored; columns added later come at the end and are shown.
+- Grouping and column filters: your own choice wins, also "no grouping". **Start collapsed** always comes from the view for everyone; you open and close groups as you like during your visit. A view saved before grouping existed keeps working.
 
 Without the right, with a read-only Git token, with the synthetic sample or in View as, the Save and Clear actions are not shown.
 

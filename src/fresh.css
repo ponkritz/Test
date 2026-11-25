@@ -1266,3 +1266,15 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .data-table-hscroll-spacer{height:1px}
 @media(forced-colors:active){.data-table-hscroll{background:Canvas;border-top-color:CanvasText;box-shadow:none}}
 @media print{.data-table-hscroll{display:none!important}}
+/* UI-25…UI-28: Group by and Filter by column of a DataTable (the On-Demand Table pages first): the group bar under the
+   toolbar, the filter row under the headings, and the group rows indented by their level — the QE Mapping's look. */
+.data-table-group-bar .inline-select{white-space:nowrap}.data-table-group-bar .inline-select select{max-width:200px}
+.data-table-filter-note{font-size:12px}
+.data-table .data-table-filters th{padding:4px 6px;background:var(--surface-2)}
+.data-table-filters input,.data-table-filters select{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
+.data-table-group td{background:var(--surface-2);font-weight:600}
+.data-table-group-1 td,.data-table-group-2 td,.data-table-group-3 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.data-table-group-toggle{font-weight:600;color:var(--heading)}
+.data-table-group-count{font-weight:400;font-size:12px}
+.data-table-save-summary{margin:0 0 12px;padding-left:18px;display:grid;gap:4px}
+@media print{.data-table-group-bar,.data-table-filters{display:none}}

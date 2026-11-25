@@ -1482,7 +1482,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-UI-15 Saved and cleared in the shared views defaults** — Req UI-20, UI-23 — L1 `table-views.test.mjs` ("views for everyone: saved and cleared in the shared views defaults with who and when; merged per entry (TC-UI-15)"); browser check: Save view for everyone writes `table:<id>` and `by:table:<id>` to `personal-views-defaults.json` with one commit, listed under Background jobs; Clear the view for everyone asks first and removes both.
 
-**TC-UI-16 The Tool Owner saves a table's view for everyone** — Req UI-20, UI-21, UI-22 — **UAT** — E2E `views-for-everyone.e2e.mjs` ("TC-UI-16: the Tool Owner saves the CoNQ table’s view for everyone; another person sees it first, keeps their own changes and can use the view for everyone again"); browser check: as the Tool Owner hide, move and widen columns of a table and sort it, Save view for everyone; on another browser as a Team Member open the table — the same columns, widths and sort, no Save option; tick a column back, reload — kept; Use the view for everyone — back.
+**TC-UI-16 The Tool Owner saves a table's view for everyone** — Req UI-20, UI-21, UI-22 — **UAT** — E2E `views-for-everyone.e2e.mjs` ("TC-UI-16: the Tool Owner saves the CoNQ table’s view for everyone; another person sees it first, keeps their own changes and can use the view for everyone again"); browser check: as the Tool Owner hide, move and widen columns of a table and sort it, Save view for everyone (on an On-Demand table confirmed in its pop-up, UI-28); on another browser as a Team Member open the table — the same columns, widths and sort, no Save option; tick a column back, reload — kept; Use the view for everyone — back.
 - L3 steps:
   1. Tool Owner (Git connected): CoNQ → Data → Columns: untick Sites, move Cost (EUR) above Category, drag the Category edge wider, sort by Found on (newest first), **Save view for everyone**.
   2. Second person (Team Member, another browser, first visit): open CoNQ → Data, then Columns.
@@ -1513,6 +1513,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
   - Step 3: at the table's end the sticky bar is gone and the table's own bar shows — never two bars; it comes back higher up.
 
 **TC-UI-19 Where the sticky scroll bar goes** — Req UI-24 — L1 `sticky-scrollbar.test.mjs` ("UI-24: the sticky scroll bar of a wide table sits right above the footer while the table’s bottom is out of view (TC-UI-19)", "UI-24: no sticky bar when the table fits, its bottom is in view or it has not scrolled into view yet; never two bars (TC-UI-19)", "UI-24: without a sticky footer (none, or a phone where it scrolls with the page) the bar sits at the window’s bottom; a clipping panel’s edge wins when higher (TC-UI-19)").
+
+**TC-UI-20 Group by, a column filter and Start collapsed saved for everyone** — Req UI-25, UI-26, UI-27, UI-28, OND-132 — **UAT** — E2E `table-group-filter.e2e.mjs` ("TC-UI-20: the Tool Owner saves Group by State → Assignee, a column filter and Start collapsed for everyone; another person sees it collapsed, opens a group, changes their own filter, and Reset layout brings the owner’s view back"); browser check: on an On-Demand Table page as the Tool Owner choose Group by State, then by Assignee, Filter by column → Sites = Berlin; Columns → Save view for everyone — the pop-up names the grouping and the filter; tick Start collapsed and save; on another browser as a Team Member open the page — only the State group rows with their counts, closed; open one group, then one of its Assignee groups; choose another Sites value — your own view (Reset layout shows); reload — kept; Reset layout — the owner's grouping, filter and the closed groups again.
+- L3 steps:
+  1. As the Tool Owner (or the page's co-owner with the right) on an On-Demand Table page: Group by State, then by Assignee; Filter by column, Sites = Berlin; Columns → Save view for everyone, tick Start collapsed, Save view for everyone.
+  2. As another person on another computer: open the page; open the State group Active, then one of its Assignee groups; set Sites to Leeds.
+  3. Reload the page, then Reset layout.
+- Expected:
+  - Step 1: the pop-up says "Group by: State → Assignee." and "Column filters: Sites “Berlin”."; the job under Background jobs says the view is saved for everyone.
+  - Step 2: at first only the outermost State groups with "(blank)" last and their row counts, closed (▸); opening shows the next level, then the rows; with Leeds the count and the groups follow, and "Reset layout" appears.
+  - Step 3: after the reload the own filter (Leeds) is kept; after Reset layout Berlin, State → Assignee and the closed groups are back.
+
+**TC-UI-21 Nested groups, (blank) last, a Multi-select row in each of its groups** — Req UI-25, QEM-11 — L1 `table-groups.test.mjs` ("UI-25: Group by nests up to four columns, outermost first, values in natural order with (blank) last and a count each (TC-UI-21)", "UI-25: a Multi-select row is in the group of each of its values; the counts of a level can add up to more than the rows (TC-UI-21)"), `qe-mapping.test.mjs` (the QE Mapping's grouping on the same code, TC-QEM-08); browser check: on an On-Demand page group by a Multi-select column — a row with two options shows under both, its count in both groups; Export holds it once; group by a Currency column — "1,200.00 EUR" and "1,200.00 USD" are two groups; with 2,000 rows (Sample, or a page filled with Upload Excel…) grouping and Expand all answer without a noticeable wait.
+
+**TC-UI-22 Filter by column** — Req UI-26 — L1 `table-groups.test.mjs` ("UI-26: Filter by column keeps rows whose value as shown contains the text in any case; a pick-list value matches exactly; filters add up (TC-UI-22)"); browser check: Filter by column — a text field per column ("rita" keeps Rita Gomez), a pick list for a Dropdown or Multi-select column ("Open" does not keep "Reopened"); with the search as well both apply and the count says how many rows are left; hide a filtered column with Columns — the line "… match the column filters on …" still names it; Clear column filters and Hide filters bring every row back.
+
+**TC-UI-23 Expand all and Collapse all** — Req UI-27 — L1 `table-groups.test.mjs` ("UI-27: groups open and close one by one; Expand all / Collapse all, each only when there is something to do; Collapse all leaves the outermost rows (TC-UI-23)"); E2E `table-group-filter.e2e.mjs` ("TC-UI-23: Expand all opens every level, Collapse all leaves the outermost group rows; each is disabled when there is nothing to do").
+
+**TC-UI-24 Grouping and filters in the view: precedence, Reset and older views** — Req UI-28, UI-22 — L1 `table-groups.test.mjs` ("UI-28: grouping, column filters and Start collapsed in the view: for everyone, my own wins, Reset, Start collapsed only for everyone (TC-UI-24)", "UI-28: older views without grouping or filters keep working and take them from the view for everyone; removed columns are ignored (TC-UI-24)"); browser check: with a view for everyone saved before this version (no grouping) the table opens as before; a person with their own older view sees the grouping saved for everyone afterwards; remove a grouped column in Set up columns… — the grouping drops that level without an error.
 
 **TC-INS-03 Accessibility markup** — Req UI-03, UI-04
 - Inspect the components.
@@ -1922,6 +1940,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-OND-101 Formula text in an uploaded file is stored as text** — Req OND-108 — L1 `bulk-upload.test.mjs` ("OND-108: text a spreadsheet would run as a formula is stored with an apostrophe first, as every CSV export does (TC-OND-101)"); browser check: a Text cell "=HYPERLINK(“http://example.com”;“x”)" and "@SUM(A1)" uploaded — the preview says "2 text values starting with =, +, - or @ are stored with an apostrophe first"; the saved rows show the text with the apostrophe and the table's Excel and CSV exports open as text in Excel; "-12.5" stays as it is.
 
 **TC-OND-102 Upload rights and limits** — Req OND-107 — L1 `bulk-upload.test.mjs` ("OND-107: the limits — 10 MB and .xlsx / .csv only before reading, 5,000 rows read, 2,000 added or updated, a page of at most 5,000 rows (TC-OND-102)"); browser check: a file of 11 MB is refused before it is read with the reason; an .xls file is refused ("Old .xls files cannot be read…"); a template with 2,001 new rows is refused whole ("2,001 rows would be added or updated; one upload changes at most 2,000…") and Save to Git stays disabled; in Sample, with View as, a read-only token, without Git storage or without "Edit On-Demand data", **Upload Excel…** is greyed out with the reason as its tooltip.
+
+**TC-OND-103 Grouped and filtered On-Demand rows: drawer, search and Export** — Req OND-132, UI-25, UI-26 — E2E `table-group-filter.e2e.mjs` ("TC-OND-103: on a grouped and filtered On-Demand table a row opens in the drawer with Previous / Next in the order shown, a text filter works with the search, and Export writes the filtered rows in the order of the groups"); browser check: group an On-Demand page by a Multi-select column and filter a text column; a row opens in the drawer with "n of m" over the rows shown; Edit and Hide in the row and a row locked by someone else (TC-OND-30) behave as without grouping; Export (Excel and CSV) holds the filtered rows once each, in the order of the groups, with a hidden grouped-by column included; the sticky scroll bar (TC-UI-18) follows the table when groups open and close.
 
 ### 6.29 Custom streams
 
@@ -2635,6 +2655,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-22 | TC-UI-14, TC-UI-16 |
 | UI-23 | TC-UI-15, TC-UI-17 |
 | UI-24 | TC-UI-18, TC-UI-19 |
+| UI-25 | TC-UI-20, TC-UI-21, TC-OND-103 |
+| UI-26 | TC-UI-20, TC-UI-22, TC-OND-103 |
+| UI-27 | TC-UI-20, TC-UI-23 |
+| UI-28 | TC-UI-20, TC-UI-24 |
 | CI-01…04 | TC-INS-04, TC-CI-01 |
 | CI-05 | TC-UPD-01 |
 | CI-06 | TC-CI-02 |
@@ -2875,6 +2899,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-106 | TC-OND-100 |
 | OND-107 | TC-OND-102 |
 | OND-108 | TC-OND-101 |
+| OND-132 | TC-UI-20, TC-OND-103 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -3084,13 +3109,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…24
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
-| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |
+| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
 | UC-16 | TC-UPD-01, TC-UPD-02 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |
@@ -3113,7 +3138,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…102, TC-CHT-01…42, TC-CHT-50…59 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…59 |, TC-UI-20
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…33 |

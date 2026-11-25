@@ -105,6 +105,16 @@ Approved by the product owner on 2026-11-23.
   the bottom of the screen, right above the sticky footer, while the table's own bottom is out of view; it goes when the
   bottom shows (never two bars). It comes with `DataTable` (UI-24) — no page builds its own; a hand-built wide table
   moves onto `DataTable` to get it.
+- **Group by and Filter by column** (approved 2026-11-25): a table that groups or filters by column gets both from
+  `DataTable` (`groupFilter`, UI-25…UI-28) — no page builds its own. They sit in one row under the toolbar: **Filter by
+  column** (ghost; **Hide filters** clears and hides) then **Group by** and **then by** (`inline-select`, up to four
+  levels) and, once grouped, **Expand all** / **Collapse all** (ghost, each disabled when there is nothing to do). The
+  filter row sits under the headings: a text field per column ("Filter…", contains, any case), a pick list ("All" and
+  the values) for a column with a list. A group row is ▸ / ▾ (`text-button`, `aria-expanded`), "Column: value" with
+  "(blank)" last and "n rows", indented 18 px per level. While a filter is set a line names the filtered columns with
+  **Clear column filters**. Grouping and filters are part of the table's view (Save view for everyone, with **Start
+  collapsed** in its pop-up); which groups are open is per visit. The QE Mapping keeps its own controls with the same
+  wording (QEM-03, QEM-06…11).
 - Inside a `TablePanel` the table's toolbar (filters, search, Columns, Export), its first column and the read-only
   reason line up with the panel's title; the table's lines run the full width (one shared rule, KB-93).
 
@@ -272,6 +282,7 @@ wrong for a real case as an Improvement to the standard.
 
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-25 | §5 Tables: **Group by and Filter by column** — built once into `DataTable` and switched on per table (the On-Demand Table pages first): one row under the toolbar with Filter by column, Group by / then by (up to four levels), Expand all / Collapse all; the filter row under the headings (text, or a pick list for a column with a list); group rows ▸ / ▾ with column, value, "(blank)" last and the count; part of the table's view with **Start collapsed** in the Save view for everyone pop-up ("Add Group by, Filter by Column options to the Table page defaults … Along with Group by we will need collapse and Expand as well", UI-25…UI-28, OND-132). | Product owner, 2026-11-25 |
 | 2026-11-25 | §5 Tables: **sticky horizontal scroll bar** — a table wider than its box keeps its horizontal scroll bar at the bottom of the screen right above the sticky footer while its own bottom is out of view, and it goes when the bottom shows; built once into `DataTable` for every table ("The horizontal scrolling should be sticky to above the footer", UI-24). | Product owner, 2026-11-25 |
 | 2026-11-25 | §6 Buttons: **⚙** added to the symbols as "open the setup of this page" — an icon-only `ghost` button in the page actions, `aria-label` and title the setup page's name, shown exactly when that Admin page is in the viewer's menu; first used by My PI Review and PI Review for Admin → PI Review Setup (PIR-29, PIR-30). | Product owner, 2026-11-25 |
 | 2026-11-25 | §12 Pre-selected — **an exception**: in the PI review form (Write review…, PIR-13) and the Close pop-up's PI review (PIR-18) **Move to next PI = No is pre-selected**, although the answer is posted to the Feature's Discussion for others to read ("Default Move to next PI = No"). The Review meeting advice keeps no default and must be chosen; the pre-selected No shows in the form and in the Preview before posting. | Product owner, 2026-11-25 |
