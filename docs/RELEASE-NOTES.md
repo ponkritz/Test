@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.44.0 — 2026-11-25
+
+**New**
+- **PI Review starts from 21 September 2026** (product owner, 25 Nov 2026: "Let's do the read discussions from 26.4, older PIs don't show [as an] option. Date filter is set to 21-September-2026") — PI Review and My PI Review offer only the PIs that had not ended by the date (by their Azure DevOps dates, else their number; PI 26.4 is the first), a remembered older PI falls back to the current one, comments before the date are ignored when the Discussions are read (the columns, the latest review, Reviewed and the prefill use only the later ones), and the next PI is never suggested before it. The date is shared in `pi-review-form.json` and changed on Admin → PI Review Setup with **Edit start date…** (PIR-33; PIR-02, PIR-05, PIR-07, PIR-19, PIR-25, PIR-26, PIR-29).
+- **Edit review… in My PI Review and on PI Review** (product owner, 25 Nov 2026: "if it is already written, give me a provision to edit it. In My PI Review"; then "Edit Review on both PI Review page + My PI Review page") — on PI Review in a Feature's row and its drawer, by the same rule; — your own newest review that counts for the chosen PI can be changed in place: the same form, prefilled; saving replaces that same comment in Azure DevOps (its date kept), as a Background jobs entry "Edit review · #id", audited and read back; a refused edit offers **Post as a new review instead**. Only the author's own review; the web app and the desktop proxy accept the update only as a PI review with the same HTML allowlist (PIR-34, PIR-17, IF-02).
+
+**Changed**
+- LIM-94: a review can now be edited by its author in My PI Review; the update call is an assumption recorded there.
+
+DF-335, DF-336; SM-192, SM-193, R-22, R-23; LIM-94, LIM-112; TC-PIR-34, TC-PIR-35 (UAT), TC-PIR-36, TC-PIR-06, TC-PIR-27.
+
+PR #426.
+
 ## v10.43.0 — 2026-11-25
 
 **Changed**
