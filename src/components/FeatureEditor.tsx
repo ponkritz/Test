@@ -55,8 +55,10 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // DPF-17: from a DP release, prefilled from its mapped date columns (DPF-13, DPF-14) — still changeable.
   const [startDate, setStartDate] = useState(dp?.start ?? '')
   const [targetDate, setTargetDate] = useState(dp?.target ?? '')
-  // DPF-16, DPF-17: from a DP release, the bulk pop-up's optional tick box (not ticked: the current month only).
-  const [fromStart, setFromStart] = useState(false)
+  // BKL-48 (DPF-16, DPF-17): the month Tasks tick box, in the Feature and Time Writing sections (one choice); not ticked:
+  // one Task, for the month shown. Ticked by default for a Feature; unticked on a DP release, as DP Create Features does.
+  const [fromStartChoice, setFromStartChoice] = useState<boolean | undefined>(undefined)
+  const fromStart = fromStartChoice ?? !dp
   const [monthHours, setMonthHours] = useState<Record<string, { plan: string; done: string }>>({})
   const [iterationPath, setIterationPath] = useState('')
   const [sprintPath, setSprintPath] = useState('')
@@ -78,7 +80,9 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // DPF-17: from a DP release the months follow the bulk rule (dpTaskMonths): the current month only, or ticked every
   // month from the Start date's month to the Target date's month, each exception in the note.
   let monthsNote = ''
-  if (dp && isNew && !monthsError) ({ months, note: monthsNote } = dpTaskMonths(fromStart, { ...(startDate ? { start: startDate } : {}), ...(targetDate ? { target: targetDate } : {}) }, baseMonth))
+  // DP: the bulk rule (DPF-18); any other Feature unticked: one Task, for the month shown (BKL-48).
+  if (isNew && !monthsError && dp) ({ months, note: monthsNote } = dpTaskMonths(fromStart, { ...(startDate ? { start: startDate } : {}), ...(targetDate ? { target: targetDate } : {}) }, baseMonth))
+  else if (isNew && !monthsError && !fromStart) months = [baseMonth]
   // The first month's Task is created with the hierarchy; the later ones follow (BKL-32).
   const monthLabel = months[0]
   const hoursOf = (label: string) => monthHours[label] ?? { plan: '', done: '' }
@@ -271,6 +275,11 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // The first section not done yet is the one to fill now; the last one (estimates) once the others are done.
   const current = wizard ? [0, 1, 2].find((index) => !done(index)) ?? 3 : -1
   const complete = !wizard || ready(3)
+  const dpSuffix = dp ? ', as DP Create Features does' : ''
+  const monthsChoice = (id: string) => <div className="dp-bulk-months nf-months-choice">
+    <label className="check"><input type="checkbox" checked={fromStart} disabled={creating} onChange={(event) => setFromStartChoice(event.target.checked)} aria-describedby={`${id}-help`} />Create Time Writing month Tasks from the Start date to the Target date</label>
+    <small id={`${id}-help`} className="muted">{fromStart ? `One Task per month from the Start date’s month to the Target date’s month (not before this month)${dpSuffix}.` : `Not ticked: one Time Writing Task, for ${baseMonth}${dpSuffix}.`}</small>
+  </div>
   const sectionClass = (index: number) => `nf-step${wizard ? index === current ? ' nf-current' : index < 3 && done(index) ? ' nf-done' : '' : ''}`
   const heading = (index: number) => wizard ? <h3 className="nf-section-title"><span aria-hidden="true">{index < 3 && done(index) ? '✓' : index + 1}</span>{steps[index]}{index === current && <small> — fill this in next</small>}</h3> : null
   const goOn = ['', 'Check the DoD, then Continue.', 'Choose the User Stories, then Continue.', 'Enter the hours if you know them, then Save.']
@@ -321,10 +330,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
           {isNew && <label>Target date<input name="targetDate" type="date" aria-label="Target date" value={targetDate} min={startDate || undefined} disabled={creating} onChange={(event) => setTargetDate(event.target.value)} title={dp ? `From the ${dp.targetLabel} of the release; you can change it.` : 'Time Writing Tasks are created for every month up to this one.'} />{dp && !targetDate && dp.targetNote && <small className="warning-text">{dp.targetNote}</small>}</label>}
         </div>
         {isNew && <p className={`muted nf-months${monthsError ? ' error-text' : ''}`} role={monthsError ? 'alert' : undefined}>{monthsError || <>Time Writing: {months.length === 1 ? <>one Task for <strong>{monthLabel}</strong></> : <>{months.length} month Tasks, <strong>{monthRange}</strong></>}{dp ? monthsNote ? ` (${monthsNote})` : '' : <>{startDate ? '' : ' (Start date empty: from today)'}{targetDate ? '' : ' — set a Target date to add the months up to it'}</>}.</>}</p>}
-        {isNew && dp && <div className="dp-bulk-months nf-dp-months">
-          <label className="check"><input type="checkbox" checked={fromStart} disabled={creating} onChange={(event) => setFromStart(event.target.checked)} aria-describedby="nf-dp-months-help" />Create Time Writing month Tasks from the Start date to the Target date</label>
-          <small id="nf-dp-months-help" className="muted">{fromStart ? 'One Task per month from the Start date’s month to the Target date’s month (not before this month), as DP Create Features does.' : `Not ticked: one Time Writing Task, for ${baseMonth}, as DP Create Features does.`}</small>
-        </div>}
+        {isNew && monthsChoice('nf-months')}
         {showPat ? <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => { setPat(event.target.value); setIterationChoices([]); setIterationPath(''); setSprintPath('') }} disabled={creating} /><small>Saved in this browser only. Enter it, then ↻ Reload the schedule.</small></label>
           : <p className="muted nf-pat">Using your saved Azure DevOps token. <button type="button" className="text-button" disabled={creating} onClick={() => setShowPat(true)}>Use another token</button></p>}
         {missingNote(0)}
@@ -350,17 +356,20 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
           </fieldset>
           <p className="muted nf-always">Always: {title.trim() ? <>“{title.trim()} - Time Writing” at {config.project} (project root), with the Task “{monthLabel} | {title.trim()}”{months.length > 1 ? ` and one for each month up to ${months[months.length - 1]}` : ''}{epicSetup.task.originalEstimate != null ? ` (${epicSetup.task.originalEstimate}h by default)` : ''}.</> : 'the Time Writing User Story and the month Task (enter the title to see them).'}</p>
         </> : null}
-        {<fieldset className="milestone-choices nf-own-story" disabled={creating}><legend>Your own User Story <small className="muted">(optional)</small></legend>
+        {/* BKL-49: collapsed until opened; the summary names the story once a title is typed. */}
+        <details className="nf-more nf-own-story-fold"><summary>Your own User Story <small className="muted">(optional){ownStory.title.trim() ? ` · ${ownStory.title.trim()}` : ''}</small></summary>
+        <fieldset className="milestone-choices nf-own-story" disabled={creating} aria-label="Your own User Story">
           <label>User Story title<input value={ownStory.title} maxLength={255} placeholder="Leave empty for none" onChange={(event) => setOwnStory((current) => ({ ...current, title: event.target.value }))} /></label>
           <label>User Story description<textarea value={ownStory.description} rows={2} placeholder="What needs to be done, and why" onChange={(event) => setOwnStory((current) => ({ ...current, description: event.target.value }))} /></label>
           <label>Comment <small className="muted">(optional, added to its Discussion)</small><textarea value={ownStory.comment} rows={2} onChange={(event) => setOwnStory((current) => ({ ...current, comment: event.target.value }))} /></label>
           <small className="muted">Created under {resumeFeature ? 'the' : 'the new'} Feature in the Sprint chosen, assigned like the Feature.</small>
-        </fieldset>}
+        </fieldset></details>
         {missingNote(2)}
         <p className="info-line"><Info label="Paths and assignment">Feature → {resumeFeature ? resumeFeature.iterationPath : iterationPath || 'the PI chosen'}. Optional User Stories → {sprintPath || 'the Sprint chosen'}. Time Writing story and Task → {config.project}, never the Sprint, in the Feature’s Area Path (the same on every page; an existing month Task of the person is reused). Area: the Feature and its User Stories take the Epic’s Area Path. Every new item is assigned to {assignee || 'the person chosen'}. {month ? `Time Writing month: ${monthLabel}.` : 'The current month is the UTC month.'}</Info></p>
       </section>
       {isNew && <section className={sectionClass(3)} hidden={!shown(3)} aria-label={`Section 4: Estimates for ${monthRange}`} tabIndex={-1}>
         {heading(3)}
+        {monthsChoice('nf-tw-months')}
         {months.length === 1 ? <>
           <p className="muted nf-hint">The hours of the Time Writing Task “{monthLabel} | {title.trim() || '…'}”. Both are optional; you can change them later.</p>
           {lateTask && <p className="muted adhoc-note">Planning for {monthLabel} is locked: the new Task is tagged <code>ad-hoc</code>.</p>}

@@ -1303,7 +1303,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .dp-bulk-months .check{margin:0;font-size:12px;color:var(--text)}
 .dp-bulk-months small{flex-basis:100%}
 /* DPF-17, EPS-10: the DP Time Writing tick box in New Feature, a story's Sprint (form and bulk row), Sprint from in Setup per Epic. */
-.nf-dp-months{margin-top:6px}
+.nf-months-choice{margin-top:6px}
 .nf-story-sprint{margin-left:8px;font-size:12px}
 .dp-story-sprints{display:block;font-size:11px}
 .efe-sprint-from{display:flex;align-items:center;gap:8px;margin:4px 0 0 32px;font-size:12px;color:var(--muted)}.efe-sprint-from select{width:auto;font-size:12px}

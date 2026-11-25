@@ -812,6 +812,10 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-36 Column order saved for everyone** — Req BKL-47, BKL-03 — L1 `personal-views.test.mjs` ("BKL-47: Save for everyone sets one entry (the QMS-0025 column order) in the defaults and keeps every other default (TC-BKL-36)"); E2E `backlog.e2e.mjs` ("TC-BKL-36: QMS-0025 starts on the column order saved for everyone; Apply keeps my own; Reset to the team default goes back"); browser check with Git storage as a Tool Owner: Save view for everyone (before v10.6 "Save for everyone") writes personal-views-defaults.json with the order and who and when (`by:backlog-columns`), listed under Background jobs; another person (no own order) sees it after a reload; Clear the view for everyone (confirmed) removes it; a person without the right sees no Save view for everyone.
 
+**TC-BKL-37 Month Tasks tick box in the Feature and Time Writing sections** — Req BKL-48, BKL-32 — E2E `backlog.e2e.mjs` ("TC-BKL-21: New Feature with a Start Date and a Target date asks for the hours of every month from the start to the target": the tick box in section 4 is ticked by default; unticked, one Task and no month table, and the same choice shows in section 1; ticked again, the months and the hours typed come back); `dp-single-create.e2e.mjs` (DP release: unticked by default, unchanged); browser check: New Feature from Backlogs with a Start and Target date three months apart, untick in section 4, Summary shows one month, Save creates one Task.
+
+**TC-BKL-38 Your own User Story starts collapsed** — Req BKL-49 — E2E `backlog.e2e.mjs` ("TC-BKL-15: New Feature offers your own User Story (title and description) under the new Feature": collapsed at first, its fields hidden; the summary opens it; with a title typed the summary names the story); browser check: New Feature → section 3 shows only the folded heading.
+
 **TC-BKL-14 Release number without "v" in Feature titles** — Req BKL-24 — L1 `release-source.test.mjs` ("Create Feature title from a release: \"Stream | Name | Release\" without a \"v\", mapping back to the release (BKL-24)"), `dp-board-match.test.mjs`, `cp-reporting.test.mjs`; browser check: Create Feature on a DP, CP and Windchill row pre-fills the title with the number and no "v".
 
 **TC-CON-45 Git view data with another query is not applied** — Req CON-77 — L1 `git-snapshots.test.mjs` ("a snapshot fetched with another query than the connection has here is not applied"); browser check:
@@ -2630,6 +2634,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-45 | TC-BKL-34 |
 | BKL-46 | TC-BKL-35 |
 | BKL-47 | TC-BKL-36 |
+| BKL-48 | TC-BKL-37 |
+| BKL-49 | TC-BKL-38 |
 | QV-01, QV-02 | TC-QV-01 |
 | QV-03, QV-05 | TC-QV-02 |
 | QV-04 | TC-FET-07 |
@@ -3333,7 +3339,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
-| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
+| UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-37, TC-BKL-38, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…25, TC-CON-72, TC-CON-74 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
