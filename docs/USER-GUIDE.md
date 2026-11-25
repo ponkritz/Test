@@ -236,6 +236,26 @@ Without a writable Git connection (not connected, a read-only token, or the synt
 
 *v10.18.1 · ADM-05*
 
+**Start and Target dates for DP bulk Features; Time Writing months to choose**
+
+DP **Create Features** now sets each Feature's **Start date** and **Target date** from the DP query: the **DRPE Date** (RPE, the Release Planning Event) and the **DDT Date** (DT, Design Transfer) unless the Tool Owner maps other date columns.
+
+To change the columns (roles with *Stream options*, Git connected):
+
+1. Open **Admin → Stream options → Bulk creation Epics**. Under **DP bulk creation dates** you see the two columns in use, with *— default* when they are the defaults.
+2. Choose **Edit dates…**, pick **Start date from** and **Target date from** — any column of the DP query whose name ends in "Date" (a prefix such as Custom.DRPEDate is fine).
+3. Choose **Save to Git**. It is saved for everyone at once.
+
+In the DP **Create Features** pop-up:
+
+1. Check the **Start date** and **Target date** columns. A release without a date is still created, without that date; its Result says so, for example *"no DDT Date — Target date left empty"*. A release whose Start date is after its Target date is **skipped**, with the reason.
+2. Leave **Create Time Writing month Tasks from the Start date to the Target date** unticked (the default) for one Task per Feature, for the current month, as before — or tick it for one Task per month from the **Start date's month** to the **Target date's month**. A month before the current one cannot get a new Task, so a release whose Start date is in an earlier month starts at the current month, and its **Time Writing Tasks** column says so, for example *"from Nov 2026 (Start Sep 2026 is before this month)"*; a release without a Start date also starts at the current month (*"no Start date"*). The total of Tasks is shown under the box; a release with more than 12 months is marked *"check the Target date"*.
+3. Choose **Create n Features**.
+
+The DP and IOCC **Create Features** pop-ups now fill the window, with a small margin and the page dimmed behind; only the list scrolls, so the title, **Cancel** and **Create** stay in view. On a phone they take the whole screen.
+
+*DPF-13…DPF-16 · UI-30*
+
 ### New for Windchill export pages
 
 **⋯ → Upload latest export…** (v10.25.0)
@@ -780,7 +800,7 @@ Every Release page looks the same, top to bottom:
 
 **Create Feature** on a release without a match opens the New Feature form, titled for that release. Load the QMS-0025 board first.
 
-**Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
+**Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. The DP and IOCC pop-ups fill the window; DP also sets each Feature's Start and Target dates (DRPE Date and DDT Date by default, set in Admin → Stream options → Bulk creation Epics → DP bulk creation dates) and, with an optional tick box (not ticked by default), creates a Time Writing Task for every month from the Start date's month to the Target date's month instead of the current month only. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
 
 **The QE of each release: the QE page** (DP and IOCC). The DP table's **QE** column and the QE pre-filled on each row of Create Features come from an **On-Demand Table page** — the team's **Resource Mapping** page, or any other. Set it once per bulk Epic (roles allowed to edit the shared Feature setup): **Admin → Epic & Feature setup → Setup per Epic → the DP or IOCC bulk Epic**, under User Stories:
 

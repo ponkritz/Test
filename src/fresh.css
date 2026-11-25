@@ -1285,3 +1285,19 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .od-list-pick small{font-weight:400;color:var(--muted)}
 /* LST-08: the On-Demand column editor gives the type room for "Multi-select (built-in list)" (not below 640 px). */
 @media(min-width:641px){.od-columns-form .od-column-head{grid-template-columns:minmax(0,1.6fr) minmax(0,1.7fr) auto auto}}
+/* UI-30: the full-size pop-up (Modal full) — long lists and bulk actions. A 20 px margin with the page dimmed behind and
+   rounded corners; the header and the actions stay, only .modal-scroll scrolls; the whole screen on a phone. */
+.modal-backdrop:has(.modal-full){padding:20px}
+.modal.modal-full{width:100%;height:100%;max-height:none;display:flex;flex-direction:column;overflow:hidden}
+.modal-full>.modal-heading{flex:none}
+.modal-full>:not(.modal-heading){flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+.modal-full>:not(.modal-heading)>*{flex:none;margin-bottom:0}
+.modal-full>:not(.modal-heading)>.modal-scroll{flex:1 1 auto;min-height:0;overflow:auto}
+.modal-full .modal-scroll thead th{position:sticky;top:0;z-index:1}
+.modal-full>:not(.modal-heading)>.button-row{justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px}
+@media(max-width:640px){.modal-backdrop:has(.modal-full){padding:0}.modal.modal-full{border-radius:0}}
+/* DPF-16: the optional Time Writing months tick box of DP bulk creation. */
+.dp-bulk-months{border:1px solid var(--line);border-radius:9px;padding:8px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin:0}
+.dp-bulk-months .check{margin:0;font-size:12px;color:var(--text)}
+.dp-bulk-months small{flex-basis:100%}
+.dp-bulk td.nowrap{white-space:nowrap}

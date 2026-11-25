@@ -81,10 +81,11 @@ export function IoccBulkCreate({ releases, azure, featureSetup, featureTitle, fe
     onClose()
   }
 
-  return <Modal eyebrow="IOCC RELEASES" wide title={`Create Features for ${releases.length} IOCC release${releases.length === 1 ? '' : 's'}`} onClose={onClose}>
+  // UI-30: full size like the DP pop-up — only the list scrolls between the fixed header and actions.
+  return <Modal eyebrow="IOCC RELEASES" full title={`Create Features for ${releases.length} IOCC release${releases.length === 1 ? '' : 's'}`} onClose={onClose}>
     <div className="dp-bulk">
       <p className="muted">Under Epic #{epicId}{epic ? ` “${epic.title}”` : ''}: each Feature gets {setup ? <>the DoD and User Stories of the {classes.label} chosen on its row (Admin → Epic &amp; Feature setup → Epic #{epicId}; a value without its own set uses the Epic’s default)</> : <>DP's built-in Release / PU sets (Epic #{epicId || '—'} has no Feature setup)</>}, its Time Writing story and month Task, all assigned to the person chosen on its row.</p>
-      <div className="azure-table"><table>
+      <div className="azure-table modal-scroll"><table aria-label="IOCC releases to create">
         <thead><tr><th scope="col">Release name</th><th scope="col">Version</th>{classes.values.length > 0 && <th scope="col">{classes.label}</th>}<th scope="col">Feature title</th><th scope="col">User Stories</th><th scope="col">QE</th><th scope="col">Result</th></tr></thead>
         <tbody>{plan.map((line) => <tr key={line.release.key} className={line.skip ? 'muted' : undefined}>
           <td>{line.release.name}</td>

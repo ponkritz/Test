@@ -544,6 +544,24 @@ export async function createFeatureFromSetup(config: AzureConfig, pat: string, i
   }
 }
 
+// DPF-16: a Feature with its children and a Time Writing Task for each of several months, by New Feature's path
+// (BKL-32): createFeatureFromSetup makes the Feature, its stories and the first month's Task; addMonthTasks adds one
+// Task for every later month. adhocOf tells, per month, whether its new Task is tagged ad-hoc (planning locked). A
+// failure part-way keeps what was made (HierarchyCreationError with the items) and says how to add the missing months.
+export async function createFeatureWithMonthTasks(config: AzureConfig, pat: string, input: FeatureInput, setup: SetupChildren, months: string[], adhocOf: (month: string) => boolean, transport: AzureTransport = requestAzure) {
+  if (!months.length) throw new Error('No Time Writing month to create a Task for.')
+  const [first, ...later] = months
+  const bundle = await createFeatureFromSetup(config, pat, input, setup, first, transport, adhocOf(first))
+  if (!later.length) return bundle
+  try {
+    const added = await addMonthTasks(config, pat, bundle.feature.id, input.assignedTo ?? '', later.map((month) => ({ month, adhoc: adhocOf(month) })), setup.task.originalEstimate, transport)
+    return { ...bundle, items: [...bundle.items, ...added] }
+  } catch (failure) {
+    const made = failure instanceof HierarchyCreationError ? failure.createdItems : []
+    throw new HierarchyCreationError(`Feature #${bundle.feature.id} and its ${first} Task exist. ${failure instanceof Error ? failure.message : 'A later month Task failed.'} Add the missing months with ＋ Time Writing Task.`, mergeAzureWorkItems(bundle.items, made))
+  }
+}
+
 // Changes a work item's state and/or iteration path, then reads it back and checks the change landed.
 export async function updateAzureWorkItem(config: AzureConfig, pat: string, workItemId: number, update: { state?: string; iterationPath?: string }, transport: AzureTransport = requestAzure): Promise<AzureWorkItem> {
   if (!pat.trim()) throw new Error('Enter a Work Items (Read & Write) PAT.')

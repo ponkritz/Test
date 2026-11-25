@@ -1542,6 +1542,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-UI-25 Rows in closed groups left out of Export, select all and Previous / Next** — Req UI-29, OND-132 — L1 `table-groups.test.mjs` ("UI-29: Export, “Select every row shown” and Previous / Next take only the rows visible — rows in closed groups left out until opened (TC-UI-25)"); E2E `table-group-filter.e2e.mjs` ("TC-UI-25: rows in a closed group are left out of Export and of Previous / Next (also from Edit), and come back when the group is opened"); browser check: group an On-Demand page by State and close one group — Export's tooltip and menu say "Exports the n rows shown (m rows in closed groups left out)" and the file holds only the rows shown; a row's drawer (from a click and from Edit) counts and steps over the rows shown only; open the group — the note goes and Export holds every matching row again. "Select every row shown" (a table with a selection column and grouping — none today, LIM-103) uses the same rows, covered by the L1 test.
 
+**TC-UI-26 Full-size pop-up for bulk Create Features** — Req UI-30, UI-18 — L1 `dp-bulk-dates.test.mjs` ("UI-30: the DP and IOCC Create Features pop-ups are the full-size Modal, their list the part that scrolls (TC-UI-26)"); E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: …": at 1440×900 the DP pop-up is at least 90% of the window with a margin around it, the list fits without scrolling sideways, and its heading, ×, Cancel and Create stay in view while the list scrolls); browser check: the IOCC Create Features pop-up looks the same; Escape and × close it, Tab stays inside, dark theme; at phone width it takes the whole screen.
+
 **TC-INS-03 Accessibility markup** — Req UI-03, UI-04
 - Inspect the components.
 - Expected:
@@ -1782,6 +1784,16 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-DPF-10 Release Classification detected from the release number** — Req DPF-11, DPF-08 — L1 `class-rules.test.mjs` ("DPF-11: the value detected from x.0, x.y, x.y.z and x.y.z.w; a leading v; not numeric gives none (TC-DPF-10)", "DPF-11: without rules, today’s behaviour — the value named like the release type (TC-DPF-10)", "DPF-11: DP and IOCC bulk rows are prefilled by the rules, the hint value kept, a pick still wins (TC-DPF-10)"), `class-sets.test.mjs` ("DPF-08: bulk rows — the classification prefilled from the release number…"); E2E `classification-rules.e2e.mjs` ("TC-DPF-09: …": the rows' values and hints); browser check: IOCC Create Features pre-fills by the IOCC bulk Epic's rules and shows "detected from …"; a pick of another value shows "{detected} detected from …".
 
 **TC-DPF-11 Release name, Version, Release Classification first** — Req DPF-12, DPF-04 — E2E `classification-rules.e2e.mjs` ("TC-DPF-09: …": the setup's field order, the Create Features columns and the DP release table's first columns); `documents-and-data.e2e.mjs` ("TC-QV-43: …": DP Select first, then Release name, Version, Release Classification (detected)); browser check: the IOCC release table shows Select, Release name, Version, Release Classification (detected), then Approved; without a mapped IOCC bulk Epic the classification is "—".
+
+**TC-DPF-12 DP bulk creation dates set in Bulk creation Epics** — Req DPF-13 — L1 `dp-bulk-dates.test.mjs` ("DPF-13: the date columns are set in the shared settings, kept by field name; older files use DRPE Date and DDT Date (TC-DPF-12)", "DPF-13: the date columns offered — the query’s …Date columns by field name (prefix allowed), the DP milestone dates always (TC-DPF-12)"); E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: …": the defaults shown, Start from DRPC Date committed to planning-data.json, back to DRPE Date not stored); browser check: without a writable Git connection Edit dates… is disabled with the reason; a role without Stream options sees the summary read only.
+
+**TC-DPF-13 Start and Target dates read per release, missing dates flagged** — Req DPF-14 — L1 `dp-bulk-dates.test.mjs` ("DPF-14: a date column’s value is read as a date only, its UTC day (TC-DPF-13)", "DPF-14: a missing or unreadable date leaves that date empty with a note and does not stop the row (TC-DPF-13)"); E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: …": the Start date and Target date columns, "no DDT Date — Target date left empty", StartDate and TargetDate in the Feature's create body, none for a missing date).
+
+**TC-DPF-14 Start date after Target date skips the release** — Req DPF-15 — L1 `dp-bulk-dates.test.mjs` ("DPF-15: a Start date after the Target date is an error for the row, with the reason (TC-DPF-14)"); E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: …": the release is listed as Skipped with the reason and not created).
+
+**TC-DPF-15 Time Writing Tasks: current month, or optionally every month from the Start date's month** — Req DPF-16, BKL-31, BKL-32 — L1 `dp-bulk-dates.test.mjs` ("DPF-16: Time Writing Tasks — unticked the current month only; ticked every month from the Start date’s month to the Target month, never before this month, each exception said (TC-DPF-15)", "DPF-16: a bulk Feature gets its dates and one Time Writing Task per chosen month, by New Feature’s path (TC-DPF-15)", "DPF-16: a later month failing keeps what was made and says how to add the rest (TC-DPF-15)"); E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: …": not ticked by default, one Task per Feature; ticked, Tasks from the Start date's month, a Start date in an earlier month and no Start date both from the current month with the reason on the row); browser check: a row with more than 12 months is marked "n month Tasks: check the Target date"; a month whose planning has locked gets its Task tagged ad-hoc.
+
+**TC-DPF-16 DP bulk creation with dates and Time Writing months** — Req DPF-13, DPF-14, DPF-15, DPF-16, UI-30 — **UAT** — E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: the Tool Owner maps the DP dates (saved to Git); DP Create Features sets Start = DRPE Date and Target = DDT Date, one Time Writing Task per Feature unticked, or one per month from the Start date’s month to the Target month ticked"); UAT: in Admin → Stream options → Bulk creation Epics → DP bulk creation dates check the defaults (DRPE Date, DDT Date), Edit dates… and Save to Git; on Release Details → DP tick releases with and without a DDT Date (and one whose DRPE Date is after its DDT Date), Create Features: the pop-up fills the window, the Start date and Target date columns show the dates, the missing one is named and the late one skipped; leave "Create Time Writing month Tasks from the Start date to the Target date" unticked (the default) and Create; in Azure DevOps each Feature has the Start Date and Target Date and one month Task for the current month; repeat with the box ticked on releases whose DRPE Date is next month and last month: one Task per month from the DRPE month (the release of last month from the current month, as its row said) up to the DDT month.
 
 **TC-CNB-01 Content Features in bulk** — Req CNB-01, DPF-05 — L1 `content-bulk.test.mjs` ("CNB-01: Content bulk Features — under the mapped Content bulk Epic (none built in), the DoD, one Review of Deliverables story, 4 h; a 100% Feature match is never created, a closer one is named (BLK-01)"); browser check with QMS-0025 (a test Epic first, mapped as the Content bulk creation Epic, QV-59): Release Details → Content: releases with a Feature matching 100 % cannot be ticked; Select all shown, Create Features → the list shows each Feature title, with similar Features named; after Create each Feature is under the mapped Content bulk Epic with "Release Classification : NA", "Feature DoD: All Documents are approved", one "Review of Deliverables - <title>" story in the current Sprint and the month Task with 4 h Original Estimate.
 
@@ -2793,6 +2805,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UI-27 | TC-UI-20, TC-UI-23 |
 | UI-28 | TC-UI-20, TC-UI-24 |
 | UI-29 | TC-UI-25 |
+| UI-30 | TC-UI-26, TC-DPF-16 |
 | CI-01…04 | TC-INS-04, TC-CI-01 |
 | CI-05 | TC-UPD-01 |
 | CI-06 | TC-CI-02 |
@@ -2927,6 +2940,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | DPF-10 | TC-DPF-09 |
 | DPF-11 | TC-DPF-10, TC-DPF-09 |
 | DPF-12 | TC-DPF-11, TC-DPF-09 |
+| DPF-13 | TC-DPF-12, TC-DPF-16 |
+| DPF-14 | TC-DPF-13, TC-DPF-16 |
+| DPF-15 | TC-DPF-14, TC-DPF-16 |
+| DPF-16 | TC-DPF-15, TC-DPF-16 |
 | CNB-01 | TC-CNB-01, TC-QV-40 |
 | CNB-02 | TC-CNB-02 |
 | EPS-01 | TC-EPS-01, TC-EPS-02 |
@@ -3321,7 +3338,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-29 | TC-OVW-01…03 |
 | UC-30 | TC-CVA-01…03 |
 | UC-31 | TC-KPT-01…03 |
-| UC-32 | TC-DPF-01…04, TC-DPF-05, TC-DPF-06, TC-DPF-07, TC-DPF-08, TC-DPF-09, TC-DPF-10, TC-DPF-11 |
+| UC-32 | TC-DPF-01…04, TC-DPF-05, TC-DPF-06, TC-DPF-07, TC-DPF-08, TC-DPF-09, TC-DPF-10, TC-DPF-11, TC-DPF-12…16, TC-UI-26 |
 | UC-33 | TC-CNB-01, TC-CNB-02 |
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
