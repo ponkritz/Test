@@ -145,10 +145,13 @@ type Section = string
 // PIR-11: the sections the keyword fallback suggests.
 type KeywordSection = 'struggles' | 'learnings' | 'move'
 const gap = String.raw`[ \t]+`
-// PIR-12: the PI named in a Move heading ("… shifted to PI 26.4"), any number, so every review's next PI is read.
-const piNumber = String.raw`pi(?:[ \t]*\d+(?:\.\d+)*)?`
-// PIR-28: the reviewed PI named in a heading — "PI" and its number ("PI 26.4", "PI 2026.4").
-const reviewedPiNumber = String.raw`pi[ \t]*\d+(?:\.\d+)*`
+// PIR-12: the PI named in a Move heading ("… shifted to PI 26.4"), any number, so every review's next PI is read;
+// written "PI 26.4", "PI26.4", "PI-26.4" or "PI.26.4" (PIR-25's spellings).
+const piSeparator = String.raw`[ \t]*[._-]?[ \t]*`
+const piNumber = String.raw`pi(?:${piSeparator}\d+(?:\.\d+)*)?`
+// PIR-28: the reviewed PI named in a heading — "PI" and its number ("PI 26.4", "PI 2026.4", "PI.26.4").
+const reviewedPiNumber = String.raw`pi${piSeparator}\d+(?:\.\d+)*`
+const piNumberIn = /(?<![\p{L}\p{N}])pi[ \t]*[._-]?[ \t]*(\d+(?:\.\d+)*)/iu
 // PIR-12: "of the Feature" after a heading word ("Learnings of the Feature", "Struggles of this feature"); PIR-28: or the
 // reviewed PI ("Learnings of PI 26.4", "Struggles for PI 26.4", "… for the PI 26.4").
 const of = String.raw`(?:[ \t]+(?:of|for)[ \t]+(?:(?:the|this)[ \t]+feature|(?:the[ \t]+)?${reviewedPiNumber}))?`
@@ -185,13 +188,16 @@ const moveQuestion = headingWords.find((word) => word.pattern.includes('whether'
 const moveQuestionLine = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}(${moveQuestion})[ \t]*\??[ \t]*${bold}[ \t]+(?=(?:yes|no|partly|partially)(?![\p{L}\p{N}]))`, 'gimu')
 // PIR-19, PIR-20: the patterns of one list of heading words — the built-in ones (PIR-08, PIR-12, PIR-15), after the
 // headings of the PI Review form setup when one is in use (so a configured heading wins where both would match).
-interface HeadingPatterns { line: RegExp; inline: RegExp; dash: RegExp; tests: { section: Section; test: RegExp }[] }
+// PIR-12: tight — "Learning-good exposure, Struggle-long list CRs": Learning(s), Struggle(s), Lesson(s) learnt directly
+// followed by a dash and text, at the start of a line or after a comma, semicolon or full stop.
+interface HeadingPatterns { line: RegExp; inline: RegExp; dash: RegExp; tight: RegExp; tests: { section: Section; test: RegExp }[] }
 function patternsOf(words: HeadingWord[]): HeadingPatterns {
   const names = (pick: (word: HeadingWord) => boolean | undefined) => `(${words.filter(pick).map((word) => word.pattern).join('|')})`
   return {
     line: new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${names(() => true)}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu'),
     inline: new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.inline)}[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu'),
     dash: new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.dash)}[ \t]*\??[ \t]*${bold}[ \t]*[\-–—][ \t]+${bold}`, 'giu'),
+    tight: new RegExp(String.raw`(?<=^[ \t]*(?:[-*•+][ \t]*)?|[,;.][ \t]*)${bold}${names((word) => word.dash)}${bold}[ \t]*[\-–—](?=[ \t]*[\p{L}\p{N}])[ \t]*`, 'gimu'),
     tests: words.map((word) => ({ section: word.section, test: new RegExp(`^(?:${word.pattern})$`, 'iu') })),
   }
 }
@@ -235,6 +241,8 @@ function patternsFor(setup: PiFormSetup | undefined): HeadingPatterns {
   if (!found) { found = patternsOf([...configured, ...headingWords]); if (setupPatterns.size > 20) setupPatterns.clear(); setupPatterns.set(key, found) }
   return found
 }
+// PIR-12: "None", "Nil" (also "Nill", "N/A", "NA") alone is read as none — the same as "None" written by the form.
+export const isNoneText = (text: string | undefined) => /^(?:none|nil+|n\/?a)[ \t]*\.?$/i.test((text ?? '').trim())
 const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]|\d{1,2}[.)])\s+/, '')).filter(Boolean).join('\n')
 // The Move value: the text starts with yes / y, no / n or partly / partially / partial (any case), followed by the end,
 // a space or punctuation (so "N/A", "Not decided" and "Nothing" give no value).
@@ -259,20 +267,28 @@ function byHeadings(text: string, setup?: PiFormSetup): { split: ReviewSplit; fo
   text = withoutFooter(text)
   const patterns = patternsFor(setup)
   const sectionOf = (name: string): Section => patterns.tests.find((entry) => entry.test.test(name))?.section ?? 'struggles'
-  const found = new Map<number, { section: Section; start: number; end: number; pi?: string }>()
+  const found = new Map<number, { section: Section; start: number; end: number; pi?: string; tight?: boolean }>()
   for (const pattern of [patterns.line, moveQuestionLine, patterns.inline, patterns.dash]) {
     pattern.lastIndex = 0
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       const at = match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase())
-      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length, pi: /(?<![\p{L}\p{N}])pi[ \t]*(\d+(?:\.\d+)*)/iu.exec(match[1])?.[1] })
+      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length, pi: piNumberIn.exec(match[1])?.[1] })
     }
   }
+  // PIR-12: the tight form ("Learning-good exposure, Struggle-long list CRs") only when it gives both Learnings and
+  // Struggles — alone, "Learning-curve was steep" or "the lesson-plan" are words, not headings.
+  const tight: { at: number; section: Section; start: number; end: number }[] = []
+  patterns.tight.lastIndex = 0
+  for (let match = patterns.tight.exec(text); match; match = patterns.tight.exec(text)) tight.push({ at: match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase()), section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length })
+  if (new Set(tight.map((entry) => entry.section)).size >= 2) for (const { at, ...entry } of tight) found.set(at, { ...(found.get(at) ?? entry), tight: true })
   // A heading inside another (e.g. "went well" in "What went well:") is dropped: the first, longest one counts.
-  const headings: { section: Section; start: number; end: number; pi?: string }[] = []
+  const headings: { section: Section; start: number; end: number; pi?: string; tight?: boolean }[] = []
   for (const heading of [...found.values()].sort((a, b) => a.start - b.start || b.end - a.end)) if (!headings.length || heading.start >= headings[headings.length - 1].end) headings.push(heading)
   const split: ReviewSplit = {}
   headings.forEach((heading, index) => {
-    const body = tidy(text.slice(heading.end, headings[index + 1]?.start ?? text.length))
+    // Before a tight heading on the same line ("Learning-good exposure, Struggle-…"), the comma or semicolon is dropped.
+    const raw = text.slice(heading.end, headings[index + 1]?.start ?? text.length)
+    const body = tidy(headings[index + 1]?.tight && !/\n/.test(raw) ? raw.replace(/[ \t]*[,;][ \t]*$/, '') : raw)
     // PIR-20: a field added in the form setup has its text under extra, by its id.
     if (body && builtInSections.includes(heading.section)) { const section = heading.section as BuiltInSection; split[section] = split[section] ? `${split[section]}\n${body}` : body }
     else if (body) { const extra = split.extra ??= {}; extra[heading.section] = extra[heading.section] ? `${extra[heading.section]}\n${body}` : body }

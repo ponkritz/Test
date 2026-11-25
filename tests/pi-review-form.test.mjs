@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildReviewComment, emptyReviewForm, escapeHtml, formSetupProblems, myReviewOf, noneChoice, otherPiHint, paragraphItems, prefilledOtherPi, reviewCountOf, reviewPeriodOf, withNoTexts, nextPi, nextPiOf, pisPerYear, otherPersonBlock, personOf, piDates, piText, postReview, readBackReview, reviewFormFrom, reviewFormProblems, reviewPageBlock, reviewPostBlock } from '../src/piReviewPost.ts'
+import { buildReviewComment, emptyReviewForm, escapeHtml, formSetupProblems, myReviewOf, noneChoice, otherPiHint, paragraphItems, prefilledOtherPi, reviewCountOf, reviewPeriodOf, withNoTexts, nextPi, nextPiOf, pisPerYear, otherPersonBlock, personOf, piDates, piText, postReview, readBackReview, reviewFormFrom, reviewFormProblems, reviewPageBlock, reviewPostBlock, reviewSummary, piPeriods, leftOutNote } from '../src/piReviewPost.ts'
 import { reviewModeOf, reviewSplit, splitReviewComment, reviewFooter } from '../src/piReview.ts'
 import { piPathOf } from '../src/myWork.ts'
 import { builtInFormSetup } from '../src/piReviewSetup.ts'
@@ -117,30 +117,47 @@ test('PIR-25: the number fallback — the last PI of a year rolls over to the ne
   assert.equal(nextPi('Q\\PI 26.4', ['Q\\PI 25.6']), 'PI 26.5', 'six PIs a year known: mid-year')
   assert.equal(nextPi('Q\\PI 26.6', ['Q\\PI 25.6']), 'PI 27.1')
   assert.equal(nextPi('Q\\PI 7', []), 'PI 8', 'a single number adds one')
-  const none = nextPiOf('Q\\PI 26.4', null, ['Q\\PI 26.3', 'Q\\PI 26.4'])
-  assert.deepEqual(none, { pi: 'PI 27.1', source: 'number', note: 'The PI dates are not read from Azure DevOps here: worked out from the PI number — PI 26.4 is the last PI of its year (4 a year), so the next is PI 27.1.' })
-  const mid = nextPiOf('Q\\PI 26.2', [it('Q\\PI 26.1', '2026-01-05', '2026-03-29'), it('Q\\PI 26.2', '2026-03-30', '2026-06-28')], [])
-  assert.deepEqual(mid, { pi: 'PI 26.3', source: 'number', note: 'No later PI has dates in Azure DevOps: worked out from the PI number.' })
+  // Without the iterations today's PI is not known: the reviewed PI's number, said so (a warning).
+  const none = nextPiOf('Q\\PI 26.4', null, ['Q\\PI 26.3', 'Q\\PI 26.4'], { today: autumn })
+  assert.deepEqual(none, { pi: 'PI 27.1', source: 'number', note: 'The PI dates are not read from Azure DevOps here, so today’s PI is not known. Used instead: PI 26.4, the reviewed PI — worked out from the PI number — PI 26.4 is the last PI of its year (4 a year), so the next is PI 27.1.', short: 'PI dates missing in Azure DevOps — check this PI.', missing: true })
+  // Today's PI found, no later PI dated or in the tree: today's PI's number rolls over.
+  const rollover = nextPiOf('Q\\PI 2026.3', [it('Q\\PI 2026.3', '2026-07-06', '2026-10-04'), it('Q\\PI 2026.4\\Sprint 1', '2026-10-05', '2027-01-03')], [], { today: autumn })
+  assert.deepEqual([rollover.pi, rollover.source, rollover.missing], ['PI 2027.1', 'number', true])
+  assert.match(rollover.note, /^From Azure DevOps iteration dates: today \(.+\) is in PI 2026\.4 \(.+ – .+\), but no later PI has dates: worked out from the PI number — PI 2026\.4 is the last PI of its year \(4 a year\), so the next is PI 2027\.1\.$/)
+  const mid = nextPiOf('Q\\PI 26.2', [it('Q\\PI 26.1', '2026-01-05', '2026-03-29'), it('Q\\PI 26.2', '2026-03-30', '2026-06-28')], [], { today: new Date('2026-05-01T12:00:00Z') })
+  assert.equal(mid.pi, 'PI 26.3')
+  assert.match(mid.note, /but no later PI has dates: worked out from the PI number — the next after PI 26\.2 is PI 26\.3\.$/)
 })
 
-// PIR-25: PI names — "PI 26.4", "PI 2026.4", "PI26.4", "PI-26.4" and "Program Increment 27.1" are PIs with numbers; a
-// name without a PI number is never chosen and the note names it.
-test('PIR-25: PI names — read with or without a space, in both year formats; a name without a PI number is left out and named (TC-PIR-32)', () => {
-  assert.deepEqual(['Q\\PI 26.4\\Sprint 1', 'Q\\PI 2026.4', 'Q\\PI26.4\\Sprint 2', 'Q\\PI 27.1', 'Q\\Program Increment 27.1', 'Q\\Pipeline\\Sprint 1', 'Q\\API2'].map(piPathOf),
-    ['Q\\PI 26.4', 'Q\\PI 2026.4', 'Q\\PI26.4', 'Q\\PI 27.1', 'Q\\Program Increment 27.1', undefined, undefined])
-  assert.deepEqual(['PI26.4', 'PI-26.4', 'Program Increment 27.1', 'PI Planning', 'PI Q4 2026', 'PI 26.4 (draft)'].map(piText), ['PI 26.4', 'PI 26.4', 'PI 27.1', '', '', ''])
-  // PI26.4 dated by its Sprints: the next is PI27.1, written "PI 27.1".
-  const tight = nextPiOf('Q\\PI26.4', [it('Q\\PI26.4\\Sprint 1', '2026-07-01', '2026-09-30'), it('Q\\PI27.1\\Sprint 1', '2026-10-01', '2026-10-14')], [])
-  assert.deepEqual([tight.pi, tight.source], ['PI 27.1', 'dates'])
-  // A dated PI without a number before the next one is named; an undated one in the number fallback too.
-  const named = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI Planning', '2026-10-01', '2026-10-02'), it('Q\\PI 27.1', '2026-10-05', '2026-12-31')], [])
+// PIR-25 (product owner's photo of real data, 25 Nov 2026): PI names — "PI 26.4", "PI 2026.4", "PI26.4", "PI-26.4",
+// "PI.26.4", "Program Increment 27.1", any Unicode space, zero-width characters, full-width digits, other dots and text
+// before or after the number; a year node ("2026\PI 26.4") is no PI; the same PI in two subtrees is one PI; "PI 26.2.1"
+// is a Sprint of PI 26.2; a name without a PI number is never chosen and the note names at most five.
+test('PIR-25: PI names — spaces, dots and decorations around the number; year nodes, two subtrees and Sprint names; left out at most five (TC-PIR-32)', () => {
+  assert.deepEqual(['Q\\PI 26.4\\Sprint 1', 'Q\\PI 2026.4', 'Q\\PI26.4\\Sprint 2', 'Q\\PI 27.1', 'Q\\Program Increment 27.1', 'Q\\Pipeline\\Sprint 1', 'Q\\API2', 'Q\\2026\\PI 26.4\\Sprint 3', 'Q\\2026'].map(piPathOf),
+    ['Q\\PI 26.4', 'Q\\PI 2026.4', 'Q\\PI26.4', 'Q\\PI 27.1', 'Q\\Program Increment 27.1', undefined, undefined, 'Q\\2026\\PI 26.4', undefined])
+  const names = ['PI26.4', 'PI-26.4', 'PI.26.4', 'PI_26.4', 'Program Increment 27.1', 'PI 25.1', 'PI 25.1', 'PI  25.1', 'PI​ 25.1', 'ＰＩ ２５．１', 'PI 25․1', 'PI 25.1 (Jan–Mar)', 'PI 25.1 - Q1', 'Release PI 25.1', 'PI 26.4 (draft)', 'PI 26.2.1']
+  assert.deepEqual(names.map(piText), ['PI 26.4', 'PI 26.4', 'PI 26.4', 'PI 26.4', 'PI 27.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 25.1', 'PI 26.4', 'PI 26.2.1'])
+  assert.deepEqual(['PI Planning', 'PI Q4 2026', 'API2', 'PI 26.4x', '2026', ''].map(piText), ['', '', '', '', '', ''])
+  // The real tree's shape: year nodes, the same PIs in a second subtree (Team B), names with a non-breaking space or a
+  // dot, a Sprint named after its PI, PI 26.4 dated by its Sprints.
+  const real = [it('P\\2025'), it('P\\2025\\PI 25.1', '2025-01-06', '2025-04-06'), it('P\\Team B\\2025\\PI 25.1', '2025-01-01', '2025-04-01'), it('P\\2025\\PI.25.2', '2025-04-07', '2025-07-06'),
+    it('P\\2026'), it('P\\2026\\PI 26.2'), it('P\\Sprints\\PI 26.2.1', '2026-04-06', '2026-04-19'), it('P\\2026\\PI 26.4'), it('P\\2026\\PI 26.4\\Sprint 1', '2026-10-05', '2026-10-18'), it('P\\2026\\PI 26.4\\Sprint 6', '2026-12-21', '2027-01-03'),
+    it('P\\2027\\PI 27.1', '2027-01-04', '2027-04-04'), it('P\\Team B\\2027\\PI 27.1', '2027-01-04', '2027-04-04'), it('P\\2027\\PI 27.2 (Apr–Jun)', '2027-04-05', '2027-07-04')]
+  const periods = piPeriods(real)
+  assert.deepEqual(periods.dated.map((entry) => [entry.pi, entry.start, entry.finish]), [['PI 25.1', '2025-01-01', '2025-04-06'], ['PI 25.2', '2025-04-07', '2025-07-06'], ['PI 26.2', '2026-04-06', '2026-04-19'], ['PI 26.4', '2026-10-05', '2027-01-03'], ['PI 27.1', '2027-01-04', '2027-04-04'], ['PI 27.2', '2027-04-05', '2027-07-04']])
+  assert.deepEqual([periods.undated, periods.unnamed], [[], []], 'no year node, no Sprint name, nothing left out')
+  const next = nextPiOf('P\\2026\\PI 26.4', real, [], { today: autumn })
+  assert.deepEqual([next.pi, next.source, next.missing], ['PI 27.1', 'dates', false])
+  assert.doesNotMatch(next.note, /Left out/)
+  // Names without a number: never chosen, each once, at most five named.
+  const unnamed = [it('Q\\PI 26.4', '2026-10-05', '2027-01-03'), ...['PI Planning', 'PI Alpha', 'PI Beta', 'PI Gamma', 'PI Delta', 'PI Epsilon', 'PI Planning'].map((name) => it(`Q\\${name}`, '2027-01-04', '2027-01-05')), it('Q\\PI 27.1', '2027-01-06', '2027-04-04')]
+  const named = nextPiOf('Q\\PI 26.4', unnamed, [], { today: autumn })
   assert.equal(named.pi, 'PI 27.1')
-  assert.match(named.note, / Left out \(no PI number in the name\): PI Planning\.$/)
-  const undatedName = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI Q1 2027')], [])
-  assert.equal(undatedName.pi, 'PI 27.1')
-  assert.match(undatedName.note, /so the next is PI 27\.1\. Left out \(no PI number in the name\): PI Q1 2027\.$/)
-  // PI 26.4 and PI 2026.4 are the same PI: the Feature's spelling finds the tree's dates.
-  assert.equal(nextPiOf('Q\\PI 26.4', [it('Q\\PI 2026.4', '2026-07-01', '2026-09-30'), it('Q\\PI 2027.1', '2026-10-05', '2026-12-31')], []).source, 'dates')
+  assert.match(named.note, / Left out \(no PI number in the name\): PI Planning, PI Alpha, PI Beta, PI Gamma, PI Delta and 1 more\.$/)
+  assert.equal(leftOutNote(['PI 25.1', 'PI 25.2', 'Q\\2026']), ' Left out (no PI number in the name): Q\\2026.', 'never a name that has a PI number')
+  // PI 26.4 and PI 2026.4 are the same PI.
+  assert.equal(nextPiOf('Q\\PI 26.4', [it('Q\\PI 2026.4', '2026-10-05', '2027-01-03'), it('Q\\PI 2027.1', '2027-01-04', '2027-04-04')], [], { today: autumn }).pi, 'PI 2027.1')
 })
 
 test('PIR-13: the form starts from the latest review split by headings; Partly starts at No (TC-PIR-14)', () => {
@@ -234,91 +251,97 @@ test('PIR-17: my latest review — the newest comment I wrote with the review he
   assert.equal(myReviewOf(comments, undefined), undefined)
 })
 
-// PIR-25: the next PI from the Azure DevOps iteration tree by its dates (synthetic iterations).
+// PIR-25: the next PI from the Azure DevOps iteration tree by its dates (synthetic iterations). Product owner, 25 Nov
+// 2026: always from today's PI, never from the reviewed PI — `today` is injected.
 const it = (path, start, finish) => ({ name: path.split('\\').at(-1), path, ...(start ? { attributes: { startDate: `${start}T00:00:00Z`, finishDate: `${finish}T00:00:00Z` } } : {}) })
-test('PIR-25: the next PI is the dated PI that starts first after the reviewed PI ends — not the next number (TC-PIR-25)', () => {
-  const tree = [it('Q'), it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 26.5', '2027-01-04', '2027-03-28'), it('Q\\PI 27.1', '2026-10-01', '2026-12-31'), it('Q\\PI 26.3', '2026-04-01', '2026-06-30')]
-  const next = nextPiOf('Q\\PI 26.4', tree, ['Q\\PI 26.4', 'Q\\PI 26.5', 'Q\\PI 27.1'])
-  assert.equal(next.pi, 'PI 27.1', 'by the dates, although PI 26.5 is the next number')
-  assert.equal(next.source, 'dates')
-  assert.match(next.note, /^From Azure DevOps iteration dates: PI 27\.1 starts .+, after PI 26\.4 ends .+\.$/)
-  // An unsorted tree (and other letter case) gives the same answer.
-  assert.equal(nextPiOf('q\\pi 26.4', [...tree].reverse(), []).pi, 'PI 27.1')
-  // A PI without a number is skipped.
-  assert.equal(nextPiOf('Q\\PI 26.4', [...tree, it('Q\\PI Planning', '2026-10-01', '2026-10-02')], []).pi, 'PI 27.1')
+const autumn = new Date('2026-11-25T23:30:00Z')
+const piTreeDated = [it('Q'), it('Q\\PI 26.3', '2026-07-06', '2026-10-04'), it('Q\\PI 26.4', '2026-10-05', '2027-01-03'), it('Q\\PI 27.2', '2027-04-05', '2027-07-04'), it('Q\\PI 27.1', '2027-01-04', '2027-04-04'), it('Q\\PI 26.5')]
+test('PIR-25: the next PI is the dated PI starting next after today’s PI — whatever PI is reviewed (TC-PIR-25)', () => {
+  const expected = { pi: 'PI 27.1', source: 'dates', note: `From Azure DevOps iteration dates: today (${formatDate('2026-11-25')}) is in PI 26.4 (${formatDate('2026-10-05')} – ${formatDate('2027-01-03')}); the next PI is PI 27.1, starting ${formatDate('2027-01-04')}.`, short: 'From the Azure DevOps dates.', missing: false }
+  assert.deepEqual(nextPiOf('Q\\PI 26.4', piTreeDated, ['Q\\PI 26.4', 'Q\\PI 26.5'], { today: autumn }), expected, 'the reviewed PI is today’s PI; PI 26.5 (undated, the next number) is not chosen')
+  assert.deepEqual(nextPiOf('Q\\PI 26.3', piTreeDated, [], { today: autumn }), expected, 'a reviewed PI older than today’s PI')
+  assert.deepEqual(nextPiOf('Q\\PI 27.2', piTreeDated, [], { today: autumn }), expected, 'a reviewed PI newer than today')
+  assert.deepEqual(nextPiOf('Q\\Big Room PI', piTreeDated, [], { today: autumn }), expected, 'a reviewed PI without a number')
+  assert.deepEqual(nextPiOf('', piTreeDated, [], { today: autumn }), expected, 'no reviewed PI')
+  // The product owner's example: a Feature of PI 26.4 reviewed on 10 Jan 2027 (in PI 27.1) gets PI 27.2.
+  assert.equal(nextPiOf('Q\\PI 26.4', piTreeDated, [], { today: new Date('2027-01-10T08:00:00Z') }).pi, 'PI 27.2')
+  // An unsorted tree in other letter case gives the same answer; today is taken in UTC.
+  assert.equal(nextPiOf('q\\pi 26.4', [...piTreeDated].reverse(), [], { today: new Date('2027-01-03T23:59:00Z') }).pi, 'PI 27.1')
+  assert.equal(nextPiOf('Q\\PI 26.4', piTreeDated, [], { today: new Date('2027-01-04T00:00:00Z') }).pi, 'PI 27.2')
 })
 
 test('PIR-25: dated only by its Sprints — a PI takes the span of the dated iterations under it; its own dates win (TC-PIR-25)', () => {
   const tree = [it('Q\\PI 26.4'), it('Q\\PI 26.4\\Sprint 1', '2026-07-01', '2026-07-14'), it('Q\\PI 26.4\\Sprint 6', '2026-09-16', '2026-09-30'), it('Q\\PI 26.5'), it('Q\\PI 26.5\\Sprint 1', '2026-10-01', '2026-10-14')]
   assert.deepEqual(piDates(tree).get('q\\pi 26.4'), { path: 'Q\\PI 26.4', start: '2026-07-01', finish: '2026-09-30' })
-  const next = nextPiOf('Q\\PI 26.4', tree, [])
+  const next = nextPiOf('Q\\PI 26.4', tree, [], { today: new Date('2026-08-01T12:00:00Z') })
   assert.deepEqual([next.pi, next.source], ['PI 26.5', 'dates'])
   assert.deepEqual(piDates([it('Q\\PI 26.4\\Sprint 1', '2000-01-01', '2099-12-31'), it('Q\\PI 26.4', '2026-07-01', '2026-09-30')]).get('q\\pi 26.4'), { path: 'Q\\PI 26.4', start: '2026-07-01', finish: '2026-09-30' })
+  assert.deepEqual(piPeriods([it('Q\\PI 26.4\\Sprint 1', '2000-01-01', '2099-12-31'), it('Q\\PI 26.4', '2026-07-01', '2026-09-30')]).dated, [{ pi: 'PI 26.4', parts: [26, 4], start: '2026-07-01', finish: '2026-09-30' }])
 })
 
-test('PIR-25: overlapping dates — the earliest start after the reviewed PI’s start, said so (TC-PIR-25)', () => {
-  const tree = [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 26.6', '2026-12-01', '2027-02-28'), it('Q\\PI 26.5', '2026-09-20', '2026-12-15'), it('Q\\PI 26.3', '2026-06-01', '2026-07-15')]
-  const next = nextPiOf('Q\\PI 26.4', tree, [])
+test('PIR-25: overlapping dates — the earliest start after today’s PI’s start, said so (TC-PIR-25)', () => {
+  const tree = [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 26.6', '2026-12-01', '2027-02-28'), it('Q\\PI 26.5', '2026-09-20', '2026-12-15'), it('Q\\PI 26.3', '2026-06-01', '2026-06-30')]
+  const next = nextPiOf('Q\\PI 26.3', tree, [], { today: new Date('2026-08-15T12:00:00Z') })
   assert.equal(next.pi, 'PI 26.5', 'the overlapping PI, not the first one starting after PI 26.4 ends')
-  assert.match(next.note, /^From Azure DevOps iteration dates: PI 26\.5 starts .+, while PI 26\.4 runs until .+ \(the PIs overlap\)\.$/)
+  assert.match(next.note, /^From Azure DevOps iteration dates: today \(.+\) is in PI 26\.4 \(.+ – .+\); the next PI is PI 26\.5, starting .+ while PI 26\.4 runs until .+ \(the PIs overlap\)\.$/)
   // The same start: the lower PI number first.
-  assert.equal(nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 27.2', '2026-10-01', '2026-12-31'), it('Q\\PI 27.1', '2026-10-01', '2026-12-31')], []).pi, 'PI 27.1')
+  assert.equal(nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 27.2', '2026-10-01', '2026-12-31'), it('Q\\PI 27.1', '2026-10-01', '2026-12-31')], [], { today: new Date('2026-08-15T12:00:00Z') }).pi, 'PI 27.1')
 })
 
-test('PIR-25: the fallback to the PI number — no iterations, no dates, the reviewed PI not in the tree, no later dated PI (TC-PIR-25)', () => {
-  const options = ['Q\\PI 26.4', 'Q\\PI 26.5']
-  assert.deepEqual(nextPiOf('Q\\PI 26.4', null, options), { pi: 'PI 26.5', source: 'number', note: 'The PI dates are not read from Azure DevOps here: PI 26.5 is the next PI by number in the PI list.' })
-  assert.match(nextPiOf('Q\\PI 26.4', null, options, { reading: true }).note, /^The PI dates are still being read/)
-  const summer = new Date('2026-08-01T12:00:00Z')
-  const undated = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4'), it('Q\\PI 26.5'), it('Q\\PI 26.4\\Sprint 1')], ['Q\\PI 26.4'], { today: summer })
-  assert.deepEqual(undated, { pi: 'PI 26.5', source: 'number', note: 'PI 26.4 has no dates in Azure DevOps (neither its own nor its Sprints’), and no PI has dates covering today: PI 26.5 is the next PI by number in the Azure DevOps iteration tree (it has no dates).' })
-  const missing = nextPiOf('Q\\PI 26.4', [it('Q\\PI 27.1', '2026-10-01', '2026-12-31')], ['Q\\PI 26.4', 'Q\\PI 27.1'], { today: summer })
-  assert.deepEqual(missing, { pi: 'PI 27.1', source: 'number', note: 'PI 26.4 is not in the Azure DevOps iteration tree, and no PI has dates covering today: PI 27.1 is the next PI by number in the Azure DevOps iteration tree.' })
-  // Unreadable dates count as none; no reviewed PI gives nothing.
-  assert.equal(nextPiOf('Q\\PI 26.4', [{ name: 'PI 26.4', path: 'Q\\PI 26.4', attributes: { startDate: 'soon', finishDate: '' } }], [], { today: summer }).source, 'number')
-  assert.deepEqual(nextPiOf('', [], []), { pi: '', source: 'number', note: '' })
+// PIR-25: today's PI not found by the dates — never silently: the note says the dates were missing and what was used,
+// the short line is a warning (missing), and Moves to stays editable.
+test('PIR-25: today in no PI, today in two PIs, an undated tree — the fallbacks, said so (TC-PIR-32)', () => {
+  const gap = [it('Q\\PI 26.3', '2026-04-01', '2026-06-30'), it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 26.5'), it('Q\\PI 27.1', '2027-01-04', '2027-03-31')]
+  const none = nextPiOf('Q\\PI 26.3', gap, [], { today: autumn })
+  assert.deepEqual(none, { pi: 'PI 26.5', source: 'number', note: `The PI dates are missing: no PI in Azure DevOps has dates covering today (${formatDate('2026-11-25')}). Used instead: PI 26.4, the latest PI that ended before today (${formatDate('2026-09-30')}) — PI 26.5 is the next PI by number in the Azure DevOps iteration tree (it has no dates).`, short: 'PI dates missing in Azure DevOps — check this PI.', missing: true })
+  // No undated PI after it: the number rollover from it (the dated PI 27.1 is not chosen by number).
+  const rolled = nextPiOf('Q\\PI 26.3', gap.filter((entry) => entry.path !== 'Q\\PI 26.5'), [], { today: autumn })
+  assert.equal(rolled.pi, 'PI 27.1')
+  assert.match(rolled.note, /Used instead: PI 26\.4, the latest PI that ended before today \(.+\) — worked out from the PI number — PI 26\.4 is the last PI of its year \(4 a year\), so the next is PI 27\.1\.$/)
+  // Two PIs current today.
+  const two = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.3', '2026-07-06', '2026-10-04'), it('Q\\PI 26.4', '2026-10-05', '2027-01-03'), it('Q\\PI 26.9', '2026-11-01', '2026-11-30'), it('Q\\PI 26.5')], [], { today: autumn })
+  assert.deepEqual([two.pi, two.source, two.missing], ['PI 26.5', 'number', true])
+  assert.match(two.note, /^The PI dates do not decide: 2 PIs have dates covering today \(.+\) — PI 26\.4, PI 26\.9\. Used instead: PI 26\.3, the latest PI that ended before today/)
+  // An undated tree: only the reviewed PI is known.
+  const undated = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.4'), it('Q\\PI 26.5'), it('Q\\PI 26.4\\Sprint 1')], ['Q\\PI 26.4'], { today: autumn })
+  assert.deepEqual(undated, { pi: 'PI 26.5', source: 'number', note: 'The PI dates are missing: no PI in the Azure DevOps iteration tree has dates. Used instead: PI 26.4, the reviewed PI — PI 26.5 is the next PI by number in the Azure DevOps iteration tree (it has no dates).', short: 'PI dates missing in Azure DevOps — check this PI.', missing: true })
+  assert.deepEqual(nextPiOf('', [it('Q\\PI 26.4')], [], { today: autumn }), { pi: '', source: 'number', note: 'The PI dates are missing: no PI in the Azure DevOps iteration tree has dates, and no PI is known to work it out from.', short: 'PI dates missing in Azure DevOps — check this PI.', missing: true })
+  // Without the iterations: still being read, or not read.
+  const reading = nextPiOf('Q\\PI 26.4', null, ['Q\\PI 26.4', 'Q\\PI 26.5'], { reading: true, today: autumn })
+  assert.deepEqual([reading.pi, reading.short], ['PI 26.5', 'PI dates still being read — by the PI number for now.'])
+  assert.match(reading.note, /^The PI dates are still being read from Azure DevOps, so today’s PI is not known yet\. Used instead: PI 26\.4, the reviewed PI — PI 26\.5 is the next PI by number in the PI list\.$/)
+  // Unreadable dates count as none; nothing known gives nothing.
+  assert.equal(nextPiOf('Q\\PI 26.4', [{ name: 'PI 26.4', path: 'Q\\PI 26.4', attributes: { startDate: 'soon', finishDate: '' } }], [], { today: autumn }).missing, true)
+  assert.deepEqual(nextPiOf('', null, [], { today: autumn }), { pi: '', source: 'number', note: 'The PI dates are not read from Azure DevOps here, so today’s PI is not known, and no PI is known to work it out from.', short: 'PI dates missing in Azure DevOps — check this PI.', missing: true })
 })
 
-// PIR-25 (product owner, 25 Nov 2026: "fetch the date, identify the PI and the period of that PI and then look for the
-// next period"): the reviewed PI without dates — the period of the PI that covers today (UTC).
-test('PIR-25: the reviewed PI without dates — the PI whose dates cover today gives the period, said so (TC-PIR-32)', () => {
-  const today = new Date('2026-11-25T23:30:00Z')
-  const dated = [it('Q\\PI 2026.3', '2026-07-06', '2026-10-04'), it('Q\\PI 2026.4\\Sprint 1', '2026-10-05', '2026-10-18'), it('Q\\PI 2026.4\\Sprint 6', '2026-12-21', '2027-01-03'), it('Q\\PI 2027.2', '2027-04-05', '2027-07-04'), it('Q\\PI 2027.1', '2027-01-04', '2027-04-04')]
-  // The Feature's PI 2026.5 is not in the tree (a typo): today falls in PI 2026.4, the next after it by number and dates is PI 2027.1.
-  const typo = nextPiOf('Q\\PI 2026.5', [...dated, it('Q\\PI 2026.5')], [], { today })
-  assert.deepEqual([typo.pi, typo.source], ['PI 2027.1', 'dates'])
-  assert.match(typo.note, /^From Azure DevOps iteration dates, by today’s PI: PI 2026\.5 has no dates in Azure DevOps \(neither its own nor its Sprints’\); today \(.+\) falls in PI 2026\.4 \(.+ – .+\), and PI 2027\.1 starts .+, after PI 2026\.4 ends .+\.$/)
-  // An older undated PI reviewed late: today's PI comes after it, so it is the next PI.
-  const late = nextPiOf('Q\\PI 2026.2', dated, [], { today })
-  assert.equal(late.pi, 'PI 2026.4')
-  assert.match(late.note, /falls in PI 2026\.4 \(.+\), which comes after PI 2026\.2\.$/)
-  // A reviewed PI without a number: the PI after today's.
-  const plain = nextPiOf('Q\\Big Room PI', [it('Q\\Big Room PI'), ...dated], [], { today })
-  assert.equal(plain.pi, 'PI 2027.1')
-  // Two PIs current today: no period from today; the number fallback.
-  const two = nextPiOf('Q\\PI 2026.5', [...dated, it('Q\\PI 2026.9', '2026-11-01', '2026-11-30')], [], { today })
-  assert.equal(two.source, 'number')
-  assert.match(two.note, /^PI 2026\.5 is not in the Azure DevOps iteration tree, and 2 PIs are current today: PI 2026\.9 is the next PI by number/)
-  // Today's PI with no later dated PI: the PIs in the tree by number.
-  const alone = nextPiOf('Q\\PI 2026.5', [it('Q\\PI 2026.4', '2026-10-05', '2027-01-03'), it('Q\\PI 2027.1')], [], { today })
-  assert.deepEqual([alone.pi, alone.source], ['PI 2027.1', 'number'])
-  assert.match(alone.note, /falls in PI 2026\.4, and no later PI has dates: PI 2027\.1 is the next PI by number in the Azure DevOps iteration tree \(it has no dates\)\.$/)
-})
-
-// PIR-25: no later PI has dates, but the tree holds later PIs without dates — the next one by number among them.
-test('PIR-25: no later PI with dates — the next PI by number among the PIs in the tree, else the year rollover (TC-PIR-32)', () => {
+// PIR-25: today's PI without a later dated PI — the next undated PI by number in the tree after it.
+test('PIR-25: no later PI with dates — the next PI by number among the undated PIs in the tree after today’s PI (TC-PIR-32)', () => {
   const sprints = [it('Q\\PI 26.3', '2026-04-01', '2026-06-30'), it('Q\\PI 26.4'), it('Q\\PI 26.4\\Sprint 1', '2026-07-01', '2026-07-14'), it('Q\\PI 26.4\\Sprint 6', '2026-09-16', '2026-09-30')]
-  const future = nextPiOf('Q\\PI 26.4', [...sprints, it('Q\\PI 27.2'), it('Q\\PI 27.1'), it('Q\\PI 27.1\\Sprint 1')], [])
-  assert.deepEqual(future, { pi: 'PI 27.1', source: 'number', note: 'No later PI has dates in Azure DevOps: PI 27.1 is the next PI by number in the Azure DevOps iteration tree (it has no dates).' })
-  const last = nextPiOf('Q\\PI 26.4', [it('Q\\PI 26.3', '2026-04-01', '2026-06-30'), it('Q\\PI 26.4', '2026-07-01', '2026-09-30'), it('Q\\PI 26.5')], [])
-  assert.deepEqual(last, { pi: 'PI 26.5', source: 'number', note: 'No later PI has dates in Azure DevOps: PI 26.5 is the next PI by number in the Azure DevOps iteration tree (it has no dates).' })
-  // Nothing later at all: the year rolls over — the product owner's case, PI 2026.4 → PI 2027.1.
-  const rollover = nextPiOf('Q\\PI 2026.4', [it('Q\\PI 2026.3', '2026-04-01', '2026-06-30'), it('Q\\PI 2026.4\\Sprint 1', '2026-07-01', '2026-09-30')], [])
-  assert.deepEqual(rollover, { pi: 'PI 2027.1', source: 'number', note: 'No later PI has dates in Azure DevOps: worked out from the PI number — PI 2026.4 is the last PI of its year (4 a year), so the next is PI 2027.1.' })
-  // Own dates and Sprint span: a future PI dated only by its Sprints is found by the dates.
-  const bySprints = nextPiOf('Q\\PI 26.4', [...sprints, it('Q\\PI 27.1'), it('Q\\PI 27.1\\Sprint 1', '2026-10-05', '2026-10-18')], [])
+  const summer = new Date('2026-08-01T12:00:00Z')
+  const future = nextPiOf('Q\\PI 26.3', [...sprints, it('Q\\PI 27.2'), it('Q\\PI 27.1'), it('Q\\PI 27.1\\Sprint 1')], [], { today: summer })
+  assert.deepEqual([future.pi, future.source, future.missing], ['PI 27.1', 'number', true])
+  assert.match(future.note, /^From Azure DevOps iteration dates: today \(.+\) is in PI 26\.4 \(.+\), but no later PI has dates: PI 27\.1 is the next PI by number in the Azure DevOps iteration tree \(it has no dates\)\.$/)
+  // A future PI dated only by its Sprints is found by the dates.
+  const bySprints = nextPiOf('Q\\PI 26.4', [...sprints, it('Q\\PI 27.1'), it('Q\\PI 27.1\\Sprint 1', '2026-10-05', '2026-10-18')], [], { today: summer })
   assert.deepEqual([bySprints.pi, bySprints.source], ['PI 27.1', 'dates'])
-  assert.match(bySprints.note, /^From Azure DevOps iteration dates: PI 27\.1 starts .+, after PI 26\.4 ends .+\.$/)
+  assert.match(bySprints.note, /the next PI is PI 27\.1, starting .+\.$/)
+})
+
+// PIR-13 (product owner, 25 Nov 2026: "When I select No, it should not show the next PI"): with No the Reason is not
+// posted (kept in the form) and Moves to is not checked; the heading still names the next PI.
+test('PIR-13: Move to next PI = No — the reason kept but not posted, Moves to not asked; the heading names the next PI (TC-PIR-14)', () => {
+  const no = { ...form, move: 'No', moveReason: 'typed while Yes', movePi: 'PI 27.1', reviewedPi: 'PI 26.4' }
+  const html = buildReviewComment(no)
+  assert.match(html, /<li>Whether the feature needs to be shifted to PI 27\.1 : No<\/li>/)
+  assert.doesNotMatch(html, /typed while Yes/)
+  assert.deepEqual(reviewFormProblems(no), [])
+  assert.deepEqual(reviewFormProblems({ ...no, movePi: '' }), [], 'Moves to is hidden with No: not checked')
+  assert.match(buildReviewComment({ ...no, movePi: '' }), /shifted to the next PI : No/)
+  assert.deepEqual(reviewFormProblems({ ...no, move: 'Yes', movePi: '' }), ['Enter the PI it moves to as “PI” and its number, e.g. PI 26.5.'])
+  assert.match(buildReviewComment({ ...no, move: 'Yes' }), /shifted to PI 27\.1 : Yes<ul><li>typed while Yes<\/li><\/ul>/)
+  assert.equal(reviewSummary(no), 'Move to next PI No, Discuss during Meeting')
+  assert.equal(reviewSummary({ ...no, move: 'Yes' }), 'Move to next PI Yes (to PI 27.1), Discuss during Meeting')
 })
 
 // PIR-24: My PI Review's Person filter.
