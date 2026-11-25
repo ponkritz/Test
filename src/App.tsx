@@ -16,7 +16,7 @@ import { usePersonalViews } from './usePersonalViews'
 import { ThemeToggle } from './components/Clock'
 import { DataNotices, DataStatus } from './components/DataStatus'
 import { JobsIndicator } from './components/JobsIndicator'
-import { pages, pageGroups, pageMeta, type Page } from './pages/registry'
+import { navKeyOf, pages, pageGroups, pageMeta, readCollapsedNav, type Page } from './pages/registry'
 import { MyDashboardPage } from './pages/MyDashboardPage'
 import { HomePage } from './pages/HomePage'
 import { loadStartView, saveStartView, startPageOf, visibleTiles, type HomeLink, type HomeTile, type StartView } from './homeTiles'
@@ -116,7 +116,6 @@ const WindchillPage = lazy(() => import('./components/WindchillViews').then((mod
 const WindchillExportImport = lazy(() => import('./components/WindchillViews').then((module) => ({ default: module.WindchillExportImport })))
 const SprintCheckPage = lazy(() => import('./pages/SprintCheckPage').then((module) => ({ default: module.SprintCheckPage })))
 const menuMiniKey = 'demand-planning-menu-mini-v1'
-const legacyNavKeys = ['release:ads', 'release:windchill']
 
 
 export default function App() {
@@ -369,8 +368,9 @@ export default function App() {
   const toggleMenuMini = () => setMenuMini((current) => { const next = !current; try { localStorage.setItem(menuMiniKey, next ? '1' : '0') } catch { /* this visit only */ } return next })
   useEffect(() => { setNavOpen(false) }, [page, viewId, windchillId, onDemandId])
   useEffect(() => { if (!navOpen) return; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false) }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [navOpen])
-  // NAV-52: the Release Details sub-lists of earlier versions (release:ads, release:windchill) are gone; their stored keys are dropped.
-  const [collapsed, setCollapsed] = useState<string[]>(() => { try { const saved = JSON.parse(localStorage.getItem('demand-planning-nav-collapsed-v1') ?? '[]'); return Array.isArray(saved) ? saved.filter((key): key is string => typeof key === 'string' && !legacyNavKeys.includes(key)) : [] } catch { return [] } })
+  // NAV-52, NAV-53: the Release Details sub-lists of earlier versions (release:ads, release:windchill) and the I&D Board
+  // heading that held QMS-0025 and Backlog Health are gone; their stored keys are dropped.
+  const [collapsed, setCollapsed] = useState<string[]>(() => { try { return readCollapsedNav(localStorage.getItem('demand-planning-nav-collapsed-v1')) } catch { return [] } })
   const saveCollapsed = (next: string[]) => { try { localStorage.setItem('demand-planning-nav-collapsed-v1', JSON.stringify(next)) } catch { /* this visit only */ } return next }
   const toggleNav = (key: string) => setCollapsed((now) => saveCollapsed(now.includes(key) ? now.filter((entry) => entry !== key) : [...now, key]))
   // Expand all / Collapse all (NAV-37): every heading at once.
@@ -379,7 +379,7 @@ export default function App() {
   const navGroups: string[] = pageGroups.flatMap((group): string[] => group === 'On-Demand' ? [group, ...customGroups.map((entry) => entry.name)] : [group])
   const groupIdOf = (name: string) => builtInGroupOf(name) || customGroups.find((entry) => entry.name === name)?.id || ''
   const groupNameOf = (id: string) => findGroup(menu.layout, id)?.name ?? 'On-Demand'
-  const navKeys = navGroups
+  const navKeys = navGroups.map(navKeyOf)
   const allCollapsed = navKeys.every((key) => collapsed.includes(key))
   const navButton = (key: string, icon: string, label: string, active: boolean, onClick: () => void) => <button key={key} title={menuMini ? label : undefined} className={active ? 'nav-active' : ''} aria-current={active ? 'page' : undefined} onClick={onClick}><span className="nav-icon">{icon}</span>{label}</button>
   // PGB-04: the added pages of a group that the viewer sees — the On-Demand area (all added pages share it, CON-103), in
@@ -458,17 +458,20 @@ export default function App() {
   ] : []
   const settingsLinks: HomeLink[] = settingsPagesFor(access.can).map((entry) => ({ key: `settings:${entry.key}`, label: entry.label, icon: pageMeta('admin').icon, open: () => openSettings(entry.key) }))
   const homeTiles = visibleTiles([
-    tileOf({ key: 'mywork', title: 'My Work', detail: 'Time Writing, your tasks, the Sprint check and your PI reviews.', tone: 'sky', open: firstAllowed('activities', 'mywork'), links: [...pageLink('activities'), ...pageLink('mywork'), ...pageLink('bulk'), ...pageLink('mypireview'), ...addedLinks('my-work')], ...(my.known && azure.items.length ? { badge: `${my.pending.length} open` } : {}) }),
+    // NAV-53: My Work ends with the Time Writing backlog (QMS-0025), as in the menu.
+    tileOf({ key: 'mywork', title: 'My Work', detail: `Time Writing, your tasks, the Sprint check, your PI reviews and the ${timeWriting.name} backlog.`, tone: 'sky', open: firstAllowed('activities', 'mywork'), links: [...pageLink('activities'), ...pageLink('mywork'), ...pageLink('bulk'), ...pageLink('mypireview'), ...(access.sees('board') ? [{ key: 'board', label: timeWriting.name, icon: pageMeta('board').icon, open: () => openView(timeWriting.id) }] : []), ...addedLinks('my-work')], ...(my.known && azure.items.length ? { badge: `${my.pending.length} open` } : {}) }),
     tileOf({ key: 'mydash', title: 'My dashboard', detail: 'Your hours against your capacity, your open work and your streams.', tone: 'peach', open: firstAllowed('mydash'), links: [] }),
     tileOf({ key: 'insights', title: 'Team Insights', detail: 'Team overview, Pulse Check and PI Review.', tone: 'lilac', links: [...pageLink('overview'), ...pageLink('pulse'), ...pageLink('pireview'), ...pageLink('kpitracker'), ...addedLinks('data-insights')] }),
-    tileOf({ key: 'board', title: 'I&D Board', detail: 'The QMS-0025 backlog and its health.', tone: 'mint', open: allowed('board') && access.sees('board') ? () => openView(timeWriting.id) : undefined, links: [...(access.sees('board') ? [{ key: 'board', label: timeWriting.name, icon: pageMeta('board').icon, open: () => openView(timeWriting.id) }] : []), ...pageLink('health'), ...addedLinks('i-d-board'), ...addedLinks('other-views')] }),
+    // NAV-53: I&D Board has no page of its own any more: its tile is shown only while it (or Other views) holds added pages.
+    tileOf({ key: 'board', title: 'I&D Board', detail: 'Pages added to I&D Board and Other views.', tone: 'mint', links: [...addedLinks('i-d-board'), ...addedLinks('other-views')] }),
     tileOf({ key: 'release', title: 'Release Details', detail: 'The releases of each stream: DP, CP, IOCC, Content, Tool Validations and the Windchill exports.', tone: 'lemon', links: [...streamLinks, ...addedLinks('release-details')] }),
     tileOf({ key: 'planning', title: 'Planning & Baselines', detail: 'Release baselines against booked hours, and the pages being tried out.', tone: 'teal', links: [...pageLink('baselines'), ...pageLink('planover'), ...pageLink('capactual'), ...addedLinks('testing')] }),
     tileOf({ key: 'qe', title: 'QE Mapping', detail: 'Which QE covers which platform or product.', tone: 'rose', open: firstAllowed('qemapping'), links: [] }),
     tileOf({ key: 'ondemand', title: 'On-Demand', detail: 'Tables the team sets up itself: CoNQ (Cost of Non-Quality) and more.', tone: 'peach', links: addedLinks('on-demand') }),
     // PGB-04: a tile for each group of your own, with its pages.
     ...customGroups.map((group) => tileOf({ key: `group:${group.id}`, title: group.name, detail: `Pages added to ${group.name}.`, tone: 'lilac', links: addedLinks(group.id) })),
-    tileOf({ key: 'records', title: 'Snapshots & Documents', detail: 'Point-in-time snapshots and the project documents of this build.', tone: 'sand', links: [...pageLink('snapshots'), ...pageLink('docs'), ...addedLinks('data-governance')] }),
+    // NAV-53: Backlog Health is linked here, after Snapshots and before Documentation (its menu group is Data & governance).
+    tileOf({ key: 'records', title: 'Snapshots & Documents', detail: 'Point-in-time snapshots, Backlog Health and the project documents of this build.', tone: 'sand', links: [...pageLink('snapshots'), ...pageLink('health'), ...pageLink('docs'), ...addedLinks('data-governance')] }),
     tileOf({ key: 'admin', title: 'Admin', detail: 'Streams, Epic & Feature setup, people and roles, capacity, reports and sharing.', tone: 'sky', open: () => openSettings('home'), links: settingsLinks }),
     tileOf({ key: 'my', title: mySettingsLabel, detail: 'Your work email, servers and tokens, your views and naming patterns.', tone: 'mint', open: () => openSettings('my'), links: [] }),
   ])
@@ -626,12 +629,12 @@ export default function App() {
         if (group !== 'On-Demand' && group !== 'Settings' && groupId) sections.push({ key: `${group}:added`, entries: addedButtons(groupId) })
         const shown = sections.filter((section) => section.entries.length)
         if (!shown.length) return null
-        const open = !collapsed.includes(group)
-        const holdsActive = group === (isOther ? 'Other views' : page === 'board' ? (view.onPrem ? 'Release Details' : 'I&D Board') : page === 'ondemand' && onDemandPage ? groupNameOf(placementOf(menu.layout, onDemandPage.id).group) : meta.group)
+        const open = !collapsed.includes(navKeyOf(group))
+        const holdsActive = group === (isOther ? 'Other views' : page === 'board' ? (view.readOnly ? 'Release Details' : meta.group) : page === 'ondemand' && onDemandPage ? groupNameOf(placementOf(menu.layout, onDemandPage.id).group) : meta.group)
         // PGB-05: ⋯ on a group the viewer may add a page to opens ＋ Add page for it.
         const canAdd = Boolean(groupId) && !menuGitReason && !addPageReason(viewer, menu.layout, groupId)
         return <div key={group} className="nav-section">
-          <div className="nav-group-row"><button type="button" className={`nav-group${holdsActive && !open ? ' nav-group-active' : ''}`} aria-expanded={open} onClick={() => toggleNav(group)}><span aria-hidden="true">{open ? '▾' : '▸'}</span>{group === 'Settings' ? <>ADMIN{git.dirty && <span className="nav-badge" title="Shared changes not yet saved to Git" aria-label="1 unsaved shared change">1</span>}</> : group.toUpperCase()}</button>
+          <div className="nav-group-row"><button type="button" className={`nav-group${holdsActive && !open ? ' nav-group-active' : ''}`} aria-expanded={open} onClick={() => toggleNav(navKeyOf(group))}><span aria-hidden="true">{open ? '▾' : '▸'}</span>{group === 'Settings' ? <>ADMIN{git.dirty && <span className="nav-badge" title="Shared changes not yet saved to Git" aria-label="1 unsaved shared change">1</span>}</> : group.toUpperCase()}</button>
           {canAdd && <button type="button" className="nav-group-more" aria-label={`Add a page to ${group}`} title={`Add a page to ${group}`} onClick={() => setAddPageFor(groupId)}>⋯</button>}</div>
           {/* Collapsed lists stay in the page but are hidden on wide screens only: the narrow sidebar has no headings. */}
           <div className={`nav-items${open ? '' : ' nav-collapsed'}`}>{shown.map((section) => <div key={section.key} className="nav-items">{section.entries}</div>)}</div>

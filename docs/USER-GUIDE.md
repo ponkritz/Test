@@ -359,7 +359,7 @@ The app opens on **Home**: one tile per area. Click a tile to open the area, or 
 
 ![Home with the synthetic sample loaded](user-guide/images/home.png)
 
-The menu on the left groups the pages: **Data Insights**, **My Work**, **I&D Board**, **Release Details**, **On-Demand**, **Data & governance** and **Admin** (and **Testing** for Admins).
+The menu on the left groups the pages: **Data Insights**, **My Work** (ending with the QMS-0025 backlog), **Release Details**, **On-Demand**, **Data & governance** (with **Backlog Health** before Documentation) and **Admin** (and **Testing** for Admins). QMS-0025 and Backlog Health were under **I&D Board** in earlier versions; that heading is gone, and who may open them has not changed.
 
 ![The menu](user-guide/images/menu.png)
 
@@ -493,7 +493,7 @@ View as is read only: nothing is saved to Azure DevOps or Git while it is on. Re
 
 ### The QMS-0025 backlog
 
-**I&D Board → QMS-0025** is the Time Writing backlog as a tree: Epic → Feature → User Story → Task.
+**My Work → QMS-0025** is the Time Writing backlog as a tree: Epic → Feature → User Story → Task.
 
 ![The QMS-0025 backlog](user-guide/images/backlog.png)
 
@@ -739,7 +739,7 @@ Admins see a **Testing** group with pages that are being tried out:
 
 ### Backlog Health
 
-**I&D Board → Backlog Health** lists what needs attention in the backlog, for everyone:
+**Data & governance → Backlog Health** lists what needs attention in the backlog, for everyone:
 
 - **In older Sprints** — open work whose Sprint has ended.
 - **Features without DoD** — Features whose Description does not mention a DoD.
