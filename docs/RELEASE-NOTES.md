@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.43.0 — 2026-11-25
+
+**Changed**
+- **Closed groups are left out of Export, select all and Previous / Next** — on a grouped table (the On-Demand Table pages), Export, "Select every row shown" and the row drawer's Previous / Next (also when opened with a row's Edit button) act only on the rows you see: rows inside a closed group are left out until you open it, and Export says so — "Exports the 4 rows shown (3 rows in closed groups left out)"; the row count still counts every matching row (UI-29, UI-25, OND-132; product owner, 2026-11-25).
+
+DF-324; TC-UI-25, TC-OND-103.
+
+PR #425.
+
 ## v10.42.0 — 2026-11-25
 
 **Added**
