@@ -113,8 +113,7 @@ Approved by the product owner on 2026-11-23.
   the values) for a column with a list. A group row is ▸ / ▾ (`text-button`, `aria-expanded`), "Column: value" with
   "(blank)" last and "n rows", indented 18 px per level. While a filter is set a line names the filtered columns with
   **Clear column filters**. Grouping and filters are part of the table's view (Save view for everyone, with **Start
-  collapsed** in its pop-up); which groups are open is per visit. The QE Mapping keeps its own controls with the same
-  wording (QEM-03, QEM-06…11).
+  collapsed** in its pop-up); which groups are open is per visit.
 - Inside a `TablePanel` the table's toolbar (filters, search, Columns, Export), its first column and the read-only
   reason line up with the panel's title; the table's lines run the full width (one shared rule, KB-93).
 

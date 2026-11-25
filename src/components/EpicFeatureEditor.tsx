@@ -6,6 +6,7 @@ import { useCan } from '../useCan'
 import type { EpicSetupStore } from '../useEpicSetup'
 import type { FeatureSetup } from '../useFeatureSetup'
 import type { GitStorage } from '../useGitStorage'
+import { QePageFields } from './QePageFields'
 import { useBulkEpic } from '../useStreamEpics'
 import { Notice } from './ui'
 
@@ -17,7 +18,7 @@ type Section = 'fields' | 'dod' | 'stories' | 'task'
 const emptyFile = (): FeatureSetupFile => ({ schema: 1, kind: 'feature-setup', epics: [] })
 const sectionField: Record<Exclude<Section, 'fields'>, InheritField> = { dod: 'featureDoD', stories: 'stories', task: 'estimate' }
 
-export function EpicFeatureEditor({ setup, epicSetup, git, items, qeColumnNames = [], initialEpicId = 0 }: { setup: FeatureSetup; epicSetup: EpicSetupStore; git: GitStorage; items: AzureWorkItem[]; qeColumnNames?: string[]; initialEpicId?: number }) {
+export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId = 0 }: { setup: FeatureSetup; epicSetup: EpicSetupStore; git: GitStorage; items: AzureWorkItem[]; initialEpicId?: number }) {
   const can = useCan()
   const dpBulkEpic = useBulkEpic('DP').epicId, ioccBulkEpic = useBulkEpic('IOCC').epicId
   const [epicId, setEpicId] = useState<number>(initialEpicId) // 0 = All Epics
@@ -231,11 +232,8 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, qeColumnNames 
         {value && !own ? <div className="efe-inherited"><small>FROM THE EPIC’S DEFAULT</small><span>{stories.map((story) => story.title).join('\n') || 'None'}</span></div>
         : !value && !isAll && !custom.stories ? fromDefaults((defaults.stories ?? []).map((story) => story.title).join('\n') || 'None set: only the Review of Deliverables story and your own') : <>
           <StoriesEditor stories={stories} disabled={!editable} onChange={setStories} templates={allTemplates} offered={offered} canSaveTemplate={canTemplates} onSaveTemplate={saveAsTemplate} />
-          {hasSets && entry && !value && <div className="form-row">
-            <label>QE Mapping column with the Platform / Product{qeColumnNames.length ? <select value={entry.qeColumns?.matchColumn ?? ''} disabled={!editable} onChange={(event) => changeEntry((value) => { value.qeColumns = { matchColumn: event.target.value, qeColumn: value.qeColumns?.qeColumn ?? '' } })}><option value="">Not set</option>{qeColumnNames.map((name) => <option key={name}>{name}</option>)}</select> : <small className="muted">Open QE Mapping once to list its columns.</small>}</label>
-            <label>QE Mapping column with the QE{qeColumnNames.length ? <select value={entry.qeColumns?.qeColumn ?? ''} disabled={!editable} onChange={(event) => changeEntry((value) => { value.qeColumns = { matchColumn: value.qeColumns?.matchColumn ?? '', qeColumn: event.target.value } })}><option value="">Not set</option>{qeColumnNames.map((name) => <option key={name}>{name}</option>)}</select> : null}</label>
-          </div>}
         </>}
+        {hasSets && !value && <QePageFields entry={entry} disabled={!editable} onChange={(next) => changeEntry((item) => { item.qePage = next })} />}
       </section>
 
       <section className="efe-section" aria-label="Month Task">

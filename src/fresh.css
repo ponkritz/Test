@@ -328,19 +328,8 @@ td small{color:var(--text-3)}
 .setup-fill-dod{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px;padding:10px 12px;border:1px solid var(--warning-line);border-radius:10px;background:var(--warning-soft)}.setup-fill-dod small{flex-basis:100%}
 .column-chooser{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px;background:var(--surface)}.column-chooser legend{font-size:12px;font-weight:700;color:var(--text-2);padding:0 4px}.column-chooser-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 14px;margin-top:8px}.column-chooser-list small{display:block;width:100%;font-size:10px}
 .column-chooser-list label{display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:8px}.column-chooser-list label small{grid-column:2}
-/* QE Mapping */
-.qe-tabs{margin:0 0 12px;flex-wrap:wrap}.qe-tabs small{margin-left:4px;color:var(--muted)}
-.qe-toolbar{flex-wrap:wrap;gap:8px}.qe-source{margin:0 0 8px;font-size:12px}
-.qe-table{max-height:70vh;overflow:auto}.qe-table table{min-width:max-content}.qe-table thead th{position:sticky;top:0;z-index:2}.qe-table .qe-filters th{top:30px;background:var(--surface-2);padding:4px 6px}.qe-filters input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
-/* Compact columns (QEM-08): tight padding, smaller text, narrow minimum, long text wraps at 240px. */
-.qe-table th,.qe-table td{padding:4px 8px;font-size:12.5px;line-height:1.35}.qe-table thead th{white-space:nowrap}
-.qe-table td{min-width:0;max-width:240px;white-space:pre-wrap;overflow-wrap:anywhere}.qe-table td.qe-select,.qe-table th.qe-select{min-width:34px;width:34px}
-.qe-head{display:flex;align-items:center;gap:6px;justify-content:space-between;min-width:0}.qe-head>span{min-width:0;overflow:hidden;text-overflow:ellipsis}.qe-table.azure-table td{text-overflow:clip}.qe-menu-button{border:0;background:transparent;color:var(--text-2);cursor:pointer;padding:2px 4px;border-radius:5px}.qe-menu-button:hover{background:var(--accent-soft);color:var(--accent-text)}
-.qe-table th{position:relative}.qe-menu{position:absolute;z-index:6;top:100%;left:6px;display:grid;min-width:170px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--btn-shadow-hover);text-transform:none;letter-spacing:0}
-.qe-menu button{border:0;background:transparent;text-align:left;padding:7px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer}.qe-menu button:hover:not(:disabled){background:var(--accent-soft)}.qe-menu button:disabled{color:var(--text-3);cursor:not-allowed}.qe-menu .danger-text{color:var(--danger-text)}
-.qe-cell-editable{display:block;min-height:18px;cursor:text;border-radius:5px;padding:1px 3px;margin:-1px -3px}.qe-cell-editable:hover{background:var(--accent-soft)}.qe-table td input{width:100%;min-width:120px;padding:5px 7px}
-.qe-row-selected td{background:var(--accent-soft)}.qe-group td{background:var(--surface-2);font-weight:600}.qe-group-1 td,.qe-group-2 td,.qe-group-3 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));font-weight:600}
-.qe-table th.qe-select,.qe-table td.qe-select{width:1%!important;min-width:0!important;padding-left:10px;padding-right:6px;text-align:left}.qe-toolbar .inline-select{white-space:nowrap}
+/* Group rows of a release table (ReleaseView), shaded by level. */
+.qe-group td{background:var(--surface-2);font-weight:600}.qe-group-1 td,.qe-group-2 td,.qe-group-3 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));font-weight:600}
 .dp-counted{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.dp-counted>summary{cursor:pointer;font-weight:600;font-size:13px}
 ol.column-chooser-list{list-style:none;padding:0;margin:8px 0 0}.column-choice{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;padding:4px 6px;border:1px solid transparent;border-radius:8px;cursor:grab}.column-choice:hover{border-color:var(--line);background:var(--surface-2,transparent)}.column-choice.dragging{opacity:.45}.drag-grip{color:var(--text-3,#999);font-size:12px;letter-spacing:-2px;user-select:none}.column-move{display:inline-flex;gap:2px}.column-move .text-button{padding:2px 6px}
 .view-for-everyone{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:4px 0 8px;font-size:12px}.view-for-everyone-state{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}.view-for-everyone .text-button{padding:2px 0}.view-for-everyone .button-row{align-items:center}.page-view-for-everyone{margin:0 0 12px}
@@ -988,7 +977,7 @@ td .od-flag{display:inline-block;margin-top:0}
 .od-rules{margin:0;padding-left:18px;display:grid;gap:4px}
 .od-pivot{max-height:60vh}.od-pivot th{position:sticky;top:0;z-index:1;background:var(--surface)}.od-pivot .num{text-align:right}
 .od-pivot-note{font-size:12px;margin:6px 0 0}
-/* CHT-74…CHT-81: the nested Pivot table — two heading rows kept together, groups shaded by level (as the QE Mapping's), subtotal columns marked, every number a button for its rows. */
+/* CHT-74…CHT-81: the nested Pivot table — two heading rows kept together, groups shaded by level (as the release tables'), subtotal columns marked, every number a button for its rows. */
 .azure-table.od-pivot table.pivot-table{min-width:0}.pivot-table thead{position:sticky;top:0;z-index:1}.od-pivot .pivot-table th{position:static}.pivot-table thead tr:nth-child(2) th{border-top:1px solid var(--line)}
 .pivot-table .pivot-col-group{text-align:center}.pivot-table .pivot-subtotal-col{font-weight:600;background:color-mix(in srgb,var(--surface-2) 60%,var(--surface))}
 .pivot-table tr.pivot-group td{background:var(--surface-2);font-weight:600}.pivot-table tr.pivot-level-1 td,.pivot-table tr.pivot-level-2 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
@@ -1237,7 +1226,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .pir-latest{display:grid;gap:6px;padding-top:4px}.pir-latest h3{margin:0;font-size:14px;color:var(--heading)}.pir-latest .pir-comment-head,.pir-latest p{margin:0}
 .pir-split dd{margin:0;font-size:13px;white-space:pre-line;overflow-wrap:anywhere}
 .pir-suggested,.pir-split.pir-suggested dd{font-style:italic;color:var(--text-2)}.pir-suggested-mark{font-style:normal;font-size:11px;color:var(--muted)}
-/* QEM-13, OND-100: Replace… — the preview under the fields; the reason a disabled Replace gives, left of the buttons. */
+/* OND-100: Replace… — the preview under the fields; the reason a disabled Replace gives, left of the buttons. */
 .replace-preview{display:grid;gap:8px}.replace-preview p{margin:0}.replace-rows{max-height:260px;overflow:auto}.replace-rows table{table-layout:fixed;width:100%}.replace-rows td{overflow-wrap:anywhere;padding:8px 14px}.replace-form>p.muted,.replace-preview p.muted{font-size:12px;margin:0}
 .replace-form .modal-actions{align-items:center;flex-wrap:wrap}.replace-form .modal-actions .write-blocked{margin-right:auto}
 /* A destructive main action in a pop-up footer lines up with Cancel (UI-STANDARDS §4, §6). */
@@ -1274,7 +1263,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 @media(forced-colors:active){.data-table-hscroll{background:Canvas;border-top-color:CanvasText;box-shadow:none}}
 @media print{.data-table-hscroll{display:none!important}}
 /* UI-25…UI-28: Group by and Filter by column of a DataTable (the On-Demand Table pages first): the group bar under the
-   toolbar, the filter row under the headings, and the group rows indented by their level — the QE Mapping's look. */
+   toolbar, the filter row under the headings, and the group rows indented by their level. */
 .data-table-group-bar .inline-select{white-space:nowrap}.data-table-group-bar .inline-select select{max-width:200px}
 .data-table-filter-note{font-size:12px}
 .data-table .data-table-filters th{padding:4px 6px;background:var(--surface-2)}

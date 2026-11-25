@@ -420,8 +420,8 @@ Your app roles are set in **Admin → People & roles**. Someone with several rol
 |---|---|---|
 | Tool Owner | everything | everything, including the stream mapping, Pages & menu and building On-Demand Dashboards |
 | Admin | everything, plus the Testing pages | everything except the stream mapping, Pages & menu and building dashboards |
-| Product Owner | Dashboard, I&D Board, Backlog Health, Release Details, Baselines, QE Mapping, Documentation, On-Demand | work items (also bulk create and for others), baselines, QE Mapping, export, Monthly pack text |
-| People Manager | Dashboard, team insights, My Work, I&D Board, Release Details, Baselines, QE Mapping, Snapshots, Documentation, On-Demand | the same as Product Owner |
+| Product Owner | Dashboard, I&D Board, Backlog Health, Release Details, Baselines, Documentation, On-Demand | work items (also bulk create and for others), baselines, export, Monthly pack text |
+| People Manager | Dashboard, team insights, My Work, I&D Board, Release Details, Baselines, Snapshots, Documentation, On-Demand | the same as Product Owner |
 | Scrum Master | Dashboard, My Work, I&D Board, Backlog Health, Release Details, Documentation, On-Demand | work items (also for others), export, the shared Feature setup |
 | Team Member | Dashboard, My Work, I&D Board, Release Details, Documentation, On-Demand | their own work items, export |
 
@@ -563,8 +563,10 @@ The data sources are what the app has already loaded:
 - **Releases per stream** — a row per release as Pulse Check counts it.
 - **Completed releases per stream per month** — each stream's Completed releases in each month up to this one, as Pulse Check's Month tabs count them, with **Counted in Pulse Check** (Yes / No, from your own Streams not counted). A line chart by Month, split by Stream, with **Running total** is Pulse Check's Year chart.
 - **Capacity and utilization** — Team overview's figures per person and month.
-- **The On-Demand table pages**, the **Time Writing hours**, the **QE Mapping** sheets, the **KPI tracker** values, the **historical hours** and each **Windchill export**.
+- **The On-Demand table pages**, the **Time Writing hours**, the **KPI tracker** values, the **historical hours** and each **Windchill export**.
 - **Azure DevOps queries** — each Release Details stream's query, the Tool Validations Tool List and Validation Documents queries and your own My views, with all their columns, as last fetched.
+
+QE Mapping is no longer a source: a block you made over it earlier stays, says "This block’s data source (QE Mapping) was removed." and offers **Remove block…**.
 
 A source your role may not see is offered as "(not available)", and a block over it says "Not available for your role." A source whose data is not loaded yet offers the action that loads it (for example **Load the KPI tracker**).
 
@@ -780,6 +782,17 @@ Every Release page looks the same, top to bottom:
 
 **Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
 
+**The QE of each release: the QE page** (DP and IOCC). The DP table's **QE** column and the QE pre-filled on each row of Create Features come from an **On-Demand Table page** — the team's **Resource Mapping** page, or any other. Set it once per bulk Epic (roles allowed to edit the shared Feature setup): **Admin → Epic & Feature setup → Setup per Epic → the DP or IOCC bulk Epic**, under User Stories:
+
+1. **QE from page** — the page named *Resource Mapping* is already chosen ("Default: …"); pick another page if needed.
+2. **Column with the Platform / Product** — the column that names the product (DP: the release's PsName, else its Program; IOCC: the release name).
+3. **Column with the QE** — a Text or Dropdown column; with a built-in list, the person's name as the list shows it now.
+4. **Save to Git**.
+
+The columns are remembered by their id, so renaming a column on the page keeps the setup. A row whose product is not on the page says *"no QE on the QE page for this product"*; pick the person in its drop-down and it is created. If the setup still shows *"The old QE Mapping columns (…) need choosing again on the QE page."*, it was set up for the removed QE Mapping: choose the page and its columns again.
+
+*DPF-02, EPS-09*
+
 **Release Classification from the release number** (DP and IOCC). The Releases table of DP and IOCC starts with **Release name**, **Version** and **Release Classification (detected)** — the value of the bulk Epic's Release Classification list that its rules give for the version (— without a bulk Epic or a value). The Create Features pop-up shows the same three columns first and pre-fills each row's Release Classification, with *"detected from 5.2.1"* under it; change any row before creating. To set the rules (roles allowed *Edit the Epic setup*): **Admin → Epic & Feature setup → Setup per Epic**, choose the bulk Epic, and under its **Release Classification** field tick, for each value, the part of the release number that changes for it — **x.0** (first number only: 5.0, 5.0.0), **x.y** (second number: 5.2), **x.y.z** (third: 5.2.1), **x.y.z.w** (fourth: 5.2.1.3); the deepest non-zero part decides. For example Release ← x.0 and x.y, MLD ← x.y.z, PU ← x.y.z.w. A part can belong to one value only (the screen names a part ticked twice and does not save). **Fill with the usual rules** proposes Major, Minor, MLD and Platform Update (or PU) where your values are named so. Save to Git. Until rules are saved, the value named like the release type (Major, Minor, MLD, Platform Update) is pre-filled, as before. The fields of an Epic are listed Release name, Version, Release Classification first.
 
 ### Windchill exports
@@ -970,14 +983,14 @@ The **⋯** next to the page's main action holds **Rename page…**, **Hide page
 
 ### Replace a value in a column
 
-When one person hands their work over to another — a QE leaves and their releases go to a colleague — **Replace…** changes the name in every row at once. It is in the page's **⋯** menu on a Table or Table + Insights page, and in the toolbar of **QE Mapping**.
+When one person hands their work over to another — a QE leaves and their releases go to a colleague — **Replace…** changes the name in every row at once. It is in the page's **⋯** menu on a Table or Table + Insights page.
 
-1. Choose the **Column** (on QE Mapping the QE column of the Epic & Feature setup is already chosen).
+1. Choose the **Column**.
 2. Choose the value in **Find** — each value shows how many rows hold it — or **Another value (type it)…**. A cell matches only as a whole; upper and lower case and spaces around it do not matter.
 3. Type the new value in **Replace with** (the column's values are suggested). In a Dropdown or Multi-select column it must be one of the column's options.
 4. Check the preview — **"N rows will change"** and the first rows with the old and new value — and choose **Replace**.
 
-The change is saved to Git at once. On an On-Demand page each changed row gets an entry in its **History** ("Replaced “Alex Example” with “Sam Example” in QE") and the result is in **Background jobs**; hidden rows are not changed, and rows someone else is editing are skipped (the preview says how many). On QE Mapping every row of the tab is changed, also rows a search or filter hides; the commit names the change. Without the right to edit the page or QE Mapping, without Git storage that can save, with sample data, or while viewing as someone else, **Replace…** is greyed out with the reason.
+The change is saved to Git at once. On an On-Demand page each changed row gets an entry in its **History** ("Replaced “Alex Example” with “Sam Example” in QE") and the result is in **Background jobs**; hidden rows are not changed, and rows someone else is editing are skipped (the preview says how many). Without the right to edit the page or QE Mapping, without Git storage that can save, with sample data, or while viewing as someone else, **Replace…** is greyed out with the reason.
 
 ### Add and update many rows from Excel (bulk upload)
 
@@ -1334,6 +1347,18 @@ Your own read-only views are in **My settings → My views**: they appear under 
 A backup of the view (never a PAT) is saved to Git first. At their next start every browser and desktop app removes the view with its saved data and shows once: "The Tool Owner removed 1 shared view: …". Each person's own views (**My views**) and PATs stay. To bring it back for everyone, use **Admin → Streams → Removed connections** → **Look in Git history** → **Restore** (removed views are listed first, with who removed them). Without the Tool Owner role, while viewing as someone else, without Git storage, with a read-only Git token or with the sample data, the two items are greyed out and the line above the table says why. An app version from before this change keeps the view until it is updated.
 
 *CON-109…CON-112*
+
+**Delete qe-mapping.json from Git (Tool Owner, once).** QE Mapping was removed from the app, but its file `qe-mapping.json` stays in the Git data repository until someone with **Shared setup in Git** deletes it. While it is there, **Admin → Data & sharing → Shared setup in Git** shows **Data no longer used**: "qe-mapping.json is no longer used by the app — Delete it from Git".
+
+Before you delete it, set the **QE page** of each bulk Epic (see Create Features); the pop-up names any bulk Epic still on the old QE Mapping columns.
+
+1. Choose **Download a copy** — the file as it is in Git is saved as `qe-mapping-copy-<date>.json`. Keep it with the team's records.
+2. Choose **Delete it from Git…** (greyed out until you have a copy; also in View as, with the synthetic sample, with a read-only Git token and for anyone who is not the Tool Owner — the line next to it says why).
+3. Read the pop-up and choose **Delete from Git**. One commit deletes only that file; its history stays in GitHub. If someone changed the file after your copy, nothing is deleted: download a copy again.
+
+The notice is then gone. Someone still on an older app version that shows QE Mapping keeps its QE prefill until the file is deleted, then finds no file and is offered an empty mapping.
+
+*GIT-28, NAV-54, EPS-09*
 
 ### Look & feel
 

@@ -9,7 +9,7 @@ import type { FeatureSetups } from '../featureSetup'
 import { chooseSetup, withLinkedStories } from '../featureSetup'
 import { useBulkEpic } from '../useStreamEpics'
 import { bulkEpicMissing } from '../bulkEpics'
-import type { QeMappingFile } from '../qeMapping'
+import { useQeSource } from '../useQeSource'
 import { bulkPlan, pickQe } from '../dpBulk'
 import type { BoardHit } from '../dpBoardMatch'
 import { createFeatureFromSetup, utcMonthLabel, currentIterationPairs, futureIterationPairs, readAzureIterations, withFeatureDoD, HierarchyCreationError, type AzureIteration } from '../azureDevOps'
@@ -20,23 +20,25 @@ import { Modal, Notice } from './ui'
 // DPF-04: Create Features for the selected DP releases — under the DP bulk creation Epic (QV-59), each titled Program |
 // Service | Release, with the DoD and default User Stories of its release type (that Epic's Feature setup), the Release
 // Classification (the Epic’s list, detected from the release number by its rules, DPF-11), the Time Writing story and month Task, all assigned to the QE from
-// the QE Mapping, in the PI / Sprint chosen. One after another as a background job; releases that cannot be created
+// the QE page, in the PI / Sprint chosen. One after another as a background job; releases that cannot be created
 // are listed with the reason and skipped.
-export function DpBulkCreate({ rows, azure, featureSetup, qeMapping, featureMatch, onClose }: { rows: AzureWorkItem[]; azure: AzureWorkspace; featureSetup?: FeatureSetups | null; qeMapping?: QeMappingFile | null; featureMatch: (row: AzureWorkItem) => BoardHit | undefined; onClose: () => void }) {
+export function DpBulkCreate({ rows, azure, featureSetup, featureMatch, onClose }: { rows: AzureWorkItem[]; azure: AzureWorkspace; featureSetup?: FeatureSetups | null; featureMatch: (row: AzureWorkItem) => BoardHit | undefined; onClose: () => void }) {
   // QV-59: the DP bulk Epic — mine, else shared; none built in (0: not set, Create is blocked).
   const dpEpicId = useBulkEpic('DP').epicId ?? 0
   const unlinked = chooseSetup(featureSetup, dpEpicId, true).setup
   const epicFile = useEpicSetupFile()
   // STT-02: stories linked to a User Story template take its current title and description.
   const setup = withLinkedStories(unlinked, epicFile?.storyTemplates)
-  // DPF-06: the QE picked per release in the pop-up (email by release), in place of the QE Mapping's.
+  // DPF-02: the QE page of the bulk Epic's setup.
+  const qe = useQeSource(setup)
+  // DPF-06: the QE picked per release in the pop-up (email by release), in place of the QE page's.
   const [picks, setPicks] = useState<Record<string, string>>({})
   const people = boardPeople(azure.items)
   // DPF-08: the Release Classification per row, from the Epic's list (prefilled from the release number), decides
   // the DoD and User Stories (DPF-07).
   const classes = classificationOf(epicFile, dpEpicId)
   const [classPicks, setClassPicks] = useState<Record<string, string>>({})
-  const mappedPlan = bulkPlan(rows, { setup, qeMapping, board: azure.items, featureMatch, classes: classPicks, classValues: classes.values, classRules: classes.rules })
+  const mappedPlan = bulkPlan(rows, { setup, qe, board: azure.items, featureMatch, classes: classPicks, classValues: classes.values, classRules: classes.rules })
   const rawPlan = pickQe(mappedPlan, picks, (line) => String(line.row.id), people)
   // EPS-03: the Epic setup's fields of the bulk Epic.
   const plan = withEpicFields(rawPlan, epicFieldsFor(epicFile, dpEpicId), (line) => [line.row], { index: classes.fieldIndex, of: (line) => line.classification })
@@ -83,7 +85,7 @@ export function DpBulkCreate({ rows, azure, featureSetup, qeMapping, featureMatc
 
   return <Modal eyebrow="DP RELEASES" wide title={`Create Features for ${rows.length} DP release${rows.length === 1 ? '' : 's'}`} onClose={onClose}>
     <div className="dp-bulk">
-      <p className="muted">Under Epic #{dpEpicId}{epic ? ` “${epic.title}”` : ''}: each Feature gets the DoD and User Stories of the {classes.label} chosen on its row (Admin → Epic &amp; Feature setup → Epic {dpEpicId}; a value without its own set uses the Epic’s default), its Time Writing story and month Task, all assigned to the QE from the QE Mapping.</p>
+      <p className="muted">Under Epic #{dpEpicId}{epic ? ` “${epic.title}”` : ''}: each Feature gets the DoD and User Stories of the {classes.label} chosen on its row (Admin → Epic &amp; Feature setup → Epic {dpEpicId}; a value without its own set uses the Epic’s default), its Time Writing story and month Task, all assigned to the QE from the QE page (or the person chosen on its row).</p>
       <div className="azure-table"><table>
         <thead><tr><th scope="col">Release name</th><th scope="col">Version</th>{classes.values.length > 0 && <th scope="col">{classes.label}</th>}<th scope="col">Feature title</th><th scope="col">User Stories</th><th scope="col">QE</th><th scope="col">Result</th></tr></thead>
         <tbody>{plan.map((line) => <tr key={line.row.id} className={line.skip ? 'muted' : undefined}>

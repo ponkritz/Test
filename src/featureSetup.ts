@@ -20,11 +20,14 @@ export interface TitleField { label: string; source: string }
 // featureDoD: the Feature DoD (Definition of Done) a new Feature under the Epic starts with — mandatory in a setup.
 // titleFields: optional, at most maxTitleFields.
 // DPF-01…03 (DP, the DP bulk creation Epic as mapped, QV-59): the Feature DoD and default User Stories per release
-// type — Release (Major, Minor) and PU (MLD, Platform Update) — and which QE Mapping columns name the product and its
-// QE. Used by Release Details → DP (QE, possible QEs, Create Features); built-in values when the setup has none.
+// type — Release (Major, Minor) and PU (MLD, Platform Update) — and, since QE Mapping was removed (NAV-54), the On-Demand
+// Table page and its columns that name the product and its QE (qePage, EPS-09: column ids, so a rename keeps it; DPF-02).
+// qeColumns: the QE Mapping column names of an older setup — still read and kept as written (an older app version reads
+// them), no longer used. Used by Release Details → DP (QE, possible QEs, Create Features); built-in values when the setup has none.
 export interface ReleaseTypeSetup { featureDoD: string; stories: StoryTemplate[] }
 export interface QeMapColumns { matchColumn: string; qeColumn: string }
-export interface EpicSetup { epicId: number; epicTitle: string; inherits?: InheritField[]; featureDoD: string; stories: StoryTemplate[]; timeWritingStory: TimeWritingStoryTemplate; task: TaskTemplate; titleFields?: TitleField[]; qeColumns?: QeMapColumns; classSets?: Record<string, ReleaseTypeSetup>; completeChildren?: false }
+export interface QePageSetting { pageId: string; matchColumn: string; qeColumn: string }
+export interface EpicSetup { epicId: number; epicTitle: string; inherits?: InheritField[]; featureDoD: string; stories: StoryTemplate[]; timeWritingStory: TimeWritingStoryTemplate; task: TaskTemplate; titleFields?: TitleField[]; qeColumns?: QeMapColumns; qePage?: QePageSetting; classSets?: Record<string, ReleaseTypeSetup>; completeChildren?: false }
 // CON-95: the shared file may hold defaults for all Epics; an Epic's setup (shared or mine) may leave fields to the
 // layer above (inherits): Built in → All Epics → Epic (shared) → Mine.
 export type InheritField = 'featureDoD' | 'stories' | 'estimate'
@@ -139,15 +142,23 @@ function cleanQeColumns(input: unknown): QeMapColumns | undefined {
   const matchColumn = text(value.matchColumn, 120), qeColumn = text(value.qeColumn, 120)
   return matchColumn && qeColumn ? { matchColumn, qeColumn } : undefined
 }
+// EPS-09: the QE page — an On-Demand page id and two column ids (all three needed).
+const idOf = (value: unknown) => typeof value === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(value) ? value : ''
+const columnIdOf = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9][\w-]{0,39}$/.test(value) ? value : ''
+function cleanQePage(input: unknown): QePageSetting | undefined {
+  const value = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const pageId = idOf(value.pageId), matchColumn = columnIdOf(value.matchColumn), qeColumn = columnIdOf(value.qeColumn)
+  return pageId && matchColumn && qeColumn ? { pageId, matchColumn, qeColumn } : undefined
+}
 export function cleanSetup(input: Partial<Record<keyof EpicSetup, unknown>>): EpicSetup | null {
   const epicId = Number(input.epicId)
   if (!Number.isSafeInteger(epicId) || epicId < 1) return null
   const stories = cleanStories(input.stories, 1000)
   // EPS-07: the Feature fields moved to the Epic setup; the old title fields are no longer read or saved.
   // DPF-09: the old Release / PU sets (releaseTypes) are no longer read; a save drops them.
-  const qeColumns = cleanQeColumns(input.qeColumns), classSets = cleanClassSets(input.classSets)
+  const qeColumns = cleanQeColumns(input.qeColumns), qePage = cleanQePage(input.qePage), classSets = cleanClassSets(input.classSets)
   const inherits = Array.isArray(input.inherits) ? inheritFields.filter((field) => (input.inherits as unknown[]).includes(field)) : []
-  return { epicId, epicTitle: text(input.epicTitle, 255), ...(inherits.length ? { inherits } : {}), featureDoD: text(input.featureDoD, 100000), stories, timeWritingStory: cleanTimeWritingStory(input.timeWritingStory as Partial<Record<keyof TimeWritingStoryTemplate, unknown>> | undefined), task: cleanTask(input.task as Partial<Record<keyof TaskTemplate, unknown>> | undefined), ...(qeColumns ? { qeColumns } : {}), ...(classSets ? { classSets } : {}), ...(input.completeChildren === false ? { completeChildren: false as const } : {}) }
+  return { epicId, epicTitle: text(input.epicTitle, 255), ...(inherits.length ? { inherits } : {}), featureDoD: text(input.featureDoD, 100000), stories, timeWritingStory: cleanTimeWritingStory(input.timeWritingStory as Partial<Record<keyof TimeWritingStoryTemplate, unknown>> | undefined), task: cleanTask(input.task as Partial<Record<keyof TaskTemplate, unknown>> | undefined), ...(qeColumns ? { qeColumns } : {}), ...(qePage ? { qePage } : {}), ...(classSets ? { classSets } : {}), ...(input.completeChildren === false ? { completeChildren: false as const } : {}) }
 }
 
 export function parseFeatureSetup(raw: string): FeatureSetupFile {

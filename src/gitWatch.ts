@@ -31,7 +31,6 @@ const fileNames: [RegExp, string][] = [
   [/(^|\/)feature-setup\.json$/, 'Feature setup'],
   [/(^|\/)epic-setup\.json$/, 'Epic setup'],
   [/(^|\/)feature-setup\/[^/]+\.json$/, 'Your Feature setup'],
-  [/(^|\/)qe-mapping\.json$/, 'QE Mapping'],
   [/(^|\/)azure-views\.json$/, 'Stream mapping and connections'],
   [/(^|\/)custom-streams\.json$/, 'Custom streams'],
   [/(^|\/)monthly-pack-setup\.json$/, 'Monthly pack setup'],
@@ -91,7 +90,7 @@ export function newerFiles(state: WatchState, listings: Record<string, FolderEnt
 // was saved in another window of this browser.
 export interface RemoteChange { path: string; sha: string | null; by?: string; at?: string; otherWindow?: boolean }
 
-// GIT-18: the pages that show each shared file. A page key is a built-in page's id ('qemapping', 'pulse' …), an Admin
+// GIT-18: the pages that show each shared file. A page key is a built-in page's id ('baselines', 'pulse' …), an Admin
 // page 'admin:<tab>', or an added page 'ondemand:<page id>' (Table, Table + Insights and On-Demand Dashboard alike).
 // '*' is every page; 'admin:*' every Admin page. quiet: loaded without a notice when nothing of it is unsaved here — the
 // menu layout (the menu is refreshed), the default and own views, the access roles away from People & roles (GIT-23)
@@ -119,7 +118,8 @@ export function pagesOfFile(path: string, planningPath: string, dashboardsReadin
   // GIT-23: the roles are loaded quietly on every page (rights update in place); only Admin → People & roles, where
   // someone may be editing them, shows the notice.
   if (name === 'access.json') return { pages: ['admin:resources'], quiet: 'access', loader: 'access' }
-  if (name === 'qe-mapping.json') return { pages: ['qemapping', 'board'], loader: 'qemapping' }
+  // GIT-28: qe-mapping.json is no longer read by the app (QE Mapping removed): a change to it never raises a notice.
+  if (name === 'qe-mapping.json') return { pages: [], loader: 'none' }
   if (name === 'feature-setup.json' || /^feature-setup\/[^/]+\.json$/.test(name)) return { pages: featurePages, loader: 'featureSetup' }
   if (name === 'epic-setup.json') return { pages: featurePages, loader: 'epicSetup' }
   if (name === 'custom-streams.json') return { pages: releasePages, loader: 'customStreams' }
