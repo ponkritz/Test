@@ -1012,6 +1012,10 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-QV-52 CP: Selected month / All months** — Req QV-72 — L1 `cp-reporting.test.mjs` ("QV-72: CP All months — every release container with a QA/QE signature in any month, completion review only per month (TC-QV-52)") ; browser check: on CP choose All months — the Releases table lists every signed release container of every month, the counts stay the header month's; Selected month returns to the month's releases.
 
+**TC-CON-68 Remove a shared view for everyone, the next start of every browser drops it, Restore brings it back** — Req CON-109, CON-110, CON-111, CON-112, GIT-26, SET-17 — **UAT** — L1 `views-remove.test.mjs` ("CON-111: a removal marker is applied once — the shared view goes (also when changed here), My views and PATs stay (TC-CON-68)", "CON-110: Git wins for a removed view — not added from Git, not merged back by a computer that still has it (TC-CON-68)", "GIT-26: the first sync from another repository removes nothing for a removal marker there and marks it as seen (TC-CON-68)", "CON-109, CON-110, CON-112: Remove and Delete for everyone in Git — backup, marker, setup without it, data files deleted; Restore clears the marker (TC-CON-68, TC-CON-69)"); E2E `remove-views-for-everyone.e2e.mjs` ("TC-CON-68: the Tool Owner removes a shared view for everyone — the next start of another browser drops it with a notice, keeps My view and the PAT; Restore brings it back"); UAT with two people on two computers on the same data repository: the second person has the shared views, one view of their own (My views) and a server PAT. The Tool Owner opens Admin → Data & sharing → Other views, ⋯ of a shared view → Remove for everyone… — the pop-up names the view and says it affects everyone who uses the shared setup (the number of people is not known) and that My views and PATs are kept; Remove for everyone. The second person (whose ⋯ items are disabled with "Only the Tool Owner …") restarts the app: the notice "The Tool Owner removed 1 shared view: …" shows once, the view is gone from Other views and the menu, their own view and PAT are still there; a further restart shows no notice. The Tool Owner restores the view in Admin → Streams → Removed connections (listed first, "Removed for everyone by …"); after the second person's next start it is back.
+
+**TC-CON-69 Delete a shared view for everyone with its data in Git** — Req CON-110, CON-111 — L1 `views-remove.test.mjs` ("CON-109, CON-110, CON-112: Remove and Delete for everyone in Git — backup, marker, setup without it, data files deleted; Restore clears the marker (TC-CON-68, TC-CON-69)"); E2E `remove-views-for-everyone.e2e.mjs` ("TC-CON-69: Delete for everyone lists and deletes the view’s data file in Git; a browser that still has the view loses it"); browser check (Tool Owner, Git storage that can save): ⋯ → Delete for everyone… on an on-prem view with data in Git lists `azure-data/<id>.json`; after Delete for everyone the file is gone from the repository (its history stays in GitHub), `azure-views-removed.json` records it with mode "delete", and another browser that still had the view loses it at its next start and does not get it back from the on-prem data in Git.
+
 **TC-CON-67 Upload latest export… on a Windchill export page** — Req CON-108 — E2E `documents-and-data.e2e.mjs` ("TC-QV-44: the result of an action on a Release page — a Windchill import, a file that is not an export — is listed in Background jobs, not as a notice on the page": ⋯ → Upload latest export… opens the file picker; the export is imported for the same page, listed in Background jobs) ; browser check: on an existing export page choose ⋯ → Upload latest export… and a newer CSV — the counts and Releases follow the new file, the page keeps its name.
 
 **TC-QV-24 CP releases from the asset Titles** — *(Retired — see TC-QV-25)* Req QV-40 — L1 `streams.test.mjs` ("CP: the release from the asset Title "[Release name] [Release No] [Asset name]", each release once; fuzzy QMS-0025 match (TC-QV-24)"); browser check with a CP query holding three assets of one release in both namings ("Care Pathways 3.1 Test Report", "Care Pathways 3.1.0 SRS", "Risk Analysis v3.1 (Care Pathways)") and one of another (3.2), and a QMS-0025 Feature "CP | Care Pathways | v3.1": Release Details → CP lists two releases (3 and 1 assets), 3.1 with its Feature and %, 3.2 with Create Feature opening the New Feature form titled "Care Pathways | v3.2" (release name and number only) under the CP Epic, and found after it is created; Pulse Check's Releases and Supported summary show "CP [2]"; no page errors. **UAT**
@@ -2265,8 +2269,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-95 | TC-CON-59, TC-CON-60 |
 | CON-96 | TC-CON-60 |
 | CON-97 | TC-CON-60 |
-| CON-98 | TC-CON-61 |
-| CON-99 | TC-CON-61 |
+| CON-98 | TC-CON-61, TC-CON-68 |
+| CON-99 | TC-CON-61, TC-CON-68 |
 | CON-100 | TC-CON-62 |
 | CON-101 | TC-CON-63, TC-CON-64 |
 | CON-102 | TC-CON-64 |
@@ -2494,7 +2498,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-23 | TC-GIT-15 |
 | GIT-24 | TC-GIT-16 |
 | GIT-25 | TC-GIT-18, TC-GIT-20 |
-| GIT-26 | TC-GIT-19 |
+| GIT-26 | TC-GIT-19, TC-CON-68 |
 | GIT-19 | TC-GIT-12 |
 | GIT-17 (Tool Validations master list) | TC-TVL-01, TC-TVL-24 |
 | GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
@@ -2511,7 +2515,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | SET-14 | TC-SET-06 |
 | SET-15 | TC-SET-06 |
 | SET-16 | TC-SET-06 |
-| SET-17 | TC-SET-07 |
+| SET-17 | TC-SET-07, TC-CON-68 |
 | SET-18 | TC-SET-08 |
 | SET-10…12 | TC-SET-04 |
 | STO-01, STO-02 | TC-STO-01 |
@@ -2802,6 +2806,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-106 | TC-PGB-06 |
 | CON-107 | TC-DSH-13 |
 | CON-108 | TC-CON-67 |
+| CON-109 | TC-CON-68 |
+| CON-110 | TC-CON-68, TC-CON-69 |
+| CON-111 | TC-CON-68, TC-CON-69 |
+| CON-112 | TC-CON-68 |
 | PGB-01 | TC-PGB-01, TC-PGB-07 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
 | PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
@@ -2970,7 +2978,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18 |
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |

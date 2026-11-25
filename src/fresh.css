@@ -1230,3 +1230,5 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 /* QEM-13, OND-100: Replace… — the preview under the fields; the reason a disabled Replace gives, left of the buttons. */
 .replace-preview{display:grid;gap:8px}.replace-preview p{margin:0}.replace-rows{max-height:260px;overflow:auto}.replace-rows table{table-layout:fixed;width:100%}.replace-rows td{overflow-wrap:anywhere;padding:8px 14px}.replace-form>p.muted,.replace-preview p.muted{font-size:12px;margin:0}
 .replace-form .modal-actions{align-items:center;flex-wrap:wrap}.replace-form .modal-actions .write-blocked{margin-right:auto}
+/* A destructive main action in a pop-up footer lines up with Cancel (UI-STANDARDS §4, §6). */
+.modal-actions .danger-button{margin-top:0}

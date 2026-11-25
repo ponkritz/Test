@@ -1165,6 +1165,16 @@ Your own read-only views are in **My settings → My views**: they appear under 
 
 **Admin → Data & sharing** has **Git storage** (connect, change or disconnect; **Load latest**), **Load from Git** (**Load everything from Git**), **Shared setup in Git**, **Other views** and **Synthetic sample**.
 
+**Remove a shared view for everyone (Tool Owner).** **Remove** on a row of **Other views** takes a view out of your own browser only — the shared setup in Git brings it back at your next start. To take a shared view away from everyone:
+
+1. Open **Admin → Data & sharing → Other views** and choose **⋯** on the view's row.
+2. Choose **Remove for everyone…** to drop it from the shared setup, or **Delete for everyone…** to also delete its saved data in Git (the pop-up lists the files, e.g. `azure-data/<view>.json`).
+3. Read the pop-up — it affects everyone who uses the shared setup in Git; the app cannot tell how many people that is — and confirm.
+
+A backup of the view (never a PAT) is saved to Git first. At their next start every browser and desktop app removes the view with its saved data and shows once: "The Tool Owner removed 1 shared view: …". Each person's own views (**My views**) and PATs stay. To bring it back for everyone, use **Admin → Streams → Removed connections** → **Look in Git history** → **Restore** (removed views are listed first, with who removed them). Without the Tool Owner role, while viewing as someone else, without Git storage, with a read-only Git token or with the sample data, the two items are greyed out and the line above the table says why. An app version from before this change keeps the view until it is updated.
+
+*CON-109…CON-112*
+
 ### Look & feel
 
 **Look & feel** (profile menu) has a tab each for **Page layout** (margins and border), **Theme and zoom**, **Start view and menu** and **Table and chart defaults** (the shared table and chart design, for the roles allowed to change it). The first three are yours, on this computer.

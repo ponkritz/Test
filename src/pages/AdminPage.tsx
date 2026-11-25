@@ -275,7 +275,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
         {everything.loaded && <Notice tone={everything.failed?.length ? 'warning' : 'success'}>Loaded: {everything.loaded.join('; ') || 'nothing'}.{everything.failed?.length ? ` Not loaded — ${everything.failed.join(' · ')}` : ''}</Notice>}
       </Panel> }] : []),
       ...(can('storage.shared') ? [{ key: 'shared', label: 'Shared setup in Git', scope: 'tool-owner' as const, node: <AzureViewsGitPanel git={git} azure={azure} /> }] : []),
-      { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
+      { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canRemoveForEveryone={access.canManageStreams} viewingAs={Boolean(access.viewingAs)} /> },
       ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> }] : []),
       { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
     ]} />}
