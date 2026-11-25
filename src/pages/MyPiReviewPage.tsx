@@ -8,6 +8,7 @@ import { discussionOf, discussionsVersion, moveLabel, oneLine, piFeatures, piLab
 import { rateLimitWait } from '../azureDevOps'
 import { myReviewOf, otherPersonBlock, otherPiHint, personOf, readDiscussionInto, reviewCountOf, reviewPageBlock, reviewPeriodOf, reviewPostBlock, type ReviewCount, type ReviewPeriod } from '../piReviewPost'
 import { ReviewDialog } from './PiReviewForm'
+import { PiSetupGear } from '../components/PiFormSetupPanel'
 import { formSetupOf, useReviewViewer, useReviewWriter } from '../piReviewWriter'
 import type { PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
@@ -106,7 +107,8 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     <button type="button" className="ghost" disabled={!filtered} onClick={resetFilters}>Reset filters</button>
     <WriteBlocked reason={personBlock} />
   </span>
-  return <Page intro="The Features assigned to you (a lead can choose another person) in a PI and whether their PI review is written. Write review… posts it as a new comment in the Feature’s Discussion in Azure DevOps.">
+  // PIR-30: ⚙ PI Review Setup in the page actions, when the page is in the viewer's menu (UI-STANDARDS §6).
+  return <Page intro="The Features assigned to you (a lead can choose another person) in a PI and whether their PI review is written. Write review… posts it as a new comment in the Feature’s Discussion in Azure DevOps." actions={<PiSetupGear />}>
     {notice && <Notice tone="warning">{notice}</Notice>}
     {periodNote && <Notice tone="warning">{periodNote}</Notice>}
     {!shownMe ? <EmptyState title="Who are you in Azure DevOps?" detail="Enter your work email on the Time Writing connection, or choose your name in My Tasks [Board]." />

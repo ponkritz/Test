@@ -3,10 +3,12 @@ import assert from 'node:assert/strict'
 import { buildReviewComment, emptyReviewForm, formSetupProblems, readBackReview, reviewFormFrom, reviewFormProblems, myReviewOf } from '../src/piReviewPost.ts'
 import { reviewSplit, reviewFooter } from '../src/piReview.ts'
 import { commentText } from '../src/workItemEdit.ts'
-import { builtInFormSetup, fieldDrafts, fieldsOf, formSetupBlock, maxFormFields, mergePiFormText, parsePiFormSetup, piFormFile, serializePiFormSetup, setupChanges, setupProblems } from '../src/piReviewSetup.ts'
+import { builtInFormSetup, fieldDrafts, fieldsOf, formSetupBlock, maxFormFields, mergePiFormText, parsePiFormSetup, piFormFile, serializePiFormSetup, setupChanges, setupGearLabel, setupProblems, showsSetupGear } from '../src/piReviewSetup.ts'
 import { columnsError } from '../src/onDemand.ts'
 import { defaultPolicy, parseAccess, rightsFor, serializeAccess } from '../src/access.ts'
 import { fileLabel, pagesOfFile } from '../src/gitWatch.ts'
+import { resolveSettings, settingsLabel, settingsPagesFor, shownSettingsTab } from '../src/settingsTabs.ts'
+import { searchSettings } from '../src/adminOverview.ts'
 
 // PI Review form setup (PIR-19…PIR-24, CON-114). Synthetic data only.
 const form = { learnings: 'Book the rig early', struggles: 'Vendor late', move: 'Yes', moveReason: 'two stories left', movePi: 'PI 26.5', mode: 'Offline Review', remarks: 'Thanks team' }
@@ -123,7 +125,7 @@ test('PIR-19: the strict reader refuses a file that is not a usable setup; the m
   assert.deepEqual(setupChanges(builtInFormSetup(), changed()), ['added Customer impact', 'added Confidence', 'removed Struggles', 'changed What we learned', 'changed Move to next PI', 'new order'])
 })
 
-test('CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)', () => {
+test('CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)', () => {
   const policy = defaultPolicy()
   for (const role of ['Tool Owner', 'Scrum Master']) assert.ok(policy.roles[role].actions.includes('pireview.setup'), role)
   for (const role of ['Admin', 'Product Owner', 'People Manager', 'Team Member']) assert.ok(!policy.roles[role].actions.includes('pireview.setup'), role)
@@ -152,8 +154,8 @@ test('CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)', 
   assert.match(formSetupBlock(viewer, git, { loaded: false, error: '' }), /still being read/)
 })
 
-test('PIR-19: a newer form setup in Git is loaded quietly, except on Admin → Epic & Feature setup (TC-PIR-22)', () => {
-  assert.deepEqual(pagesOfFile('data/pi-review-form.json', 'data/planning-data.json'), { pages: ['admin:epics'], quiet: 'piForm', loader: 'piForm' })
+test('PIR-19, PIR-29: a newer form setup in Git is loaded quietly, except on Admin → PI Review Setup (TC-PIR-22)', () => {
+  assert.deepEqual(pagesOfFile('data/pi-review-form.json', 'data/planning-data.json'), { pages: ['admin:pireview'], quiet: 'piForm', loader: 'piForm' })
   assert.equal(fileLabel('data/pi-review-form.json', 'data/planning-data.json'), 'PI Review form')
 })
 
@@ -180,4 +182,51 @@ test('PIR-28: {REVIEWED PI} in the headings — written with the reviewed PI (or
   // A custom heading "None" would swallow "No learnings or struggles": the setup's read-back check refuses it.
   const clash = builtInFormSetup(); clash.fields.push({ id: 'f-9', label: 'Nothing', heading: 'None', type: 'longtext', options: [], required: false, defaultValue: '', help: '' })
   assert.match(formSetupProblems(clash).join(' '), /would not be read back as written: .*Learnings/)
+})
+
+test('PIR-29: PI Review Setup is an Admin page of its own, only for the holders of “PI Review: set up the review form” (a Scrum Master, a Tool Owner); anyone else asking for it gets Streams; Search settings and the old section link (TC-PIR-30)', () => {
+  const keys = (can) => settingsPagesFor(can).map((page) => page.key)
+  assert.ok(!keys(() => false).includes('pireview'), 'hidden without the permission (and before the roles file is loaded)')
+  assert.deepEqual(keys(() => true).slice(3, 5), ['epics', 'pireview'], 'next to Epic & Feature setup')
+  const policy = defaultPolicy(); policy.members = { 'sm@example.com': ['Scrum Master'], 'to@example.com': ['Tool Owner'], 'tm@example.com': ['Team Member'], 'ad@example.com': ['Admin'], 'pm@example.com': ['People Manager'] }
+  const sees = (p, email) => { const rights = rightsFor(p, email); return keys((key) => rights.actions.has(key)).includes('pireview') }
+  assert.deepEqual(['sm', 'to', 'tm', 'ad', 'pm'].filter((who) => sees(policy, `${who}@example.com`)), ['sm', 'to'])
+  const changed = parseAccess(serializeAccess(policy)); changed.roles['Team Member'].actions.push('pireview.setup')
+  assert.equal(sees(changed, 'tm@example.com'), true, 'Role rights decide')
+  assert.equal(settingsLabel('pireview'), 'PI Review Setup')
+  // A remembered tab or an old link: the page for those who may see it, Streams for everyone else (as every hidden Admin page).
+  const can = (...allowed) => (action) => allowed.includes(action)
+  assert.equal(shownSettingsTab('pireview', can('pireview.setup')), 'pireview')
+  assert.equal(shownSettingsTab('pireview', can()), 'connections')
+  assert.equal(shownSettingsTab('audit', can()), 'connections')
+  assert.equal(shownSettingsTab('my', can()), 'my')
+  assert.deepEqual(resolveSettings('epics', 'pireview'), { tab: 'pireview' }, 'the former section opens the page')
+  assert.equal(shownSettingsTab(resolveSettings('epics', 'pireview').tab, can()), 'connections')
+  assert.deepEqual(resolveSettings('epics', 'lists'), { tab: 'epics', section: 'lists' })
+  // Search settings lists only the pages the viewer may open (App filters it by settingsPagesFor).
+  const found = searchSettings('pi review form')
+  assert.equal(found[0]?.tab, 'pireview'); assert.equal(found[0]?.page, 'PI Review Setup'); assert.equal(found[0]?.section, undefined)
+  assert.ok(!searchSettings('pi review').some((entry) => entry.tab === 'epics'), 'no longer a section of Epic & Feature setup')
+  assert.ok(!found.some((entry) => keys(can()).includes(entry.tab)), 'nothing found without the permission')
+})
+
+test('PIR-30: the ⚙ PI Review Setup button — shown exactly when the page is in the menu: by the permission, not the role; in View as by the viewed role (TC-PIR-31)', () => {
+  const can = (...allowed) => (action) => allowed.includes(action)
+  assert.equal(setupGearLabel, 'PI Review Setup')
+  assert.equal(showsSetupGear({ can: can('pireview.setup') }), true)
+  assert.equal(showsSetupGear({ can: can() }), false, 'without the permission')
+  // The starting matrix: Scrum Master and Tool Owner; Role rights changes count (a Team Member allowed, a Scrum Master denied).
+  const policy = defaultPolicy(); policy.members = { 'sm@example.com': ['Scrum Master'], 'to@example.com': ['Tool Owner'], 'tm@example.com': ['Team Member'], 'ad@example.com': ['Admin'], 'pm@example.com': ['People Manager'] }
+  const shows = (p, email) => { const rights = rightsFor(p, email); const has = (key) => rights.actions.has(key); assert.equal(showsSetupGear({ can: has }), settingsPagesFor(has).some((page) => page.key === 'pireview'), 'the gear and the menu agree'); return showsSetupGear({ can: has }) }
+  assert.deepEqual(['sm', 'to', 'tm', 'ad', 'pm'].filter((who) => shows(policy, `${who}@example.com`)), ['sm', 'to'])
+  const changed = parseAccess(serializeAccess(policy))
+  changed.roles['Team Member'].actions.push('pireview.setup')
+  changed.roles['Scrum Master'].actions = changed.roles['Scrum Master'].actions.filter((key) => key !== 'pireview.setup')
+  assert.equal(shows(changed, 'tm@example.com'), true, 'a Team Member allowed in Role rights')
+  assert.equal(shows(changed, 'sm@example.com'), false, 'a Scrum Master without it')
+  assert.equal(shows(null, 'sm@example.com'), false, 'no roles file loaded (CON-101)')
+  // View as: the viewed role's rights decide (an Admin viewing as the Scrum Master sees it); the page is then read only.
+  const viewed = rightsFor(policy, 'sm@example.com')
+  assert.equal(showsSetupGear({ can: (key) => viewed.actions.has(key) }), true)
+  assert.match(formSetupBlock({ viewingAs: 'the role Scrum Master', readOnly: false, can: (key) => viewed.actions.has(key) }, { connected: true, readOnly: false, isSample: false }, { loaded: true, error: '' }), /^Read only while viewing as the role Scrum Master/)
 })

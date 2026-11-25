@@ -117,8 +117,12 @@ left-aligned; six wordings for the row count and seven schemes for cut lists.
 | Destructive | `text-button danger-text` in a row; `danger-button` for a page-level irreversible action | Remove, Delete, Reset |
 
 - Symbols, only these: **＋** add, **↻** refresh / read again, **✕** remove a chip or line, **→** go to, **⋯** more
-  actions, **▸ / ▾** expand. No other emoji or symbols in labels.
+  actions, **▸ / ▾** expand, **⚙** open the setup of this page. No other emoji or symbols in labels.
 - An icon-only button has an `aria-label` naming the action and its object.
+- **Setup of a page** (approved 2026-11-25): a page whose setup lives on an Admin page offers it as an icon-only **⚙**
+  button (`ghost`) in the **page actions** (§1), last; its `aria-label` and title are the setup page's name (e.g. "PI
+  Review Setup"). It is shown exactly when that Admin page is in the viewer's menu (its permission; in View as the
+  viewed role's) and hidden otherwise — it only opens the page, which says itself why it is read only.
 
 **Today:** private button classes (`act-primary`, `act-ghost`, `backlog-action`); destructive actions in five styles;
 both ⟳ and ↻, both ✕ and ×, both ＋ and +.
@@ -264,6 +268,7 @@ wrong for a real case as an Improvement to the standard.
 
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-25 | §6 Buttons: **⚙** added to the symbols as "open the setup of this page" — an icon-only `ghost` button in the page actions, `aria-label` and title the setup page's name, shown exactly when that Admin page is in the viewer's menu; first used by My PI Review and PI Review for Admin → PI Review Setup (PIR-29, PIR-30). | Product owner, 2026-11-25 |
 | 2026-11-25 | §12 Pre-selected — **an exception**: in the PI review form (Write review…, PIR-13) and the Close pop-up's PI review (PIR-18) **Move to next PI = No is pre-selected**, although the answer is posted to the Feature's Discussion for others to read ("Default Move to next PI = No"). The Review meeting advice keeps no default and must be chosen; the pre-selected No shows in the form and in the Preview before posting. | Product owner, 2026-11-25 |
 | 2026-11-24 | §7 Period: **Show: Selected month / All months** is a segmented toggle, no longer a drop-down repeating the month ("Month is repeating … make it as a Toggle", QV-71). | Product owner, 2026-11-24 |
 | 2026-11-24 | §3 Missing permission — **row buttons with a reason per row** (an exception): on the Tool Validations Master list a tool from Azure DevOps has Edit and Remove disabled with its own reason as each button's tooltip (Edit: change it in Azure DevOps; Remove: until Azure DevOps no longer returns it), and one line above the table covers both, with Edit notes… for the notes (TVL-30). | Product owner, 2026-11-24 |

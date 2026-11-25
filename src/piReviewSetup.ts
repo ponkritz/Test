@@ -163,7 +163,7 @@ export const mergePiFormText: Merge = (baseText, mineText, theirsText, mineLater
 }
 
 // ---- who may change it (CON-114) ----
-// PIR-23: why the viewer cannot change the form setup ('' when they can): View as, the roles not loaded (CON-101), the
+// PIR-31: why the viewer cannot change the form setup ('' when they can): View as, the roles not loaded (CON-101), the
 // permission, the synthetic sample, Git storage (not connected, a read-only token), the file unreadable or still loading.
 export interface FormSetupViewer { viewingAs: string; readOnly: boolean; can: (action: 'pireview.setup') => boolean }
 export interface FormSetupGit { connected: boolean; readOnly: boolean; isSample: boolean }
@@ -177,6 +177,16 @@ export function formSetupBlock(viewer: FormSetupViewer, git: FormSetupGit, state
   if (state.error) return `${piFormFile} could not be read from Git, so the form cannot be changed here: ${state.error}`
   if (!state.loaded) return 'The PI Review form is still being read from Git.'
   return ''
+}
+
+// PIR-30: the ⚙ PI Review Setup button in the headers of My PI Review and PI Review — shown exactly when Admin → PI
+// Review Setup is in the viewer's menu (PIR-29): to a holder of "PI Review: set up the review form" (decided by the
+// permission, so Role rights changes count; Scrum Master and Tool Owner by default). In View as it follows the viewed
+// role, as the menu does, and with the synthetic sample it stays, as the menu entries do; the page then opens read only
+// with the reason (PIR-31). Nobody without the right, and nobody before the roles file is loaded (CON-101), sees it.
+export const setupGearLabel = 'PI Review Setup'
+export function showsSetupGear(viewer: { can: (action: 'pireview.setup') => boolean }): boolean {
+  return viewer.can('pireview.setup')
 }
 
 // PIR-22: what changed between two setups, for the commit message and the Background jobs entry.

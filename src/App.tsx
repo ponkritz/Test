@@ -20,7 +20,7 @@ import { pages, pageGroups, pageMeta, type Page } from './pages/registry'
 import { MyDashboardPage } from './pages/MyDashboardPage'
 import { HomePage } from './pages/HomePage'
 import { loadStartView, saveStartView, startPageOf, visibleTiles, type HomeLink, type HomeTile, type StartView } from './homeTiles'
-import { lookLabel, mySettingsLabel, readSettingsTab, settingsPages, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, type SettingsTab } from './settingsTabs'
+import { lookLabel, mySettingsLabel, readSettingsTab, settingsPages, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, shownSettingsTab, type SettingsTab } from './settingsTabs'
 import { normalizeReleaseSourceSettings, streamPatterns } from './releaseSource'
 import { viewSource } from './viewSources'
 import { cleanDays, ownersReason as toolOwnersReason } from './toolValidations'
@@ -109,6 +109,7 @@ const KpiTrackerPage = lazy(() => import('./pages/KpiTrackerPage').then((module)
 const QeMappingPage = lazy(() => import('./pages/QeMappingPage').then((module) => ({ default: module.QeMappingPage })))
 const OnDemandPage = lazy(() => import('./pages/OnDemandPage').then((module) => ({ default: module.OnDemandPage })))
 const CustomDashboardPage = lazy(() => import('./pages/CustomDashboardPage').then((module) => ({ default: module.CustomDashboardPage })))
+const PiReviewSetupPage = lazy(() => import('./pages/PiReviewSetupPage').then((module) => ({ default: module.PiReviewSetupPage })))
 const PagesMenuPage = lazy(() => import('./pages/PagesMenuPage').then((module) => ({ default: module.PagesMenuPage })))
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((module) => ({ default: module.MyWorkPage })))
 const WindchillPage = lazy(() => import('./components/WindchillViews').then((module) => ({ default: module.WindchillPage })))
@@ -402,7 +403,9 @@ export default function App() {
   const menuGitReason = gitReasonOf(git)
   // Settings pages (SET-14): one menu entry each; opening one on a given section (e.g. Stream mapping) shows that
   // section. The page is remounted so it picks up the section asked for.
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>(readSettingsTab)
+  const [settingsAsked, setSettingsTab] = useState<SettingsTab>(readSettingsTab)
+  // CON-94, PIR-29: a page the viewer may not see (PI Review Setup without its right) opens Streams, header included.
+  const settingsTab = shownSettingsTab(settingsAsked, access.can)
   const [settingsVisit, setSettingsVisit] = useState(0)
   // SET-15: an older page or section opens where it lives now.
   const openSettings = (asked: SettingsTab, askedSection?: string) => { const { tab, section } = resolveSettings(asked, askedSection); if (section) saveSettingsSection(tab, section); saveSettingsTab(tab); setSettingsTab(tab); setSettingsVisit((visit) => visit + 1); setPage('admin') }
@@ -434,9 +437,9 @@ export default function App() {
   const dismissGuide = () => { try { localStorage.setItem(guideKey, 'dismissed') } catch { /* this visit only */ } setGuideOpen(false) }
   const pageProps = { store, month, setMonth }
   // PIR-13, PIR-17, PIR-18: what posting a PI review needs (PI Review, My PI Review, the Close pop-up).
-  // CON-114, PIR-23: who may change the PI Review form setup, and why not.
+  // CON-114, PIR-31: who may change the PI Review form setup, and why not.
   const piFormBlock = formSetupBlock({ viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', readOnly: access.readOnly, can: access.can }, git, piForm)
-  const reviewEnv: ReviewEnv = { email: access.email, viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit, formSetup: piForm.setup, openFormSetup: () => openSettings('epics', 'pireview') }
+  const reviewEnv: ReviewEnv = { email: access.email, viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit, formSetup: piForm.setup, openFormSetup: () => openSettings('pireview') }
   const storageLabel = store.cache.status === 'error' ? '⚠ Not saved locally' : store.cache.status === 'saving' ? '◌ Saving locally' : '○ Local IndexedDB'
   const buildStatus = <BuildStatus pending={store.hasPendingSave} failed={store.ready && store.cache.status === 'error'} busy={azure.busy} preview={Boolean(azure.preview)} details={<p className="storage-line" title="Where app data is saved"><strong>Data saved:</strong> {storageLabel}</p>} onBackup={store.ready ? () => exportStateJson({ ...store.state, azureWorkItems: mergeAzureWorkItems(store.state.azureWorkItems ?? [], azure.preview?.items ?? []), ...(azure.preview ? { azureBacklogScope: azure.preview.scope } : {}) }) : undefined} />
 
@@ -514,8 +517,8 @@ export default function App() {
   const targetOf = (path: string): FilePages => pagesOfFile(path, git.config?.path ?? '', dashboardsReading)
   // GIT-23: the access roles are loaded quietly too, except on Admin → People & roles (someone may be editing them there).
   const rolesPage = pageKey === 'admin:resources'
-  // PIR-19: the PI Review form too, except on Admin → Epic & Feature setup (someone may be editing it there).
-  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage) || (target.quiet === 'piForm' && pageKey !== 'admin:epics')
+  // PIR-19, PIR-29: the PI Review form too, except on Admin → PI Review Setup (someone may be editing it there).
+  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage) || (target.quiet === 'piForm' && pageKey !== 'admin:pireview')
   // An added page's file is named by the page's name ("CoNQ"; its blocks for a dashboard).
   const pageChanges = changesForPage(git.remoteChanges, pageKey, targetOf, quietTarget).map((change) => {
     const added = /(?:^|\/)(on-demand|dashboards)\/([a-z0-9-]+)(?:\.json|\/page\.json|\/rows)$/.exec(change.path), name = added && onDemand.pages.find((entry) => entry.id === added[2])?.name
@@ -673,7 +676,9 @@ export default function App() {
       {page === 'board' && <BoardPage views={personalViews} canSetDefault={access.can('layout.defaults') && git.connected && !git.readOnly && !git.isSample} azure={azure} store={store} current={view} month={month} git={git} onOpenConnection={openConnection} onOpenSettings={openSettings} assign={assign} featureSetup={featureSetup.setups} qeMapping={qeMapping.file} />}
       {page === 'snapshots' && <SnapshotsPage {...pageProps} git={git} who={my.me.email || my.me.name || 'unknown'} />}
       {page === 'admin' && settingsTab === 'pages' && <PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />}
-      {page === 'admin' && settingsTab !== 'pages' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} piForm={{ store: piForm, block: piFormBlock, by: my.self.me.name?.trim() || azure.creatorEmail.trim() }} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
+      {/* PIR-29: Admin → PI Review Setup, the PI Review form setup on a page of its own. */}
+      {page === 'admin' && settingsTab === 'pireview' && <PiReviewSetupPage store={piForm} block={piFormBlock} by={my.self.me.name?.trim() || azure.creatorEmail.trim()} />}
+      {page === 'admin' && settingsTab !== 'pages' && settingsTab !== 'pireview' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} setupSteps={steps} onSearch={() => setSearchOpen(true)} qeColumnNames={[...new Set((qeMapping.file?.sheets ?? []).flatMap((sheet) => sheet.columns.map((column) => column.name)))]} monthlyPack={monthlyPack} history={history} loadEverything={loadEverything} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage key={docsVisit} />}
       </Fragment></Suspense>
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}

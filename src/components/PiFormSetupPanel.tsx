@@ -4,15 +4,17 @@ import { formatDateTime } from '../format'
 import { emptyReviewForm, formSetupProblems, reviewBlocks, withFieldValue, type ReviewForm } from '../piReviewPost'
 import { ReviewPreview } from '../pages/PiReviewForm'
 import { headingText, piPlaceholder, reviewedPiPlaceholder } from '../piReview'
-import { builtInFields, fieldDrafts, fieldsOf, isBuiltInField, isChoice, maxFormFields, newFieldId, piFieldTypes, piFormFile, setupChanges, type PiFormField, type PiFormSetup } from '../piReviewSetup'
+import { builtInFields, fieldDrafts, fieldsOf, isBuiltInField, isChoice, maxFormFields, newFieldId, piFieldTypes, piFormFile, setupChanges, setupGearLabel, showsSetupGear, type PiFormField, type PiFormSetup } from '../piReviewSetup'
 import { typeLabel, type ColumnDraft } from '../onDemand'
 import { ColumnListEditor } from './ColumnListEditor'
 import type { PiFormStore } from '../usePiFormSetup'
+import { useReviewViewer } from '../piReviewWriter'
 
-// PIR-19…PIR-23: Admin → Epic & Feature setup → PI Review form. Everyone sees the fields of the form in use — the order,
-// labels, the headings written in the comment, types, options, required and defaults — as a summary (UI-STANDARDS §3);
-// **Edit form…** opens the editor in a pop-up for the roles with "PI Review: set up the review form" (Scrum Master and
-// Tool Owner by default, CON-114), disabled with the reason for everyone else, in View as, with the sample or without Git.
+// PIR-19…PIR-22, PIR-29, PIR-31: the panel of Admin → PI Review Setup (PiReviewSetupPage), shown to the holders of "PI Review: set
+// up the review form" (Scrum Master and Tool Owner by default, CON-114). It shows the fields of the form in use — the
+// order, labels, the headings written in the comment, types, options, required and defaults — as a summary
+// (UI-STANDARDS §3); **Edit form…** opens the editor in a pop-up, disabled with the reason in View as, with the sample,
+// without Git, while the file is read or when it could not be used (PIR-31).
 // Save to Git runs the checks (headings, limits, the read-back of a review written with the form) first.
 const yesNo = (value: boolean) => value ? 'Yes' : 'No'
 
@@ -44,6 +46,16 @@ export function PiFormSetupPanel({ store, block, by }: { store: PiFormStore; blo
     <SaveQueueStatus state={store.queue} onRetry={() => void store.retry()} />
     {editing && <PiFormEditor setup={setup} by={by} blocked={block} onSave={async (next, message) => { await store.save(next, message); setEditing(false) }} onClose={() => setEditing(false)} />}
   </Panel>
+}
+
+// PIR-30: ⚙ in the page header of My PI Review and PI Review — opens Admin → PI Review Setup; shown when that page is in
+// the viewer's menu, i.e. to the holders of "PI Review: set up the review form" (showsSetupGear; in View as those of the
+// viewed role). The icon of "open the setup of this page" (UI-STANDARDS §6): aria-label and title name the page.
+export function PiSetupGear() {
+  const viewer = useReviewViewer()
+  const open = viewer.env?.openFormSetup
+  if (!open || !showsSetupGear(viewer)) return null
+  return <button type="button" className="ghost pir-setup-gear" aria-label={setupGearLabel} title={setupGearLabel} onClick={open}><span aria-hidden="true">⚙</span></button>
 }
 
 // The comment a review written with this form gives — each paragraph as a placeholder, each choice its default (else its
