@@ -1001,6 +1001,14 @@ When many people add rows at the same time, the Tool Owner converts the page to 
 
 Update every app first: versions before 10.0 cannot open a converted page.
 
+### Page files in Git
+
+A page you add is kept in the data repository under its name: `on-demand/Supplier issues--supplier-issues.json` (a page of row files: the folder `on-demand/Supplier issues--supplier-issues/`). The part after the two hyphens is the page's id and never changes. When you rename such a page, its file moves with it in one commit. The name is visible in the repository, its history and GitHub links, also after a rename or delete: keep confidential words out of page names.
+
+CoNQ and the pages that existed before keep their file (`on-demand/conq.json`) for good: renaming them changes only the title inside. Older app versions do not list the pages added under a name: make sure everyone (web and desktop) updates. A Dashboard page you add keeps its blocks in `dashboards/<name>--<id>.json` and moves them with the page when you rename it; existing dashboards keep `dashboards/<id>.json`.
+
+If a page (or a dashboard's blocks) has two copies in Git — for example after someone used an older app version — the page and Admin → Pages & menu say so and show the newer one. The Tool Owner chooses **Delete older copy…**: the pop-up lists exactly what is deleted and what stays (the newer copy), and **Delete older copy** removes it in one commit; its history stays in GitHub.
+
 ### Live and Sample
 
 **Data: Live | Sample** at the top of every table page switches your own view:

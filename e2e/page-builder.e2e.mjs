@@ -106,7 +106,7 @@ test('TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supp
   const quality = menuGroup(page, 'Quality')
   assert.match(await text(quality), /^▾ QUALITY ⋯ ⚑ Supplier issues$/)
   assert.equal(await quality.getByRole('button', { name: /Supplier issues/ }).getAttribute('aria-current'), 'page')
-  const pageFile = lastWrite(writes, 'on-demand/supplier-issues.json').data
+  const pageFile = lastWrite(writes, 'on-demand/Supplier issues--supplier-issues.json').data
   assert.deepEqual([pageFile.kind, pageFile.id, pageFile.name, pageFile.description], ['on-demand-page', 'supplier-issues', 'Supplier issues', 'Issues raised with suppliers'])
   let layout = lastWrite(writes, 'menu-layout.json').data
   assert.deepEqual(layout.groups['g-quality'], { name: 'Quality', order: 1, acceptsPages: true, owners: [] })
@@ -148,7 +148,7 @@ test('TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supp
   assert.match(await text(page.locator('.od-panel .panel-heading')), /^QUALITY Supplier issues/)
   assert.match(await text(page.locator('.od-panel table tbody tr').first()), /Acme Seals Major/)
   assert.equal(await page.locator('.git-bar-dirty').count(), 0, 'no unsaved-changes bar: the columns and the row were saved at once')
-  const saved = lastWrite(writes, 'on-demand/supplier-issues.json').data
+  const saved = lastWrite(writes, 'on-demand/Supplier issues--supplier-issues.json').data
   assert.deepEqual(saved.columns.map((column) => [column.name, column.type]), [['Supplier', 'text'], ['Severity', 'dropdown']])
   assert.deepEqual(saved.rows.map((entry) => Object.values(entry.cells)), [['Acme Seals', 'Major']])
   assert.equal(saved.rows[0].seq, 1)

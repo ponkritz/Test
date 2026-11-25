@@ -263,7 +263,7 @@ export function BlockDialog({ datasets, dashboard, block, isNew, preview, onCanc
       </div>
       <div className="od-editor-footer">
         {error && <Notice tone="error">{error}</Notice>}
-        <p className="muted">{saveNote ?? `Saved to Git for everyone at once (dashboards/${dashboard.id}.json).`}</p>
+        <p className="muted">{saveNote ?? 'Saved to Git for everyone at once (in dashboards/, next to the page).'}</p>
         <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy}>{busy ? saveLabel ? 'Saving…' : 'Saving to Git…' : isNew ? 'Add block' : saveLabel ?? 'Save to Git'}</button></div>
       </div>
     </form>

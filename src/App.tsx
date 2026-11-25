@@ -35,6 +35,7 @@ import { useAzureWorkspace, type FetchListener, type GitDataSource } from './use
 import { sharedThroughGit } from './gitSnapshots'
 import { useGitStorage } from './useGitStorage'
 import { changesForPage, pagesOfFile, type FilePages } from './gitWatch'
+import { pageIdOfPath } from './pageFiles'
 import { PageGitNotice } from './components/PageGitNotice'
 import { useUnsavedEdits } from './pageEdits'
 import { cached as cachedDashboard } from './useDashboardPage'
@@ -544,8 +545,10 @@ export default function App() {
   const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage) || (target.quiet === 'piForm' && pageKey !== 'admin:pireview') || (target.quiet === 'lists' && pageKey !== 'admin:epics')
   // An added page's file is named by the page's name ("CoNQ"; its blocks for a dashboard).
   const pageChanges = changesForPage(git.remoteChanges, pageKey, targetOf, quietTarget).map((change) => {
-    const added = /(?:^|\/)(on-demand|dashboards)\/([a-z0-9-]+)(?:\.json|\/page\.json|\/rows)$/.exec(change.path), name = added && onDemand.pages.find((entry) => entry.id === added[2])?.name
-    return name ? { ...change, label: added[1] === 'dashboards' ? `the blocks of ${name}` : name } : change
+    // OND-122: a page's file is found by its id in either form ("<id>" or "<name>--<id>").
+    const blocks = pageIdOfPath(change.path, 'dashboards'), file = blocks ? null : pageIdOfPath(change.path)
+    const name = onDemand.pages.find((entry) => entry.id === (blocks ? blocks.id : file?.id))?.name
+    return name ? { ...change, label: blocks ? `the blocks of ${name}` : name } : change
   })
   const editsHere = useUnsavedEdits()
   const planningChanged = pageChanges.some((change) => change.planning)

@@ -1801,7 +1801,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-STT-03 User Story templates as a list** — Req STT-03, STT-01 — E2E `backlog.e2e.mjs` ("TC-STT-01: a User Story template, linked in an Epic’s setup, gives New Feature its current title, ticked; Admin lists it with its tags": one table row with title, description, Epic, Release Classification and "1 place"; no cards); browser check with Git storage and the right to edit: Edit opens the template in a pop-up; a blank title cannot be saved; Save puts the change in the unsaved bar and Save to Git commits it; ＋ New template adds a row; Remove of a linked template asks first; search, sort and Export work.
 ### 6.28 On-Demand pages
 
-**TC-OND-01 On-Demand → CoNQ: columns, a row, Save to Git** — Req OND-01, OND-02, OND-03, OND-04, OND-05, OND-09, OND-28, OND-29, OND-30 — **UAT** — L1 `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/conq.json, and a reload shows it from Git"); UAT: with Git storage that can save and a role allowed both On-Demand permissions, open On-Demand → CoNQ (its title says Cost of Non-Quality and that it is not in Git yet); Set up columns… → add **Category** (Dropdown: Scrap, Rework) and **Sites** (Multi-select: Berlin, Leeds, Lyon), Save — saved to Git at once, no unsaved-changes bar; ＋ Add row → the row drawer opens → Category Rework, Sites Berlin and Lyon, Save to Git — the drawer shows CONQ-0001; the table shows "Rework" and "Berlin, Lyon" and "1 of 1 row"; Background jobs says "Saved to Git." and the data repository has `on-demand/conq.json` with both columns, their options and the row; on a second computer (or after a reload) CoNQ shows the row; Export gives the row in Excel and CSV.
+**TC-OND-01 On-Demand → CoNQ: columns, a row, Save to Git** — Req OND-01, OND-02, OND-03, OND-04, OND-05, OND-09, OND-28, OND-29, OND-30, OND-120 — **UAT** — L1 `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/CoNQ--conq.json, and a reload shows it from Git"); UAT: with Git storage that can save and a role allowed both On-Demand permissions, open On-Demand → CoNQ (its title says Cost of Non-Quality and that it is not in Git yet); Set up columns… → add **Category** (Dropdown: Scrap, Rework) and **Sites** (Multi-select: Berlin, Leeds, Lyon), Save — saved to Git at once, no unsaved-changes bar; ＋ Add row → the row drawer opens → Category Rework, Sites Berlin and Lyon, Save to Git — the drawer shows CONQ-0001; the table shows "Rework" and "Berlin, Lyon" and "1 of 1 row"; Background jobs says "Saved to Git." and the data repository has `on-demand/conq.json` with both columns, their options and the row; on a second computer (or after a reload) CoNQ shows the row; Export gives the row in Excel and CSV.
 
 **TC-OND-02 Page file read back from Git is validated** — Req OND-08, GIT-15 — L1 `on-demand.test.mjs` ("OND-08: an On-Demand page file is validated when read back from Git — unknown types, bad ids and values cleaned, a file that is not a page refused (TC-OND-02)"); browser check: put a hand-edited `on-demand/test.json` with a column of type "formula" and a row with a value of an unknown column in the data repository, Reload from Git — the page shows the column as Text and no unknown value; a file that is not a page is reported as "On-Demand: on-demand/….json: … is not an On-Demand page." and the other pages still show; a change saved from another browser is named "On-Demand page …" in the Newer data in Git banner.
 
@@ -1847,7 +1847,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-23 The row drawer read only without the right** — Req OND-27, OND-07, CON-102 — E2E `row-drawer.e2e.mjs` ("TC-OND-23: a viewer without the right to edit rows opens a row in the drawer read only — Edit and Hide row disabled with the reason; a click beside the drawer closes it"); browser check: as a Team Member a row opens in the drawer with its values and History; Edit and Remove row are disabled with "Your role does not allow “Edit On-Demand data (rows)”. …" as their tooltip and as a line in the footer; without a roles file the line says "Read only: the access roles are not loaded yet, so nothing can be changed on this page."; with a read-only Git token it says "View only: your Git token can read but not save."; nothing is written.
 
-**TC-OND-24 Columns, page name and charts saved at once; no unsaved-changes bar** — Req OND-30, OND-10, OND-15, OND-05 — E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/conq.json, and a reload shows it from Git", "TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost by Category and a Summary table, Save to Git writes them into on-demand/conq.json, a reload shows them and the Table view lists the values"), `page-builder.e2e.mjs` ("TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supplier issues”, names a group co-owner, sets the page up and adds a row — the page is under Quality in the menu, saved in Git"); browser check: Set up columns… → Save commits the columns at once (the pop-up shows "Saving to Git…" and stays open with the reason when the save fails); Rename page… → Save to Git commits the name; adding, editing, moving and removing a chart each commit at once and show at once; no "Unsaved changes" bar on either tab; with the network off a chart change stays shown with "Not saved to Git: the change to the charts and tables of CoNQ, kept here — …", Retry saves it once the network is back, Discard asks first and drops it, ↻ Reload from Git asks before dropping it.
+**TC-OND-24 Columns, page name and charts saved at once; no unsaved-changes bar** — Req OND-30, OND-10, OND-15, OND-05 — E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/CoNQ--conq.json, and a reload shows it from Git", "TC-OND-09: Insights — on CoNQ add rows, add a Bar chart of Sum of cost by Category and a Summary table, Save to Git writes them into on-demand/conq.json, a reload shows them and the Table view lists the values"), `page-builder.e2e.mjs` ("TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supplier issues”, names a group co-owner, sets the page up and adds a row — the page is under Quality in the menu, saved in Git"); browser check: Set up columns… → Save commits the columns at once (the pop-up shows "Saving to Git…" and stays open with the reason when the save fails); Rename page… → Save to Git commits the name; adding, editing, moving and removing a chart each commit at once and show at once; no "Unsaved changes" bar on either tab; with the network off a chart change stays shown with "Not saved to Git: the change to the charts and tables of CoNQ, kept here — …", Retry saves it once the network is back, Discard asks first and drops it, ↻ Reload from Git asks before dropping it.
 
 **TC-OND-25 The drawer: keyboard, focus, phone, themes and reduced motion** — Req OND-27 — E2E `row-drawer.e2e.mjs` ("TC-OND-21: a CoNQ row opens in a drawer from the right with its values and History; Edit → Save to Git writes the change and its log entry to Git at once; Esc closes; ＋ Add row gets its ID in its save"); browser check: with the keyboard only, Tab to a row, Enter opens the drawer and the focus is in it; Tab and Shift+Tab stay inside; Escape closes it and the focus is back on the row; a click on the dimmed page beside it closes it (asking first with unsaved edits); a screen reader announces a dialog named by the row's ID; at 390 px wide the drawer is the full width with the buttons at the bottom; in light and dark mode the text and the buttons are readable; with "reduce motion" on in the system the drawer appears without sliding; a click on Edit or Remove in the table opens the drawer for editing or the remove pop-up, not the plain view.
 
@@ -1948,6 +1948,44 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-OND-102 Upload rights and limits** — Req OND-107 — L1 `bulk-upload.test.mjs` ("OND-107: the limits — 10 MB and .xlsx / .csv only before reading, 5,000 rows read, 2,000 added or updated, a page of at most 5,000 rows (TC-OND-102)"); browser check: a file of 11 MB is refused before it is read with the reason; an .xls file is refused ("Old .xls files cannot be read…"); a template with 2,001 new rows is refused whole ("2,001 rows would be added or updated; one upload changes at most 2,000…") and Save to Git stays disabled; in Sample, with View as, a read-only token, without Git storage or without "Edit On-Demand data", **Upload Excel…** is greyed out with the reason as its tooltip.
 
 **TC-OND-103 Grouped and filtered On-Demand rows: drawer, search and Export** — Req OND-132, UI-25, UI-26 — E2E `table-group-filter.e2e.mjs` ("TC-OND-103: on a grouped and filtered On-Demand table a row opens in the drawer with Previous / Next in the order shown, a text filter works with the search, and Export writes the filtered rows in the order of the groups"); browser check: group an On-Demand page by a Multi-select column and filter a text column; a row opens in the drawer with "n of m" over the rows shown; Edit and Hide in the row and a row locked by someone else (TC-OND-30) behave as without grouping; Export (Excel and CSV) holds the filtered rows shown once each, in the order of the groups (rows in closed groups left out, TC-UI-25), with a hidden grouped-by column included; the sticky scroll bar (TC-UI-18) follows the table when groups open and close.
+
+### 6.28a Page file names
+
+**TC-OND-120 File-safe names; names that differ only by case** — Req OND-120 — L1 `page-files.test.mjs` ("OND-120: the name part of a file name is file-safe — characters refused by file systems and URLs, control characters, spaces, "--", dots, length, Windows device names (TC-OND-120)"); L1 `page-files.test.mjs` ("OND-120: names that differ only by case, or are the same name, never share a file — the id tells them apart, also on a file system that ignores case (TC-OND-120)"); browser check: a page named "Q1 / Q2: scrap?" is saved as `on-demand/Q1 - Q2- scrap--q1-q2-scrap.json`; a page named with an emoji opens and saves.
+
+**TC-OND-121 A path read back gives the page id** — Req OND-122, OND-121 — L1 `page-files.test.mjs` ("OND-122: a path read back gives the page id — the old form "<id>" and the named form "<name>--<id>", files and folders; anything else is not a page (TC-OND-121)").
+
+**TC-OND-122 Both forms read; both present: the newer, flagged** — Req OND-123, OND-122 — L1 `page-files.test.mjs` ("OND-123: the folder read — old and new forms side by side, a folder wins over files, markers are not pages, both forms present: the newer wins and the older is flagged (TC-OND-122)"); browser check: with `on-demand/conq.json` written again by hand next to `on-demand/CoNQ--conq.json`, CoNQ shows the newer and the warning naming both files, also in Admin → Pages & menu.
+
+**TC-OND-123 A new page saved in place, or moved in one commit when renamed** — Req OND-124, OND-120, GIT-27 — L1 `page-files.test.mjs` ("OND-124: a page saved — created at "<name>--<id>", saved in place while its name stays, moved in ONE commit when renamed (old form: a marker stays) (TC-OND-123)"); L1 `page-files.test.mjs` ("GIT-27, OND-124: a page save GitHub answers with HTTP 500 is tried once more by itself and saved where its name says; twice a 500: the failure in plain words (TC-OND-123)").
+
+**TC-OND-124 A save made after someone else renamed the page** — Req OND-124, GIT-17 — L1 `page-files.test.mjs` ("OND-124, GIT-17: a save queued here while someone else renamed the page is merged into the moved file — nothing written under the old name; two renames at once end in one file (TC-OND-124)"); E2E `page-file-names.e2e.mjs` ("TC-OND-131: a second browser with a page of row files open — editing a row, its save failed — saves into the folder the Tool Owner renamed meanwhile, keeps its lock, and shows the new name").
+
+**TC-OND-125 A page of row files renamed; converted under its name** — Req OND-124, OND-125 — L1 `page-files.test.mjs` ("OND-124, OND-125: a row-file page renamed — the whole folder moves in one commit by the versions of its files; a converted named page keeps its name (TC-OND-125)").
+
+**TC-OND-126 Row files written under the old name brought over** — Req OND-129 — L1 `page-files.test.mjs` ("OND-129: a row saved to the folder someone renamed meanwhile is brought into the folder of the page in one commit — the row kept, the higher counter, a folder with page.json never touched (TC-OND-126)").
+
+**TC-OND-127 Rename page files: the plan and one commit** — *(Retired — see TC-OND-132)* Req OND-126
+
+**TC-OND-128 Delete of every file of the page; the update marker; minimum version** — Req OND-130, OND-121, OND-128 — L1 `page-files.test.mjs` ("OND-130, OND-121, OND-128: a page deleted takes every file of its id in one commit; the update marker is written once; an app older than its version says so (TC-OND-128)"); browser check: with `on-demand/app-update-required.json` holding `minVersion` above the running version, Admin → Pages & menu shows "This data repository needs app version … or later".
+
+**TC-OND-129 A page added, renamed, a page of row files renamed** — Req OND-120, OND-121, OND-124, OND-127, OND-131 — **UAT** — E2E `page-file-names.e2e.mjs` ("TC-OND-129: a page added is saved as on-demand/<Name>--<id>.json; renamed, its file moves in one commit; a page of row files kept under its name renamed moves its folder"); browser check: in the data repository on GitHub the page's file carries its name; History in GitHub opens the current file.
+
+**TC-OND-130 Rename page files once** — *(Retired — see TC-OND-133)* Req OND-126
+
+**TC-OND-132 A page from before keeps its file** — Req OND-133, OND-124 — L1 `page-files.test.mjs` ("OND-133: a page of the form before keeps its file for good — renamed, only the title in it changes; saved, read and deleted where it is; a page of row files keeps its folder (TC-OND-132)").
+
+**TC-OND-133 CoNQ and the pages from before keep their files when renamed** — Req OND-133, OND-127 — **UAT** — E2E `page-file-names.e2e.mjs` ("TC-OND-133: CoNQ and the other pages of the form before keep their files — renamed, only the title in the file changes; a page of row files keeps its folder; nothing else is written"); browser check: rename CoNQ — the data repository still holds `on-demand/conq.json`, with the new title inside; History in GitHub shows its whole history.
+
+**TC-OND-134 The older copy chosen and deleted** — Req OND-135, OND-123 — L1 `page-files.test.mjs` ("OND-135: the older copy is the one the reader does not read — by latest commit, else the named form; Delete older copy deletes exactly it (file or folder) in one commit, never the newer, and nothing once it is gone (TC-OND-134)").
+
+**TC-OND-135 Dashboard blocks file named as its page** — Req OND-134, OND-131, OND-124, OND-130 — L1 `page-files.test.mjs` ("OND-134: a Dashboard blocks file is named as its page — dashboards/<name>--<id>.json for a new page, dashboards/<id>.json kept for a page from before; moved with a rename in the same commit; read in both forms (TC-OND-135)").
+
+**TC-OND-136 Delete older copy** — Req OND-135, OND-123 — **UAT** — E2E `page-file-names.e2e.mjs` ("TC-OND-136: a page with two copies in Git — the notice names them; Delete older copy… (Tool Owner only) lists what is deleted and what stays, deletes the older one in one commit, and the notice goes"); browser check: in View as, with the sample loaded and with a read-only token the button is disabled with the reason; while a save of the page waits for Retry it says so.
+
+**TC-OND-137 A Dashboard page's blocks file named, moved, or kept** — Req OND-134, OND-133, DSH-08 — E2E `page-file-names.e2e.mjs` ("TC-OND-137: a Dashboard page added keeps its blocks in dashboards/<Name>--<id>.json, moved with the page on rename; a Dashboard page from before keeps dashboards/<id>.json").
+
+**TC-OND-131 A second browser keeps its save and its lock through a rename** — Req OND-124, OND-129, OND-35, OND-131, GIT-17 — E2E `page-file-names.e2e.mjs` ("TC-OND-131: a second browser with a page of row files open — editing a row, its save failed — saves into the folder the Tool Owner renamed meanwhile, keeps its lock, and shows the new name").
 
 ### 6.29 Custom streams
 
@@ -2966,6 +3004,20 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-107 | TC-OND-102 |
 | OND-108 | TC-OND-101 |
 | OND-132 | TC-UI-20, TC-OND-103, TC-UI-25 |
+| OND-120 | TC-OND-120, TC-OND-123, TC-OND-129 |
+| OND-121 | TC-OND-121, TC-OND-128, TC-OND-129 |
+| OND-122 | TC-OND-121, TC-OND-122 |
+| OND-123 | TC-OND-122, TC-OND-134, TC-OND-136 |
+| OND-124 | TC-OND-123, TC-OND-124, TC-OND-125, TC-OND-129, TC-OND-131, TC-OND-132, TC-OND-135 |
+| OND-125 | TC-OND-125 |
+| OND-127 | TC-OND-129, TC-OND-133 |
+| OND-128 | TC-OND-128 |
+| OND-129 | TC-OND-126, TC-OND-131 |
+| OND-130 | TC-OND-128, TC-OND-135 |
+| OND-131 | TC-OND-129, TC-OND-131, TC-OND-135 |
+| OND-133 | TC-OND-132, TC-OND-133, TC-OND-137 |
+| OND-134 | TC-OND-135, TC-OND-137 |
+| OND-135 | TC-OND-134, TC-OND-136 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -3012,7 +3064,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | DSH-05 | TC-DSH-01, TC-DSH-06, TC-DSH-07, TC-DSH-16 |
 | DSH-06 | TC-DSH-01, TC-DSH-06, TC-DSH-10, TC-DSH-14 |
 | DSH-07 | TC-DSH-01, TC-DSH-05 |
-| DSH-08 | TC-DSH-01, TC-DSH-03, TC-DSH-04 |
+| DSH-08 | TC-DSH-01, TC-DSH-03, TC-DSH-04, TC-OND-137 |
 | DSH-09 | TC-DSH-09, TC-DSH-12, TC-DSH-13 |
 | DSH-10 | TC-DSH-01, TC-DSH-07, TC-DSH-11 |
 | DSH-11 | TC-DSH-01 |
@@ -3233,8 +3285,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
-| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
+| UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…37 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |

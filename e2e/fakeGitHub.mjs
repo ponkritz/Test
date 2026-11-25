@@ -73,7 +73,10 @@ export function fakeGitHub({ owner = 'example', repo = 'storage', files = {}, br
     if (rest === '' && method === 'GET') return json(200, { permissions: { push: true } })
     if (rest === '/commits' && method === 'GET') {
       const file = target.searchParams.get('path') ?? '', ref = target.searchParams.get('sha') ?? branch
-      return json(200, history.filter((entry) => entry.branch === ref && entry.paths.includes(file)).slice(0, Number(target.searchParams.get('per_page') ?? 30)).map((entry) => ({ sha: entry.sha, commit: { message: entry.message, author: { name: 'someone', date: entry.date }, committer: { date: entry.date } } })))
+      // A commit as the ref (a read at a commit): the commits that lead to it.
+      const ancestors = new Set()
+      for (let at = commits.has(ref) ? ref : null; at; at = commits.get(at)?.parent) ancestors.add(at)
+      return json(200, history.filter((entry) => (ancestors.size ? ancestors.has(entry.sha) : entry.branch === ref) && entry.paths.includes(file)).slice(0, Number(target.searchParams.get('per_page') ?? 30)).map((entry) => ({ sha: entry.sha, commit: { message: entry.message, author: { name: 'someone', date: entry.date }, committer: { date: entry.date } } })))
     }
     const branchRead = /^\/branches\/(.+)$/.exec(rest)
     if (branchRead && method === 'GET') return heads[branchRead[1]] ? json(200, { name: branchRead[1], commit: { sha: heads[branchRead[1]] } }) : json(404, { message: 'Branch not found' })
@@ -136,7 +139,7 @@ export function fakeGitHub({ owner = 'example', repo = 'storage', files = {}, br
       const from = trees.get(body.base_tree)
       if (!from || from.prefix) return json(422, { message: 'base_tree is not a root tree' })
       const map = { ...from.map }
-      for (const entry of body.tree) { if (entry.sha === null) delete map[entry.path]; else map[entry.path] = entry.content }
+      for (const entry of body.tree) { if (entry.sha === null) delete map[entry.path]; else if (typeof entry.sha === 'string') { if (!blobs.has(entry.sha)) return json(422, { message: 'Unknown blob' }); map[entry.path] = blobs.get(entry.sha) } else map[entry.path] = entry.content }
       return json(201, { sha: treeOf(map, '') })
     }
     if (rest === '/git/commits' && method === 'POST') {

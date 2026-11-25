@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { OlderCopies } from '../components/OlderCopies'
 import { useUnsavedEdit } from '../pageEdits'
 import { recordJob } from '../backgroundJobs'
 import { DataTable, type DataColumn } from '../components/DataTable'
@@ -22,7 +23,7 @@ import { canBuildDashboard, deleteReason, findGroup, gitReasonOf, hideReason, is
 import { PublishDialog } from '../components/PublishDialog'
 import { prepareDashboard, useSchedules } from '../publishRun'
 import { formatDateTime } from '../format'
-import { cleanOptions, hasOptions, insightKindOf as kindOf, onDemandPath, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
+import { cleanOptions, hasOptions, insightKindOf as kindOf, renamePage, type OnDemandPage, withoutHidden } from '../onDemand'
 import { noneKey, noneLabel } from '../onDemandInsights'
 import { useWriteBlock } from '../useCan'
 import { changeOtherDashboard, useDashboardPage } from '../useDashboardPage'
@@ -242,6 +243,7 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     {!gitReason && <WriteBlocked reason={buildNote} />}
     {dash.error && <Notice tone="error">Dashboard: {dash.error} The dashboard last read is kept.</Notice>}
     {dash.dropped.length > 0 && <Notice tone="warning">Dashboard: {dash.path} — {dash.dropped.join(' ')}</Notice>}
+    <OlderCopies store={store} git={git} viewer={viewer} id={page.id} name={page.name} />
     {store.errors.map((entry) => <Notice key={entry} tone="error">On-Demand: {entry}</Notice>)}
     {/* OND-65: a block over a table page the viewer shows in Sample draws its sample rows; the page says so. */}
     {sampleSources.length > 0 && <Notice tone="warning" className="od-sample-banner"><strong>Sample data — nothing is saved.</strong> {sampleSources.join(', ')} {sampleSources.length === 1 ? 'is' : 'are'} set to Sample by you: the blocks over {sampleSources.length === 1 ? 'it' : 'them'} show made-up rows. Choose Live on {sampleSources.length === 1 ? 'that page' : 'those pages'} to see the real figures.</Notice>}
@@ -312,14 +314,15 @@ export function CustomDashboardPage({ git, store, pageId, menu, viewer, views, o
     {pageDialog === 'rename' && <PageNameDialog title="Rename the page" action="Save to Git" name={page.name} description={page.description} except={`ondemand:${page.id}`} onCancel={() => setPageDialog(null)} onSave={async (name, description) => {
       const stored = store.stored(page.id) ?? page
       const saved = await store.save(renamePage(stored, name, description), `Pages & menu: rename ${stored.name} to ${name.trim()}`)
-      recordJob(`pages:${page.id}`, `Rename page · ${stored.name}`, { text: `${outcomeText(saved)} ${onDemandPath(page.id)}` })
+      recordJob(`pages:${page.id}`, `Rename page · ${stored.name}`, { text: `${outcomeText(saved)} ${store.filePath(page.id)}` })
       setPageDialog(null)
     }} />}
-    {pageDialog === 'remove' && <RemoveDashboardDialog page={page} blocks={dashboard.blocks.length} path={dash.path} onCancel={() => setPageDialog(null)} onRemove={async () => {
+    {pageDialog === 'remove' && <RemoveDashboardDialog page={page} blocks={dashboard.blocks.length} path={dash.path} pageFile={store.filePath(page.id)} onCancel={() => setPageDialog(null)} onRemove={async () => {
+      const pageFile = store.filePath(page.id)
       await store.remove(page.id, `Pages & menu: remove the dashboard ${page.name} (${dashboard.blocks.length} blocks)`)
       const removed = await git.removeDashboard(page.id, `Pages & menu: remove the dashboard ${page.name} (${dashboard.blocks.length} blocks)`)
       if (menu.layout.pages[page.id]) await menu.save(removePlacement(menu.layout, page.id), `Pages & menu: remove the page ${page.name}`)
-      recordJob(`pages:${page.id}`, `Remove page · ${page.name}`, { text: `Removed ${onDemandPath(page.id)}${removed ? ` and ${dash.path}` : ''}; the history stays in GitHub. The data sources are not changed.` })
+      recordJob(`pages:${page.id}`, `Remove page · ${page.name}`, { text: `Removed ${pageFile}${removed ? ` and ${dash.path}` : ''}; the history stays in GitHub. The data sources are not changed.` })
       setPageDialog(null); const next = store.pages.find((entry) => entry.id !== page.id); if (next) onOpen(next.id)
     }} />}
   </Page></ExportNoteContext.Provider>
@@ -471,13 +474,13 @@ function RemoveBlockDialog({ block, onCancel, onRemove }: { block: DashboardBloc
 }
 
 // DSH-01: removing a Dashboard page asks first: its two files go, its data sources stay.
-function RemoveDashboardDialog({ page, blocks, path, onCancel, onRemove }: { page: OnDemandPage; blocks: number; path: string; onCancel: () => void; onRemove: () => Promise<void> }) {
+function RemoveDashboardDialog({ page, blocks, path, pageFile, onCancel, onRemove }: { page: OnDemandPage; blocks: number; path: string; pageFile: string; onCancel: () => void; onRemove: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const remove = async () => { setBusy(true); setError(''); try { await onRemove() } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) } }
   return <Modal eyebrow={`PAGES & MENU · ${page.name.toUpperCase()}`} title="Delete the On-Demand Dashboard" onClose={() => { if (!busy) onCancel() }}>
     <form onSubmit={(event) => { event.preventDefault(); void remove() }}>
-      <p>Delete the On-Demand Dashboard <strong>{page.name}</strong> with its {blocks} block{blocks === 1 ? '' : 's'}, for everyone? Its files {onDemandPath(page.id)} and {path} are deleted from Git; their history stays in GitHub. The table pages and hours it shows are not changed.</p>
+      <p>Delete the On-Demand Dashboard <strong>{page.name}</strong> with its {blocks} block{blocks === 1 ? '' : 's'}, for everyone? Its files {pageFile} and {path} are deleted from Git; their history stays in GitHub. The table pages and hours it shows are not changed.</p>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions"><button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="danger-button" disabled={busy}>{busy ? 'Deleting…' : 'Delete On-Demand Dashboard'}</button></div>
     </form>
