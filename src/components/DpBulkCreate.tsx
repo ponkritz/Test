@@ -1,22 +1,18 @@
 import { useEffect, useState } from 'react'
 import { ClassPick, QePick } from './QePick'
 import { boardPeople } from '../contentBulk'
-import { classificationOf, epicFieldsFor, withEpicFields } from '../epicSetup'
-import { useEpicSetupFile } from '../useEpicSetup'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { FeatureSetups } from '../featureSetup'
-import { chooseSetup, withLinkedStories } from '../featureSetup'
-import { useBulkEpic, useDpBulkDates } from '../useStreamEpics'
 import { bulkEpicMissing } from '../bulkEpics'
-import { useQeSource } from '../useQeSource'
-import { bulkPlan, pickQe } from '../dpBulk'
+import { useDpCreateContext } from '../useDpCreateContext'
+import { dpCreateLines, dpStorySprints, storySprintText, withStorySprints } from '../dpCreatePlan'
 import type { BoardHit } from '../dpBoardMatch'
 import { createFeatureWithMonthTasks, utcMonthLabel, currentIterationPairs, futureIterationPairs, readAzureIterations, withFeatureDoD, HierarchyCreationError, type AzureIteration } from '../azureDevOps'
 import { runInBackground } from '../backgroundJobs'
 import { adhocAfterLock } from '../planningLock'
 import { Modal, Notice } from './ui'
-import { dpDateLabel, dpRowDates, dpTaskMonths, manyMonthTasks } from '../dpBulkDates'
+import { dpDateLabel, manyMonthTasks } from '../dpBulkDates'
 
 // DPF-04: Create Features for the selected DP releases — under the DP bulk creation Epic (QV-59), each titled Program |
 // Service | Release, with the DoD and default User Stories of its release type (that Epic's Feature setup), the Release
@@ -30,35 +26,22 @@ import { dpDateLabel, dpRowDates, dpTaskMonths, manyMonthTasks } from '../dpBulk
 // Target date's month (never before the current month, New Feature's rule; the row says when it starts later).
 // The pop-up is full size (UI-30): its list scrolls between the fixed header and actions.
 export function DpBulkCreate({ rows, azure, featureSetup, featureMatch, onClose }: { rows: AzureWorkItem[]; azure: AzureWorkspace; featureSetup?: FeatureSetups | null; featureMatch: (row: AzureWorkItem) => BoardHit | undefined; onClose: () => void }) {
-  // QV-59: the DP bulk Epic — mine, else shared; none built in (0: not set, Create is blocked).
-  const dpEpicId = useBulkEpic('DP').epicId ?? 0
-  const unlinked = chooseSetup(featureSetup, dpEpicId, true).setup
-  const epicFile = useEpicSetupFile()
-  // STT-02: stories linked to a User Story template take its current title and description.
-  const setup = withLinkedStories(unlinked, epicFile?.storyTemplates)
-  // DPF-02: the QE page of the bulk Epic's setup.
-  const qe = useQeSource(setup)
+  // DPF-17: the same settings and rules as the New Feature form from a DP release (dpCreatePlan): the DP bulk Epic
+  // (QV-59; 0: not set, Create is blocked), its setup, QE page (DPF-02), Release Classification (DPF-07, DPF-08) and
+  // Epic setup fields (EPS-03), the dates (DPF-14, DPF-15) and the Time Writing months (DPF-16).
+  const context = useDpCreateContext(featureSetup)
+  const { epicId: dpEpicId, setup, classes, dateColumns } = context
   // DPF-06: the QE picked per release in the pop-up (email by release), in place of the QE page's.
   const [picks, setPicks] = useState<Record<string, string>>({})
   const people = boardPeople(azure.items)
-  // DPF-08: the Release Classification per row, from the Epic's list (prefilled from the release number), decides
-  // the DoD and User Stories (DPF-07).
-  const classes = classificationOf(epicFile, dpEpicId)
   const [classPicks, setClassPicks] = useState<Record<string, string>>({})
-  const mappedPlan = bulkPlan(rows, { setup, qe, board: azure.items, featureMatch, classes: classPicks, classValues: classes.values, classRules: classes.rules })
-  const rawPlan = pickQe(mappedPlan, picks, (line) => String(line.row.id), people)
-  // EPS-03: the Epic setup's fields of the bulk Epic.
-  const plan = withEpicFields(rawPlan, epicFieldsFor(epicFile, dpEpicId), (line) => [line.row], { index: classes.fieldIndex, of: (line) => line.classification })
-  // DPF-14, DPF-15: the dates of each row from the mapped columns; Start after Target skips the row.
-  const dateColumns = useDpBulkDates()
   // DPF-16: optional, not ticked by default — unticked keeps one Task for the current month, as before.
   const [fromStart, setFromStart] = useState(false)
   const currentMonth = utcMonthLabel()
-  const lines = plan.map((line) => {
-    const dates = dpRowDates(line.row, dateColumns)
-    const { months, note: monthsNote } = dates.error ? { months: [] as string[], note: '' } : dpTaskMonths(fromStart, dates, currentMonth)
-    return { ...line, dates, months, monthsNote, skip: line.baseSkip || dates.error || line.skip }
-  })
+  // EPS-10: the iteration tree, for the Sprint of each User Story from its milestone date.
+  const [iterations, setIterations] = useState<AzureIteration[] | null>(null)
+  const lines = dpCreateLines(rows, context, { board: azure.items, featureMatch, classPicks, qePicks: picks, people, fromStart, currentMonth })
+    .map((line) => ({ ...line, sprints: dpStorySprints(line.set?.stories ?? [], line.row, iterations) }))
   const ready = lines.filter((line) => !line.skip)
   const taskTotal = ready.reduce((sum, line) => sum + line.months.length, 0)
   const epic = azure.items.find((item) => item.id === dpEpicId && item.workItemType === 'Epic')
@@ -70,6 +53,7 @@ export function DpBulkCreate({ rows, azure, featureSetup, featureMatch, onClose 
     let active = true
     readAzureIterations(azure.config, azure.pat).then((options) => {
       if (!active) return
+      setIterations(options)
       const current = currentIterationPairs(options)
       setPairs(current.length ? current : futureIterationPairs(options))
     }).catch((failure) => { if (active) setError(failure instanceof Error ? failure.message : 'Unable to load the PI / Sprint.') })
@@ -88,7 +72,7 @@ export function DpBulkCreate({ rows, azure, featureSetup, featureMatch, onClose 
         try {
           const feature = { parentId: epic.id, title: line.title, description: withFeatureDoD(line.set!.featureDoD, '', undefined, line.fieldLines), acceptanceCriteria: '', areaPath: epic.areaPath, iterationPath: pair.pi.path, storyIterationPath: pair.sprint.path, assignedTo: line.email, ...(line.dates.start ? { startDate: line.dates.start } : {}), ...(line.dates.target ? { targetDate: line.dates.target } : {}) }
           // DPF-16: the Time Writing months chosen (current month only, or Start to Target), each Task ad-hoc after its lock.
-          const bundle = await createFeatureWithMonthTasks(config, token, feature, { stories: line.set!.stories, reviewStory: false, ...(setup?.timeWritingStory ? { timeWritingStory: setup.timeWritingStory } : {}), task: { ...(setup?.task ?? { title: '{month} | {feature}', description: '', assignedTo: '', areaPath: '', iterationPath: '' }), assignedTo: line.email } }, line.months, adhocAfterLock)
+          const bundle = await createFeatureWithMonthTasks(config, token, feature, { stories: withStorySprints(line.set!.stories, line.sprints), reviewStory: false, ...(setup?.timeWritingStory ? { timeWritingStory: setup.timeWritingStory } : {}), task: { ...(setup?.task ?? { title: '{month} | {feature}', description: '', assignedTo: '', areaPath: '', iterationPath: '' }), assignedTo: line.email } }, line.months, adhocAfterLock)
           azure.featureCreated([epic, ...bundle.items])
           done.push(`#${bundle.feature.id} ${line.title} → ${line.qe}${line.months.length > 1 ? ` (${line.months.length} month Tasks)` : ''}${line.warned.length ? ` (empty: ${line.warned.join(', ')})` : ''}`)
         } catch (failure) {
@@ -118,11 +102,11 @@ export function DpBulkCreate({ rows, azure, featureSetup, featureMatch, onClose 
           <td>{line.version || '—'}</td>
           {classes.values.length > 0 && <td><ClassPick label={line.title} field={classes.label} values={classes.values} value={line.classification} detected={line.detected} version={line.version} onPick={(value) => setClassPicks((current) => ({ ...current, [String(line.row.id)]: value }))} /></td>}
           <td>{line.title}</td>
-          <td>{line.set ? line.set.stories.map((story) => story.title.split(' :')[0]).join(', ') || 'none' : '—'}</td>
+          <td>{line.set ? line.set.stories.map((story) => story.title.split(' :')[0]).join(', ') || 'none' : '—'}{storySprintText(line.sprints) && <small className="muted dp-story-sprints">{storySprintText(line.sprints)}</small>}{line.sprints.filter((entry) => entry.note).map((entry) => <small key={entry.note} className="warning-text">{entry.note}</small>)}</td>
           <td className="nowrap">{line.dates.start ?? <span className="warning-text">—</span>}</td>
           <td className="nowrap">{line.dates.target ?? <span className="warning-text">—</span>}</td>
           <td>{line.months.length ? <>{monthsText(line.months)}{line.monthsNote && <small className="muted">{line.monthsNote}</small>}{line.months.length > manyMonthTasks && <small className="warning-text">{line.months.length} month Tasks: check the Target date</small>}</> : '—'}</td>
-          <td>{line.baseSkip ? (line.qe || '—') : <QePick label={line.title} email={line.email} mapped={mappedPlan.find((entry) => String(entry.row.id) === String(line.row.id))?.qe} people={people} onPick={(email) => setPicks((current) => ({ ...current, [String(line.row.id)]: email }))} />}</td>
+          <td>{line.baseSkip ? (line.qe || '—') : <QePick label={line.title} email={line.email} mapped={line.mappedQe} people={people} onPick={(email) => setPicks((current) => ({ ...current, [String(line.row.id)]: email }))} />}</td>
           <td>{line.skip ? <span className="warning-text">Skipped: {line.skip}</span> : <>Will be created{line.note && <small className="warning-text"> — {line.note}</small>}{line.warned.length > 0 && <small className="warning-text"> — empty {line.warned.join(', ')}</small>}{line.dates.notes.map((note) => <small key={note} className="warning-text"> — {note}</small>)}</>}</td>
         </tr>)}</tbody>
       </table></div>

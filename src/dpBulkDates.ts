@@ -49,18 +49,20 @@ export function utcDay(value: string | undefined): string | undefined {
 // DPF-14, DPF-15: the Start and Target dates of one DP row. A missing or unreadable date is left empty with a note
 // ("no DDT Date — Target date left empty"), which does not stop the row; a Start date after the Target date is an
 // error, and the row is skipped with it.
-export interface DpRowDates { start?: string; target?: string; notes: string[]; error: string }
+// DPF-17: fieldNotes — the same notes, short, for the field each date fills in the single New Feature form ("No DDT Date
+// on this release").
+export interface DpRowDates { start?: string; target?: string; notes: string[]; error: string; fieldNotes: { start?: string; target?: string } }
 export function dpRowDates(row: Pick<AzureWorkItem, 'fields'>, columns: DpBulkDates): DpRowDates {
-  const notes: string[] = []
-  const read = (field: string, what: string) => {
+  const notes: string[] = [], fieldNotes: DpRowDates['fieldNotes'] = {}
+  const read = (field: string, what: string, key: 'start' | 'target') => {
     const raw = fieldOf(row, field), day = utcDay(raw)
-    if (!raw) notes.push(`no ${dpDateShort(field)} — ${what} left empty`)
-    else if (!day) notes.push(`${dpDateShort(field)} “${raw.slice(0, 40)}” is not a date — ${what} left empty`)
+    if (!raw) { notes.push(`no ${dpDateShort(field)} — ${what} left empty`); fieldNotes[key] = `No ${dpDateShort(field)} on this release` }
+    else if (!day) { notes.push(`${dpDateShort(field)} “${raw.slice(0, 40)}” is not a date — ${what} left empty`); fieldNotes[key] = `${dpDateShort(field)} “${raw.slice(0, 40)}” is not a date` }
     return day
   }
-  const start = read(columns.start, 'Start date'), target = read(columns.target, 'Target date')
+  const start = read(columns.start, 'Start date', 'start'), target = read(columns.target, 'Target date', 'target')
   const error = start && target && start > target ? `the Start date ${start} (${dpDateShort(columns.start)}) is after the Target date ${target} (${dpDateShort(columns.target)})` : ''
-  return { ...(start ? { start } : {}), ...(target ? { target } : {}), notes, error }
+  return { ...(start ? { start } : {}), ...(target ? { target } : {}), notes, error, fieldNotes }
 }
 
 // DPF-16: the Time Writing Tasks of a Feature made in bulk. Without the optional tick box (not ticked by default): one

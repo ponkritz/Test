@@ -256,6 +256,26 @@ The DP and IOCC **Create Features** pop-ups now fill the window, with a small ma
 
 *DPF-13…DPF-16 · UI-30*
 
+**Create Feature on one DP release, the same as Create Features**
+
+**Create Feature** on a row of Release Details → DP (the *QMS-0025 match* column) now opens New Feature filled in by the same rules as DP **Create Features**, so the same release gives the same Feature either way:
+
+- **Parent Epic** — the DP bulk creation Epic (*"The DP bulk creation Epic, as Create Features uses it."*); blank with the reason when none is set or it is not on the loaded board.
+- **Title** and **Release Classification** — Program | Service | Release (or the Epic setup's title pattern) and the value detected from the release number, with its DoD and User Stories.
+- **Assigned to** — the QE from the QE page when that person is on the loaded board; otherwise you, with the reason under the field.
+- **Start date** and **Target date** — from the DRPE Date and DDT Date (or the columns set in DP bulk creation dates). A missing date stays empty with a note, for example *"No DDT Date on this release"*.
+- **Time Writing** — the same optional tick box, **Create Time Writing month Tasks from the Start date to the Target date**, not ticked: one Task for the current month; ticked: one per month from the Start date's month to the Target date's month, with the same notes.
+
+You can change every value. If the Start date is after the Target date, the form says *"The Target date is before the Start Date."* and Save waits until you fix it. Create Feature on IOCC, CP, Content and Windchill releases is unchanged.
+
+**Sprint from: a User Story in the Sprint of a DP milestone**
+
+In **Admin → Epic & Feature setup → Setup per Epic → User Stories**, each story has **Sprint from**: **None — the Sprint chosen** (the default), **DRPE Date (RPE)**, **DRPC Date (PRD)**, **DRfH Date (SFV)**, **DDT Date (DT)** or another date column of the DP query. Save to Git as usual.
+
+When a DP release's Feature is made (Create Features or Create Feature), a story with Sprint from goes in the **current or future Sprint whose dates hold that date** of the release. Create Features shows it on each row (*"SFV → Sprint 3 · PRD → default Sprint"*), New Feature next to each story. A story whose date is missing, in a past Sprint or in no Sprint keeps the default Sprint, and the note says why, for example *"PRD 12 Mar 2026 is in a past Sprint — default Sprint"*. The Feature stays in its PI; the Time Writing story and Tasks do not change. Other streams ignore Sprint from.
+
+*DPF-17, DPF-18 · EPS-10*
+
 ### New for Windchill export pages
 
 **⋯ → Upload latest export…** (v10.25.0)

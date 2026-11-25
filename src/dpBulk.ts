@@ -107,7 +107,7 @@ export function emailFor(name: string, board: AzureWorkItem[]): string {
 // threshold but not exact Feature is named as a note, and the release is still created.
 export const fullMatch = (hit: BoardHit | undefined) => Boolean(hit && hit.score >= 100)
 export const similarNote = (hit: BoardHit | undefined) => hit && hit.score < 100 ? `a similar Feature #${hit.item.id} (${hit.score}%) exists` : ''
-export interface BulkLine { row: AzureWorkItem; title: string; name: string; version: string; type?: DpReleaseType; classification: string; detected: string; set?: ReleaseTypeSetup; qe: string; email: string; skip: string; baseSkip: string; note: string }
+export interface BulkLine { row: AzureWorkItem; title: string; name: string; version: string; type?: DpReleaseType; classification: string; detected: string; set?: ReleaseTypeSetup; qe: string; email: string; skip: string; baseSkip: string; note: string; hit?: BoardHit }
 export function bulkPlan(rows: AzureWorkItem[], options: { setup?: EpicSetup; qe?: QeSource | null; board: AzureWorkItem[]; featureMatch: (row: AzureWorkItem) => BoardHit | undefined; classes?: Record<string, string>; classValues?: string[]; classRules?: ClassRule[] }): BulkLine[] {
   return rows.map((row) => {
     const version = dpRowVersion(row), typed = dpReleaseType(version), detected = detectClassification({ values: options.classValues ?? [], rules: options.classRules ?? [] }, version), classification = options.classes?.[String(row.id)] ?? detected, found = qeFor(row, options.qe)
@@ -120,7 +120,7 @@ export function bulkPlan(rows: AzureWorkItem[], options: { setup?: EpicSetup; qe
       : !email ? `no email found for ${qe} (not assigned anything on QMS-0025 yet)` : '')
     const skip = baseSkip || qeSkip
     const set = bulkSetFor(options.setup, classification)
-    return { row, title: dpFeatureTitle(row), name: dpRowName(row), version, classification, detected, ...(typed ? { type: typed.type } : {}), ...(set ? { set } : {}), qe, email, skip, baseSkip, note: baseSkip ? '' : similarNote(hit) }
+    return { row, title: dpFeatureTitle(row), name: dpRowName(row), version, classification, detected, ...(typed ? { type: typed.type } : {}), ...(set ? { set } : {}), qe, email, skip, baseSkip, note: baseSkip ? '' : similarNote(hit), ...(hit ? { hit } : {}) }
   })
 }
 

@@ -495,7 +495,8 @@ export async function createAzureReleaseHierarchy(config: AzureConfig, pat: stri
 // "<Feature> - Time Writing"; its Iteration Path, when set, wins over the Sprint chosen in the dialog)
 // and the month Task with the setup's defaults. Titles may carry placeholders ({feature}, {program}, {service},
 // {version}, {month}). Existing children with the same title are reused, so it can also complete a Feature.
-export interface SetupChildren { stories: { title: string; description: string }[]; reviewStory?: boolean; titleFields?: TitleField[]; fieldValues?: string[]; timeWritingStory?: { title: string; description: string; assignedTo: string; areaPath: string; iterationPath: string }; task: { title: string; description: string; originalEstimate?: number; assignedTo: string; areaPath: string; iterationPath: string } }
+// EPS-10: a story's iterationPath — the Sprint of its milestone date — wins over the Sprint chosen.
+export interface SetupChildren { stories: { title: string; description: string; iterationPath?: string }[]; reviewStory?: boolean; titleFields?: TitleField[]; fieldValues?: string[]; timeWritingStory?: { title: string; description: string; assignedTo: string; areaPath: string; iterationPath: string }; task: { title: string; description: string; originalEstimate?: number; assignedTo: string; areaPath: string; iterationPath: string } }
 export async function completeFeatureFromSetup(config: AzureConfig, pat: string, featureId: number, setup: SetupChildren, monthLabel = utcMonthLabel(), transport: AzureTransport = requestAzure, storyIterationPath?: string, assignee?: string, adhoc = false) {
   const items: AzureWorkItem[] = []
   try {
@@ -519,7 +520,7 @@ export async function completeFeatureFromSetup(config: AzureConfig, pat: string,
     }
     const stories = setup.stories.map((story) => ({ ...story, title: fill(story.title, `User Story "${story.title}"`) }))
     const children = await directChildren(config, pat, feature.id, transport)
-    for (const story of stories) items.push(await ensureChild(config, pat, feature, 'User Story', story.title, children, owner, transport, storyIterationPath || feature.iterationPath, undefined, undefined, { description: story.description }))
+    for (const story of stories) items.push(await ensureChild(config, pat, feature, 'User Story', story.title, children, owner, transport, story.iterationPath || storyIterationPath || feature.iterationPath, undefined, undefined, { description: story.description }))
     // The built-in "Review of Deliverables - <Feature>" story (optional, ticked by default; reviewStory false skips it): in the Sprint chosen (else the Feature's iteration); an existing one is reused wherever it sits.
     const reviewTitle = reviewStoryTitle(feature.title)
     if (setup.reviewStory !== false && reviewTitle.length > 255) throw new Error('The Review of Deliverables title exceeds 255 characters. Shorten the Feature title.')

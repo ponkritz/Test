@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { dpQueryDateColumns } from '../dpQueryColumns'
 import { EpicFeatureEditor } from '../components/EpicFeatureEditor'
 import { AdminOverview } from '../components/AdminOverview'
 import { setupGaps } from '../adminOverview'
@@ -355,7 +356,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
     ].filter((section) => section.key === 'people' || section.key === 'tree' ? can('people.edit') : section.key === 'capacity-roles' ? can('people.capacityRoles') : true).map((section) => ({ ...section, scope: 'everyone' as const }))} />}
     {tab === 'audit' && <div className="scope-line"><ScopeChip scope="everyone" /></div>}
     {tab === 'epics' && <SectionTabs page="epics" sections={[
-      { key: 'setup', label: 'Setup per Epic', scope: 'both', node: <EpicFeatureEditor setup={featureSetup} epicSetup={epicSetup} git={git} items={azure.items} /> },
+      { key: 'setup', label: 'Setup per Epic', scope: 'both', node: <EpicFeatureEditor setup={featureSetup} epicSetup={epicSetup} git={git} items={azure.items} dateColumns={dpQueryDateColumns(store.state, azure.connectionProfiles).options} /> },
       // LST-03…LST-07: the Value lists and, below them, the team lists from Azure DevOps — both usable as built-in lists of
       // the On-Demand columns (LST-08).
       { key: 'lists', label: 'Value lists', scope: 'everyone', node: <><EpicSetupPanel section="lists" setup={epicSetup} git={git} items={azure.items} canEdit={can('setup.epic')} canEditLists={can('setup.values')} />{sharedLists && <SharedListsPanel env={sharedLists} />}</> },

@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AzureConnectionProfileSummary } from '../azureCredentials'
 import { bulkSharedBlocked } from '../bulkEpics'
-import { dpBulkDateDefaults, dpBulkDatesOf, dpDateColumns, dpDateLabel, type DpBulkDates } from '../dpBulkDates'
-import { queryLayout } from '../queryView'
+import { dpBulkDateDefaults, dpBulkDatesOf, dpDateLabel, type DpBulkDates } from '../dpBulkDates'
+import { dpQueryDateColumns } from '../dpQueryColumns'
 import { normalizeReleaseSourceSettings } from '../releaseSource'
-import { defaultStreams, profilesForStream } from '../streams'
-import { viewSource } from '../viewSources'
 import type { PageProps } from '../pages/types'
 import type { GitStorage } from '../useGitStorage'
 import { Modal, Notice, Panel, SettingsSummary, WriteBlocked } from './ui'
@@ -20,11 +18,7 @@ export function DpBulkDatesPanel({ store, profiles, canManage, git }: { store: P
   const used = dpBulkDatesOf(saved)
   const blocked = canManage ? bulkSharedBlocked(git) : 'Set by the roles with “Stream options” (shared); read only for you.'
   // The DP query's columns: the fetched data's, else the query's SELECT.
-  const dp = profilesForStream(defaultStreams.find((stream) => stream.rule === 'dp')!, profiles)[0]
-  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
-  const source = dp ? viewSource(store.state, dp.id, dp.role, dp.query, releaseConnections) : undefined
-  const columns = source?.columns?.length ? source.columns : dp?.query ? queryLayout(dp.query).columns.map((ref) => ({ ref, name: ref })) : []
-  const options = dpDateColumns(columns)
+  const { options, fetched } = dpQueryDateColumns(store.state, profiles)
   const [editing, setEditing] = useState(false)
   // Committed once the change is in the store (git.save reads the current state), as the shared bulk Epic is.
   const [pending, setPending] = useState<DpBulkDates | null>(null)
@@ -58,7 +52,7 @@ export function DpBulkDatesPanel({ store, profiles, canManage, git }: { store: P
     ]} />
     <div className="button-row"><button type="button" className="ghost" disabled={Boolean(blocked)} title={blocked || undefined} onClick={() => setEditing(true)}>Edit dates…</button><WriteBlocked reason={blocked} /></div>
     {pending && !blocked && git && ['saving', 'synced', 'error', 'conflict'].includes(git.status) && git.message && <Notice tone={git.status === 'error' || git.status === 'conflict' ? 'error' : git.status === 'synced' ? 'success' : 'info'}>{git.message}</Notice>}
-    {editing && <DpBulkDatesEditor used={used} options={options} fetched={Boolean(source?.columns?.length)} onSave={save} onClose={() => setEditing(false)} />}
+    {editing && <DpBulkDatesEditor used={used} options={options} fetched={fetched} onSave={save} onClose={() => setEditing(false)} />}
   </Panel>
 }
 

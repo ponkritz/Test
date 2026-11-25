@@ -7,6 +7,8 @@ import { assignablePeople } from '../myWork'
 import { runInBackground } from '../backgroundJobs'
 import { adhocAfterLock } from '../planningLock'
 import { featureMonths, isFutureMonth } from '../featureMonths'
+import { dpTaskMonths } from '../dpBulkDates'
+import { dpMilestoneOf, dpStorySprints, withStorySprints, type DpPrefill } from '../dpCreatePlan'
 import { useEpicSetupFile } from '../useEpicSetup'
 import { onPremValues, useOnPremSources } from '../onPremValues'
 import { asTitleFields, epicFieldsFor, featureFromFields, listOf, offList } from '../epicSetup'
@@ -22,17 +24,25 @@ import { chooseSetup, setForClass, withLinkedStories, emptySetup, fieldKey, fiel
 // Area Path, the PI chosen (the current one preselected) and the stories in its Sprint.
 export type FeatureEditorMode = { parent: AzureWorkItem; resume?: undefined } | { resume: AzureWorkItem; parent?: undefined }
 export interface FeatureEditorResult { feature: AzureWorkItem; items: AzureWorkItem[]; text: string; parent?: AzureWorkItem }
-export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoose, featureSetup, initialTitle = '', releaseItems, month, onSavePat, onCreated, onDone, onPartial, onClose }: { mode: FeatureEditorMode; initialTitle?: string; month?: string; releaseItems?: AzureWorkItem[]; items: AzureWorkItem[]; config: AzureConfig; savedPat?: string; me: string; canChoose: boolean; featureSetup?: FeatureSetups | null; onSavePat?: (pat: string) => void; onCreated?: (items: AzureWorkItem[]) => void; onDone: (result: FeatureEditorResult) => void; onPartial: (text: string, items: AzureWorkItem[], parent?: AzureWorkItem) => void; onClose: () => void }) {
+export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoose, featureSetup, initialTitle = '', releaseItems, month, dp, onSavePat, onCreated, onDone, onPartial, onClose }: { mode: FeatureEditorMode; initialTitle?: string; month?: string; releaseItems?: AzureWorkItem[]; dp?: DpPrefill; items: AzureWorkItem[]; config: AzureConfig; savedPat?: string; me: string; canChoose: boolean; featureSetup?: FeatureSetups | null; onSavePat?: (pat: string) => void; onCreated?: (items: AzureWorkItem[]) => void; onDone: (result: FeatureEditorResult) => void; onPartial: (text: string, items: AzureWorkItem[], parent?: AzureWorkItem) => void; onClose: () => void }) {
   const people = useMemo(() => assignablePeople(items), [items])
   const resumeFeature = mode.resume ?? null
   const scoped = useMemo(() => items.filter((item) => item.state.trim().toLowerCase() !== 'removed' && item.organization.toLowerCase() === config.organization.toLowerCase() && item.project.toLowerCase() === config.project.toLowerCase()), [items, config.organization, config.project])
   const epics = scoped.filter((item) => item.workItemType === 'Epic').sort((a, b) => a.id - b.id)
   // A new Feature: the Parent Epic starts blank on every opening and is chosen in the form (BKL-23); the Epic the form
   // was opened from is only offered in the list.
+  // DPF-17: opened from a DP release (dp), the Parent Epic starts as the DP bulk creation Epic (QV-59), as bulk uses it;
+  // it can still be changed.
   const isNew = !resumeFeature
-  const epicOptions = mode.parent && !epics.some((epic) => epic.key === mode.parent!.key) ? [mode.parent, ...epics] : epics
-  const [parent, setParent] = useState<AzureWorkItem | null>(null)
-  const [assigneeName, setAssigneeName] = useState(() => resumeFeature && canChoose ? people.find((person) => person.email === resumeFeature.assignedToEmail && person.email !== me)?.name ?? '' : '')
+  const offered = [mode.parent, dp?.epic].filter((epic): epic is AzureWorkItem => Boolean(epic))
+  const epicOptions = [...offered.filter((epic, index) => !epics.some((item) => item.key === epic.key) && offered.findIndex((item) => item.key === epic.key) === index), ...epics]
+  const [parentChoice, setParent] = useState<AzureWorkItem | null | undefined>(undefined)
+  const parent = parentChoice === undefined ? dp?.epic ?? null : parentChoice
+  // DPF-17: from a DP release the person starts as the QE from the QE page (DPF-02, the rule of bulk) when it matches
+  // someone on the board, else me; it can still be changed.
+  const [assigneeChoice, setAssigneeName] = useState<string | null>(() => resumeFeature && canChoose ? people.find((person) => person.email === resumeFeature.assignedToEmail && person.email !== me)?.name ?? '' : dp ? null : '')
+  const dpQeName = dp?.email && dp.email !== me ? people.find((person) => person.email === dp.email)?.name ?? '' : ''
+  const assigneeName = assigneeChoice ?? (canChoose ? dpQeName : '')
   const assignee = canChoose && assigneeName ? people.find((person) => person.name === assigneeName)?.email ?? '' : me
   const [titleText, setTitleText] = useState(resumeFeature?.title ?? initialTitle)
   // With title fields in the Epic's setup the title follows them until it is typed over.
@@ -42,8 +52,11 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   const [dodText, setDodText] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   // BKL-31 / BKL-32: Start Date and Target date decide the months of the Time Writing Tasks; hours are asked per month.
-  const [startDate, setStartDate] = useState('')
-  const [targetDate, setTargetDate] = useState('')
+  // DPF-17: from a DP release, prefilled from its mapped date columns (DPF-13, DPF-14) — still changeable.
+  const [startDate, setStartDate] = useState(dp?.start ?? '')
+  const [targetDate, setTargetDate] = useState(dp?.target ?? '')
+  // DPF-16, DPF-17: from a DP release, the bulk pop-up's optional tick box (not ticked: the current month only).
+  const [fromStart, setFromStart] = useState(false)
   const [monthHours, setMonthHours] = useState<Record<string, { plan: string; done: string }>>({})
   const [iterationPath, setIterationPath] = useState('')
   const [sprintPath, setSprintPath] = useState('')
@@ -62,6 +75,10 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   const baseMonth = month || todayMonth
   let months: string[] = [baseMonth], monthsError = ''
   if (!resumeFeature) { try { months = featureMonths({ startDate, targetDate, formMonth: baseMonth, currentMonth: todayMonth }) } catch (failure) { monthsError = failure instanceof Error ? failure.message : 'Check the dates.' } }
+  // DPF-17: from a DP release the months follow the bulk rule (dpTaskMonths): the current month only, or ticked every
+  // month from the Start date's month to the Target date's month, each exception in the note.
+  let monthsNote = ''
+  if (dp && isNew && !monthsError) ({ months, note: monthsNote } = dpTaskMonths(fromStart, { ...(startDate ? { start: startDate } : {}), ...(targetDate ? { target: targetDate } : {}) }, baseMonth))
   // The first month's Task is created with the hierarchy; the later ones follow (BKL-32).
   const monthLabel = months[0]
   const hoursOf = (label: string) => monthHours[label] ?? { plan: '', done: '' }
@@ -72,7 +89,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // The Epic's own setup (Admin → Epic & Feature setup → Feature setup), if any: its optional User Stories replace the PU / Full Release
   // milestones (all ticked by default) and its Task defaults apply.
   // My own setup of the Epic first, else the shared one; the switch below picks the shared one instead.
-  const [preferShared, setPreferShared] = useState(false)
+  const [preferShared, setPreferShared] = useState(Boolean(dp))
   const epicId = parent?.id ?? resumeFeature?.parentId
   const { setup: unlinkedSetup, source: setupSource } = chooseSetup(featureSetup, epicId, preferShared)
   // EPS-02: the Epic setup's fields (Admin → Epic & Feature setup) apply to every new Feature under the Epic and take the place
@@ -87,8 +104,11 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // Title fields in the other setup of the Epic (mine vs shared) only: say so, with a switch, instead of hiding them.
   const otherSetup = bothSetups ? chooseSetup(featureSetup, epicId, !preferShared).setup : undefined
   const fieldsElsewhere = !resumeFeature && !epicEntry && !titleFields.length && Boolean(otherSetup?.titleFields?.length)
-  const fromRelease = releaseItems?.length ? fieldsFromItems(titleFields, releaseItems) : [], fromTitle = fieldsFromTitle(titleFields, initialTitle)
-  const fieldValues = titleFields.map((field, index) => typedFields[fieldKey(field.label)] ?? (fromRelease[index] || fromTitle[index] || ''))
+  // DPF-17: from a DP release the fields are read as bulk reads them (EPS-03: the release's items only) and the Release
+  // Classification starts as the value detected from the release number (DPF-11).
+  const fromRelease = releaseItems?.length ? fieldsFromItems(titleFields, releaseItems) : [], fromTitle = dp ? [] : fieldsFromTitle(titleFields, initialTitle)
+  const dpClass = dp?.classification.trim() ? titleFields.findIndex((field) => fieldKey(field.label) === 'releaseclassification') : -1
+  const fieldValues = titleFields.map((field, index) => typedFields[fieldKey(field.label)] ?? (index === dpClass ? dp!.classification.trim() : fromRelease[index] || fromTitle[index] || ''))
   // DPF-07, BKL-33: the Release Classification chosen in the Epic setup's own field (there is no built-in picker) picks the DoD and
   // User Stories set for that value, else the Epic's default.
   const classField = epicEntry ? epicEntry.fields.findIndex((field) => fieldKey(field.label) === 'releaseclassification') : -1
@@ -99,7 +119,8 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   const epicSetup = baseSetup && classSet ? { ...baseSetup, featureDoD: classSet.featureDoD, stories: classSet.stories } : baseSetup ?? (epicId != null ? emptySetup(epicId) : undefined)
   // With an Epic setup the Title follows its pattern or its Title fields; fields that go only into the Description leave the typed title.
   const fromFields = epicEntry ? featureFromFields(epicEntry, fieldValues, titleText) : undefined
-  const fieldsMakeTitle = epicEntry ? Boolean(epicEntry.titlePattern || epicEntry.fields.some((field) => field.into !== 'description')) : titleFields.length > 0
+  // DPF-17: from a DP release the title is bulk's — the Epic setup's title pattern, else Program | Service | Release.
+  const fieldsMakeTitle = dp ? Boolean(epicEntry?.titlePattern) : epicEntry ? Boolean(epicEntry.titlePattern || epicEntry.fields.some((field) => field.into !== 'description')) : titleFields.length > 0
   const title = fieldsMakeTitle && !titleTyped ? (fromFields ? fromFields.title : fieldTitle(fieldValues)) : titleText
   const offListFields = epicEntry ? offList(epicEntry, fieldValues, epicFile) : []
   const setTitle = (value: string) => { setTitleText(value); setTitleTyped(true) }
@@ -108,11 +129,14 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // The built-in "Review of Deliverables - <Feature>" story: optional, in the Sprint chosen. It and the milestone /
   // optional stories exclude each other: ticking one side clears the other. By default the stories are ticked and it
   // is not, unless there are no stories to tick.
-  const [reviewChoice, setReviewChoice] = useState<boolean | null>(null)
+  // DPF-17: from a DP release not ticked, as bulk creates no Review of Deliverables story.
+  const [reviewChoice, setReviewChoice] = useState<boolean | null>(dp ? false : null)
   // A different classification offers other stories: start their choice afresh.
   const [storiesOf, setStoriesOf] = useState(classValue)
-  if (storiesOf !== classValue) { setStoriesOf(classValue); setSkipStories([]); setReviewChoice(null); setDodText(null) }
+  if (storiesOf !== classValue) { setStoriesOf(classValue); setSkipStories([]); setReviewChoice(dp ? false : null); setDodText(null) }
   const reviewStory = reviewChoice ?? (epicSetup ? epicSetup.stories.length === 0 : true)
+  // EPS-10: from a DP release each User Story's Sprint from its "Sprint from" milestone date, as in bulk; else the Sprint chosen.
+  const storySprints = dp && epicSetup ? dpStorySprints(epicSetup.stories, dp.row, iterationChoices) : []
   const chooseReview = (checked: boolean) => { setReviewChoice(checked); if (checked) { setSkipStories(epicSetup ? epicSetup.stories.map((_, index) => index) : []) } }
   const storiesChosen = (count: number) => { if (count > 0) setReviewChoice(false) }
   const dod = dodText ?? (epicSetup ? epicSetup.featureDoD.trim() : '')
@@ -168,7 +192,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
       const adhoc = adhocAfterLock(monthLabel)
       let bundle
       if (epicSetup) {
-        const children = { stories: epicSetup.stories.filter((_, index) => !skipStories.includes(index)), reviewStory, titleFields: epicEntry ? titleFields : epicSetup.titleFields, ...(titleFields.length ? { fieldValues } : {}), timeWritingStory: epicSetup.timeWritingStory, task: { ...epicSetup.task, ...(feature.taskOriginalEstimate != null ? { originalEstimate: feature.taskOriginalEstimate } : {}) } }
+        const children = { stories: withStorySprints(epicSetup.stories, storySprints).filter((_, index) => !skipStories.includes(index)), reviewStory, titleFields: epicEntry ? titleFields : epicSetup.titleFields, ...(titleFields.length ? { fieldValues } : {}), timeWritingStory: epicSetup.timeWritingStory, task: { ...epicSetup.task, ...(feature.taskOriginalEstimate != null ? { originalEstimate: feature.taskOriginalEstimate } : {}) } }
         bundle = resumeFeature ? await completeFeatureFromSetup(config, token, resumeFeature.id, children, monthLabel, undefined, sprintPath, assignee, adhoc) : await createFeatureFromSetup(config, token, feature, children, monthLabel, undefined, adhoc)
         const task = bundle.items.find((item) => item.workItemType === 'Task')
         if (task && feature.taskCompletedWork != null) { const updated = await updateAzureTimeWritingEffort(config, token, task.id, undefined, feature.taskCompletedWork); bundle = { ...bundle, items: bundle.items.map((item) => item.id === task.id ? updated : item) } }
@@ -264,8 +288,9 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
           <span className="nf-type">FEATURE</span>
           <div className="nf-headmain">
             {isNew && <div className="nf-top">
-              <label>Parent Epic<select required aria-label="Parent Epic" disabled={creating} value={parent?.key ?? ''} onChange={(event) => setParent(epicOptions.find((item) => item.key === event.target.value) ?? null)}><option value="">Choose the parent Epic…</option>{epicOptions.map((epic) => <option value={epic.key} key={epic.key}>#{epic.id} · {epic.title}</option>)}</select></label>
+              <label>Parent Epic<select required aria-label="Parent Epic" disabled={creating} value={parent?.key ?? ''} onChange={(event) => setParent(epicOptions.find((item) => item.key === event.target.value) ?? null)}><option value="">Choose the parent Epic…</option>{epicOptions.map((epic) => <option value={epic.key} key={epic.key}>#{epic.id} · {epic.title}</option>)}</select>{dp && parentChoice === undefined && (dp.epic ? <small className="muted">The DP bulk creation Epic, as Create Features uses it.</small> : <small className="warning-text">{dp.epicNote}</small>)}</label>
             </div>}
+            {dp?.warning && <Notice tone="warning">{dp.warning}</Notice>}
             <input className="nf-title" aria-label="Feature title" name="title" required maxLength={255} value={title} onChange={(event) => setTitle(event.target.value)} disabled={creating || Boolean(resumeFeature)} placeholder={titleFields.length ? titleFields.map((field) => field.label).join(' | ') : 'Feature title (free text, e.g. Program | Service | Release)'} autoFocus />
             {fieldsElsewhere && <p className="muted">The {setupSource === 'personal' ? 'shared' : 'your own'} setup of this Epic has title fields ({otherSetup!.titleFields!.map((field) => field.label).join(', ')}); this form uses {setupSource === 'personal' ? 'your own' : 'the shared'} setup. <button type="button" className="text-button" disabled={creating} onClick={() => { setPreferShared(!preferShared); setSkipStories([]); setReviewChoice(null); setDodText(null) }}>{setupSource === 'personal' ? 'Use the shared setup' : 'Use my own setup'}</button></p>}
             {titleFields.length > 0 && <div className="nf-fields">{titleFields.map((field, index) => {
@@ -287,15 +312,19 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
           </div>
         </div>
         <div className="nf-strip">
-          <label>Assigned to{canChoose ? <PersonPicker label="Assigned to" value={assigneeName} people={people.filter((person) => person.email !== me).map((person) => person.name)} onChange={setAssigneeName} meLabel={me ? `Me (${me})` : 'Choose a person…'} /> : <span className="nf-value" title={me}>{me || 'Set your work email in Settings'}</span>}</label>
+          <label>Assigned to{canChoose ? <PersonPicker label="Assigned to" value={assigneeName} people={people.filter((person) => person.email !== me).map((person) => person.name)} onChange={setAssigneeName} meLabel={me ? `Me (${me})` : 'Choose a person…'} /> : <span className="nf-value" title={me}>{me || 'Set your work email in Settings'}</span>}{dp && assigneeChoice === null && <small className={dp.email && (dp.email === me || (canChoose && dpQeName)) ? 'muted' : 'warning-text'}>{dp.email && dp.email !== me && !canChoose ? `The QE page names ${dp.qe}; you can assign only to yourself` : dp.email && dp.email !== me && !dpQeName ? `QE ${dp.qe} is not on the loaded board: assigned to you unless you choose` : dp.qeNote}</small>}</label>
           <label>State<span className="nf-value">{resumeFeature ? resumeFeature.state : 'New'}</span></label>
           <label>Area{parent ? <input name="areaPath" key={parent.key} value={parent.areaPath} readOnly title={parent.areaPath} /> : isNew ? <span className="nf-value muted">From the parent Epic</span> : <span className="nf-value" title={resumeFeature?.areaPath}>{resumeFeature?.areaPath.split('\\').pop()}</span>}</label>
           <label>Iteration (PI → Sprint)<select aria-label="PI / Sprint schedule" required value={sprintPath} onChange={(event) => { const pair = selectablePairs.find((value) => value.sprint.path === event.target.value); setSprintPath(pair?.sprint.path ?? ''); setIterationPath(pair?.pi.path ?? '') }} disabled={creating || iterationLoading}><option value="">{iterationLoading ? 'Loading the schedule…' : selectablePairs.length ? 'Select a PI → Sprint' : 'Load the schedule ↻'}</option>{pairs.length > 0 && <optgroup label="Current">{pairs.map((pair) => <option key={pair.sprint.path} value={pair.sprint.path}>{pairLabel(pair)}</option>)}</optgroup>}{futurePairs.length > 0 && <optgroup label="Future">{futurePairs.map((pair) => <option key={pair.sprint.path} value={pair.sprint.path}>{pairLabel(pair)}</option>)}</optgroup>}</select>
             <button type="button" className="text-button" onClick={() => void loadIterations()} disabled={creating || iterationLoading || !(pat || savedPat)} title="Reload the current and future PI / Sprint schedule">↻ Reload</button></label>
-          {isNew && <label>Start date<input name="startDate" type="date" aria-label="Start date" value={startDate} disabled={creating} onChange={(event) => setStartDate(event.target.value)} title="Empty: today. Time Writing Tasks start in this month (not before the current month)." /></label>}
-          {isNew && <label>Target date<input name="targetDate" type="date" aria-label="Target date" value={targetDate} min={startDate || undefined} disabled={creating} onChange={(event) => setTargetDate(event.target.value)} title="Time Writing Tasks are created for every month up to this one." /></label>}
+          {isNew && <label>Start date<input name="startDate" type="date" aria-label="Start date" value={startDate} disabled={creating} onChange={(event) => setStartDate(event.target.value)} title={dp ? `From the ${dp.startLabel} of the release; you can change it.` : 'Empty: today. Time Writing Tasks start in this month (not before the current month).'} />{dp && !startDate && dp.startNote && <small className="warning-text">{dp.startNote}</small>}</label>}
+          {isNew && <label>Target date<input name="targetDate" type="date" aria-label="Target date" value={targetDate} min={startDate || undefined} disabled={creating} onChange={(event) => setTargetDate(event.target.value)} title={dp ? `From the ${dp.targetLabel} of the release; you can change it.` : 'Time Writing Tasks are created for every month up to this one.'} />{dp && !targetDate && dp.targetNote && <small className="warning-text">{dp.targetNote}</small>}</label>}
         </div>
-        {isNew && <p className={`muted nf-months${monthsError ? ' error-text' : ''}`} role={monthsError ? 'alert' : undefined}>{monthsError || <>Time Writing: {months.length === 1 ? <>one Task for <strong>{monthLabel}</strong></> : <>{months.length} month Tasks, <strong>{monthRange}</strong></>}{startDate ? '' : ' (Start date empty: from today)'}{targetDate ? '' : ' — set a Target date to add the months up to it'}.</>}</p>}
+        {isNew && <p className={`muted nf-months${monthsError ? ' error-text' : ''}`} role={monthsError ? 'alert' : undefined}>{monthsError || <>Time Writing: {months.length === 1 ? <>one Task for <strong>{monthLabel}</strong></> : <>{months.length} month Tasks, <strong>{monthRange}</strong></>}{dp ? monthsNote ? ` (${monthsNote})` : '' : <>{startDate ? '' : ' (Start date empty: from today)'}{targetDate ? '' : ' — set a Target date to add the months up to it'}</>}.</>}</p>}
+        {isNew && dp && <div className="dp-bulk-months nf-dp-months">
+          <label className="check"><input type="checkbox" checked={fromStart} disabled={creating} onChange={(event) => setFromStart(event.target.checked)} aria-describedby="nf-dp-months-help" />Create Time Writing month Tasks from the Start date to the Target date</label>
+          <small id="nf-dp-months-help" className="muted">{fromStart ? 'One Task per month from the Start date’s month to the Target date’s month (not before this month), as DP Create Features does.' : `Not ticked: one Time Writing Task, for ${baseMonth}, as DP Create Features does.`}</small>
+        </div>}
         {showPat ? <label>PAT — Work Items: Read &amp; Write<input type="password" required autoComplete="off" value={pat} onChange={(event) => { setPat(event.target.value); setIterationChoices([]); setIterationPath(''); setSprintPath('') }} disabled={creating} /><small>Saved in this browser only. Enter it, then ↻ Reload the schedule.</small></label>
           : <p className="muted nf-pat">Using your saved Azure DevOps token. <button type="button" className="text-button" disabled={creating} onClick={() => setShowPat(true)}>Use another token</button></p>}
         {missingNote(0)}
@@ -316,7 +345,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
         {epicSetup ? <>
           <fieldset className="milestone-choices" disabled={creating}><legend>Optional User Stories</legend>
             {epicSetup.stories.length > 0 && <div className="button-row"><button type="button" className="text-button" onClick={() => { setSkipStories([]); storiesChosen(epicSetup.stories.length) }}>Select all</button><button type="button" className="text-button" onClick={() => { setSkipStories(epicSetup.stories.map((_, index) => index)); setReviewChoice(false) }}>Deselect all</button></div>}
-            {epicSetup.stories.map((story, index) => <label className="checkbox-label" key={index}><input type="checkbox" checked={!skipStories.includes(index)} onChange={(event) => { setSkipStories((now) => event.target.checked ? now.filter((value) => value !== index) : [...now, index]); if (event.target.checked) setReviewChoice(false) }} />{filled(story.title)}</label>)}
+            {epicSetup.stories.map((story, index) => <label className="checkbox-label" key={index}><input type="checkbox" checked={!skipStories.includes(index)} onChange={(event) => { setSkipStories((now) => event.target.checked ? now.filter((value) => value !== index) : [...now, index]); if (event.target.checked) setReviewChoice(false) }} />{filled(story.title)}{storySprints[index]?.sprintFrom && <small className={storySprints[index].path ? 'muted nf-story-sprint' : 'warning-text nf-story-sprint'}>{storySprints[index].path ? `${dpMilestoneOf(storySprints[index].sprintFrom)} → ${storySprints[index].sprint}` : storySprints[index].note}</small>}</label>)}
             <label className="checkbox-label"><input type="checkbox" checked={reviewStory} onChange={(event) => chooseReview(event.target.checked)} />{reviewStoryTitle(title.trim() || '{feature}')} <small className="muted">(built-in, in the Sprint)</small></label>
           </fieldset>
           <p className="muted nf-always">Always: {title.trim() ? <>“{title.trim()} - Time Writing” at {config.project} (project root), with the Task “{monthLabel} | {title.trim()}”{months.length > 1 ? ` and one for each month up to ${months[months.length - 1]}` : ''}{epicSetup.task.originalEstimate != null ? ` (${epicSetup.task.originalEstimate}h by default)` : ''}.</> : 'the Time Writing User Story and the month Task (enter the title to see them).'}</p>

@@ -9,7 +9,10 @@ import { fieldOf } from './dpReleases.ts'
 // same format). For its owner a personal setup of an Epic wins over the shared one; anyone who can write to Git may
 // enable their setup of an Epic for everyone, which copies it into the shared file.
 // templateId: linked to a User Story template of the Epic setup file (STT-02); title and description are its copy.
-export interface StoryTemplate { title: string; description: string; templateId?: string }
+// EPS-10: sprintFrom — the DP date column (field name, by its last part: DRPEDate RPE, DRPCDate PRD, DRfHDate SFV,
+// DDTDate DT, or another DP date column) whose date picks the Sprint of the story when a DP release's Feature is made
+// (DP Create Features and the New Feature form from a DP row); none: the Sprint chosen, as before.
+export interface StoryTemplate { title: string; description: string; templateId?: string; sprintFrom?: string }
 export interface TaskTemplate { title: string; description: string; originalEstimate?: number; assignedTo: string; areaPath: string; iterationPath: string }
 // The "Time Writing" User Story that holds the month Task: always created; its title and fields are configurable.
 export interface TimeWritingStoryTemplate { title: string; description: string; assignedTo: string; areaPath: string; iterationPath: string }
@@ -124,8 +127,10 @@ export function cleanTitleFields(input: unknown): TitleField[] {
   return input.map((field: Partial<Record<keyof TitleField, unknown>>) => ({ label: text(field?.label, 60), source: text(field?.source, 255) }))
     .filter((field) => { const key = fieldKey(field.label); if (!key || seen.has(key)) return false; seen.add(key); return true }).slice(0, maxTitleFields)
 }
+// EPS-10: a field name only (letters, digits, _ and ., up to 120), kept by its last part; anything else is left out (None).
+const sprintFromRef = (value: unknown) => { const name = typeof value === 'string' && /^[A-Za-z][\w.]{0,119}$/.test(value.trim()) ? value.trim().split('.').filter(Boolean).pop() ?? '' : ''; return name ? { sprintFrom: name } : {} }
 const templateRef = (value: unknown) => typeof value === 'string' && /^[a-z0-9-]{1,60}$/.test(value) ? { templateId: value } : {}
-const cleanStories = (input: unknown, max = 20) => Array.isArray(input) ? input.map((story: Partial<Record<keyof StoryTemplate, unknown>>) => ({ title: text(story?.title, 255), description: text(story?.description, 100000), ...templateRef(story?.templateId) })).filter((story) => story.title).slice(0, max) : []
+const cleanStories = (input: unknown, max = 20) => Array.isArray(input) ? input.map((story: Partial<Record<keyof StoryTemplate, unknown>>) => ({ title: text(story?.title, 255), description: text(story?.description, 100000), ...templateRef(story?.templateId), ...sprintFromRef(story?.sprintFrom) })).filter((story) => story.title).slice(0, max) : []
 function cleanClassSets(input: unknown): Record<string, ReleaseTypeSetup> | undefined {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
   const sets: Record<string, ReleaseTypeSetup> = {}

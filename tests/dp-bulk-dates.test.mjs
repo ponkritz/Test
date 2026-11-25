@@ -45,14 +45,14 @@ test('DPF-14: a date column’s value is read as a date only, its UTC day (TC-DP
   assert.equal(utcDay(''), undefined)
   // The field is matched by its name with a prefix (Custom.DRPEDate), as the DP milestones are.
   const dates = dpRowDates(row({ 'Custom.DRPEDate': '2026-12-01T00:00:00Z', 'Custom.DDTDate': '2027-03-15T00:00:00Z' }), dpBulkDateDefaults)
-  assert.deepEqual(dates, { start: '2026-12-01', target: '2027-03-15', notes: [], error: '' })
+  assert.deepEqual(dates, { start: '2026-12-01', target: '2027-03-15', notes: [], error: '', fieldNotes: {} })
   const other = dpRowDates(row({ 'Custom.DRPCDate': '2027-01-10', DDTDate: '2027-02-01' }), { start: 'DRPCDate', target: 'DDTDate' })
   assert.deepEqual([other.start, other.target], ['2027-01-10', '2027-02-01'], 'the mapped columns are read')
 })
 
 test('DPF-14: a missing or unreadable date leaves that date empty with a note and does not stop the row (TC-DPF-13)', () => {
   const noTarget = dpRowDates(row({ DRPEDate: '2026-12-01' }), dpBulkDateDefaults)
-  assert.deepEqual(noTarget, { start: '2026-12-01', notes: ['no DDT Date — Target date left empty'], error: '' })
+  assert.deepEqual(noTarget, { start: '2026-12-01', notes: ['no DDT Date — Target date left empty'], error: '', fieldNotes: { target: 'No DDT Date on this release' } })
   const none = dpRowDates(row({ DRPEDate: 'TBD' }), dpBulkDateDefaults)
   assert.deepEqual(none.notes, ['DRPE Date “TBD” is not a date — Start date left empty', 'no DDT Date — Target date left empty'])
   assert.equal(none.error, '')

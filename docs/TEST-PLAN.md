@@ -1801,6 +1801,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-DPF-16 DP bulk creation with dates and Time Writing months** — Req DPF-13, DPF-14, DPF-15, DPF-16, UI-30 — **UAT** — E2E `dp-bulk-dates.e2e.mjs` ("TC-DPF-16: the Tool Owner maps the DP dates (saved to Git); DP Create Features sets Start = DRPE Date and Target = DDT Date, one Time Writing Task per Feature unticked, or one per month from the Start date’s month to the Target month ticked"); UAT: in Admin → Stream options → Bulk creation Epics → DP bulk creation dates check the defaults (DRPE Date, DDT Date), Edit dates… and Save to Git; on Release Details → DP tick releases with and without a DDT Date (and one whose DRPE Date is after its DDT Date), Create Features: the pop-up fills the window, the Start date and Target date columns show the dates, the missing one is named and the late one skipped; leave "Create Time Writing month Tasks from the Start date to the Target date" unticked (the default) and Create; in Azure DevOps each Feature has the Start Date and Target Date and one month Task for the current month; repeat with the box ticked on releases whose DRPE Date is next month and last month: one Task per month from the DRPE month (the release of last month from the current month, as its row said) up to the DDT month.
 
+**TC-DPF-17 Create Feature on one DP release is prefilled like bulk** — Req DPF-17, BKL-23 — L1 `dp-create-plan.test.mjs` ("DPF-17: the New Feature form from a DP release is prefilled by the bulk plan — Epic, title, QE, Start and Target dates; a prefixed field is read; a missing date is left empty with a short note (TC-DPF-17)"), `dp-bulk-dates.test.mjs` ("DPF-14: a missing or unreadable date leaves that date empty with a note and does not stop the row (TC-DPF-13)": the short note per field); E2E `dp-single-create.e2e.mjs` ("TC-DPF-18: …": the Parent Epic, Start and Target dates, the optional tick box and the months line, Start after Target named by the form); browser check: on Release Details → DP open Create Feature on a release without a DDT Date — the Target date is empty with "No DDT Date on this release" under it, the months line says "no Target date: first month only" when the box is ticked; on an IOCC or CP release Create Feature opens as before (Parent Epic blank, no dates).
+
+**TC-DPF-18 The same DP release gives the same Feature by bulk and by Create Feature** — Req DPF-18, DPF-17, DPF-16, EPS-10 — **UAT** — L1 `dp-create-plan.test.mjs` ("DPF-18: one set of rules — bulk and the single form use the same plan module, and no second copy of the date rules exists (TC-DPF-18)"); E2E `dp-single-create.e2e.mjs` ("TC-DPF-18: Create Feature on a DP release row starts like DP Create Features — the DP bulk Epic, Start = DRPE Date, Target = DDT Date, the optional month Tasks — and creates the same Feature as bulk; TC-EPS-09: each User Story in the Sprint of its “Sprint from” milestone date, else the default Sprint with a note"); UAT: on Release Details → DP open Create Feature on a release with a DRPE Date and a DDT Date: the Parent Epic is the DP bulk creation Epic, the title is Program | Service | Release, Assigned to is the QE from the QE page, Start date = DRPE Date and Target date = DDT Date, and the Time Writing line says one Task for the current month; tick "Create Time Writing month Tasks from the Start date to the Target date": the line shows the month range; set the Start date after the Target date: the form says "The Target date is before the Start Date."; put it back and Save. In a second project (or after removing that Feature) create the same release with DP Create Features, the box ticked: in Azure DevOps both Features have the same title, parent, Start Date, Target Date, assignee, month Tasks and User Story Iteration Paths.
+
 **TC-CNB-01 Content Features in bulk** — Req CNB-01, DPF-05 — L1 `content-bulk.test.mjs` ("CNB-01: Content bulk Features — under the mapped Content bulk Epic (none built in), the DoD, one Review of Deliverables story, 4 h; a 100% Feature match is never created, a closer one is named (BLK-01)"); browser check with QMS-0025 (a test Epic first, mapped as the Content bulk creation Epic, QV-59): Release Details → Content: releases with a Feature matching 100 % cannot be ticked; Select all shown, Create Features → the list shows each Feature title, with similar Features named; after Create each Feature is under the mapped Content bulk Epic with "Release Classification : NA", "Feature DoD: All Documents are approved", one "Review of Deliverables - <title>" story in the current Sprint and the month Task with 4 h Original Estimate.
 
 **TC-CNB-02 One person for all** — Req CNB-02 — L1 `content-bulk.test.mjs` ("CNB-02: the pop-up assigns to one person — a name on the board, "Name <email>" or an email"); browser check: Create stays disabled until a person is chosen; typing a board name shows its email; every Feature, story and Task made is assigned to that person.
@@ -1817,6 +1821,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-EPS-06 Epic & Feature setup page** — Req EPS-08, SET-15 — E2E `backlog.e2e.mjs` ("TC-EPS-01: …" — the Epic in Setup per Epic with its fields), `shell.e2e.mjs` ("TC-SET-06: …" — the page's three sections Setup per Epic, Value lists and User Story templates; the PI Review form is a page of its own, PIR-29); browser check: an old link to the Feature setup or All Epic setups opens Setup per Epic.
 
 **TC-EPS-07 QE page in Setup per Epic** — Req EPS-09, DPF-02 — L1 `dp-bulk.test.mjs` ("EPS-09: the QE page is stored by id in the Epic setup; the page named Resource Mapping is the default; an older setup with only QE Mapping columns is kept and asks for the page, nothing guessed (TC-EPS-07)"); E2E `qe-page.e2e.mjs` ("TC-DPF-02: …": the default and the save by id), `remove-qe-mapping.e2e.mjs` ("TC-GIT-23: …": a bulk Epic still on the old columns is named in the delete pop-up); browser check: a Feature setup with only `qeColumns` shows "The old QE Mapping columns (“…”, “…”) need choosing again on the QE page." under the three selects.
+
+**TC-EPS-08 Sprint from: the Sprint of a story from a DP milestone date** — Req EPS-10 — L1 `dp-create-plan.test.mjs` ("EPS-10: the Sprint of a milestone date — the current or future Sprint holding it (UTC days, both ends), in any PI; none in a gap; a finished Sprint is never used (TC-EPS-08)", "EPS-10: each story’s Sprint from its “Sprint from” date of the DP release (prefix allowed); else the default Sprint with the reason (TC-EPS-08)", "EPS-10: “Sprint from” is kept by the strict reader (field name, by its last part); an older setup without it is None (TC-EPS-08)", "EPS-10: a story with a Sprint is created in it; the others in the Sprint chosen; the Feature keeps its PI (TC-EPS-08)"); browser check: an IOCC bulk creation with a story set to Sprint from SFV puts the story in the Sprint chosen (IOCC has no DP dates).
+
+**TC-EPS-09 Sprint from set in Setup per Epic and used by bulk and Create Feature** — Req EPS-10, DPF-18 — **UAT** — E2E `dp-single-create.e2e.mjs` ("TC-DPF-18: …; TC-EPS-09: each User Story in the Sprint of its “Sprint from” milestone date, else the default Sprint with a note"); UAT: in Admin → Epic & Feature setup → Setup per Epic → the DP bulk creation Epic → User Stories set "Sprint from" SFV on one story and PRD on another, Save to Git; on Release Details → DP pick a release whose DRfH Date is in a coming Sprint and whose DRPC Date is in a finished one: DP Create Features shows "SFV → Sprint n · PRD → default Sprint" and "PRD … is in a past Sprint — default Sprint" on its row; Create Feature on that row shows the same next to each story; in Azure DevOps the SFV story is in the Sprint holding the DRfH Date, the PRD story in the PI / Sprint chosen, the Feature in its PI.
 
 **TC-ADM-01 Overview checks and settings search** — Req ADM-01, ADM-03 — L1 `admin-overview.test.mjs` ("Admin overview: open Get started steps and shared-setup checks, required first, each with its fix (ADM-01, TC-ADM-01)"; "Search settings: by name or what it affects, every page reachable (ADM-03, TC-ADM-01)").
 
@@ -2597,7 +2605,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-20 | TC-BKL-11, TC-PIR-03 |
 | BKL-21 | TC-BKL-12 |
 | BKL-22 | TC-BKL-12, TC-BKL-18 |
-| BKL-23 | TC-BKL-13 |
+| BKL-23 | TC-BKL-13, TC-DPF-17 |
 | BKL-24 | TC-BKL-14 |
 | BKL-25 | TC-BKL-15 |
 | BKL-26 | TC-BKL-16 |
@@ -2950,7 +2958,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | DPF-13 | TC-DPF-12, TC-DPF-16 |
 | DPF-14 | TC-DPF-13, TC-DPF-16 |
 | DPF-15 | TC-DPF-14, TC-DPF-16 |
-| DPF-16 | TC-DPF-15, TC-DPF-16 |
+| DPF-16 | TC-DPF-15, TC-DPF-16, TC-DPF-18 |
+| DPF-17 | TC-DPF-17, TC-DPF-18 |
+| DPF-18 | TC-DPF-18 |
 | CNB-01 | TC-CNB-01, TC-QV-40 |
 | CNB-02 | TC-CNB-02 |
 | EPS-01 | TC-EPS-01, TC-EPS-02 |
@@ -2962,6 +2972,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | EPS-07 | TC-EPS-05 |
 | EPS-08 | TC-EPS-06, TC-EPS-01 |
 | EPS-09 | TC-EPS-07, TC-DPF-02 |
+| EPS-10 | TC-EPS-08, TC-EPS-09, TC-DPF-18 |
 | ADM-01 | TC-ADM-01, TC-ADM-02 |
 | ADM-02 | TC-ADM-02 |
 | ADM-03 | TC-ADM-01, TC-ADM-02 |
@@ -3347,9 +3358,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-29 | TC-OVW-01…03 |
 | UC-30 | TC-CVA-01…03 |
 | UC-31 | TC-KPT-01…03 |
-| UC-32 | TC-DPF-01…04, TC-DPF-05, TC-DPF-06, TC-DPF-07, TC-DPF-08, TC-DPF-09, TC-DPF-10, TC-DPF-11, TC-DPF-12…16, TC-UI-26 |
+| UC-32 | TC-DPF-01…04, TC-DPF-05, TC-DPF-06, TC-DPF-07, TC-DPF-08, TC-DPF-09, TC-DPF-10, TC-DPF-11, TC-DPF-12…16, TC-DPF-17, TC-DPF-18, TC-UI-26 |
 | UC-33 | TC-CNB-01, TC-CNB-02 |
-| UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07 |
+| UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07, TC-EPS-08, TC-EPS-09 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
