@@ -1219,6 +1219,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-GIT-20 An unreadable repository keeps what the browser has and offers no Set up roles** — Req GIT-25, CON-101 — E2E `shell.e2e.mjs` ("TC-GIT-20: a data repository the token cannot read (404 for everything) — the custom streams, connection and PAT here stay, the error says the repository cannot be read, and Set up roles is not offered"): GitHub answers 404 for everything in the new repository; the read-only notice says the data repository cannot be read (Open Git storage, no Set up roles), the custom stream stays in the menu, the connection and its server's PAT and the custom streams cache stay in this browser, Data & sharing names the repository, People & roles shows the error and no "No access roles yet", and the branch is probed once.
 
+**TC-GIT-21 No answer or a server error: in plain words, tried once more by itself** — Req GIT-27, GIT-17 — L1 `git-save-queue.test.mjs` ("GIT-27: a network failure and a server error are said in plain words; any other error stays as it is (TC-GIT-21)", "GIT-27: a server error or no answer is tried once more by itself — written once; a write that did reach the repository is not written twice (TC-GIT-21)").
+
+**TC-GIT-22 A save answered with HTTP 500 is saved by its second try; twice a 500 keeps the change, Retry saves it** — Req GIT-27, OND-28 — E2E `pivot-table.e2e.mjs` ("TC-GIT-22: a save GitHub answers with HTTP 500 is tried once more by itself and saved; twice a 500: the change is kept with a plain message, and Retry saves it"); browser check: with the network switched off, adding a chart shows "GitHub could not be reached (network, VPN or proxy) … (Browser: Failed to fetch)" with Discard and Retry; back online, Retry saves it.
+
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
 - Steps:
@@ -2133,6 +2137,32 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-CHT-59 The Dashboard block pop-up in the same tabs: data source, period and tab on Data; a KPI tile only Data and Filters** — Req CHT-70, CHT-71, CHT-72, CHT-73 — E2E `chart-editor-tabs.e2e.mjs` ("TC-CHT-59: the Dashboard block pop-up has the same tabs — data source, period and tab on Data; a KPI tile only Data and Filters"); browser check at 1440 and 390 px, light and dark: ＋ Add block… on a dashboard with tabs shows Data · Filters for a KPI tile (Data source, Period filter on, Opens the tab on Data), Data · Filters · Format · Elements for a bar chart; Width Full on Format reads "Format (1)"; an empty title marks Data and Save to Git opens it; the block is saved as before.
 
+**TC-CHT-60 Nested rows and columns with subtotals and totals, in their order** — Req CHT-74, CHT-75 — L1 `pivot-table.test.mjs` ("CHT-74, CHT-75: rows nested Epic → State with a subtotal on each group’s row, columns by Month, the grand totals (TC-CHT-60)", "CHT-74, CHT-75: columns nested Stream → Month — each outer column has its Subtotal column; values under two outer columns are two columns (TC-CHT-60)", "CHT-75: Sort and Show apply to the outer rows; Percent of total to every number (TC-CHT-60)").
+
+**TC-CHT-61 Average, Minimum, Maximum and Distinct count subtotals from the rows** — Req CHT-76 — L1 `pivot-table.test.mjs` ("CHT-76: Average, Minimum, Maximum and Distinct count subtotals are measured over the group’s rows — never by adding or averaging the cells (TC-CHT-61)").
+
+**TC-CHT-62 A Multi-select field at any level** — Req CHT-76 — L1 `pivot-table.test.mjs` ("CHT-76: a Multi-select field counts a row in each of its values; subtotals and totals take each row once (TC-CHT-62)").
+
+**TC-CHT-63 Date fields by the chosen grain at every level** — Req CHT-76 — L1 `pivot-table.test.mjs` ("CHT-76: Date fields are grouped by the chosen grain, at every level (TC-CHT-63)").
+
+**TC-CHT-64 Rows behind a cell, a subtotal and a total** — Req CHT-80 — L1 `pivot-table.test.mjs` ("CHT-80: the drill-down lists the rows behind a cell, a subtotal, an outer column’s subtotal and the total — every group filter applied (TC-CHT-64)").
+
+**TC-CHT-65 Open and close groups; the first 10 outer rows** — Req CHT-77, CHT-81 — L1 `pivot-table.test.mjs` ("CHT-77: collapsing a group hides its rows and keeps its subtotal line; Collapse all keeps the outer lines only; the first N outer rows (TC-CHT-65)"); browser check: a group closed, then reload the page — every group is open again (nothing saved).
+
+**TC-CHT-66 At most 2,000 numbers drawn, the cap said** — Req CHT-81 — L1 `pivot-table.test.mjs` ("CHT-81: at most 2,000 value cells and 200 value columns are drawn — the Total column always — and a cap is said (TC-CHT-66)"); browser check: a Pivot table by a Text column with several hundred values in the rows and the columns shows the message under the table and Export writes every line.
+
+**TC-CHT-67 Export of the flat table** — Req CHT-80 — L1 `pivot-table.test.mjs` ("CHT-80: Export is a flat table — a column per row field, the Line (Subtotal / Total), the column combinations, the outer Subtotals and the Total (TC-CHT-67)").
+
+**TC-CHT-68 Stored additively; old files and older apps** — Req CHT-79 — L1 `pivot-table.test.mjs` ("CHT-79: the stored format — rows2, rows3 and second2 written only for a nested Pivot table, read back; an older file reads unchanged (TC-CHT-68)", "CHT-79: Dashboard blocks keep the nested fields the same way; asInsight carries them; an older dashboard reads unchanged (TC-CHT-68)").
+
+**TC-CHT-69 The fields: set, checked, kept, named; the type is Pivot table** — Req CHT-74, CHT-78, CHT-79 — L1 `pivot-table.test.mjs` ("CHT-78, CHT-79: the fields — set outermost first, checked, kept when they fit, named in the subject; the type is called Pivot table (TC-CHT-69)").
+
+**TC-CHT-70 Build a nested Pivot table on a Table + Insights page** — Req CHT-74, CHT-75, CHT-77, CHT-78, CHT-80, CHT-82 — **UAT** — E2E `pivot-table.e2e.mjs` ("TC-CHT-70: on a Table + Insights page a Tool Owner builds a Pivot table — rows Epic then State, columns by Month — closes and opens a group, lists the rows behind a subtotal and exports the flat table; saved in Git"); UAT: on a table page with Epic and State (Dropdown), Stream and a Date column, ＋ Add chart / table → Pivot table, Rows by Epic, ＋ then by State, Columns by the Date column; ＋ then by Stream on the columns and ↑ to move it first — the preview shows two heading rows with a Subtotal per stream; ✕ removes it; Add chart: each epic's line carries its subtotals, the Total row and column are right, ▸ closes an epic to its line, Collapse all / Expand all, a click on an epic's month lists exactly its rows, Export (CSV) has Epic, State, Line, the months and Total with the subtotals marked; light and dark theme at 1440 px and 390 px.
+
+**TC-CHT-71 The same Pivot table on an On-Demand Dashboard page** — Req CHT-74, CHT-77, CHT-78, CHT-80, CHT-79 — E2E `pivot-table.e2e.mjs` ("TC-CHT-71: on an On-Demand Dashboard page the same Pivot table as a block — collapse, Expand all, a subtotal’s rows, Export; saved in the dashboard’s file").
+
+**TC-CHT-72 The value's own name everywhere in one chart** — Req CHT-83 — L1 `pivot-table.test.mjs` ("CHT-83: the value’s own name — the Value name, else the value axis title, else the measure — in every place the chart names its value (TC-CHT-72)"); E2E `pivot-table.e2e.mjs` ("TC-CHT-72: the Y axis title the owners gave a chart ("Services") names its value in the legend and in the Table view — not "Count of rows""); browser check: Value name on the Data tab, the tooltip and a data label with Series name show it.
+
 ### 6.33 Tool Validations master list
 
 **TC-TVL-01 The master list file in Git: validated when read, merged when saved** — Req TVL-02, GIT-17, GIT-18 — L1 `tool-validations.test.mjs` ("TVL-02: the master list read from Git — round trip, each source and tool checked on its own, a broken file refused whole (TC-TVL-01)", "GIT-17, TVL-02: two saves of the master list are merged — tools by tool, sources by id, co-owners as sets; the file is mapped for “Newer data in Git” (TC-TVL-01)"); browser check with Git storage: a hand-edited `tool-validations.json` with a tool dated "2026-02-30", one without a name and a source of kind "formula" — the Master list says "Not used — tool-validations.json in Git: …" for each with why and lists the others; a file that is not JSON keeps the list last read, with the warning, and every change disabled with the reason; two browsers each adding a tool at the same time both keep their tool (two commits, each "[saved …] [by …]").
@@ -2594,6 +2624,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-24 | TC-GIT-16 |
 | GIT-25 | TC-GIT-18, TC-GIT-20 |
 | GIT-26 | TC-GIT-19, TC-CON-68 |
+| GIT-27 | TC-GIT-21, TC-GIT-22 |
 | GIT-19 | TC-GIT-12 |
 | GIT-17 (Tool Validations master list) | TC-TVL-01, TC-TVL-24 |
 | GIT-17 (On-Demand pages) | TC-OND-05, TC-OND-11, TC-OND-17, TC-OND-22, TC-PGB-08, TC-DSH-04, TC-OND-41 |
@@ -3024,6 +3055,16 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CHT-71 | TC-CHT-58, TC-CHT-59 |
 | CHT-72 | TC-CHT-58, TC-CHT-59 |
 | CHT-73 | TC-CHT-58, TC-CHT-59 |
+| CHT-74 | TC-CHT-60, TC-CHT-69, TC-CHT-70, TC-CHT-71 |
+| CHT-75 | TC-CHT-60, TC-CHT-70 |
+| CHT-76 | TC-CHT-61, TC-CHT-62, TC-CHT-63 |
+| CHT-77 | TC-CHT-65, TC-CHT-70, TC-CHT-71 |
+| CHT-78 | TC-CHT-69, TC-CHT-70, TC-CHT-71 |
+| CHT-79 | TC-CHT-68, TC-CHT-69, TC-CHT-71 |
+| CHT-80 | TC-CHT-64, TC-CHT-67, TC-CHT-70, TC-CHT-71 |
+| CHT-81 | TC-CHT-65, TC-CHT-66 |
+| CHT-82 | TC-CHT-70 |
+| CHT-83 | TC-CHT-72 |
 | TVL-01 | TC-TVL-04, TC-TVL-07 |
 | TVL-02 | TC-TVL-01 |
 | TVL-03 | TC-TVL-02 |
@@ -3113,7 +3154,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-CON-62 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
@@ -3138,8 +3179,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…59 |, TC-UI-20
-| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20 |
+| UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…33 |
 

@@ -551,8 +551,8 @@ Its built-in sections — My hours, My open work, My streams and releases, Relea
 **Add a block**
 
 1. Press **＋ Add block…**.
-2. On **Data**, type a **Title**, choose the type — KPI tile, Bar chart, Line chart, Pie chart, Pareto, Summary table or Narrative (text) — and the **Data source**.
-3. Choose **Categories by** (or **Rows by**), the **Measure** and its column, and, when the source has dates, **Period filter on**.
+2. On **Data**, type a **Title**, choose the type — KPI tile, Bar chart, Line chart, Pie chart, Pareto, Pivot table or Narrative (text) — and the **Data source**.
+3. Choose **Categories by** (or, for a Pivot table, **Rows** and **Columns** with **＋ then by**), the **Measure** and its column, and, when the source has dates, **Period filter on**.
 4. Set the other tabs if you need them (**Filters**, **Format**, **Elements**; see [Add a chart or table](#add-a-chart-or-table)) and press **Add block**.
 
 ![The block pop-up: the data sources My dashboard can read](user-guide/images/my-dashboard-sources.png)
@@ -1047,11 +1047,24 @@ Each chart also has **Data labels** (your own choice) and **Table** (the numbers
 
 People who may set up the page add charts with **＋ Add chart / table**. The pop-up holds its fields in **tabs**, with a live **Preview** beside them (under them in a narrow window). **Cancel** and the main button always stay in view.
 
-1. On **Data**: type a **Title**, choose the **Type** — Bar / column, Line over time, Pie / donut, Pareto, KPI (one number), Summary table or Narrative (text) — then **Categories by** (the column to group by; for a bar chart an optional **Stacked by**), the **Measure** — Count of rows, Sum, Average, Minimum, Maximum (of a Number or Currency column) or Distinct count — and **Group dates by**, **Show** and the sort.
+1. On **Data**: type a **Title**, choose the **Type** — Bar / column, Line over time, Pie / donut, Pareto, KPI (one number), Pivot table or Narrative (text) — then **Categories by** (the column to group by; for a bar chart an optional **Stacked by**), the **Measure** — Count of rows, Sum, Average, Minimum, Maximum (of a Number or Currency column) or Distinct count — and **Group dates by**, **Show** and the sort.
 2. On **Filters**: **＋ Add filter** narrows this chart only (values of a Dropdown or Multi-select, or a range of months).
 3. On **Format**: the look of the chart — see [Chart options](#chart-options).
 4. On **Elements**: the chart elements and the axis names — see [Chart elements](#chart-elements).
 5. Press **Add chart** (**Save** when you edit one). It is saved to Git at once, for everyone.
+
+**A Pivot table with nested rows and columns**
+
+1. Choose the type **Pivot table**. Under **Rows**, pick the outer field in **Rows by** (for example Epic), then **＋ then by** for the next one (Feature, then State) — up to three.
+2. Under **Columns (optional)**, pick **Columns by** (for example Stream) and **＋ then by** (Month) — up to two.
+3. **↑ ↓** change the order of the fields, **✕** removes one. Date fields follow **Group dates by**.
+4. Every group shows its **subtotal** on its own line, every outer column a **Subtotal** column, and the table its **Total** row and column. An average or a distinct count of a group is worked out from its rows, not by adding up the cells.
+5. On the table, **▸ / ▾** closes or opens a group; **Collapse all** and **Expand all** do it for all. This is only for you and only until you leave the page.
+6. Click any number to see the **rows behind** it. **Export** gives a flat table (a column per row field, the Line column marking Subtotal and Total).
+
+The first 10 outer rows are shown, with **Show all**. A very large table draws at most 2,000 numbers at once and says so; Export always has everything.
+
+**Name the value**: by default the chart calls its value after the measure ("Count of rows"). Type a **Value name** on Data (for example "Services") — or give the value axis a title on Elements — and the legend, the Table view, tooltips, data labels, table headings, Rows behind and Export all use it.
 
 ![The chart pop-up on Data, with a Pareto in the preview](user-guide/images/chart-dialog.png)
 

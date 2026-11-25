@@ -988,6 +988,13 @@ td .od-flag{display:inline-block;margin-top:0}
 .od-rules{margin:0;padding-left:18px;display:grid;gap:4px}
 .od-pivot{max-height:60vh}.od-pivot th{position:sticky;top:0;z-index:1;background:var(--surface)}.od-pivot .num{text-align:right}
 .od-pivot-note{font-size:12px;margin:6px 0 0}
+/* CHT-74…CHT-81: the nested Pivot table — two heading rows kept together, groups shaded by level (as the QE Mapping's), subtotal columns marked, every number a button for its rows. */
+.azure-table.od-pivot table.pivot-table{min-width:0}.pivot-table thead{position:sticky;top:0;z-index:1}.od-pivot .pivot-table th{position:static}.pivot-table thead tr:nth-child(2) th{border-top:1px solid var(--line)}
+.pivot-table .pivot-col-group{text-align:center}.pivot-table .pivot-subtotal-col{font-weight:600;background:color-mix(in srgb,var(--surface-2) 60%,var(--surface))}
+.pivot-table tr.pivot-group td{background:var(--surface-2);font-weight:600}.pivot-table tr.pivot-level-1 td,.pivot-table tr.pivot-level-2 td{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.pivot-table td{vertical-align:middle}.pivot-table .pivot-label{white-space:nowrap}.pivot-table .pivot-leaf{padding-left:1.2em}.pivot-table .pivot-toggle{font-weight:600;color:var(--text)}
+.pivot-table .pivot-cell{all:unset;cursor:pointer;font:inherit;font-variant-numeric:tabular-nums;border-radius:4px;padding:0 2px}.pivot-table .pivot-cell:hover{color:var(--link);text-decoration:underline}.pivot-table .pivot-cell:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+.od-pivot-nested .data-table-toolbar{margin-bottom:6px}
 .od-insight-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px;align-items:start}
 .od-insight-fields{display:grid;gap:10px}
 .od-insight-preview{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface);min-width:0}.od-insight-preview h3{margin:2px 0 4px;font-size:14px}.od-insight-preview>.muted{font-size:12px;margin:0 0 8px}
@@ -1278,3 +1285,5 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .data-table-group-count{font-weight:400;font-size:12px}
 .data-table-save-summary{margin:0 0 12px;padding-left:18px;display:grid;gap:4px}
 @media print{.data-table-group-bar,.data-table-filters{display:none}}
+/* CHT-78: a Pivot table's Rows and Columns in the chart editor — a line per field with ↑ ↓ ✕, then ＋ then by. */
+.pivot-fields{display:grid;gap:6px;border:0;padding:0;margin:0}.pivot-fields legend{font-weight:600;padding:0;margin-bottom:4px}.pivot-field{display:flex;align-items:center;gap:6px}.pivot-field select{flex:1;min-width:0}.pivot-fields>.text-button{justify-self:start}
