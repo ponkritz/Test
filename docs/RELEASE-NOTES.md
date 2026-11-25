@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.40.0 — 2026-11-25
+
+**Added**
+- **Wide tables keep their horizontal scroll bar above the footer** — a table wider than the page (PI Review with many columns, On-Demand, Tool Validations, Release Details, every table on the shared table) shows a horizontal scroll bar at the bottom of the screen, right above the footer, until you reach the table's end, so you can scroll sideways without scrolling down first; the bar and the table move together (drag, trackpad, Shift + wheel, keyboard) and it follows hidden columns, Wrap text, density, the window and the side menu (UI-24; UI-STANDARDS §5, approved by the product owner on 2026-11-25).
+
+DF-321, LIM-102; TC-UI-18, TC-UI-19.
+
+PR #422.
+
 ## v10.39.0 — 2026-11-25
 
 **Changed**
