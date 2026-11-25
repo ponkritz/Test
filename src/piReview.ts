@@ -1,6 +1,7 @@
-// PI Review (PIR-01…PIR-11): the PIs to choose from and the default one, the Features of a PI, the Discussions of
+// PI Review (PIR-01…PIR-15): the PIs to choose from and the default one, the Features of a PI, the Discussions of
 // those Features read from Azure DevOps and their latest comment split by its headings (or, without one, suggested by
-// keywords) — kept in this page load's memory only (nothing is written to Git, IndexedDB or Azure DevOps).
+// keywords) — kept in this page load's memory only (nothing is written to Git or IndexedDB; the only write to Azure
+// DevOps is a review posted as a new comment, piReviewPost.ts, PIR-13).
 import { currentIterationPairs, type AzureIteration } from './azureRead.ts'
 import { laterPi, piName, piPathOf } from './myWork.ts'
 import type { AzureWorkItem } from './domain'
@@ -127,10 +128,16 @@ export function latestComment(comments: WorkItemComment[]): WorkItemComment | un
 // given twice (or two synonyms of one) has its texts joined. No heading: an empty result (see reviewSplit for the
 // keyword fallback, PIR-11).
 export type MoveValue = 'Yes' | 'No' | 'Partly'
+// PIR-15: the advice whether to discuss the Feature during the Review meeting, normalized.
+export const reviewModes = ['Discuss during Meeting', 'Offline Review'] as const
+export type ReviewMode = typeof reviewModes[number]
 // PIR-11: where the columns come from — the headings, the keywords (suggested) or nothing.
 export type SplitFrom = 'Headings' | 'Keywords' | 'None'
-export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; from?: SplitFrom }
-type Section = 'struggles' | 'learnings' | 'move'
+// PIR-15: review (the Review meeting advice as written) with reviewMode (normalized), remarks (Additional Remarks).
+export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; review?: string; reviewMode?: ReviewMode; remarks?: string; from?: SplitFrom }
+type Section = 'struggles' | 'learnings' | 'move' | 'review' | 'remarks'
+// PIR-11: the sections the keyword fallback suggests.
+type KeywordSection = 'struggles' | 'learnings' | 'move'
 const gap = String.raw`[ \t]+`
 // PIR-12: "of the Feature" after a heading word ("Learnings of the Feature", "Struggles of this feature").
 const of = String.raw`(?:[ \t]+(?:of|for)[ \t]+(?:the|this)[ \t]+feature)?`
@@ -153,6 +160,13 @@ const headingWords: { section: Section; pattern: string; inline: boolean; dash?:
   // need to be …"), the PI any number.
   { section: 'move', pattern: `(?:whether${gap}|does${gap})?(?:the${gap}|this${gap})?feature${gap}needs?${gap}to${gap}(?:be${gap})+(?:shifted|moved|carried(?:${gap}over)?|pushed|spilled(?:${gap}over)?)${gap}(?:to|into)${gap}(?:the${gap}next${gap})?${piNumber}`, inline: true },
   { section: 'move', pattern: `next${gap}pi`, inline: false },
+  // PIR-15: "Advise to discuss the Feature during the Review meeting" (Advice / Advised; "in the Review meeting"), and
+  // at a line start only the short forms "Review meeting", "Discuss in (the) meeting", "Review mode".
+  { section: 'review', pattern: `advi[sc]e[sd]?${gap}to${gap}discuss(?:${gap}(?:the|this)${gap}feature)?(?:${gap}(?:during|in|at)${gap}(?:the${gap})?review${gap}meeting)?`, inline: true },
+  { section: 'review', pattern: `review${gap}meeting|discuss(?:ed)?${gap}(?:in|during)${gap}(?:the${gap})?(?:review${gap})?meeting|review${gap}mode`, inline: false },
+  // PIR-15: "Additional Remarks (If Any)", "Additional comments"; at a line start also "Remarks".
+  { section: 'remarks', pattern: String.raw`additional${gap}(?:remarks?|comments?)(?:${gap}\(if${gap}any\))?`, inline: true },
+  { section: 'remarks', pattern: String.raw`remarks?(?:${gap}\(if${gap}any\))?`, inline: false },
 ]
 const names = (pick: (word: typeof headingWords[number]) => boolean | undefined) => `(${headingWords.filter(pick).map((word) => word.pattern).join('|')})`
 const bold = String.raw`(?:\*\*|__)?`
@@ -170,7 +184,23 @@ const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().rep
 // a space or punctuation (so "N/A", "Not decided" and "Nothing" give no value).
 const moveStart = /^(yes|y|no|n|partly|partially|partial)(?=$|[\s.,;:!)—–-])[\s.,;:!)—–-]*/i
 const moveValueOf = (word: string): MoveValue => word.toLowerCase().startsWith('y') ? 'Yes' : word.toLowerCase().startsWith('p') ? 'Partly' : 'No'
+// PIR-15: the Review meeting advice normalized — "Discuss during Meeting" (also "discuss …", "in the meeting", "meeting",
+// "yes") or "Offline Review" (also "offline …", "no"); otherwise none (shown as written).
+export function reviewModeOf(text: string | undefined): ReviewMode | undefined {
+  const value = (text ?? '').trim().toLowerCase()
+  if (/^(?:discuss|(?:in|during)\s+(?:the\s+)?(?:review\s+)?meeting|meeting|yes)(?![\p{L}\p{N}])/u.test(value)) return 'Discuss during Meeting'
+  if (/^(?:offline|no)(?![\p{L}\p{N}])/u.test(value)) return 'Offline Review'
+  return undefined
+}
+// PIR-14: the footer line of a review posted from this app ("— posted from Demand Planning (PI Review)"); dropped before
+// the comment is split, so it never lands in a section.
+export const reviewFooter = '— posted from Demand Planning (PI Review)'
+const footerLine = /^[ \t]*[—–-]+[ \t]*posted[ \t]+from[ \t]+demand[ \t]+planning\b[^\n]*$/gimu
+export const withoutFooter = (text: string) => text.replace(footerLine, '')
+// PIR-14: a section's lines as the split gives them back (trimmed, a leading bullet or number dropped, no empty lines).
+export const tidyReviewText = (text: string) => tidy(text)
 function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
+  text = withoutFooter(text)
   const found = new Map<number, { section: Section; start: number; end: number; pi?: string }>()
   for (const pattern of [lineHeading, moveQuestionLine, inlineHeading, inlineDashHeading]) {
     pattern.lastIndex = 0
@@ -192,6 +222,8 @@ function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
     const match = moveStart.exec(split.move)
     if (match) { split.moveValue = moveValueOf(match[1]); split.moveRest = split.move.slice(match[0].length).trim() }
   }
+  const mode = reviewModeOf(split.review)
+  if (mode) split.reviewMode = mode
   return { split, found: headings.length > 0 }
 }
 export function splitReviewComment(text: string | undefined): ReviewSplit {
@@ -201,7 +233,7 @@ export function splitReviewComment(text: string | undefined): ReviewSplit {
 // PIR-11: the keywords that suggest a column when the comment has no heading at all — built in, one list to change
 // later. Matched case-insensitively as whole words (a single word also with a plural "s" / "es"); a trailing * matches
 // any ending ("escalat*": escalate, escalated, escalation); a space matches any spaces; ' matches ' and ’.
-export const reviewKeywords: Record<Section, readonly string[]> = {
+export const reviewKeywords: Record<KeywordSection, readonly string[]> = {
   struggles: ['blocked', 'blocker', 'delay', 'delayed', 'issue', 'problem', 'risk', 'escalat*', 'dependency', 'dependencies', 'waiting', 'rework', 'missed', 'slipped', 'could not', "couldn't", 'unable', 'late', 'impediment', 'struggle*', 'challeng*'],
   learnings: ['learned', 'learnt', 'lesson', 'next time', 'improve*', 'went well', 'worked well', 'better to', 'recommend', 'should have', 'takeaway', 'learning'],
   move: ['carry over', 'carryover', 'next PI', 'spill*', 'move to', 'moving to', 'continue in'],
@@ -211,7 +243,7 @@ const keywordSource = (keyword: string) => {
   const body = word.split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, `['’]`)).join(String.raw`[ \t]+`)
   return `${body}${wild ? String.raw`[\p{L}\p{N}]*` : /\s/.test(word) ? '' : '(?:s|es)?'}`
 }
-const sections: Section[] = ['struggles', 'learnings', 'move']
+const sections: KeywordSection[] = ['struggles', 'learnings', 'move']
 const keywordPatterns = new Map(sections.map((section) => [section, new RegExp(String.raw`(?<![\p{L}\p{N}])(?:${reviewKeywords[section].map(keywordSource).join('|')})(?![\p{L}\p{N}])`, 'giu')]))
 // A negation just before the keyword (at most two words between): "no blocker", "no major issues", "not blocked",
 // "wasn't late" are not taken.
@@ -221,7 +253,7 @@ export const reviewSentences = (text: string) => text.split(/\r?\n/).flatMap((li
 // The Move value of a suggested Move sentence: only when, after the move phrase (and "over", "to", "the", "next PI"),
 // it says yes, no, partly or partially followed by punctuation or the end ("Spill over to next PI — partly, the docs").
 const keywordMoveValue = /^(?:[ \t]+(?:over|to|into|in|the|next|pi))*[ \t]*[:,\-–—]?[ \t]*(yes|no|partly|partially)[ \t]*(?:$|[.,;:!—–-])[ \t.,;:!—–-]*/i
-function keywordIn(section: Section, sentence: string) {
+function keywordIn(section: KeywordSection, sentence: string) {
   const pattern = keywordPatterns.get(section)!
   pattern.lastIndex = 0
   for (let match = pattern.exec(sentence); match; match = pattern.exec(sentence)) if (!negated.test(sentence.slice(0, match.index))) return match
@@ -260,5 +292,7 @@ export function reviewSplit(text: string | undefined): ReviewSplit & { from: Spl
 // PIR-08: Move to next PI as shown — "Yes — waiting for vendor" with a value, otherwise the text as written.
 // PIR-12: the PI the comment names ("… shifted to PI 26.4") follows as " · to PI 26.4".
 export const moveLabel = (split: ReviewSplit) => { const base = split.moveValue ? `${split.moveValue}${split.moveRest ? ` — ${split.moveRest}` : ''}` : split.move ?? ''; return base && split.movePi ? `${base} · to ${split.movePi}` : base }
+// PIR-15: the Review meeting advice as shown — the normalized value, otherwise the text as written.
+export const reviewModeLabel = (split: ReviewSplit) => split.reviewMode ?? split.review ?? ''
 // PIR-09: one line for a table cell — the line breaks as " · ".
 export const oneLine = (text: string | undefined) => (text ?? '').split(/\n+/).map((line) => line.trim()).filter(Boolean).join(' · ')

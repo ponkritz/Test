@@ -1236,3 +1236,13 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 /* OND-105: the Upload Excel preview — narrow Line, Row ID and Result columns, error rows marked, the error line in body text. */
 .bulk-rows .bulk-col-line{width:64px}.bulk-rows .bulk-col-id{width:120px}.bulk-rows .bulk-col-result{width:100px}.bulk-rows td.num,.bulk-rows th.num{text-align:right}.bulk-rows tr.bulk-error td{color:var(--danger-text)}.bulk-preview .bulk-errors-line{font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .bulk-template-form>p.muted{font-size:12px;margin:0}
+/* PIR-13, PIR-18: the PI review form — the fields beside the Preview of the exact comment (one column on a phone) */
+.modal:has(.pir-review-columns){width:min(1040px,100%)}
+.pir-review-form,.close-review{display:grid;gap:12px}.pir-review-note{margin:0;font-size:12px}
+.pir-review-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.pir-review-fields{display:grid;gap:12px;min-width:0}.pir-review-fields>label,.pir-review-fields fieldset>label{display:grid}.pir-review-fields .segmented{justify-self:start}.pir-review-fields .segmented label{display:flex}.pir-review-fields small{font-size:11px;color:var(--muted)}.pir-review-fields textarea{width:100%;resize:vertical}
+.pir-review-fields fieldset{display:grid;gap:8px}.pir-review-fields legend{font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.pir-review-preview{display:grid;gap:6px;min-width:0;position:sticky;top:0}.pir-review-preview h3,.close-review h3{margin:0;font-size:14px;color:var(--heading)}
+.pir-review-preview pre{margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:min(460px,55vh);overflow:auto}
+.close-review{border-top:1px solid var(--line);padding-top:12px}
+@media(max-width:760px){.pir-review-columns{grid-template-columns:1fr}.pir-review-preview{position:static}}

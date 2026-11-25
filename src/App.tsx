@@ -45,6 +45,7 @@ import { ViewAsDialog } from './components/ViewAsDialog'
 import { useHistory } from './useHistory'
 import { withHistory } from './history'
 import { CanContext, ReadOnlyContext } from './useCan'
+import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
 import { SettingsSearch } from './components/SettingsSearch'
 import { EpicSetupContext, useEpicSetup } from './useEpicSetup'
 import { OnPremContext } from './onPremValues'
@@ -100,6 +101,7 @@ const BoardPage = lazy(() => import('./pages/BoardPage').then((module) => ({ def
 const BacklogHealthPage = lazy(() => import('./pages/BacklogHealthPage').then((module) => ({ default: module.BacklogHealthPage })))
 const PulseCheckPage = lazy(() => import('./pages/PulseCheckPage').then((module) => ({ default: module.PulseCheckPage })))
 const PiReviewPage = lazy(() => import('./pages/PiReviewPage').then((module) => ({ default: module.PiReviewPage })))
+const MyPiReviewPage = lazy(() => import('./pages/MyPiReviewPage').then((module) => ({ default: module.MyPiReviewPage })))
 const BritePage = lazy(() => import('./pages/BritePage').then((module) => ({ default: module.BritePage })))
 const KpiTrackerPage = lazy(() => import('./pages/KpiTrackerPage').then((module) => ({ default: module.KpiTrackerPage })))
 const QeMappingPage = lazy(() => import('./pages/QeMappingPage').then((module) => ({ default: module.QeMappingPage })))
@@ -332,7 +334,7 @@ export default function App() {
   const openOnDemand = (id: string) => { setOnDemandId(id); try { localStorage.setItem('demand-planning-on-demand-page-v1', id) } catch { /* this visit only */ } setPage('ondemand') }
   // Access roles: each menu entry belongs to an area; Settings is always there (each person's own connections and tokens).
   // A page the viewer's roles do not include falls back to the first one they do.
-  const areaOf = (id: Page): Area | null => id === 'admin' || id === 'home' ? null : id === 'board' ? (view.onPrem ? 'release' : 'board') : id === 'windchill' || id === 'brite' ? 'release' : id === 'overview' || id === 'pulse' || id === 'pireview' || id === 'kpitracker' ? 'insights' : id === 'mydash' ? 'overview' : id === 'activities' ? 'monthly' : id === 'planover' || id === 'capactual' ? 'insights' : id
+  const areaOf = (id: Page): Area | null => id === 'admin' || id === 'home' ? null : id === 'board' ? (view.onPrem ? 'release' : 'board') : id === 'windchill' || id === 'brite' ? 'release' : id === 'overview' || id === 'pulse' || id === 'pireview' || id === 'kpitracker' ? 'insights' : id === 'mydash' ? 'overview' : id === 'activities' ? 'monthly' : id === 'mypireview' ? 'mywork' : id === 'planover' || id === 'capactual' ? 'insights' : id
   // Testing (ACT-01): pages being tried out, for the Admin role only (an access policy must name it; View as follows the viewed rights).
   const testing = access.rights.roles.includes('Admin')
   const allowed = (id: Page) => { if (id === 'home' && startView === 'classic') return false; if (pageMeta(id).group === 'Testing' && !testing) return false; const area = areaOf(id); return area == null || access.sees(area) }
@@ -427,6 +429,8 @@ export default function App() {
   useEffect(() => { if (problemAt && !azure.isSample) setGuideOpen(true) }, [problemAt, azure.isSample])
   const dismissGuide = () => { try { localStorage.setItem(guideKey, 'dismissed') } catch { /* this visit only */ } setGuideOpen(false) }
   const pageProps = { store, month, setMonth }
+  // PIR-13, PIR-17, PIR-18: what posting a PI review needs (PI Review, My PI Review, the Close pop-up).
+  const reviewEnv: ReviewEnv = { email: access.email, viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit }
   const storageLabel = store.cache.status === 'error' ? '⚠ Not saved locally' : store.cache.status === 'saving' ? '◌ Saving locally' : '○ Local IndexedDB'
   const buildStatus = <BuildStatus pending={store.hasPendingSave} failed={store.ready && store.cache.status === 'error'} busy={azure.busy} preview={Boolean(azure.preview)} details={<p className="storage-line" title="Where app data is saved"><strong>Data saved:</strong> {storageLabel}</p>} onBackup={store.ready ? () => exportStateJson({ ...store.state, azureWorkItems: mergeAzureWorkItems(store.state.azureWorkItems ?? [], azure.preview?.items ?? []), ...(azure.preview ? { azureBacklogScope: azure.preview.scope } : {}) }) : undefined} />
 
@@ -445,7 +449,7 @@ export default function App() {
   ] : []
   const settingsLinks: HomeLink[] = settingsPagesFor(access.can).map((entry) => ({ key: `settings:${entry.key}`, label: entry.label, icon: pageMeta('admin').icon, open: () => openSettings(entry.key) }))
   const homeTiles = visibleTiles([
-    tileOf({ key: 'mywork', title: 'My Work', detail: 'Time Writing, your tasks and the Sprint check.', tone: 'sky', open: firstAllowed('activities', 'mywork'), links: [...pageLink('activities'), ...pageLink('mywork'), ...pageLink('bulk'), ...addedLinks('my-work')], ...(my.known && azure.items.length ? { badge: `${my.pending.length} open` } : {}) }),
+    tileOf({ key: 'mywork', title: 'My Work', detail: 'Time Writing, your tasks, the Sprint check and your PI reviews.', tone: 'sky', open: firstAllowed('activities', 'mywork'), links: [...pageLink('activities'), ...pageLink('mywork'), ...pageLink('bulk'), ...pageLink('mypireview'), ...addedLinks('my-work')], ...(my.known && azure.items.length ? { badge: `${my.pending.length} open` } : {}) }),
     tileOf({ key: 'mydash', title: 'My dashboard', detail: 'Your hours against your capacity, your open work and your streams.', tone: 'peach', open: firstAllowed('mydash'), links: [] }),
     tileOf({ key: 'insights', title: 'Team Insights', detail: 'Team overview, Pulse Check and PI Review.', tone: 'lilac', links: [...pageLink('overview'), ...pageLink('pulse'), ...pageLink('pireview'), ...pageLink('kpitracker'), ...addedLinks('data-insights')] }),
     tileOf({ key: 'board', title: 'I&D Board', detail: 'The QMS-0025 backlog and its health.', tone: 'mint', open: allowed('board') && access.sees('board') ? () => openView(timeWriting.id) : undefined, links: [...(access.sees('board') ? [{ key: 'board', label: timeWriting.name, icon: pageMeta('board').icon, open: () => openView(timeWriting.id) }] : []), ...pageLink('health'), ...addedLinks('i-d-board'), ...addedLinks('other-views')] }),
@@ -572,7 +576,7 @@ export default function App() {
   // saves a built-in chart's size for everyone with Git connected (not with the synthetic sample); View as saves nothing.
   const chartSizeEnv = { views: personalViews, viewOnly: Boolean(access.viewingAs), canSetDefault: access.can('layout.defaults') && git.connected && !git.readOnly && !git.isSample }
   // UI-12: every table follows the shared design default.
-  return <PageNamesContext.Provider value={menuNames}><OwnerPeopleContext.Provider value={ownerPeople}><TableDefaultsContext.Provider value={tableDesign}><CustomStreamsContext.Provider value={customStreams}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><CanContext.Provider value={access.can}><ReadOnlyContext.Provider value={access.readOnly}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><ToolValidationsContext.Provider value={toolEnv}><HeaderSlot.Provider value={headerSlot}><ChartSizeEnvContext.Provider value={chartSizeEnv}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
+  return <PageNamesContext.Provider value={menuNames}><OwnerPeopleContext.Provider value={ownerPeople}><TableDefaultsContext.Provider value={tableDesign}><CustomStreamsContext.Provider value={customStreams}><ReleaseSettingsContext.Provider value={store.state.releaseSourceSettings}><ReviewEnvContext.Provider value={reviewEnv}><CanContext.Provider value={access.can}><ReadOnlyContext.Provider value={access.readOnly}><EpicSetupContext.Provider value={epicSetup.file}><OnPremContext.Provider value={onPremSources}><ToolValidationsContext.Provider value={toolEnv}><HeaderSlot.Provider value={headerSlot}><ChartSizeEnvContext.Provider value={chartSizeEnv}><div className={`app-shell${navOpen ? ' nav-open' : ''}${menuMini ? ' nav-mini' : ''}`}>
     {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
     <aside className="sidebar" id="primary-navigation">
       <div className="brand" title="I&amp;D Quality Demand Planning"><div className="brand-mark"><BrandMark /></div><div><strong>I&amp;D Quality</strong><span>Demand Planning</span></div><button type="button" className="nav-mini-toggle" aria-pressed={menuMini} aria-label={menuMini ? 'Expand the menu' : 'Collapse the menu'} title={menuMini ? 'Show the menu with names' : 'Fold the menu to icons'} onClick={toggleMenuMini}>{menuMini ? '»' : '«'}</button></div>
@@ -650,6 +654,7 @@ export default function App() {
       {page === 'qemapping' && <QeMappingPage git={git} store={qeMapping} resources={qeResources} viewOnly={Boolean(access.viewingAs)} qeColumnNames={[...new Set([featureSetup.setups?.shared, featureSetup.setups?.personal].flatMap((file) => file?.epics ?? []).flatMap((epic) => epic.qeColumns?.qeColumn ? [epic.qeColumns.qeColumn] : []))]} />}
       {page === 'mywork' && <MyWorkPage azure={azure} store={store} my={my} month={month} onOpenActivities={() => setPage('activities')} assign={assign} featureSetup={featureSetup.setups} />}
       {page === 'bulk' && <SprintCheckPage azure={azure} store={store} my={my} />}
+      {page === 'mypireview' && <MyPiReviewPage azure={azure} my={my} />}
       {page === 'capactual' && <CapacityActualPage azure={reportAzure} store={store} month={month} />}
       {page === 'planover' && <PlanningOverviewPage azure={reportAzure} store={store} month={month} onOpenPack={() => openSettings('pack', 'pack')} />}
       {page === 'activities' && <MyActivitiesPage azure={azure} store={store} my={my} month={month} assign={assign} featureSetup={featureSetup.setups} onOpen={setPage} />}
@@ -665,5 +670,5 @@ export default function App() {
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>
     </main>
-  </div></ChartSizeEnvContext.Provider></HeaderSlot.Provider></ToolValidationsContext.Provider></OnPremContext.Provider></EpicSetupContext.Provider></ReadOnlyContext.Provider></CanContext.Provider></ReleaseSettingsContext.Provider></CustomStreamsContext.Provider></TableDefaultsContext.Provider></OwnerPeopleContext.Provider></PageNamesContext.Provider>
+  </div></ChartSizeEnvContext.Provider></HeaderSlot.Provider></ToolValidationsContext.Provider></OnPremContext.Provider></EpicSetupContext.Provider></ReadOnlyContext.Provider></CanContext.Provider></ReviewEnvContext.Provider></ReleaseSettingsContext.Provider></CustomStreamsContext.Provider></TableDefaultsContext.Provider></OwnerPeopleContext.Provider></PageNamesContext.Provider>
 }

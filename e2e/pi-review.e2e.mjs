@@ -96,6 +96,11 @@ async function cell(page, key, label) {
   assert.ok(at >= 0, `column ${label} in ${headings.join(' | ')}`)
   return text(page.locator(`.pir-table tr[data-row-key="${key}"] td`).nth(at))
 }
+// The tooltip of a Feature's cell in the column headed `label`.
+async function cellTitle(page, key, label) {
+  const headings = await page.locator('.pir-table thead th').evaluateAll((cells) => cells.map((th) => (th.querySelector('.sort-button')?.textContent ?? th.textContent ?? '').replace(/[▴▾]/g, '').trim()))
+  return page.locator(`.pir-table tr[data-row-key="${key}"] td`).nth(headings.indexOf(label)).getAttribute('title')
+}
 const localDateTime = (page, iso) => page.evaluate((value) => new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(new Date(value)), iso)
 const rowKeys = (page) => page.locator('.pir-table tbody tr[data-row-key]').evaluateAll((rows) => rows.map((row) => row.dataset.rowKey))
 
@@ -109,7 +114,7 @@ test('TC-PIR-06: the current PI is preselected, its Features listed, a Discussio
   // PIR-03, PIR-04: the PI's Features by ID; the toggle adds the Feature with a User Story in the PI.
   await page.locator('.pir-table tr[data-row-key="example/project/202"]').waitFor()
   assert.deepEqual(await rowKeys(page), ['example/project/201', 'example/project/202'])
-  assert.match(await text(page.locator('.pir-table tr[data-row-key="example/project/201"]')), /^201 DP 4\.2 release review DP releases Active Rita Gomez — PI 2026\.4 — — — — — —$/)
+  assert.match(await text(page.locator('.pir-table tr[data-row-key="example/project/201"]')), /^201 DP 4\.2 release review DP releases Active Rita Gomez — PI 2026\.4 — — — — — — — — Write review…$/)
   assert.match(await text(page.locator('.data-table-status')), /^2 of 2 Features$/)
   await page.getByRole('checkbox', { name: 'Also Features with User Stories in this PI' }).check()
   await page.locator('.pir-table tr[data-row-key="example/project/203"]').waitFor()
@@ -149,7 +154,7 @@ test('TC-PIR-09: after Read all Discussions the five columns show each Feature\'
   const five = ['Date and Time of Comment', 'Comment', 'Struggles', 'Learnings', 'Move to Next PI']
   const values = async (key) => { const found = []; for (const label of five) found.push(await cell(page, key, label)); return found }
   assert.deepEqual(await values('example/project/201'), ['—', '—', '—', '—', '—'])
-  assert.match(await page.locator('.pir-table tr[data-row-key="example/project/201"] td').last().getAttribute('title'), /not read yet: open the Feature, or ↻ Read all Discussions/)
+  assert.match(await cellTitle(page, 'example/project/201', 'Move to Next PI'), /not read yet: open the Feature, or ↻ Read all Discussions/)
   await page.getByRole('button', { name: '↻ Read all Discussions' }).click()
   await page.locator('.jobs-button').click()
   const panel = page.getByRole('dialog', { name: 'Background jobs' })
@@ -158,7 +163,7 @@ test('TC-PIR-09: after Read all Discussions the five columns show each Feature\'
   // PIR-07, PIR-09: each Feature's newest comment by date — split for 201; for 202 (listed after an older one) whole only.
   assert.deepEqual(await values('example/project/201'), [await localDateTime(page, '2026-11-21T14:30:00Z'), 'Struggles: test rig late · Learnings: book the rig early · share the calendar · Move to next PI: Yes - waiting for vendor', 'test rig late', 'book the rig early · share the calendar', 'Yes — waiting for vendor'])
   assert.deepEqual(await values('example/project/202'), [await localDateTime(page, '2026-11-19T09:00:00Z'), 'Ready for review', '', '', ''])
-  assert.match(await page.locator('.pir-table tr[data-row-key="example/project/201"] td').last().getAttribute('title'), /^Yes — waiting for vendor$/)
+  assert.match(await cellTitle(page, 'example/project/201', 'Move to Next PI'), /^Yes — waiting for vendor$/)
   // PIR-09: sorted by the date, newest first on the first click; filtered by the Move value.
   const byDate = page.locator('.pir-table thead .sort-button', { hasText: 'Date and Time of Comment' })
   await byDate.click()
@@ -191,7 +196,7 @@ test('TC-PIR-09: after Read all Discussions the five columns show each Feature\'
   await drawer.getByRole('heading', { name: 'Discussion (4)' }).waitFor()
   const latest = drawer.getByRole('region', { name: 'Latest comment' })
   assert.equal(await text(latest.locator('.pir-comment-head')), `Ben Okafor ${await localDateTime(page, '2026-11-21T14:30:00Z')}`)
-  assert.deepEqual(await latest.locator('dd').allInnerTexts(), ['test rig late', 'book the rig early\nshare the calendar', 'Yes — waiting for vendor'])
+  assert.deepEqual(await latest.locator('dd').allInnerTexts(), ['test rig late', 'book the rig early\nshare the calendar', 'Yes — waiting for vendor', '—', '—'])
   await page.keyboard.press('Escape')
   await drawer.waitFor({ state: 'detached' })
   assert.deepEqual(errors, [])
@@ -237,10 +242,10 @@ test('TC-PIR-11: a newest comment without headings has its Struggles, Learnings 
   await exportButton.click()
   if (menu) await page.getByRole('menuitem', { name: 'CSV (.csv)' }).click()
   const csv = readFileSync(await (await download).path(), 'utf8').replace(/\r\n/g, '\n')
-  assert.match(csv, /Struggles,Learnings,Move to Next PI,Split from\n/)
-  assert.match(csv, /Yes — waiting for vendor,Headings\n/)
-  assert.match(csv, /2026-11-19[^,]*,Ready for review,,,,None\n/)
-  assert.match(csv, /,We were blocked by the vendor for two Sprints\.,Next time we book the rig at PI planning\.,Partly — the rig test\.,Keywords\n?/)
+  assert.match(csv, /Struggles,Learnings,Move to Next PI,Review mode,Additional Remarks,Split from\n/)
+  assert.match(csv, /Yes — waiting for vendor,,,Headings\n/)
+  assert.match(csv, /2026-11-19[^,]*,Ready for review,,,,,,None\n/)
+  assert.match(csv, /,We were blocked by the vendor for two Sprints\.,Next time we book the rig at PI planning\.,Partly — the rig test\.,,,Keywords\n?/)
   // PIR-10, PIR-11: the drawer's Latest comment says the texts are suggested.
   await page.locator(`.pir-table tr[data-row-key="${row}"] td`).nth(1).click()
   const drawer = page.locator('aside.drawer[role="dialog"]', { has: page.getByRole('heading', { name: 'Feature #204', exact: true }) })

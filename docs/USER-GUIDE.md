@@ -638,13 +638,13 @@ What feeds each line and KPI row is set in **Admin → Reports → Monthly pack*
 
 ### PI Review
 
-**Data Insights → PI Review** shows the Features of a PI and what was discussed on them in Azure DevOps — the starting point for the PI Review meeting. It reads only: nothing is written to Azure DevOps or Git.
+**Data Insights → PI Review** shows the Features of a PI and what was discussed on them in Azure DevOps — the starting point for the PI Review meeting. It writes nothing to Git; the only thing it writes to Azure DevOps is a review you post with **Write review…** (below), as a new comment.
 
 1. **Choose the PI.** The **PI** list in the table's filter bar holds the PIs of your Time Writing connection and of the fetched data, newest first. The **current PI** (its Sprint's dates cover today, in UTC) is chosen for you and marked **Current PI**. If two PIs are current at the same time nothing is chosen: pick one. If the iterations cannot be read, the latest PI with Features is shown and a warning says why. Your choice is remembered in this browser.
-2. **Look at the Features.** The table lists the Features whose Iteration is in the PI (not Removed ones, not those under the absence Epic), by ID. Tick **Also Features with User Stories in this PI** to add Features that stayed in an older PI while their stories moved on. Filter by **Epic** and **State**, search, **Reset filters**, and **Export** (with the Export data right).
+2. **Look at the Features.** The table lists the Features whose Iteration is in the PI (not Removed ones, not those under the absence Epic), by ID. Tick **Also Features with User Stories in this PI** to add Features that stayed in an older PI while their stories moved on. Filter by **Epic**, **State** and **Assigned to**, search (the search looks in every column shown and the whole latest comment), **Reset filters**, and **Export** (with the Export data right).
 3. **Read a Discussion.** Click a Feature: a drawer opens with its details and its **Discussion** — every comment (up to the newest 1,000), newest first, as plain text. Formatting is not kept: a mention shows as **@Name** and an image as **[image]**. Use **↻ Read again** after new comments, ‹ › to go to the next Feature, and **Open in Azure DevOps →** to see the work item.
 4. **Read them all.** **↻ Read all Discussions** reads every Feature's Discussion in the background (the top bar shows "Reading Discussions · x of n"). If Azure DevOps asks the app to slow down it waits and tries again once; if it keeps asking, the job stops with "x of n read" — click again later to read the rest. The **Comments** column shows each Feature's count.
-5. **See the latest review comment in columns.** Once a Feature's Discussion is read (in the drawer or with Read all), the columns **Date and Time of Comment**, **Comment**, **Struggles**, **Learnings** and **Move to Next PI** show its **latest comment** — the newest by date and time, whoever wrote it. The date and time are in your time zone; a long text is cut in the cell, and pointing at it shows the whole text. Before the Discussion is read the cells show "—". Sort by any of them, search the comment text, filter with **Move to next PI** (Yes, No, Partly, Other text, Not given, Discussion not read), and **Export** them. The drawer shows the same split under **Latest comment**, above the Discussion.
+5. **See the latest review comment in columns.** Once a Feature's Discussion is read (in the drawer or with Read all), the columns **Date and Time of Comment**, **Comment**, **Struggles**, **Learnings** and **Move to Next PI** show its **latest comment** — the newest by date and time, whoever wrote it. The date and time are in your time zone; a long text is cut in the cell, and pointing at it shows the whole text. Before the Discussion is read the cells show "—". Sort by any of them, search the comment text, filter with **Move to next PI** (Yes, No, Partly, Other text, Not given, Discussion not read) and **Review mode** (Discuss during Meeting, Offline Review, …), and **Export** them. **Review mode** shows the answer to "Advise to discuss the Feature during the Review meeting" and **Additional Remarks** the remarks. The drawer shows the same split under **Latest comment**, above the Discussion.
 
 **How to write the review comment so it is split.** Write the three headings, each followed by a colon — on their own lines or in one line — as the **newest** comment of the Feature (a later reply, even "Thanks!", becomes the latest comment):
 
@@ -682,6 +682,36 @@ The Feature then shows **Struggles** "the test rig arrived two Sprints late", **
 - A comment with neither headings nor keywords shows only its date and the whole comment. The whole comment is always shown next to the split, so check it when a section looks wrong.
 
 The Discussions are read with your own PAT (Work Items, Read) and kept only until you reload the page. Tagging struggles and learnings in the app, saving them to Git and recording the Move to next PI decision come in later releases.
+
+#### Write the PI review in the app (from PI 26.4)
+
+Instead of typing the headings yourself, fill in the review form; the app writes the comment in the standard format for you.
+
+1. **Open the form.** Click **Write review…** in the Feature's drawer (bottom right) or in the **Actions** column of its row — or open **My Work → My PI Review**, which lists only your Features of the PI with **My review** (Reviewed / Not reviewed) and its date.
+2. **Who can post.** The Feature's **assignee** (your work email on the Time Writing connection is the Feature's Assigned To) and the **leads** (Tool Owner, Admin, People Manager — the right "PI Review: post the review of a Feature"). For anyone else the button is greyed out and says why; it is also greyed out with sample data, in View as, without the PAT, or on an on-premises connection (reviews go to dev.azure.com only).
+3. **Fill in the paragraphs.** One point per line; start a line with **-** or **1.** for a list.
+   - **Learnings** and **Struggles** — required (write "None" if there are none).
+   - **Move to next PI** — **Yes** or **No** (**No** is pre-selected). **Moves to** is filled in with the PI after the reviewed one (e.g. PI 26.4 → PI 26.5); change it if needed. **Reason** is optional.
+   - **Advise to discuss the Feature during the Review meeting?** — **Discuss during Meeting** or **Offline Review** (required, no default).
+   - **Additional Remarks** — optional.
+   If the Feature already has a review, the form starts from it, so a correction only changes what is wrong.
+4. **Check the Preview.** It shows the exact comment, for example:
+   ```
+   Learnings :
+   Book the rig early
+   - share the lab calendar
+   Struggles :
+   Vendor documents late
+   Whether the feature needs to be shifted to PI 26.5 : Yes - two stories left
+   Advise to discuss the Feature during the Review meeting : Discuss during Meeting
+   Additional Remarks :
+   Thanks to the lab team
+   — posted from Demand Planning (PI Review)
+   ```
+   The last line marks it as posted from the app; PI Review ignores it. If a line of yours looks like a heading (e.g. "Issues: …" inside Learnings), the form asks you to reword it, so the columns stay right.
+5. **Post.** **Post to Azure DevOps** asks you to confirm, then posts the comment as you (your PAT). The result is under **Background jobs** ("Post review · #id"); the Discussion is read again and the columns show the new values. A posted comment cannot be deleted from the app: to correct it, write the review again — the newest comment counts.
+
+**When you close a Feature** (Close in My Tasks [Board], Sprint check or Time Writing), the Close pop-up asks the same questions for that Feature (Learnings and Struggles optional, **Move to next PI = No** pre-selected, the Review meeting advice required) and **posts the review first, then closes**. If the review cannot be posted nothing is closed: choose **Close without the review** or **Cancel**. When several Features are closed at once, write their reviews in PI Review or My PI Review.
 
 ### Planning Overview and Capacity vs Actual (Testing)
 

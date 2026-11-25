@@ -395,7 +395,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-25 Configurable Time Writing story** — Req CON-57 — L1 `azure-devops.test.mjs` (a setup file without it keeps “{feature} - Time Writing”; a configured title, Area Path, Iteration Path and assignee are used and the month Task goes under that story). **UAT**
 
-**TC-NAV-17 Menu groups and collapsing** — Req NAV-17, NAV-18, OV-10 — L1 `format.test.mjs` (Data Insights holds Overview, Pulse Check, PI Review; My Work order My Tasks [Board], Monthly Time Writing, Bulk actions); browser check on sample data: the menu shows the five headings; Pulse Check shows the month's releases (Overview keeps This month and Trends); collapsing My Work and Release Details hides them and stays so after a reload; at 900 px width every page is still reachable. **UAT**
+**TC-NAV-17 Menu groups and collapsing** — Req NAV-17, NAV-18, OV-10 — L1 `format.test.mjs` (Data Insights holds Overview, Pulse Check, PI Review; My Work order Time Writing, My Tasks [Board], Sprint check, My PI Review); browser check on sample data: the menu shows the five headings; Pulse Check shows the month's releases (Overview keeps This month and Trends); collapsing My Work and Release Details hides them and stays so after a reload; at 900 px width every page is still reachable. **UAT**
 
 **TC-CON-23 Feature setup per Epic** — Req CON-52, CON-53 — L1 `azure-devops.test.mjs` (placeholders, plain text, unknown braces kept, missing values; the file is parsed and written clean; a Feature from its Epic setup gets the chosen stories, the Time Writing story and the Task with title, Original Estimate, Area Path, Iteration Path and assignee; completing again creates nothing; a placeholder the title cannot fill stops it); browser check with GitHub and Azure DevOps mocked: Settings → Feature setup, add “US 1 ({service})” and “US 4”, Original Estimate 6 → preview shows “US 1 (Service)”; Save to Git writes feature-setup.json; ＋ Feature under that Epic with “CP | Care Pathways | v3.1” lists “US 1 (Care Pathways)” and “US 4” ticked, the Task “October 2026 | CP | Care Pathways | v3.1” with 6 h, and no PU / Full Release choice. **UAT**
 
@@ -2192,6 +2192,20 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-09 A lead sees each Feature's latest review comment in five columns** — Req PIR-07, PIR-08, PIR-09, PIR-10 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-09: after Read all Discussions the five columns show each Feature's newest comment, split by its headings, can be filtered by Move to next PI and are exported": against the mocked Azure DevOps of TC-PIR-06 — Feature 201's newest comment written with the headings, Feature 202's newest one, listed after an older one, without — the five cells show "—" with the hint before the read; after ↻ Read all Discussions ("2 of 2 read.") 201 shows the local date-time, the whole comment on one line with " · ", "test rig late", "book the rig early · share the calendar" and "Yes — waiting for vendor", 202 only its date and "Ready for review"; the date sorts newest first then oldest first; the Move to next PI filter Yes leaves 201 and Reset filters clears it; the CSV export has the five headings, the whole comment with its line breaks and Move as shown; the drawer's Latest comment block shows the author, date and the three sections); UAT: on the released build a lead writes a review comment with the three headings on a test Feature, opens PI Review, runs Read all Discussions and checks the five columns, the drawer and an Excel export.
 
+**TC-PIR-13 The review comment: format, escaping, next PI and the round trip** — Req PIR-14, PIR-13 — L1 `pi-review-form.test.mjs` ("PIR-14: the comment in the standard format — paragraph lines kept, bullets as "- ", numbers kept, the Move question with the PI, the footer (TC-PIR-13)", "PIR-14: round trip — build → sent as HTML → commentText → splitReviewComment gives back every field; the footer lands nowhere (TC-PIR-13)", "PIR-13: the next PI after the reviewed one — the next later PI in the list, else the last number plus one (TC-PIR-13)").
+
+**TC-PIR-14 The review form's checks, defaults and prefill** — Req PIR-13, PIR-18 — L1 `pi-review-form.test.mjs` ("PIR-13: the form checks — required fields, the PI, and a line PI Review would read back differently (TC-PIR-14)", "PIR-13: the form starts from the latest review split by headings; Partly starts at No (TC-PIR-14)").
+
+**TC-PIR-15 The Review meeting and Additional Remarks headings** — Req PIR-15 — L1 `pi-review-form.test.mjs` ("PIR-15: the Review meeting and Additional Remarks headings and their short forms (TC-PIR-15)").
+
+**TC-CON-70 Who may post a PI review** — Req CON-113, CON-94, CON-101 — L1 `pi-review-form.test.mjs` ("CON-113: who may post — the assignee (with Add a comment), a lead (PI Review: post), nobody else; the page reasons (TC-CON-70)": the assignee, a lead, another Team Member, Add a comment denied, no work email, roles not loaded, View as, sample data, no PAT, on premises; the write guard refuses before anything is sent; the body sent escaped; 401, 403 and 429 name the reason; "CON-113: “PI Review: post the review of a Feature” (permissions 7) — Tool Owner, Admin and People Manager in the starting matrix and for an older file (TC-CON-70)").
+
+**TC-PIR-16 The Feature's assignee writes and posts its review** — Req PIR-13, PIR-14, PIR-15, PIR-16, PIR-01, CON-113, IF-02 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-16: the Feature’s assignee writes its review — prefilled, previewed, posted as a new comment, and read back into the table; another Feature is disabled with the reason": a Team Member, assignee of Feature 201, against a fake dev.azure.com that records the comment POST — the Assigned to filter and the search over the columns; Write review… on Ben's Feature 202 disabled with the reason; in the drawer Write review… prefilled from the latest review (Partly → No, said so), Moves to PI 2026.5; the advice required; the Preview equals the comment built; Post → confirmation → the fake receives exactly the escaped comment; the Discussion read again shows it in the drawer's Latest comment and the table's Move to Next PI, Review mode and Additional Remarks; the Review mode filter; "Post review · #201" in Background jobs); UAT (day 4): on the released build the owner of a test Feature writes its review in PI Review, checks the preview, posts it, finds the comment in the Feature's Discussion in Azure DevOps and the new values in the table; a colleague who is not the assignee sees Write review… disabled with the reason; a correction is posted as a new review and wins.
+
+**TC-PIR-17 My PI Review: my Features and my review status** — Req PIR-17, PIR-13, NAV-17 — E2E `pi-review-form.e2e.mjs` ("TC-PIR-17: My PI Review lists my Features of the current PI with my review status, and Write review… posts from there": the current PI chosen; only my Features 201 and 205, Not reviewed; the review of 205 posted from the row; then Reviewed with its date, Move "No · to PI 2026.5", Offline Review, "1 of 2 reviewed"); L1 `pi-review-form.test.mjs` ("PIR-17: my latest review — the newest comment I wrote with the review headings (TC-PIR-17)").
+
+**TC-PIR-18 Closing a Feature posts its review first** — Req PIR-18, BKL-39, PIR-13 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the advice required — posts it first and closes only once it is posted": Close on my Feature 205 in My Tasks [Board] shows the PI review section with No pre-selected and Moves to PI 2026.5; without the advice nothing is sent; a failed post (500) closes nothing and offers Close without the review; again: the POST, then the PATCH to Closed, the comment as built, "Post review · #205" in Background jobs); UAT (day 4): a Feature owner closes a test Feature from My Tasks [Board], answers the review and finds the comment in its Discussion before the Feature is Closed.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2279,7 +2293,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-91 | TC-ACC-04 |
 | CON-92 | TC-ACC-04, TC-ACC-05 |
 | CON-93 | TC-CON-57 |
-| CON-94 | TC-CON-58, TC-OND-06 |
+| CON-94 | TC-CON-58, TC-OND-06, TC-CON-70 |
 | CON-95 | TC-CON-59, TC-CON-60 |
 | CON-96 | TC-CON-60 |
 | CON-97 | TC-CON-60 |
@@ -2383,7 +2397,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-36 | TC-BKL-25 |
 | BKL-37 | TC-BKL-26 |
 | BKL-38 | TC-BKL-27 |
-| BKL-39 | TC-BKL-28 |
+| BKL-39 | TC-BKL-28, TC-PIR-18 |
 | BKL-40 | TC-BKL-29 |
 | BKL-41 | TC-BKL-30 |
 | BKL-42 | TC-BKL-31 |
@@ -2830,6 +2844,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-110 | TC-CON-68, TC-CON-69 |
 | CON-111 | TC-CON-68, TC-CON-69 |
 | CON-112 | TC-CON-68 |
+| CON-113 | TC-CON-70, TC-PIR-16 |
 | PGB-01 | TC-PGB-01, TC-PGB-07 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
 | PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
@@ -2967,7 +2982,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | TVL-34 | TC-TVL-32, TC-TVL-18 |
 | TVL-35 | TC-TVL-32, TC-TVL-18 |
 | TVL-36 | TC-TVL-33, TC-TVL-18 |
-| PIR-01 | TC-PIR-06 |
+| PIR-01 | TC-PIR-06, TC-PIR-16 |
 | PIR-02 | TC-PIR-01, TC-PIR-06 |
 | PIR-03 | TC-PIR-02, TC-PIR-06 |
 | PIR-04 | TC-PIR-06 |
@@ -2979,6 +2994,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-10 | TC-PIR-09, TC-PIR-11 |
 | PIR-11 | TC-PIR-10, TC-PIR-11 |
 | PIR-12 | TC-PIR-12 |
+| PIR-13 | TC-PIR-13, TC-PIR-14, TC-PIR-16, TC-PIR-17 |
+| PIR-14 | TC-PIR-13, TC-PIR-16 |
+| PIR-15 | TC-PIR-15, TC-PIR-16 |
+| PIR-16 | TC-PIR-16 |
+| PIR-17 | TC-PIR-17 |
+| PIR-18 | TC-PIR-14, TC-PIR-18 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2987,7 +3008,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | NFR-09 | TC-CSP-01 |
 | NFR-07 | TC-INS-01 |
 | IF-01, IF-03, IF-04 | TC-INS-04 |
-| IF-02 | TC-DSK-02 |
+| IF-02 | TC-DSK-02, TC-PIR-16 |
 
 ### Use-case coverage
 
@@ -3014,7 +3035,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70 |
 | UC-23 | TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
@@ -3032,7 +3053,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…102, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…12 |
+| UC-40 | TC-PIR-01…18 |
 
 ## 8. Result record
 
