@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.27.0 — 2026-11-25
+
+**Added**
+- **Replace… on QE Mapping** — when a QE leaves and their releases go to one person, **Replace…** in the QE Mapping toolbar replaces one value of a column with another in every row of the tab: pick the Column (the QE column of the Feature setup is chosen for you), Find (the column's values with their row counts, or one typed) and Replace with; the preview says "N rows will change" with the first rows (old → new), and **Replace** saves the QE Mapping to Git at once, the commit naming the change. A cell matches only as a whole, ignoring case and the spaces around it (QEM-13).
+- **Replace… on On-Demand table pages** — the same pop-up in the ⋯ menu of CoNQ and every Table and Table + Insights page, for Text, Long text, Dropdown (its options only) and Multi-select columns (OND-100). Saved at once through the queued, merged save (a page of row files: every changed row file in one commit), its result in Background jobs; every changed row gets a History entry "Replaced “X” with “Y” in {column}"; hidden rows are not changed and rows someone else is editing are skipped and counted (OND-101, OND-21).
+- **Rights** — Replace… needs the right to edit the page (the QE Mapping, or the page's rows) and is greyed out with the reason without Git storage that can save, with the sample, while viewing as someone else or without the right (OND-102, QEM-13).
+
+DF-301, DF-302; LIM-88; TC-QEM-10, TC-OND-98.
+
+PR #408.
+
 ## v10.26.0 — 2026-11-24
 
 **Added**
