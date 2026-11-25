@@ -900,12 +900,29 @@ People who may set up the page use **Set up columns…** to add, rename, reorder
 
 ![Set up columns](user-guide/images/set-up-columns.png)
 
-1. **＋ Add column**, then give it a name and a **type**: Text, Long text, Number, Currency, Date, Dropdown (one value) or Multi-select.
+1. **＋ Add column**, then give it a name and a **type**: Text, Long text, Number, Currency, Date, Dropdown (one value), Multi-select, Dropdown (built-in list) or Multi-select (built-in list) (see *Built-in lists* below).
 2. For a Dropdown or Multi-select, add its **options**. For a Currency, choose its default currency.
 3. Tick **Required** where a value must be given, and add a **Description** — how or what to fill. It shows under the field and behind ⓘ on the column heading.
 4. Press **Save**. If the change touches values already in the rows, the pop-up first lists what happens and asks.
 
 Nothing is lost silently: values that no longer fit are kept and marked (for example *not in the list*) until someone changes them.
+
+### Built-in lists: the QE list from Azure DevOps
+
+A column can pick from a list the team shares instead of options of its own — for example the **QE list**, the members of your Azure DevOps team.
+
+![Set up columns with a built-in list](user-guide/images/builtin-list-column-editor.png)
+
+1. In **Admin → Epic & Feature setup → Value lists**, under the Value lists, the panel **Team lists from Azure DevOps** lists the team lists. **＋ New list…**: give the list a name (e.g. *QE team*), check the server and project (your Time Writing connection's to start with), type the team and press **↻ Read the team**. The members are listed (with their emails as a hint); **Save to Git** saves the list for everyone — names and Azure DevOps ids only, no emails.
+2. In **Set up columns…** choose the type **Dropdown (built-in list)** (one person) or **Multi-select (built-in list)** (several), then the list in **Built-in list**. The Epic setup's Value lists can be chosen here too.
+3. The row form offers the list's names. The row keeps the name and, for a person, their Azure DevOps id. Two people with the same name are offered as, for example, *Sam Lee (#3f2a)* and *Sam Lee (#9c1b)* — the name and the start of their id.
+4. When people join or leave the team, open the list and press **↻ Refresh…**. You see who is **added**, **removed** and **renamed** (the same person in Azure DevOps, a new name), and how many rows use a removed person, before you **Save to Git**. **Log** shows every change of the list.
+
+![Refresh a list](user-guide/images/builtin-list-refresh-diff.png)
+
+A person who left the team stays in the rows that name them, marked *not in the list*; a renamed person keeps their rows under the new name. Replace… takes only a name of the list, and the Excel template's drop-down is the list as it is now.
+
+Who may change the lists: the Tool Owner, the Admin and the Scrum Master (*Manage built-in lists*), and the co-owners of an On-Demand page (they cannot remove a list). Everyone else sees the lists read only, with the reason next to the buttons. Nothing is written to Azure DevOps: the team is only read, with your own PAT.
 
 ### Open, edit and save a row
 

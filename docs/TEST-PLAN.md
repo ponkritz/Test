@@ -2310,6 +2310,30 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
+### 6.35 Built-in lists
+
+**TC-LST-01 The shared lists file: read, written, merged** — Req LST-01, LST-02, LST-03, LST-04, LST-09 — L1 `shared-lists.test.mjs` ("LST-02, LST-04: the shared lists file — round trip, items cleaned, broken files refused as a whole (TC-LST-01)": a list created with its id, items sorted, created and refreshed by, one log entry; written and read back byte for byte; the identity id only when it is a GUID (lower case), once, no email kept, two people with one name kept apart; a file that is not JSON, of another kind, a list with a bad id, an http or credentialled source, a list twice refused with the reason; the on-prem collection as the base URL; no token in the file; a name twice refused; "LST-02: two saves meanwhile are merged by list, the log of both kept (GIT-17) (TC-LST-01)"; "LST-02, OND-34: row files and page merges keep a value with its keys (TC-LST-01)"); browser check with Git: create a list, then with a second browser refresh it while the first edits its name — both changes in Git, both log entries.
+
+**TC-LST-02 Refresh shows added, removed and renamed** — Req LST-05, LST-06, LST-07 — L1 `shared-lists.test.mjs` ("LST-06: Refresh — the difference by identity id (added, removed, renamed), one log entry, nothing else changed (TC-LST-02)": a person added, one removed, one renamed by the same identity id in another letter case, the count unchanged; the refreshed list's items, time, person and log entry; Edit logs a rename and a new source, an edit changing nothing keeps the list); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": the Refresh pop-up with 1 added · 1 removed · 1 renamed · 1 unchanged, the names with their emails, the rows using a removed person, the Log).
+
+**TC-LST-03 A built-in list column follows the list** — Req LST-08, LST-09, LST-11, LST-01 — L1 `shared-lists.test.mjs` ("LST-08, LST-09, LST-11: a built-in list column — choices from the list, a renamed person by identity id, a removed one kept and marked (TC-LST-03)": the catalog of team lists and Value lists, the type labels, a row's keys (identity ids) written from the list, the items never written, the list reference read back; after a refresh the choices are the list now, the renamed person shows the new name, the removed one stays "not in the list"; the file unchanged by showing it; a later save writes the new name and keeps the removed person's key; a list not found falls back to the options saved, marked; bad keys (an email, a count that does not fit) dropped; a Value list as the source without keys; the columns that use a list); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": the table after the refresh, Ben Okafor-Smith in the row picked as Ben Okafor, Cara Lund "not in the list").
+
+**TC-LST-04 Set up columns with a built-in list** — Req LST-08, OND-05, OND-06 — L1 `shared-lists.test.mjs` ("LST-08: Set up columns — the list is chosen instead of options, its names kept as the options; keys follow the column (TC-LST-04)": a list type without a list refused with the reason; the effects named before saving; the column saved as a Dropdown with its list and the names as options; keys kept while the list and type stay, dropped otherwise; an older or bad reference read as before); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": the type list ends with Dropdown (built-in list) and Multi-select (built-in list), the Built-in list picker instead of options, the column in Git); E2E `on-demand.e2e.mjs` (the existing column types unchanged); browser check: in the PI Review form setup (the same editor) the built-in list types are not offered.
+
+**TC-LST-05 Replace in a built-in list column** — Req LST-10, OND-100, OND-101, QEM-13 — L1 `shared-lists.test.mjs` ("LST-10: Replace in a built-in list column — only a value of the list, found by its current name, keys follow (TC-LST-05)"); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": a name not in the list refused with the reason and Replace disabled; the removed person's row handed over to Dev Rao, saved with Dev Rao's identity id).
+
+**TC-LST-06 Bulk upload with a built-in list column** — Req LST-10, OND-103, OND-104, OND-105 — L1 `shared-lists.test.mjs` ("LST-10: bulk upload — the template lists the list as it is now; an upload takes its names and keys them (TC-LST-06)": the template's strict list of the current names and its prompt; a name not in the list an error of its row; the rows added with their keys); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": the downloaded template's data validation of the Auditor column is "Ana Silva,Ben Okafor-Smith,Dev Rao"); browser check: open the template in Excel and pick a person from the drop-down.
+
+**TC-LST-07 Who may change the lists** — Req LST-12, CON-115, CON-94, CON-101 — L1 `shared-lists.test.mjs` ("CON-115, LST-12: who may change the lists — the right (Tool Owner, Admin, Scrum Master), page co-owners, fail closed (TC-LST-07)": the starting matrix, permissions 9, an older file migrated and Not set kept when saved again, nothing without a roles file; the reasons for no right, View as, roles not loaded, sample, no Git, an unreadable file; a page co-owner and a co-owner of a group that takes pages may create and refresh but not remove; a used list cannot be removed); `access.test.mjs` (the Scrum Master of an older file gets it; permissions 9); E2E `builtin-lists.e2e.mjs` ("TC-LST-10: …").
+
+**TC-LST-08 Newer lists in Git; Search settings** — Req LST-02, LST-13, GIT-18, ADM-03 — L1 `shared-lists.test.mjs` ("LST-02: newer lists in Git are loaded quietly; Search settings finds the team lists (TC-LST-08)": the file loaded quietly everywhere, the notice only on Admin → Epic & Feature setup, its label "Built-in lists", Search settings "qe list"); browser check with two browsers: a refresh in one reaches the other's column choices without a reload.
+
+**TC-LST-09 The QE list from an Azure DevOps team, end to end** — Req LST-03, LST-04, LST-05, LST-06, LST-08, LST-09, LST-10, LST-11, LST-13, LST-14 — **UAT** — E2E `builtin-lists.e2e.mjs` ("TC-LST-09: the QE list from an Azure DevOps team — created, used in a column, picked in rows, refreshed (added, removed, renamed), Replace and the Excel template follow it": ＋ New list… with the Time Writing connection's server and project, ↻ Read the team, the members with their emails, Save to Git; the panel row; the column Auditor of the Table page Audits as Dropdown (built-in list); two rows with people picked, each saved with the Azure DevOps identity id as key and no email in shared-lists.json; ↻ Refresh… with two added (one a second Ana Silva), one removed and one renamed, the emails shown as hints only, Save to Git, the Log; the table under the new name and the removed person marked; Replace; the Excel template's list with "Ana Silva (#a1a1)" and "Ana Silva (#e5e5)"; nothing written to Azure DevOps, no PAT in Git); browser check with the real team (UAT, day 11): create the QE list from the team, use it on a page, then add a colleague to the team in Azure DevOps and Refresh — they are listed as added and offered in the row form.
+
+**TC-LST-10 The lists read only without the right; a page co-owner refreshes** — Req LST-12, LST-13, CON-115 — E2E `builtin-lists.e2e.mjs` ("TC-LST-10: without “Manage built-in lists” the lists are read only with the reason; a co-owner of an On-Demand page refreshes them but cannot remove one": a Team Member sees the list, every action disabled with the reason as a line, Log open; a Team Member who co-owns the page Audits refreshes the list and saves it; Remove disabled with "A page co-owner cannot remove a list").
+
+**TC-LST-11 Keys from Azure DevOps; one display name, two people** — Req LST-04, LST-09, LST-15 — L1 `shared-lists.test.mjs` ("LST-04, LST-15: keys from Azure DevOps — identity ids, no email in Git; two people with one display name stay two, told apart in the picker (TC-LST-11)": the team read keeps identity.id in lower case and the email for the screen, groups and bad ids left out; People & access's read unchanged; the saved file holds no "@" (who created it written as "someone" when only an email is known); the twins shown as "Sam Lee (#a1a1a)" and "Sam Lee (#a1a1f)" and a row keyed to the right one; when one leaves, the other is shown as "Sam Lee" again and their row follows by the id; no email in the page file); E2E `builtin-lists.e2e.mjs` ("TC-LST-09: …": the second Ana Silva in the template's list); browser check with a real team: the ids in shared-lists.json are the team members' identity ids, and a colleague renamed in Azure DevOps keeps their rows.
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2853,7 +2877,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-02 | TC-OND-01, TC-OND-08 |
 | OND-03 | TC-OND-01, TC-OND-03 |
 | OND-04 | TC-OND-01, TC-OND-03 |
-| OND-05 | TC-OND-01, TC-OND-04, TC-PIR-21, TC-PIR-23 |
+| OND-05 | TC-OND-01, TC-OND-04, TC-PIR-21, TC-PIR-23, TC-LST-04 |
 | OND-06 | TC-OND-04, TC-OND-18 |
 | OND-07 | TC-OND-06, TC-OND-07 |
 | OND-08 | TC-OND-02 |
@@ -3140,6 +3164,22 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-32 | TC-PIR-33 |
 | PIR-33 | TC-PIR-34 |
 | PIR-34 | TC-PIR-35, TC-PIR-36 |
+| CON-115 | TC-LST-07, TC-LST-10 |
+| LST-01 | TC-LST-01, TC-LST-03 |
+| LST-02 | TC-LST-01, TC-LST-08 |
+| LST-03 | TC-LST-01, TC-LST-09 |
+| LST-04 | TC-LST-01, TC-LST-09, TC-LST-11 |
+| LST-05 | TC-LST-02, TC-LST-09 |
+| LST-06 | TC-LST-02, TC-LST-09 |
+| LST-07 | TC-LST-02 |
+| LST-08 | TC-LST-03, TC-LST-04, TC-LST-09 |
+| LST-09 | TC-LST-01, TC-LST-03, TC-LST-09, TC-LST-11 |
+| LST-10 | TC-LST-05, TC-LST-06, TC-LST-09 |
+| LST-11 | TC-LST-03, TC-LST-09 |
+| LST-12 | TC-LST-07, TC-LST-10 |
+| LST-13 | TC-LST-08, TC-LST-09, TC-LST-10 |
+| LST-14 | TC-LST-09 |
+| LST-15 | TC-LST-11, TC-LST-09 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -3175,7 +3215,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01, TC-NAV-53 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70, TC-CON-71 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70, TC-CON-71, TC-LST-07 |
 | UC-23 | TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
@@ -3194,6 +3234,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…36 |
+| UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record
 
