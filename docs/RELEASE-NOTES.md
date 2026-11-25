@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.37.0 — 2026-11-25
+
+**Changed**
+- **PI Review Setup** — the PI Review form setup is now a page of its own, **Admin → PI Review Setup**, right after Epic & Feature setup in the Admin menu: the summary of the form in use, **Edit form…** with the shared column editor, **Save to Git**, the notices and the read-only state with its reason. The page — in the menu, Search settings (Ctrl K) and the Home page's Admin links — is shown **only to people with "PI Review: set up the review form"** (Scrum Master and Tool Owner by default; Role rights decide); anyone else asking for it by a remembered page or an old link gets Admin → Streams, and everyone else's reviews simply follow the form. **Epic & Feature setup** is back to its three sections (Setup per Epic, Value lists, User Story templates). The "newer data in Git" notice for `pi-review-form.json` shows on the new page; everywhere else the newer form is loaded quietly. A link to the former section opens the page (PIR-29, PIR-31, PIR-19, SET-15; PIR-23 retired).
+
+**Added**
+- **⚙ PI Review Setup** — an icon button at the end of the page actions of **My PI Review** and **PI Review** opens PI Review Setup. It is shown exactly when the page is in your menu — also in View as, by the viewed role, with the page then read only — and replaces PI Review's **Form setup** button (PIR-30, CON-114).
+- **UI standard** — ⚙ is the symbol for "open the setup of this page" in the page actions (UI-STANDARDS §6, approved by the product owner on 2026-11-25).
+
+TC-PIR-30, TC-PIR-31 (UAT), TC-PIR-22, TC-PIR-23, TC-PIR-24, TC-CON-71, TC-SET-06.
+
+PR #418.
+
 ## v10.36.0 — 2026-11-25
 
 **Changed**
