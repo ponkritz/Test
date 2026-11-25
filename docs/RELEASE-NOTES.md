@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.48.0 — 2026-11-25
+
+**Added**
+- **Azure DevOps queries as data sources** — a dashboard block can read the queries the app already reads, with all their columns as fields: each Release Details stream's query, the Tool Validations Tool List and Validation Documents queries and your own My views, from the fetched data (DSH-17; on My dashboard too, MYD-26). Rights follow their pages: Release Details for the streams and Tool Validations, a My view its owner only (DSH-23).
+- **＋ Add Azure query…** — a Dashboard page's builders add any other saved query, picked from a connection's project or by its address on a server the app already reads; only the reference (server, project, query id, name) is saved in the dashboard's file in Git, never a PAT or rows; **Remove Azure query…**, and Copy to… takes it along (DSH-18).
+- Each viewer reads a saved query **with their own PAT** when the dashboard opens, reads only (the query by id, the field list, the work items in batches); **↻ Refresh Azure queries** reads it again, no polling; a viewer without a PAT or access sees the reason (DSH-19, DSH-22, DSH-23).
+- Azure DevOps field types become chart types — numbers, dates, picklists and people as Dropdown-like fields (people by display name, never an email), Tags as Multi-select (DSH-20); at most 5,000 rows and 30 columns, a capped source marked on the block, in ⓘ and in every export (DSH-21).
+
+DF-350…DF-353, SM-200…SM-202, R-33, LIM-120, LIM-121; TC-DSH-17…TC-DSH-23, TC-MYD-11.
+
+PR #431.
+
 ## v10.47.0 — 2026-11-25
 
 **Added**
