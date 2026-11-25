@@ -1227,6 +1227,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .pir-table table.no-wrap .pir-clip{display:block;max-width:18rem;overflow:hidden;text-overflow:ellipsis}
 .pir-latest{display:grid;gap:6px;padding-top:4px}.pir-latest h3{margin:0;font-size:14px;color:var(--heading)}.pir-latest .pir-comment-head,.pir-latest p{margin:0}
 .pir-split dd{margin:0;font-size:13px;white-space:pre-line;overflow-wrap:anywhere}
+.pir-suggested,.pir-split.pir-suggested dd{font-style:italic;color:var(--text-2)}.pir-suggested-mark{font-style:normal;font-size:11px;color:var(--muted)}
 /* QEM-13, OND-100: Replace… — the preview under the fields; the reason a disabled Replace gives, left of the buttons. */
 .replace-preview{display:grid;gap:8px}.replace-preview p{margin:0}.replace-rows{max-height:260px;overflow:auto}.replace-rows table{table-layout:fixed;width:100%}.replace-rows td{overflow-wrap:anywhere;padding:8px 14px}.replace-form>p.muted,.replace-preview p.muted{font-size:12px;margin:0}
 .replace-form .modal-actions{align-items:center;flex-wrap:wrap}.replace-form .modal-actions .write-blocked{margin-right:auto}

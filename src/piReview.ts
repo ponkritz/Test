@@ -1,6 +1,6 @@
-// PI Review (PIR-01…PIR-10): the PIs to choose from and the default one, the Features of a PI, the Discussions of
-// those Features read from Azure DevOps and their latest comment split by its headings — kept in this page load's
-// memory only (nothing is written to Git, IndexedDB or Azure DevOps).
+// PI Review (PIR-01…PIR-11): the PIs to choose from and the default one, the Features of a PI, the Discussions of
+// those Features read from Azure DevOps and their latest comment split by its headings (or, without one, suggested by
+// keywords) — kept in this page load's memory only (nothing is written to Git, IndexedDB or Azure DevOps).
 import { currentIterationPairs, type AzureIteration } from './azureRead.ts'
 import { laterPi, piName, piPathOf } from './myWork.ts'
 import type { AzureWorkItem } from './domain'
@@ -113,40 +113,64 @@ export function latestComment(comments: WorkItemComment[]): WorkItemComment | un
   return newest
 }
 
-// PIR-08: a review comment split by its headings — Struggles, Learnings and Move to next PI. A heading counts only
+// PIR-08: a review comment split by its headings — Struggles, Learnings and Move to next PI, or one of their synonyms
+// (headingWords). A heading counts only
 //  (a) at the start of a line, after an optional bullet (- * • +), number (1. or 1)) or #, and optional bold (** __),
-//      followed by a colon, a dash and a space, or the end of the line; or
-//  (b) anywhere in a line when a colon follows it directly ("Struggles: … Learnings: … Move to next PI: Yes"), not
-//      inside a word; the bare "Next PI" counts only at the start of a line (a), so "planned for next PI: …" is no heading.
-// Letter case is ignored; singular and plural (Struggle(s), Learning(s)); Move / Moved / Moves to (the) next PI and
-// Next PI; a "?" after the heading is allowed. A heading word in a sentence without a colon is not taken. Each section
-// runs to the next heading or the end of the comment, its lines trimmed, a leading bullet (- * •) and empty lines
-// dropped (line breaks kept);
-// text before the first heading belongs to no section; a heading given twice has its texts joined. No heading: an
-// empty result (the whole comment is shown only).
+//      followed by a colon, a dash (- – —) and a space, or the end of the line; or
+//  (b) anywhere in a line, not inside a word, when a colon follows it directly ("Struggles: … Learnings: … Move to next
+//      PI: Yes"), or — for Struggle(s), Learning(s), Lesson(s) and Lessons learnt / learned only — a dash and a space
+//      ("… a learning – book the rig early"); the line-start-only words (Next PI, Next time, Improve, Went well) never
+//      count inside a line, so "planned for next PI: …" is no heading.
+// Letter case is ignored; a "?" after the heading is allowed. A heading word in a sentence without a colon or a dash is
+// not taken. Each section runs to the next heading or the end of the comment, its lines trimmed, a leading bullet
+// (- * •) and empty lines dropped (line breaks kept); text before the first heading belongs to no section; a heading
+// given twice (or two synonyms of one) has its texts joined. No heading: an empty result (see reviewSplit for the
+// keyword fallback, PIR-11).
 export type MoveValue = 'Yes' | 'No' | 'Partly'
-export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string }
+// PIR-11: where the columns come from — the headings, the keywords (suggested) or nothing.
+export type SplitFrom = 'Headings' | 'Keywords' | 'None'
+export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; from?: SplitFrom }
 type Section = 'struggles' | 'learnings' | 'move'
-const headingNames = String.raw`(struggles?|learnings?|move[sd]?[ \t]+to[ \t]+(?:the[ \t]+)?next[ \t]+pi|next[ \t]+pi)`
+const gap = String.raw`[ \t]+`
+// The heading words of each section, as regular expressions (longer forms first). `inline`: also counts inside a line
+// with a colon; `dash`: also inside a line with a dash and a space.
+const headingWords: { section: Section; pattern: string; inline: boolean; dash?: boolean }[] = [
+  { section: 'struggles', pattern: 'struggles?', inline: true, dash: true },
+  { section: 'struggles', pattern: `what${gap}(?:didn['’]?t|did${gap}not)${gap}go${gap}well`, inline: true },
+  { section: 'struggles', pattern: `what${gap}went${gap}wrong`, inline: true },
+  { section: 'struggles', pattern: 'challenges?|issues?|problems?|blockers?|impediments?|risks?', inline: true },
+  { section: 'struggles', pattern: `pain${gap}points?`, inline: true },
+  { section: 'learnings', pattern: `lessons?${gap}learn(?:t|ed)|lessons?|learnings?`, inline: true, dash: true },
+  { section: 'learnings', pattern: String.raw`take[ \t-]?aways?|what${gap}went${gap}well|improvements?`, inline: true },
+  { section: 'learnings', pattern: `went${gap}well|improve|next${gap}time`, inline: false },
+  { section: 'move', pattern: `move[sd]?${gap}to${gap}(?:the${gap})?next${gap}pi|moving${gap}to${gap}(?:the${gap})?next${gap}pi|continue[sd]?${gap}in${gap}(?:the${gap})?next${gap}pi`, inline: true },
+  { section: 'move', pattern: String.raw`spill[ \t-]?overs?|carry[ \t-]?overs?`, inline: true },
+  { section: 'move', pattern: `next${gap}pi`, inline: false },
+]
+const names = (pick: (word: typeof headingWords[number]) => boolean | undefined) => `(${headingWords.filter(pick).map((word) => word.pattern).join('|')})`
 const bold = String.raw`(?:\*\*|__)?`
-const lineHeading = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${headingNames}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu')
-const inlineHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}(struggles?|learnings?|move[sd]?[ \t]+to[ \t]+(?:the[ \t]+)?next[ \t]+pi)[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu')
-const sectionOf = (name: string): Section => /^struggle/i.test(name) ? 'struggles' : /^learning/i.test(name) ? 'learnings' : 'move'
+const lineHeading = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${names(() => true)}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu')
+const inlineHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.inline)}[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu')
+const inlineDashHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.dash)}[ \t]*\??[ \t]*${bold}[ \t]*[\-–—][ \t]+${bold}`, 'giu')
+const sectionTests = headingWords.map((word) => ({ section: word.section, test: new RegExp(`^(?:${word.pattern})$`, 'iu') }))
+const sectionOf = (name: string): Section => sectionTests.find((entry) => entry.test.test(name))?.section ?? 'struggles'
 const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().replace(/^[-*•]\s+/, '')).filter(Boolean).join('\n')
 // The Move value: the text starts with yes / y, no / n or partly / partially / partial (any case), followed by the end,
 // a space or punctuation (so "N/A", "Not decided" and "Nothing" give no value).
 const moveStart = /^(yes|y|no|n|partly|partially|partial)(?=$|[\s.,;:!)—–-])[\s.,;:!)—–-]*/i
-export function splitReviewComment(text: string | undefined): ReviewSplit {
-  if (!text) return {}
+const moveValueOf = (word: string): MoveValue => word.toLowerCase().startsWith('y') ? 'Yes' : word.toLowerCase().startsWith('p') ? 'Partly' : 'No'
+function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
   const found = new Map<number, { section: Section; start: number; end: number }>()
-  for (const pattern of [lineHeading, inlineHeading]) {
+  for (const pattern of [lineHeading, inlineHeading, inlineDashHeading]) {
     pattern.lastIndex = 0
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       const at = match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase())
       if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length })
     }
   }
-  const headings = [...found.values()].sort((a, b) => a.start - b.start)
+  // A heading inside another (e.g. "went well" in "What went well:") is dropped: the first, longest one counts.
+  const headings: { section: Section; start: number; end: number }[] = []
+  for (const heading of [...found.values()].sort((a, b) => a.start - b.start || b.end - a.end)) if (!headings.length || heading.start >= headings[headings.length - 1].end) headings.push(heading)
   const split: ReviewSplit = {}
   headings.forEach((heading, index) => {
     const body = tidy(text.slice(heading.end, headings[index + 1]?.start ?? text.length))
@@ -154,13 +178,72 @@ export function splitReviewComment(text: string | undefined): ReviewSplit {
   })
   if (split.move) {
     const match = moveStart.exec(split.move)
-    if (match) {
-      const word = match[1].toLowerCase()
-      split.moveValue = word.startsWith('y') ? 'Yes' : word.startsWith('p') ? 'Partly' : 'No'
-      split.moveRest = split.move.slice(match[0].length).trim()
+    if (match) { split.moveValue = moveValueOf(match[1]); split.moveRest = split.move.slice(match[0].length).trim() }
+  }
+  return { split, found: headings.length > 0 }
+}
+export function splitReviewComment(text: string | undefined): ReviewSplit {
+  return text ? byHeadings(text).split : {}
+}
+
+// PIR-11: the keywords that suggest a column when the comment has no heading at all — built in, one list to change
+// later. Matched case-insensitively as whole words (a single word also with a plural "s" / "es"); a trailing * matches
+// any ending ("escalat*": escalate, escalated, escalation); a space matches any spaces; ' matches ' and ’.
+export const reviewKeywords: Record<Section, readonly string[]> = {
+  struggles: ['blocked', 'blocker', 'delay', 'delayed', 'issue', 'problem', 'risk', 'escalat*', 'dependency', 'dependencies', 'waiting', 'rework', 'missed', 'slipped', 'could not', "couldn't", 'unable', 'late', 'impediment', 'struggle*', 'challeng*'],
+  learnings: ['learned', 'learnt', 'lesson', 'next time', 'improve*', 'went well', 'worked well', 'better to', 'recommend', 'should have', 'takeaway', 'learning'],
+  move: ['carry over', 'carryover', 'next PI', 'spill*', 'move to', 'moving to', 'continue in'],
+}
+const keywordSource = (keyword: string) => {
+  const wild = keyword.endsWith('*'), word = (wild ? keyword.slice(0, -1) : keyword).trim()
+  const body = word.split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, `['’]`)).join(String.raw`[ \t]+`)
+  return `${body}${wild ? String.raw`[\p{L}\p{N}]*` : /\s/.test(word) ? '' : '(?:s|es)?'}`
+}
+const sections: Section[] = ['struggles', 'learnings', 'move']
+const keywordPatterns = new Map(sections.map((section) => [section, new RegExp(String.raw`(?<![\p{L}\p{N}])(?:${reviewKeywords[section].map(keywordSource).join('|')})(?![\p{L}\p{N}])`, 'giu')]))
+// A negation just before the keyword (at most two words between): "no blocker", "no major issues", "not blocked",
+// "wasn't late" are not taken.
+const negated = /(?:^|[^\p{L}\p{N}'’])(?:no|not|never|without|none|nor|\p{L}+n['’]t)(?:[ \t]+[\p{L}\p{N}'’-]+){0,2}[ \t]+$/iu
+// The sentences of a comment: by line, then after ". ! ?" and a space; a leading bullet dropped.
+export const reviewSentences = (text: string) => text.split(/\r?\n/).flatMap((line) => line.trim().replace(/^[-*•]\s+/, '').split(/(?<=[.!?])[ \t]+(?=\S)/)).map((sentence) => sentence.trim()).filter(Boolean)
+// The Move value of a suggested Move sentence: only when, after the move phrase (and "over", "to", "the", "next PI"),
+// it says yes, no, partly or partially followed by punctuation or the end ("Spill over to next PI — partly, the docs").
+const keywordMoveValue = /^(?:[ \t]+(?:over|to|into|in|the|next|pi))*[ \t]*[:,\-–—]?[ \t]*(yes|no|partly|partially)[ \t]*(?:$|[.,;:!—–-])[ \t.,;:!—–-]*/i
+function keywordIn(section: Section, sentence: string) {
+  const pattern = keywordPatterns.get(section)!
+  pattern.lastIndex = 0
+  for (let match = pattern.exec(sentence); match; match = pattern.exec(sentence)) if (!negated.test(sentence.slice(0, match.index))) return match
+  return null
+}
+// PIR-11: the keyword fallback — each sentence goes to every column whose keyword it holds (not negated), its sentences
+// joined with line breaks. The Move value only when there is one Move sentence and it says so right after the phrase.
+export function splitByKeywords(text: string | undefined): ReviewSplit {
+  if (!text) return {}
+  const split: ReviewSplit = {}
+  const moves: { sentence: string; end: number }[] = []
+  for (const sentence of reviewSentences(text)) {
+    for (const section of sections) {
+      const match = keywordIn(section, sentence)
+      if (!match) continue
+      split[section] = split[section] ? `${split[section]}\n${sentence}` : sentence
+      if (section === 'move') moves.push({ sentence, end: match.index + match[0].length })
     }
   }
+  if (moves.length === 1) {
+    const { sentence, end } = moves[0]
+    const value = keywordMoveValue.exec(sentence.slice(end))
+    if (value) { split.moveValue = moveValueOf(value[1]); split.moveRest = sentence.slice(end + value[0].length).trim() }
+  }
   return split
+}
+// PIR-08, PIR-11: the split shown — by the headings when the comment has at least one; otherwise suggested from the
+// keywords; "None" when neither fills a column.
+export function reviewSplit(text: string | undefined): ReviewSplit & { from: SplitFrom } {
+  if (!text) return { from: 'None' }
+  const headings = byHeadings(text)
+  if (headings.found) return { ...headings.split, from: 'Headings' }
+  const suggested = splitByKeywords(text)
+  return { ...suggested, from: suggested.struggles || suggested.learnings || suggested.move ? 'Keywords' : 'None' }
 }
 // PIR-08: Move to next PI as shown — "Yes — waiting for vendor" with a value, otherwise the text as written.
 export const moveLabel = (split: ReviewSplit) => split.moveValue ? `${split.moveValue}${split.moveRest ? ` — ${split.moveRest}` : ''}` : split.move ?? ''

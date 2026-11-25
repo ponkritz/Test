@@ -657,10 +657,19 @@ Move to next PI: Yes - waiting for the vendor's fix
 
 The Feature then shows **Struggles** "the test rig arrived two Sprints late", **Learnings** "book the rig at PI planning · share the lab calendar with the team" (each line break shown as " · ") and **Move to Next PI** "Yes — waiting for the vendor's fix".
 
-- Letter case does not matter, and **Struggle** / **Learning** (singular) work too. For Move you may write *Move to next PI*, *Moved to next PI*, *Move to the next PI* or, at the start of a line, *Next PI*.
-- A heading counts at the **start of a line** (a bullet, number, # or bold before it is fine) followed by a colon, a dash and a space, or nothing; **inside a line** only when a colon follows it. "We had struggles with the rig" is not a heading.
+- Letter case does not matter, and these headings count too:
+
+  | Column | Accepted headings |
+  |---|---|
+  | **Struggles** | Struggles, Struggle, Challenges, Issues, Problems, Blockers, Impediments, Risks (each also singular), Pain points, What went wrong, What didn't go well |
+  | **Learnings** | Learnings, Learning, Lessons, Lesson, Lessons learnt, Lessons learned, Takeaways, What went well, Improvements, and at the start of a line Went well, Improve, Next time |
+  | **Move to Next PI** | Move to next PI, Moved to next PI, Move to the next PI, Moving to next PI, Continue in next PI, Spill over, Spillover, Spill-over, Carry over, Carryover, Carry-over, and at the start of a line Next PI |
+
+  Two headings of the same column (e.g. *Issues* and *Risks*) are joined.
+- A heading counts at the **start of a line** (a bullet, number, # or bold before it is fine) followed by a colon, a dash (- – —) and a space, or nothing; **inside a line** when a colon follows it ("… Lesson: share the calendar"), and for *Struggle*, *Learning* and *Lesson* also a dash and a space ("… a learning – book the rig early"). "We had struggles with the rig" or "there were issues" is not a heading.
 - Start the Move text with **Yes**, **No** or **Partly** (or Y / N) to use the filter; anything else (e.g. "N/A", "to be decided") is shown as written under Other text.
-- A comment without the headings shows only its date and the whole comment. The whole comment is always shown next to the split, so check it when a section looks wrong.
+- **No heading at all? Suggested values.** When the newest comment has none of the headings, the app looks for **keywords** sentence by sentence (a sentence ends at a line break or after ". ", "! ", "? "): *blocked, blocker, delay(ed), issue, problem, risk, escalated, dependency, waiting, rework, missed, slipped, could not, unable, late, impediment, struggle, challenge* go to **Struggles**; *learned, learnt, lesson, next time, improve, went well, worked well, better to, recommend, should have, takeaway, learning* to **Learnings**; *carry over, next PI, spill over, move to, moving to, continue in* to **Move to Next PI**. A sentence with words of two columns goes to both; "no blockers", "not blocked" or "wasn't late" are not taken. These texts are only a guess: the cell shows **(suggested)** before them in italics (pointing at it says "Suggested from keywords, not headings"), the drawer's Latest comment says **Suggested from keywords**, and Export has a column **Split from** (Headings, Keywords or None). A suggested Move gets Yes / No / Partly only when the sentence says so right after the phrase, e.g. "Carry over to next PI — partly, the docs" → "Partly — the docs". Write the headings to be sure.
+- A comment with neither headings nor keywords shows only its date and the whole comment. The whole comment is always shown next to the split, so check it when a section looks wrong.
 
 The Discussions are read with your own PAT (Work Items, Read) and kept only until you reload the page. Tagging struggles and learnings in the app, saving them to Git and recording the Move to next PI decision come in later releases.
 

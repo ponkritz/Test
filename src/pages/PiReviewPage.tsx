@@ -7,16 +7,17 @@ import { rateLimitWait, readAzureIterations, readDiscussion, type AzureConfig, t
 import { capacityContext } from '../capacity'
 import { formatDate, formatDateTime } from '../format'
 import { useNow } from '../useNow'
-import { defaultPi, discussionOf, discussionsVersion, epicOf, latestComment, moveLabel, oneLine, piFeatures, piLabel, piOptions, readDiscussions, samePi, setDiscussion, splitReviewComment, subscribeDiscussions, type ReviewSplit } from '../piReview'
+import { defaultPi, discussionOf, discussionsVersion, epicOf, latestComment, moveLabel, oneLine, piFeatures, piLabel, piOptions, readDiscussions, reviewSplit, samePi, setDiscussion, subscribeDiscussions, type ReviewSplit, type SplitFrom } from '../piReview'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { PageProps } from './types'
 
-// PI Review (PIR-01…PIR-10): choose a PI, see its Features, and read each Feature's Discussion (all pages, newest
+// PI Review (PIR-01…PIR-11): choose a PI, see its Features, and read each Feature's Discussion (all pages, newest
 // first, as plain text) in a drawer, or every Discussion at once as a background job; the latest comment of each read
-// Discussion fills five columns, split by its Struggles / Learnings / Move to next PI headings. Read only: nothing is
-// written to Azure DevOps, Git or this browser's database; the Discussions stay in memory for this page load.
+// Discussion fills five columns, split by its Struggles / Learnings / Move to next PI headings (or their synonyms), or
+// — without any heading — suggested from keywords. Read only: nothing is written to Azure DevOps, Git or this browser's
+// database; the Discussions stay in memory for this page load.
 const piKey = 'demand-planning-pi-review-pi-v1'
 const readStored = () => { try { return localStorage.getItem(piKey) ?? '' } catch { return '' } }
 const writeStored = (value: string) => { try { if (value) localStorage.setItem(piKey, value); else localStorage.removeItem(piKey) } catch { /* the choice is a convenience only */ } }
@@ -26,23 +27,30 @@ type Row = { item: AzureWorkItem; epic?: AzureWorkItem }
 interface Filters { epics: string[]; states: string[]; moves: string[]; text: string }
 const noFilters: Filters = { epics: [], states: [], moves: [], text: '' }
 
-// PIR-07, PIR-08: the newest comment of a Feature whose Discussion was read in this page load, split by its headings
-// (cached per comment, so sorting and filtering do not parse again). undefined: not read (yet).
-type Latest = { comment?: WorkItemComment; split: ReviewSplit }
-const splits = new WeakMap<WorkItemComment, ReviewSplit>()
+// PIR-07, PIR-08, PIR-11: the newest comment of a Feature whose Discussion was read in this page load, split by its
+// headings or suggested from keywords (cached per comment, so sorting and filtering do not parse again). undefined: not
+// read (yet).
+type Split = ReviewSplit & { from: SplitFrom }
+type Latest = { comment?: WorkItemComment; split: Split }
+const splits = new WeakMap<WorkItemComment, Split>()
 function latestOf(item: AzureWorkItem): Latest | undefined {
   const entry = discussionOf(item.key)
   if (entry?.state !== 'done') return undefined
   const comment = latestComment(entry.comments)
-  if (!comment) return { split: {} }
+  if (!comment) return { split: { from: 'None' } }
   let split = splits.get(comment)
-  if (!split) { split = splitReviewComment(comment.text); splits.set(comment, split) }
+  if (!split) { split = reviewSplit(comment.text); splits.set(comment, split) }
   return { comment, split }
 }
 // PIR-09: the Move to next PI filter — the normalized value, Other (text without one), Not given, Not read.
 const moveOptions: [string, string][] = [['Yes', 'Yes'], ['No', 'No'], ['Partly', 'Partly'], ['other', 'Other text'], ['none', 'Not given'], ['unread', 'Discussion not read']]
 const moveKey = (latest: Latest | undefined) => !latest ? 'unread' : latest.split.moveValue ?? (latest.split.move ? 'other' : 'none')
 const unreadHint = 'The Discussion is not read yet: open the Feature, or ↻ Read all Discussions.'
+// PIR-11: a text suggested from keywords (the comment has no heading) — marked "(suggested)", in italics, with the tooltip.
+const suggestedHint = 'Suggested from keywords, not headings'
+const suggestedTitle = (text: string) => `${suggestedHint}:\n${text}`
+const keywordNote = 'Suggested texts are a guess: check them against the whole Comment.'
+const Suggested = ({ text }: { text: string }) => <span className="pir-clip pir-suggested"><span className="pir-suggested-mark">(suggested)</span> {oneLine(text)}</span>
 
 // Reads one Feature's Discussion into the page's memory (PIR-05); the error is kept for the drawer and the table.
 async function readInto(config: AzureConfig, pat: string, item: AzureWorkItem) {
@@ -125,12 +133,15 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
       value: ({ item }) => latestOf(item)?.comment?.date ?? '', title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : latest.comment ? `By ${latest.comment.author}` : 'No comments in the Discussion.' },
       render: ({ item }) => { const latest = latestOf(item); return latest?.comment ? formatDateTime(latest.comment.date) : <span className="muted">—</span> } },
     textColumn('latest-comment', 'Comment', 'The whole newest comment, as plain text; the full text is in the tooltip and in the Feature’s drawer.', (latest) => latest.comment?.text),
-    textColumn('struggles', 'Struggles', 'The text after the heading “Struggles:” in the newest comment (empty when the comment has no such heading).', (latest) => latest.split.struggles),
-    textColumn('learnings', 'Learnings', 'The text after the heading “Learnings:” in the newest comment (empty when the comment has no such heading).', (latest) => latest.split.learnings),
-    { id: 'move', label: 'Move to Next PI', hint: 'The text after the heading “Move to next PI:” in the newest comment; when it starts with Yes, No or Partly (or Y / N) that value comes first, e.g. “Yes — waiting for vendor”. Filter it with Move to next PI.',
+    textColumn('struggles', 'Struggles', `The text after the heading “Struggles:” (or Challenges, Issues, Problems, Blockers, Impediments, Risks, Pain points, What went wrong, What didn’t go well) in the newest comment. Without any heading in the comment, the sentences with words such as blocked, delayed, issue or risk, marked “(suggested)”. ${keywordNote}`, (latest) => latest.split.struggles),
+    textColumn('learnings', 'Learnings', `The text after the heading “Learnings:” (or Lessons, Lessons learnt, Takeaways, What went well, Improvements, Next time) in the newest comment. Without any heading in the comment, the sentences with words such as learned, lesson, next time or went well, marked “(suggested)”. ${keywordNote}`, (latest) => latest.split.learnings),
+    { id: 'move', label: 'Move to Next PI', hint: `The text after the heading “Move to next PI:” (or Next PI, Spill over, Carry over, Moving to next PI, Continue in next PI) in the newest comment; when it starts with Yes, No or Partly (or Y / N) that value comes first, e.g. “Yes — waiting for vendor”. Without any heading in the comment, the sentences with carry over, next PI, spill over or move to, marked “(suggested)”. Filter it with Move to next PI. ${keywordNote} Filled once the Discussion is read: open the Feature, or ↻ Read all Discussions.`,
       value: ({ item }) => { const latest = latestOf(item); return latest ? moveLabel(latest.split) : '' },
-      title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : moveLabel(latest.split) || undefined },
-      render: ({ item }) => { const latest = latestOf(item); if (!latest) return <span className="muted">—</span>; const label = moveLabel(latest.split); return label ? <span className="pir-clip">{oneLine(label)}</span> : '' } },
+      title: ({ item }) => { const latest = latestOf(item); if (!latest) return unreadHint; const label = moveLabel(latest.split); return label && latest.split.from === 'Keywords' ? suggestedTitle(label) : label || undefined },
+      render: ({ item }) => { const latest = latestOf(item); if (!latest) return <span className="muted">—</span>; const label = moveLabel(latest.split); return !label ? '' : latest.split.from === 'Keywords' ? <Suggested text={label} /> : <span className="pir-clip">{oneLine(label)}</span> } },
+    { id: 'split-from', label: 'Split from', defaultHidden: true, export: 'always', hint: 'How Struggles, Learnings and Move to Next PI were filled from the newest comment: Headings, Keywords (suggested: the comment has no heading) or None. Exported even while hidden.',
+      value: ({ item }) => latestOf(item)?.split.from ?? '', title: ({ item }) => latestOf(item) ? undefined : unreadHint,
+      render: ({ item }) => latestOf(item)?.split.from ?? <span className="muted">—</span> },
   ]
 
   const toolbar = <span className="people-filters pir-filters">
@@ -167,12 +178,14 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
 }
 
 // PIR-09: a text column of the latest comment — one line in the cell (line breaks as " · ", cut with …), the whole
-// text in the tooltip and in the export (line breaks kept); "—" with the hint until the Discussion is read.
+// text in the tooltip and in the export (line breaks kept); "—" with the hint until the Discussion is read. PIR-11: a
+// split text suggested from keywords is marked in the cell and the tooltip (the export has Split from).
 function textColumn(id: string, label: string, hint: string, pick: (latest: Latest) => string | undefined): DataColumn<Row> {
   const of = (row: Row) => { const latest = latestOf(row.item); return latest ? pick(latest) ?? '' : '' }
+  const suggested = (row: Row) => id !== 'latest-comment' && latestOf(row.item)?.split.from === 'Keywords'
   return { id, label, hint: `${hint} Filled once the Discussion is read: open the Feature, or ↻ Read all Discussions.`, value: of,
-    title: (row) => latestOf(row.item) ? of(row) || undefined : unreadHint,
-    render: (row) => latestOf(row.item) ? <span className="pir-clip">{oneLine(of(row))}</span> : <span className="muted">—</span> }
+    title: (row) => !latestOf(row.item) ? unreadHint : !of(row) ? undefined : suggested(row) ? suggestedTitle(of(row)) : of(row),
+    render: (row) => !latestOf(row.item) ? <span className="muted">—</span> : of(row) && suggested(row) ? <Suggested text={of(row)} /> : <span className="pir-clip">{oneLine(of(row))}</span> }
 }
 
 // PIR-05: one Feature in a drawer (UI-STANDARDS §4a), read only: its details, then its Discussion, newest first, as
@@ -222,18 +235,21 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked }:
 
 // PIR-10: the newest comment's split in the drawer, above the Discussion: when and by whom, then Struggles, Learnings
 // and Move to next PI (or that the comment has none of the headings; the whole comment is the first of the Discussion).
+// PIR-11: without a heading, the texts suggested from keywords, in italics after "Suggested from keywords".
 function LatestComment({ comments }: { comments: WorkItemComment[] }) {
   const comment = latestComment(comments)
   if (!comment) return null
-  const split = splitReviewComment(comment.text)
+  const split = reviewSplit(comment.text)
   const any = Boolean(split.struggles || split.learnings || split.move)
+  const suggested = split.from === 'Keywords'
   return <section aria-label="Latest comment" className="pir-latest">
     <h3>Latest comment</h3>
     <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(comment.date)}</small></p>
-    {any ? <dl className="od-row-values pir-split">
+    {suggested && <p className="muted pir-suggested-note" title={`${suggestedHint}: the comment has no Struggles, Learnings or Move to next PI heading, so its sentences with their keywords are shown.`}>Suggested from keywords — the comment has no heading: check them against the whole comment in the Discussion below.</p>}
+    {any ? <dl className={`od-row-values pir-split${suggested ? ' pir-suggested' : ''}`}>
       <div><dt>Struggles</dt><dd>{split.struggles || '—'}</dd></div>
       <div><dt>Learnings</dt><dd>{split.learnings || '—'}</dd></div>
       <div><dt>Move to Next PI</dt><dd>{moveLabel(split) || '—'}</dd></div>
-    </dl> : <p className="muted">No Struggles, Learnings or Move to next PI heading in this comment: see the whole comment in the Discussion below.</p>}
+    </dl> : <p className="muted">No Struggles, Learnings or Move to next PI heading or keyword in this comment: see the whole comment in the Discussion below.</p>}
   </section>
 }
