@@ -12,7 +12,9 @@ import type { Writing } from '../piReviewWriter'
 // PIR-19, PIR-20: the fields, their order, labels, help, required and defaults are those of the form setup in use; a
 // paragraph is a text area, a choice a segmented control (one option to pick), Move to next PI keeps its Moves to and
 // Reason.
-export function ReviewFields({ form, onChange, pi, partly, optionalTexts = false, idPrefix = 'review', setup = builtInFormSetup() }: { form: ReviewForm; onChange: (form: ReviewForm) => void; pi: string; partly: boolean; optionalTexts?: boolean; idPrefix?: string; setup?: PiFormSetup }) {
+// PIR-25: moveNote — where Moves to came from (the Azure DevOps iteration dates, the PI number or the latest review),
+// shown under it.
+export function ReviewFields({ form, onChange, pi, partly, optionalTexts = false, idPrefix = 'review', setup = builtInFormSetup(), moveNote = '' }: { form: ReviewForm; onChange: (form: ReviewForm) => void; pi: string; partly: boolean; optionalTexts?: boolean; idPrefix?: string; setup?: PiFormSetup; moveNote?: string }) {
   const set = <K extends keyof ReviewForm>(key: K, value: ReviewForm[K]) => onChange({ ...form, [key]: value })
   const paragraph = (key: string, label: string, help: string, required: boolean, value: string, onText: (text: string) => void, rows = 3) =>
     <label key={key}>{label}<textarea rows={rows} required={required} value={value} onChange={(event) => onText(event.target.value)} />{help && <small>{help}</small>}</label>
@@ -26,7 +28,7 @@ export function ReviewFields({ form, onChange, pi, partly, optionalTexts = false
       <legend>{field.label}</legend>
       {choice('Move to next PI', ['Yes', 'No'], form.move, true, (value) => set('move', value as ReviewMove))}
       <small className="muted">{[partly ? `The latest review said Partly: choose Yes or No${field.defaultValue ? ` (${field.defaultValue} is pre-selected)` : ''}.` : moveDefaultNote(setup), field.help].filter(Boolean).join(' ')}</small>
-      <label>Moves to<input value={form.movePi} required onChange={(event) => set('movePi', event.target.value)} /><small>The next PI after {pi ? piLabel(pi) : 'the Feature’s PI'}, from the PI list; change it if needed.</small></label>
+      <label>Moves to<input value={form.movePi} required onChange={(event) => set('movePi', event.target.value)} /><small className="pir-next-pi">The next PI after {pi ? piLabel(pi) : 'the Feature’s PI'}. {moveNote ? `${moveNote} ` : ''}Change it if needed.</small></label>
       {paragraph('moveReason', 'Reason (optional)', 'Why it moves, or what is left.', false, form.moveReason, (text) => set('moveReason', text), 2)}
     </fieldset>
     if (field.type === 'dropdown') return <fieldset key={field.id} className="plain-fieldset">
@@ -49,7 +51,7 @@ export function ReviewFields({ form, onChange, pi, partly, optionalTexts = false
 // PIR-13: the "Write review" pop-up (UI-STANDARDS §3, §4): the fields and the Preview; Cancel and **Post to Azure
 // DevOps**, disabled with the reason; Post opens the confirmation pop-up naming the Feature, then onPost.
 export function ReviewDialog({ writing, blocked, onPost, onClose }: { writing: Writing; blocked: string; onPost: (form: ReviewForm, text: string) => void; onClose: () => void }) {
-  const { item: feature, pi, prefilledFrom, partly, setup } = writing
+  const { item: feature, pi, prefilledFrom, partly, setup, moveNote } = writing
   const [form, setForm] = useState(writing.initial)
   const [tried, setTried] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -65,7 +67,7 @@ export function ReviewDialog({ writing, blocked, onPost, onClose }: { writing: W
     <form className="pir-review-form" onSubmit={submit} noValidate>
       <p className="pir-title"><strong>{feature.title}</strong> <span className="muted">· {pi ? piLabel(pi) : 'no PI'} · Assigned to {feature.assignedTo || 'nobody'}</span></p>
       <p className="muted pir-review-note">{prefilledFrom ? `Prefilled from the latest review comment (${prefilledFrom.author}, ${formatDateTime(prefilledFrom.date)}). ` : ''}Posting adds a new comment to the Feature’s Discussion; PI Review reads the newest, so a correction is posted as a new review.</p>
-      <ReviewFields form={form} onChange={setForm} pi={pi} partly={partly} setup={setup} />
+      <ReviewFields form={form} onChange={setForm} pi={pi} partly={partly} setup={setup} moveNote={moveNote} />
       {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}
       <div className="modal-actions"><WriteBlocked reason={why} /><button type="button" className="ghost" onClick={onClose}>Cancel</button><button type="submit" className="primary" disabled={Boolean(blocked)} title={blocked || undefined}>Post to Azure DevOps</button></div>
     </form>

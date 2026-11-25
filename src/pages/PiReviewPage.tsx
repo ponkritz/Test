@@ -171,7 +171,7 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
   const openRow = open ? byKey.get(open.key) : undefined
   const step = (by: number) => { if (!open) return; const key = open.order[open.order.indexOf(open.key) + by]; if (key && byKey.has(key)) setOpen({ ...open, key }) }
   // PIR-13: Write review… (the drawer and the row action) — the shared form and post (useReviewWriter).
-  const writer = useReviewWriter(pi)
+  const writer = useReviewWriter(pi, { list: iterations.list, reading: !iterations.done })
   const pageBlock = reviewPageBlock(poster)
   const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
 

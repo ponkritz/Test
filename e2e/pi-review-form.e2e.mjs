@@ -6,10 +6,12 @@ import { buildReviewComment } from '../src/piReviewPost.ts'
 import { commentHtml } from '../src/azureClient.ts'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 
-// PI Review, the review form (PIR-13…PIR-18, CON-113; TC-PIR-16 UAT, TC-PIR-17, TC-PIR-18 UAT): against a fake
+// PI Review, the review form (PIR-13…PIR-18, PIR-24, PIR-25, CON-113; TC-PIR-16 UAT, TC-PIR-17, TC-PIR-18 UAT,
+// TC-PIR-25, TC-PIR-26 UAT): against a fake
 // dev.azure.com that also accepts a comment POST (recording its body, then listing it in the Discussion) and the Close
-// PATCH. Rita Gomez is a Team Member and the assignee of Features 201 and 205; Feature 202 is Ben Okafor's. Synthetic
-// data only; every step waits for what it needs, never for a time.
+// PATCH. Rita Gomez is a Team Member and the assignee of Features 201 and 205; Feature 202 is Ben Okafor's; Lena Berg
+// is a People Manager (a lead) with no Feature of her own. Synthetic data only; every step waits for what it needs,
+// never for a time.
 let app
 before(async () => { app = await startApp() })
 after(async () => { await app.stop() })
@@ -41,7 +43,7 @@ function fakeAzure(state) {
       return json({ workItems: state.world.filter((item) => parents.includes(item.fields['System.Parent']) && item.id > after).map((item) => ({ id: item.id })) })
     }
     if (path.endsWith('/_apis/work/teamsettings/iterations')) return json({ value: [dated('Sprint 2', 'Project\\PI 2026.4\\Sprint 2', '2000-01-01', '2099-12-31')] })
-    if (path.endsWith('/_apis/wit/classificationnodes/iterations')) return json(node('', [node('PI 2026.4', [node('PI 2026.4\\Sprint 2', [], { startDate: '2000-01-01T00:00:00Z', finishDate: '2099-12-31T00:00:00Z' })]), node('PI 2026.5')]))
+    if (path.endsWith('/_apis/wit/classificationnodes/iterations')) return json(state.tree ?? node('', [node('PI 2026.4', [node('PI 2026.4\\Sprint 2', [], { startDate: '2000-01-01T00:00:00Z', finishDate: '2099-12-31T00:00:00Z' })]), node('PI 2026.5')]))
     const patch = /\/_apis\/wit\/workitems\/(\d+)$/.exec(path)
     if (patch && request.method() === 'PATCH') {
       const item = state.world.find((entry) => entry.id === Number(patch[1]))
@@ -70,13 +72,19 @@ function fakeAzure(state) {
 // Everyone is a Team Member; Team Members are also given Team insights (PI Review) here — an Admin's choice in Role
 // rights — so the assignee rule is shown on PI Review itself.
 const teamMembersSeePiReview = () => { const policy = defaultPolicy(); policy.defaultRole = 'Team Member'; policy.roles['Team Member'].areas.push('insights'); return serializeAccess(policy) }
-async function open({ email = 'rita.gomez@example.com', width = 1300, height = 1000, scale } = {}) {
-  const state = { world: world(), comments: { 201: [{ id: 5, text: '<div>Struggles: test rig late</div><div>Learnings: book the rig early</div><div>Move to next PI: Partly - waiting for vendor</div>', createdBy: ben, createdDate: '2026-11-21T14:30:00Z' }] }, posts: [], log: [], failNextPost: false }
+// PIR-25: an iteration tree with PI dates — PI 2026.4 (6 Jul – 4 Oct 2026, current by its Sprint), PI 2027.2 and PI 2027.1
+// listed out of order; PI 2027.1 starts first after PI 2026.4 ends.
+const span = (start, finish) => ({ startDate: `${start}T00:00:00Z`, finishDate: `${finish}T00:00:00Z` })
+const datedTree = () => node('', [node('PI 2027.2', [], span('2027-01-04', '2027-04-04')), node('PI 2026.4', [node('PI 2026.4\\Sprint 2', [], span('2000-01-01', '2099-12-31'))], span('2026-07-06', '2026-10-04')), node('PI 2027.1', [], span('2026-10-05', '2027-01-03'))])
+// Lena Berg is a People Manager (a lead: "PI Review: post the review of a Feature"); everyone else a Team Member.
+const withLead = () => { const policy = JSON.parse(teamMembersSeePiReview()); policy.members['lena.berg@example.com'] = ['People Manager']; return JSON.stringify(policy) }
+async function open({ email = 'rita.gomez@example.com', width = 1300, height = 1000, scale, roles = teamMembersSeePiReview(), tree } = {}) {
+  const state = { tree, world: world(), comments: { 201: [{ id: 5, text: '<div>Struggles: test rig late</div><div>Learnings: book the rig early</div><div>Move to next PI: Partly - waiting for vendor</div>', createdBy: ben, createdDate: '2026-11-21T14:30:00Z' }] }, posts: [], log: [], failNextPost: false }
   const { page, context, errors } = await openPage(app, { width, height, scale, init: ([connection, mail, roles]) => {
     localStorage.setItem('demand-planning-access-v1', roles)
     localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify([connection]))
     localStorage.setItem('demand-planning-work-email-v1', mail)
-  }, initArg: [profile(email), email, teamMembersSeePiReview()] })
+  }, initArg: [profile(email), email, roles] })
   await context.route('https://dev.azure.com/**', fakeAzure(state))
   const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
   await page.addLocatorHandler(guide, () => guide.getByRole('button', { name: 'Close', exact: true }).last().click())
@@ -184,6 +192,10 @@ test('TC-PIR-17: My PI Review lists my Features of the current PI with my review
   await rowOf(page, '205').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
   await rowOf(page, '201').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
   assert.deepEqual(await table.locator('tbody tr td:first-child').allInnerTexts(), ['201', '205'], 'mine only: not Ben’s 202')
+  // PIR-24: a Team Member sees only their own Features — Person disabled with the reason shown; nothing to reset.
+  assert.equal(await page.getByRole('combobox', { name: 'Person' }).isDisabled(), true)
+  assert.match(await text(page.locator('.pir-filters .write-blocked')), /^You see your own Features: showing another person’s needs “PI Review: post the review of a Feature”/)
+  assert.equal(await page.getByRole('button', { name: 'Reset filters' }).isDisabled(), true)
   await page.getByRole('button', { name: 'Write review of Feature 205' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review of Feature #205' })
   await dialog.getByRole('textbox', { name: /^Learnings/ }).fill('None')
@@ -230,6 +242,47 @@ test('TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the
   assert.deepEqual(state.log, ['POST 205 failed', 'POST 205', 'PATCH 205 Closed'])
   assert.equal(state.posts[0].body.text, commentHtml(buildReviewComment({ learnings: '', struggles: '', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '' })))
   await jobDone(page, 'Post review · #205', 'Posted to the Discussion of #205 before closing it')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('TC-PIR-26: a lead chooses another person and a PI in My PI Review and sees only that person’s Features; TC-PIR-25: the review form takes the next PI from the Azure DevOps dates', async () => {
+  const { page, context, errors, state } = await open({ email: 'lena.berg@example.com', roles: withLead(), tree: datedTree(), ...(shots ? { width: 1440, height: 900, scale: 2 } : {}) })
+  await navigate(page, 'My PI Review')
+  await page.locator('.pir-filters .pill', { hasText: 'Current PI' }).waitFor()
+  assert.equal(await page.getByLabel('PI', { exact: true }).inputValue(), 'Project\\PI 2026.4')
+  // PIR-24: the PI list is PI Review's (the iteration tree and the data), the current PI first chosen.
+  assert.deepEqual(await page.getByLabel('PI', { exact: true }).locator('option').allInnerTexts(), ['PI 2027.2', 'PI 2027.1', 'PI 2026.4 (current)'])
+  await page.locator('.pir-table').getByText('No Features assigned to you in PI 2026.4.').waitFor()
+  // A lead may choose another person: only that person's Features (by their work email), their review status.
+  const person = page.getByRole('combobox', { name: 'Person' })
+  assert.equal(await person.isDisabled(), false)
+  assert.equal(await page.locator('.pir-filters .write-blocked').count(), 0)
+  await person.click()
+  assert.deepEqual(await page.getByRole('listbox').getByRole('option').allInnerTexts(), ['Me (lena.berg@example.com)', 'Ben Okafor', 'Rita Gomez'])
+  await page.getByRole('listbox').getByRole('option', { name: 'Ben Okafor', exact: true }).click()
+  await page.getByRole('heading', { name: 'Features of Ben Okafor' }).waitFor()
+  await rowOf(page, '202').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
+  assert.deepEqual(await page.locator('.pir-table tbody tr td:first-child').allInnerTexts(), ['202'], 'Ben’s Feature only')
+  assert.equal(await cell(page, '202', 'Their review'), 'Not reviewed')
+  if (shots) { mkdirSync(shots, { recursive: true }); await page.emulateMedia({ colorScheme: 'light' }); await page.screenshot({ path: `${shots}/my-pi-review-person-1440-light.png` }) }
+  // CON-113: a lead may write the review of another person's Feature; PIR-25: Moves to from the iteration dates.
+  await page.getByRole('button', { name: 'Write review of Feature 202' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review of Feature #202' })
+  await dialog.waitFor()
+  assert.equal(await dialog.getByRole('textbox', { name: /^Moves to/ }).inputValue(), 'PI 2027.1')
+  assert.match(await text(dialog.locator('.pir-next-pi')), /^The next PI after PI 2026\.4\. From Azure DevOps iteration dates: PI 2027\.1 starts .+, after PI 2026\.4 ends .+\. Change it if needed\.$/)
+  if (shots) await page.screenshot({ path: `${shots}/review-form-next-pi-from-dates-1440-light.png` })
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  // Another PI: no Feature of Ben's there. Reset filters: back to me and the current PI.
+  await page.getByLabel('PI', { exact: true }).selectOption('Project\\PI 2027.1')
+  await page.locator('.pir-table').getByText('No Features assigned to Ben Okafor in PI 2027.1.').waitFor()
+  await page.getByRole('button', { name: 'Reset filters' }).click()
+  await page.getByRole('heading', { name: 'My Features' }).waitFor()
+  assert.equal(await page.getByLabel('PI', { exact: true }).inputValue(), 'Project\\PI 2026.4')
+  assert.equal(await page.getByRole('button', { name: 'Reset filters' }).isDisabled(), true)
+  assert.deepEqual(state.posts, [], 'nothing posted')
   assert.deepEqual(errors, [])
   await context.close()
 })

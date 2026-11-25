@@ -3,13 +3,15 @@
 // new comment in the Feature's Discussion, written with the person's own PAT to dev.azure.com only.
 import { commentHtml, isCloudBase, collectionUrl, requestAzure, type AzureConfig, type AzureTransport } from './azureClient.ts'
 import { writeBlockedReason, type Action } from './access.ts'
-import { laterPi, piName } from './myWork.ts'
+import { laterPi, piName, piPathOf, type Me } from './myWork.ts'
+import { formatDate } from './format.ts'
 import { commentText } from './workItemEdit.ts'
 import { readDiscussion } from './azureDevOps.ts'
 import { piPlaceholder, reviewFooter, reviewSplit, setDiscussion, tidyReviewText, type ReviewSplit } from './piReview.ts'
 import { builtInFormSetup, fieldOf, setupProblems, type PiFormField, type PiFormSetup } from './piReviewSetup.ts'
 import type { AzureWorkItem } from './domain'
 import type { WorkItemComment } from './azureDevOps.ts'
+import type { AzureIteration } from './azureRead.ts'
 
 // PIR-13: the form. move: Yes or No only (an older comment's Partly is read, never offered), **No** pre-selected (the
 // product owner's choice, UI-STANDARDS §12 exception of 2026-11-25); movePi: the PI it moves to. mode: the Review
@@ -35,6 +37,59 @@ export function nextPi(reviewed: string, options: readonly string[]): string {
   if (later) return piText(piName(later))
   const name = piText(piName(reviewed))
   return name ? name.replace(/(\d+)$/, (last) => String(Number(last) + 1)) : ''
+}
+
+// PIR-25: the PI after the reviewed one from the Azure DevOps iteration tree by its dates. A PI's dates are those of
+// its PI-level iteration (the path ending at the PI segment, ATM-30), else the span of the dated iterations under it
+// (teams often date only the Sprints). The next PI is the dated PI with a PI number that starts earliest after the
+// reviewed PI's start — the first one starting after the reviewed PI ends, or, when the dates overlap, the overlapping
+// one. Without the iterations, without the reviewed PI's dates or without a later dated PI, the number order of nextPi
+// applies. `note` says which source was used, for the form.
+export type NextPi = { pi: string; source: 'dates' | 'number'; note: string }
+type PiSpan = { path: string; start: string; finish: string }
+const isoDay = (value: string | undefined) => { const day = value?.slice(0, 10) ?? ''; return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '' }
+export function piDates(iterations: readonly AzureIteration[]): Map<string, PiSpan> {
+  const own = new Map<string, PiSpan>(), span = new Map<string, PiSpan>()
+  for (const iteration of iterations) {
+    const pi = piPathOf(iteration.path), start = isoDay(iteration.attributes?.startDate), finish = isoDay(iteration.attributes?.finishDate)
+    if (!pi || !start || !finish || finish < start) continue
+    const key = pi.toLowerCase()
+    if (key === iteration.path.toLowerCase()) { own.set(key, { path: iteration.path, start, finish }); continue }
+    const seen = span.get(key)
+    span.set(key, seen ? { path: seen.path, start: start < seen.start ? start : seen.start, finish: finish > seen.finish ? finish : seen.finish } : { path: pi, start, finish })
+  }
+  return new Map([...span, ...own])
+}
+export function nextPiOf(reviewed: string, iterations: readonly AzureIteration[] | null | undefined, options: readonly string[], { reading = false }: { reading?: boolean } = {}): NextPi {
+  const byNumber = (why: string): NextPi => { const pi = nextPi(reviewed, options); return { pi, source: 'number', note: pi ? `${why}: worked out from the PI number.` : '' } }
+  if (!reviewed) return { pi: '', source: 'number', note: '' }
+  const label = piName(reviewed), name = label.toLowerCase(), path = reviewed.toLowerCase()
+  if (!iterations) return byNumber(reading ? 'The PI dates are still being read from Azure DevOps' : 'The PI dates are not read from Azure DevOps here')
+  const dates = piDates(iterations)
+  const own = dates.get(path) ?? [...dates.values()].find((entry) => piName(entry.path).toLowerCase() === name)
+  if (!own) {
+    const inTree = iterations.some((iteration) => piPathOf(iteration.path)?.toLowerCase() === path || piName(piPathOf(iteration.path) ?? '').toLowerCase() === name)
+    return byNumber(inTree ? `${label} has no dates in Azure DevOps` : `${label} is not in the Azure DevOps iteration tree`)
+  }
+  const later = [...dates.values()].filter((entry) => piName(entry.path).toLowerCase() !== name && piText(piName(entry.path)) && entry.start > own.start)
+    .sort((a, b) => a.start.localeCompare(b.start) || (laterPi(a.path, b.path) ? 1 : laterPi(b.path, a.path) ? -1 : 0))
+  const next = later[0]
+  if (!next) return byNumber('No later PI with dates in Azure DevOps')
+  const overlap = next.start <= own.finish
+  return { pi: piText(piName(next.path)), source: 'dates', note: `From Azure DevOps iteration dates: ${piName(next.path)} starts ${formatDate(next.start)}, ${overlap ? `while ${label} runs until ${formatDate(own.finish)} (the PIs overlap)` : `after ${label} ends ${formatDate(own.finish)}`}.` }
+}
+
+// PIR-24: who may show another person's Features in My PI Review — a lead with "PI Review: post the review of a
+// Feature" (CON-113), who may also post their reviews; everyone else sees their own ('' when they may choose).
+export function otherPersonBlock(viewer: Pick<ReviewViewer, 'can'>): string {
+  return isReviewLead(viewer) ? '' : 'You see your own Features: showing another person’s needs “PI Review: post the review of a Feature” (a lead). An Admin can change this in Admin → People & roles → Role rights.'
+}
+// PIR-24: a person chosen by name (a Feature's Assigned To) — with their work email when a fetched item assigned to
+// them carries one, so their Features are matched by email where it is known (isMine, as CON-113's assignee rule).
+export function personOf(items: readonly Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>[], name: string): Me {
+  const wanted = name.trim().toLowerCase()
+  const email = items.find((item) => item.assignedTo.trim().toLowerCase() === wanted && item.assignedToEmail?.trim())?.assignedToEmail?.trim().toLowerCase()
+  return { name: name.trim(), ...(email ? { email } : {}) }
 }
 
 // CON-113, PIR-13: who may post the review of a Feature — a lead ("PI Review: post the review of a Feature") on every

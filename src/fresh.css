@@ -1216,6 +1216,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .dsh-status-toggle{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}.dsh-status-toggle .check{margin:0}.dsh-status-toggle>small{flex-basis:100%;font-size:11px;font-weight:400;color:var(--muted);line-height:1.4}
 /* PIR-02…PIR-05: PI Review — the filter bar, and the Discussion in the Feature drawer as plain text. */
 .pir-filters .inline-select select{min-width:9rem}.pir-filters .check{margin-top:0;font-size:12px}
+.pir-filters .person-picker input{min-width:200px}.pir-filters .person-picker input:disabled{cursor:not-allowed;opacity:.7}.pir-filters .write-blocked{flex-basis:100%;padding:0}
 .pir-title{margin:0;font-size:14px;color:var(--heading);overflow-wrap:anywhere}
 .pir-discussion{display:grid;gap:8px;padding-top:4px}
 .pir-discussion-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.pir-discussion-head h3{margin:0;font-size:14px;color:var(--heading)}

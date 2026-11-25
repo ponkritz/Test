@@ -7,6 +7,7 @@ import { piLabel } from '../piReview'
 import { ReviewFields } from '../pages/PiReviewForm'
 import { formSetupOf, forgetDiscussion, postAndAudit, startForm, useReviewViewer } from '../piReviewWriter'
 import { Modal, Notice, WriteBlocked } from './ui'
+import { usePiIterations } from '../pages/usePiChoice'
 
 // BKL-39: the pop-up of Close Feature / Close User Story — every open item that would close, with a tick box (yours
 // ticked, other people's not), its type, #ID (opens it in Azure DevOps), title, owner and state. Close shows how many
@@ -16,6 +17,8 @@ import { Modal, Notice, WriteBlocked } from './ui'
 // Review meeting advice required, the texts optional) and posted first; the items close only once it is posted. A
 // failed post closes nothing: the person chooses Close without the review, or Cancel. Without the right to post (or
 // with several Features) the review is not asked and Close works as before.
+// PIR-25: Moves to is the next PI by the Azure DevOps iteration dates (the iterations are read when the review is asked),
+// else by the PI number, and says which.
 export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm, onClose }: { title: string; intro: string; rows: CloseRow[]; asked?: number; blocked?: string; onConfirm: (items: ReturnType<typeof closeSelection>) => void; onClose: () => void }) {
   const [ticked, setTicked] = useState(() => defaultTicks(rows, asked))
   const [hoursDone, setHoursDone] = useState(false)
@@ -28,8 +31,10 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
   const asking = Boolean(reviewed && !reviewBlock)
   // PIR-19: the form setup in use when the pop-up opened, kept while it is open.
   const [setup] = useState(() => formSetupOf(viewer.env))
-  const [forms, setForms] = useState<Record<number, { form: ReviewForm; pi: string; partly: boolean }>>({})
-  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items, setup); return { form: writing.initial, pi: writing.pi, partly: writing.partly } })() : undefined
+  const [forms, setForms] = useState<Record<number, { form: ReviewForm; pi: string; partly: boolean; moveNote: string }>>({})
+  // PIR-25: the iterations for the next PI by its dates; until they are read (or when they cannot be), the PI number.
+  const iterations = usePiIterations({ config: viewer.env?.config ?? null, pat: viewer.env?.pat ?? '', isSample: viewer.env?.isSample ?? false }, asking)
+  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items, setup, { list: iterations.list, reading: !iterations.done }); return { form: writing.initial, pi: writing.pi, partly: writing.partly, moveNote: writing.moveNote } })() : undefined
   const problems = asking && start ? reviewFormProblems(start.form, { optionalTexts: true, setup }) : []
   const [tried, setTried] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -73,7 +78,7 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
       {asking && reviewed && start && <section className="close-review" aria-label="PI review">
         <h3>PI review of Feature #{reviewed.id}{start.pi ? ` · ${piLabel(start.pi)}` : ''}</h3>
         <p className="muted">Posted as a new comment in the Feature’s Discussion before the items close. {moveDefaultNote(setup)}</p>
-        <ReviewFields form={start.form} onChange={(form) => setForms({ ...forms, [reviewed.id]: { ...start, form } })} pi={start.pi} partly={start.partly} optionalTexts idPrefix="close-review" setup={setup} />
+        <ReviewFields form={start.form} onChange={(form) => setForms({ ...forms, [reviewed.id]: { ...start, form } })} pi={start.pi} partly={start.partly} optionalTexts idPrefix="close-review" setup={setup} moveNote={start.moveNote} />
         {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}
       </section>}
       {blocked && <Notice tone="warning">{blocked}</Notice>}

@@ -2202,7 +2202,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-16 The Feature's assignee writes and posts its review** — Req PIR-13, PIR-14, PIR-15, PIR-16, PIR-01, CON-113, IF-02 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-16: the Feature’s assignee writes its review — prefilled, previewed, posted as a new comment, and read back into the table; another Feature is disabled with the reason": a Team Member, assignee of Feature 201, against a fake dev.azure.com that records the comment POST — the Assigned to filter and the search over the columns; Write review… on Ben's Feature 202 disabled with the reason; in the drawer Write review… prefilled from the latest review (Partly → No, said so), Moves to PI 2026.5; the advice required; the Preview equals the comment built; Post → confirmation → the fake receives exactly the escaped comment; the Discussion read again shows it in the drawer's Latest comment and the table's Move to Next PI, Review mode and Additional Remarks; the Review mode filter; "Post review · #201" in Background jobs); UAT (day 4): on the released build the owner of a test Feature writes its review in PI Review, checks the preview, posts it, finds the comment in the Feature's Discussion in Azure DevOps and the new values in the table; a colleague who is not the assignee sees Write review… disabled with the reason; a correction is posted as a new review and wins.
 
-**TC-PIR-17 My PI Review: my Features and my review status** — Req PIR-17, PIR-13, NAV-17 — E2E `pi-review-form.e2e.mjs` ("TC-PIR-17: My PI Review lists my Features of the current PI with my review status, and Write review… posts from there": the current PI chosen; only my Features 201 and 205, Not reviewed; the review of 205 posted from the row; then Reviewed with its date, Move "No · to PI 2026.5", Offline Review, "1 of 2 reviewed"); L1 `pi-review-form.test.mjs` ("PIR-17: my latest review — the newest comment I wrote with the review headings (TC-PIR-17)").
+**TC-PIR-17 My PI Review: my Features and my review status** — Req PIR-17, PIR-13, PIR-24, NAV-17 — E2E `pi-review-form.e2e.mjs` ("TC-PIR-17: My PI Review lists my Features of the current PI with my review status, and Write review… posts from there": the current PI chosen; only my Features 201 and 205, Not reviewed; as a Team Member the Person control disabled with the reason line and Reset filters disabled; the review of 205 posted from the row; then Reviewed with its date, Move "No · to PI 2026.5", Offline Review, "1 of 2 reviewed"); L1 `pi-review-form.test.mjs` ("PIR-17: my latest review — the newest comment I wrote with the review headings (TC-PIR-17)").
 
 **TC-PIR-18 Closing a Feature posts its review first** — Req PIR-18, BKL-39, PIR-13 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the advice required — posts it first and closes only once it is posted": Close on my Feature 205 in My Tasks [Board] shows the PI review section with No pre-selected and Moves to PI 2026.5; without the advice nothing is sent; a failed post (500) closes nothing and offers Close without the review; again: the POST, then the PATCH to Closed, the comment as built, "Post review · #205" in Background jobs); UAT (day 4): a Feature owner closes a test Feature from My Tasks [Board], answers the review and finds the comment in its Discussion before the Feature is Closed.
 
@@ -2217,6 +2217,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-PIR-23 The Scrum Master changes the PI Review form** — Req PIR-19, PIR-20, PIR-21, PIR-22, CON-114, OND-05 — **UAT** — E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-23: the Scrum Master changes the PI Review form in the shared column editor — a colliding heading refused, saved to Git; Write review… follows it and posts the new field": against a mocked GitHub and a fake dev.azure.com — the built-in form shown; in Edit form… (the On-Demand column editor) Move to next PI locked and the built-ins' type locked, the types Long text and Dropdown (one value); a Dropdown field "Customer impact" added with three options and moved up, the Move default set to Yes; the heading "Issues" refused (already read as Struggles), nothing saved; fixed, Required, the Comment preview, Save to Git writes pi-review-form.json; My PI Review → Write review… shows the field and Yes pre-selected, asks for the required choice, previews and posts exactly the comment the setup builds); UAT (day 4): the Scrum Master adds a field, a Team Member writes a review with it and the PI Review table shows it as a column.
 
 **TC-PIR-24 Read only for everyone else; the added field as a column** — Req PIR-23, PIR-20, CON-114 — E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-24: a People Manager sees the form setup read only with the reason; PI Review reads the added field into a column of its own": Edit form… disabled with the reason line; after ↻ Read all Discussions the Customer impact column after Additional Remarks shows the answer; Form setup opens the setup); L1 `pi-review-setup.test.mjs` ("CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)": View as, roles not loaded, the permission, sample data, no Git, a read-only token, the file unusable, loading).
+
+**TC-PIR-25 The next PI from the Azure DevOps iteration dates, with the PI number as fallback** — Req PIR-25, PIR-13, PIR-18 — L1 `pi-review-form.test.mjs` ("PIR-25: the next PI is the dated PI that starts first after the reviewed PI ends — not the next number (TC-PIR-25)": PI 27.1 by its dates although PI 26.5 is the next number, the note, an unsorted tree and other letter case, a PI without a number skipped; "PIR-25: dated only by its Sprints — a PI takes the span of the dated iterations under it; its own dates win (TC-PIR-25)"; "PIR-25: overlapping dates — the earliest start after the reviewed PI’s start, said so (TC-PIR-25)": the overlapping PI 26.5 rather than PI 26.6, the overlap note, the same start by the lower number; "PIR-25: the fallback to the PI number — no iterations, no dates, the reviewed PI not in the tree, no later dated PI (TC-PIR-25)": each reason in the note, unreadable dates as none); E2E `pi-review-form.e2e.mjs` ("TC-PIR-26: a lead chooses another person and a PI in My PI Review and sees only that person’s Features; TC-PIR-25: the review form takes the next PI from the Azure DevOps dates": Moves to PI 2027.1 with "From Azure DevOps iteration dates: PI 2027.1 starts …, after PI 2026.4 ends …" for a tree listed out of order; the earlier scenarios TC-PIR-16…18 keep PI 2026.5 from the number when the next PI has no dates); browser check: the Close pop-up of a Feature (My Tasks [Board]) shows the same note under Moves to.
+
+**TC-PIR-26 My PI Review: the Person and PI filters** — Req PIR-24, PIR-17, PIR-02, CON-113 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-26: a lead chooses another person and a PI in My PI Review and sees only that person’s Features; TC-PIR-25: the review form takes the next PI from the Azure DevOps dates": as a People Manager with no Feature of her own, the PI list of PI Review with the current PI chosen, "No Features assigned to you in PI 2026.4."; Person enabled, its list Me then the PI's assignees; Ben Okafor chosen: "Features of Ben Okafor", only Feature 202, Their review Not reviewed; Write review… on his Feature enabled; another PI: "No Features assigned to Ben Okafor in PI 2027.1."; Reset filters back to My Features and the current PI); E2E "TC-PIR-17: …" (a Team Member: Person disabled with the reason); L1 `pi-review-form.test.mjs` ("PIR-24: who may show another person — a lead with “PI Review: post the review of a Feature”; the person matched by email where known (TC-PIR-26)"); UAT (day 4): a lead opens My PI Review, chooses a team member and a PI, sees only that person's Features and their review status; a Feature owner sees Person disabled with the reason.
 
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
@@ -2858,7 +2862,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-110 | TC-CON-68, TC-CON-69 |
 | CON-111 | TC-CON-68, TC-CON-69 |
 | CON-112 | TC-CON-68 |
-| CON-113 | TC-CON-70, TC-PIR-16 |
+| CON-113 | TC-CON-70, TC-PIR-16, TC-PIR-26 |
 | CON-114 | TC-CON-71, TC-PIR-23, TC-PIR-24 |
 | PGB-01 | TC-PGB-01, TC-PGB-07 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
@@ -2998,7 +3002,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | TVL-35 | TC-TVL-32, TC-TVL-18 |
 | TVL-36 | TC-TVL-33, TC-TVL-18 |
 | PIR-01 | TC-PIR-06, TC-PIR-16 |
-| PIR-02 | TC-PIR-01, TC-PIR-06 |
+| PIR-02 | TC-PIR-01, TC-PIR-06, TC-PIR-26 |
 | PIR-03 | TC-PIR-02, TC-PIR-06 |
 | PIR-04 | TC-PIR-06 |
 | PIR-05 | TC-PIR-03, TC-PIR-05, TC-PIR-06 |
@@ -3009,17 +3013,19 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-10 | TC-PIR-09, TC-PIR-11 |
 | PIR-11 | TC-PIR-10, TC-PIR-11 |
 | PIR-12 | TC-PIR-12 |
-| PIR-13 | TC-PIR-13, TC-PIR-14, TC-PIR-16, TC-PIR-17 |
+| PIR-13 | TC-PIR-13, TC-PIR-14, TC-PIR-16, TC-PIR-17, TC-PIR-25 |
 | PIR-14 | TC-PIR-13, TC-PIR-16 |
 | PIR-15 | TC-PIR-15, TC-PIR-16 |
 | PIR-16 | TC-PIR-16 |
-| PIR-17 | TC-PIR-17 |
-| PIR-18 | TC-PIR-14, TC-PIR-18 |
+| PIR-17 | TC-PIR-17, TC-PIR-26 |
+| PIR-18 | TC-PIR-14, TC-PIR-18, TC-PIR-25 |
 | PIR-19 | TC-PIR-19, TC-PIR-22, TC-PIR-23 |
 | PIR-20 | TC-PIR-20, TC-PIR-23, TC-PIR-24 |
 | PIR-21 | TC-PIR-21, TC-PIR-23 |
 | PIR-22 | TC-PIR-21, TC-PIR-23 |
 | PIR-23 | TC-PIR-24, TC-CON-71 |
+| PIR-24 | TC-PIR-26, TC-PIR-17 |
+| PIR-25 | TC-PIR-25 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -3073,7 +3079,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…102, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…24 |
+| UC-40 | TC-PIR-01…26 |
 
 ## 8. Result record
 
