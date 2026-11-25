@@ -687,28 +687,30 @@ The Discussions are read with your own PAT (Work Items, Read) and kept only unti
 
 Instead of typing the headings yourself, fill in the review form; the app writes the comment in the standard format for you.
 
-1. **Open the form.** Click **Write review…** in the Feature's drawer (bottom right) or in the **Actions** column of its row — or open **My Work → My PI Review**, which lists only your Features of the PI with **My review** (Reviewed / Not reviewed) and its date. Its filter row has **PI** (the current PI first) and **Person** (**Me** first) and **Reset filters** (back to Me and the current PI). A lead with "PI Review: post the review of a Feature" can choose another person in Person: the page then shows only that person's Features (their Assigned To, by work email where known) with **Their review** and its date, and Write review… still follows the posting rights below. For everyone else Person is greyed out and the line under it says why.
+1. **Open the form.** Click **Write review…** in the Feature's drawer (bottom right) or in the **Actions** column of its row — or open **My Work → My PI Review**, which lists only your Features of the PI with **My review** (Reviewed / Not reviewed) and its date. **Reviewed** means your review counts **for the PI chosen in the PI filter**: its headings name that PI ("Learnings of PI 26.4:"), or — for an older review without a PI in its headings — it is dated within that PI's dates in Azure DevOps (the PI's own dates, else its Sprints'; compared in UTC), or the Feature is **Closed** and your review is dated on or after its Closed Date (the review you answer when closing it; shown "At close"). A review written for another PI shows **Not reviewed** with "Last review 12 June 2026 (PI 2026.3)" under it, so you see why — write the review for this PI. Choosing another PI in the filter recomputes the column. When the chosen PI has no dates in Azure DevOps (or they cannot be read, e.g. without the PAT), every review counts as before and a line above the table says so. Its filter row has **PI** (the current PI first) and **Person** (**Me** first) and **Reset filters** (back to Me and the current PI). A lead with "PI Review: post the review of a Feature" can choose another person in Person: the page then shows only that person's Features (their Assigned To, by work email where known) with **Their review** and its date, and Write review… still follows the posting rights below. For everyone else Person is greyed out and the line under it says why.
 2. **Who can post.** The Feature's **assignee** (your work email on the Time Writing connection is the Feature's Assigned To) and the **leads** (Tool Owner, Admin, People Manager — the right "PI Review: post the review of a Feature"). For anyone else the button is greyed out and says why; it is also greyed out with sample data, in View as, without the PAT, or on an on-premises connection (reviews go to dev.azure.com only).
-3. **Fill in the paragraphs.** One point per line; start a line with **-** or **1.** for a list.
-   - **Learnings** and **Struggles** — required (write "None" if there are none).
+3. **Fill in the paragraphs.** One point per line — each line becomes a bullet under its heading; a leading **-**, ***** or **•** is dropped, and numbered lines (**1.**, **2)**) become a numbered list.
+   - **Learnings** and **Struggles** — required (write "None" if there are none). **No learnings or struggles** (above them, not ticked) writes "None" in both and greys them out; untick it to get back what you typed. If the form setup has only one of the two, the tick box sets that one and its label says so; with neither there is no tick box.
    - **Move to next PI** — **Yes** or **No** (**No** is pre-selected). **Moves to** is filled in with the PI after the reviewed one: the PI that **starts first after the reviewed PI ends**, by the PI dates in Azure DevOps (a PI without dates of its own takes its Sprints' dates; when two PIs overlap, the one starting next). The line under it says where it came from — "From Azure DevOps iteration dates: …" or, when Azure DevOps has no usable dates (no PAT, sample data, an undated PI, no later dated PI), the reason and "worked out from the PI number" (the next PI in the list, else e.g. PI 26.4 → PI 26.5). Change it if needed. **Reason** is optional.
    - **Advise to discuss the Feature during the Review meeting?** — **Discuss during Meeting** or **Offline Review** (required, no default).
    - **Additional Remarks** — optional.
-   If the Feature already has a review, the form starts from it, so a correction only changes what is wrong.
-4. **Check the Preview.** It shows the exact comment, for example:
-   ```
-   Learnings :
-   Book the rig early
-   - share the lab calendar
-   Struggles :
-   Vendor documents late
-   Whether the feature needs to be shifted to PI 26.5 : Yes - two stories left
-   Advise to discuss the Feature during the Review meeting : Discuss during Meeting
-   Additional Remarks :
-   Thanks to the lab team
+   If the Feature already has a review, the form starts from it, so a correction only changes what is wrong. When that review was written for another PI, the line at the top says so ("written for PI 2026.3: check it before posting").
+4. **Check the Preview.** It shows the comment as it will look in Azure DevOps — a bulleted list — for example:
+
+   - Learnings of PI 26.4:
+     - Book the rig early
+     - share the lab calendar
+   - Struggles of PI 26.4:
+     - None
+   - Whether the feature needs to be shifted to PI 26.5 : Yes
+     - two stories left
+   - Advise to discuss the Feature during the Review meeting : Discuss during Meeting
+   - Additional Remarks:
+     - Thanks to the lab team
+
    — posted from Demand Planning (PI Review)
-   ```
-   The last line marks it as posted from the app; PI Review ignores it. If a line of yours looks like a heading (e.g. "Issues: …" inside Learnings), the form asks you to reword it, so the columns stay right.
+
+   The headings name the **reviewed PI** — the PI chosen on the page (in the Close pop-up, the Feature's own PI) — so the reviews of a PI can be collected; PI Review shows it in its **Reviewed PI** column. Without a known PI the headings are just "Learnings:" and "Struggles:". The last line marks it as posted from the app; PI Review ignores it. What you type is sent as text (a "<b>" stays "<b>"), never as formatting. If a line of yours looks like a heading (e.g. "Issues: …" inside Learnings), the form asks you to reword it, so the columns stay right.
 5. **Post.** **Post to Azure DevOps** asks you to confirm, then posts the comment as you (your PAT). The result is under **Background jobs** ("Post review · #id"); the Discussion is read again and the columns show the new values. A posted comment cannot be deleted from the app: to correct it, write the review again — the newest comment counts.
 
 **When you close a Feature** (Close in My Tasks [Board], Sprint check or Time Writing), the Close pop-up asks the same questions for that Feature (Learnings and Struggles optional, **Move to next PI = No** pre-selected, the Review meeting advice required) and **posts the review first, then closes**. If the review cannot be posted nothing is closed: choose **Close without the review** or **Cancel**. When several Features are closed at once, write their reviews in PI Review or My PI Review.
@@ -719,7 +721,7 @@ The fields of the review form are a shared setup: when the review changes, the S
 
 1. **Open it.** **Admin → Epic & Feature setup → PI Review form**, or **Form setup** at the top of PI Review. Everyone sees the form in use: each field with the heading it writes in the comment, its type, options, whether it is required and its default. Without a setup in Git it says *The built-in form*.
 2. **Edit form…** opens the editor — the same column editor as **Set up columns…** on the On-Demand pages. For each field: **Name** (the label in the form), **Type** (**Long text** for a paragraph, **Dropdown (one value)** for a choice), **Required**, ↑ ↓ to reorder, ✕ to remove, the **Heading in the comment**, the **Default** of a Dropdown, a **Help text**, and the **options** of a Dropdown. **＋ Add field** adds one (at most 15); **Use the built-in form** starts again from the built-in fields. The **Comment preview** shows what a review written with the form looks like.
-3. **Move to next PI** keeps its behaviour — Yes / No, the PI it moves to and the reason — so its name, type, options and Required are locked and it cannot be removed; its heading (with **{PI}** where the PI is written), its default (No unless you change it) and its help can be changed. The other built-in fields keep their type.
+3. **Move to next PI** keeps its behaviour — Yes / No, the PI it moves to and the reason — so its name, type, options and Required are locked and it cannot be removed; its heading (with **{PI}** where the next PI is written), its default (No unless you change it) and its help can be changed. The other built-in fields keep their type. **{REVIEWED PI}** in any heading (at most once) is where the reviewed PI is written — the built-in Learnings and Struggles headings are "Learnings of {REVIEWED PI}" and "Struggles of {REVIEWED PI}"; a form saved before keeps its headings as saved.
 4. **Save to Git.** The form is checked first: a heading that is empty, used twice, or already read as another field (for example "Issues" or "What went wrong" is read as Struggles, so older reviews would land in the wrong column) is refused, and a review written with every field must read back exactly. The result is in **Background jobs** ("PI Review form · Save to Git").
 
 PI Review reads your headings and still the built-in ones and the earlier formats, so older reviews keep their columns; each field you add is a column of its own in PI Review. **Edit form…** is greyed out, with the reason next to it, for everyone without the right "PI Review: set up the review form" (Scrum Master and Tool Owner by default), in View as, with the synthetic sample and without Git storage.

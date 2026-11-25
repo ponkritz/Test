@@ -6,7 +6,6 @@ import { fakeGitHub } from './fakeGitHub.mjs'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 import { buildReviewComment, emptyReviewForm } from '../src/piReviewPost.ts'
 import { builtInFormSetup, parsePiFormSetup, serializePiFormSetup } from '../src/piReviewSetup.ts'
-import { commentHtml } from '../src/azureClient.ts'
 
 // PI Review form setup (PIR-19…PIR-24, CON-114; TC-PIR-23 UAT, TC-PIR-24): against a mocked GitHub (access.json, the
 // shared pi-review-form.json) and a fake dev.azure.com (the Time Writing fetch, the iterations, the Discussions and a
@@ -115,8 +114,9 @@ test('TC-PIR-23: the Scrum Master changes the PI Review form in the shared colum
   assert.equal(gh.read('pi-review-form.json'), null, 'nothing saved')
   await dialog.getByRole('textbox', { name: 'Field 5 heading' }).fill('Customer impact')
   await dialog.locator('li.od-column').nth(4).getByRole('checkbox', { name: 'Required' }).check()
-  await dialog.locator('.pir-review-preview pre', { hasText: 'Customer impact : None' }).waitFor()
-  assert.match(await dialog.locator('.pir-review-preview pre').innerText(), /Whether the feature needs to be shifted to PI 26\.5 : Yes/)
+  await dialog.locator('.pir-review-comment', { hasText: 'Customer impact : None' }).waitFor()
+  assert.match(await dialog.locator('.pir-review-comment').innerText(), /Whether the feature needs to be shifted to PI 26\.5 : Yes/)
+  assert.match(await dialog.locator('.pir-review-comment').innerText(), /Learnings of PI 26\.4:/, 'PIR-28: the sample names the reviewed PI')
   await shot(page, 'setup-editor-scrum-master')
   await dialog.getByRole('button', { name: 'Save to Git' }).click()
   await dialog.waitFor({ state: 'detached' })
@@ -140,14 +140,14 @@ test('TC-PIR-23: the Scrum Master changes the PI Review form in the shared colum
   await review.getByRole('button', { name: 'Post to Azure DevOps' }).click()
   assert.match(await text(review.locator('.notice.error')), /Choose Customer impact: None or Some sites or Many sites/)
   await review.getByRole('radio', { name: 'Some sites' }).check()
-  const expected = buildReviewComment({ ...emptyReviewForm('PI 2026.5', saved), learnings: 'Book the rig early', struggles: 'Parts late', mode: 'Offline Review', extra: { 'f-6': 'Some sites' } }, saved)
-  assert.equal(await review.locator('.pir-review-preview pre').innerText(), expected)
-  assert.match(expected, /Customer impact : Some sites\n/)
+  const expected = buildReviewComment({ ...emptyReviewForm('PI 2026.5', saved), learnings: 'Book the rig early', struggles: 'Parts late', mode: 'Offline Review', extra: { 'f-6': 'Some sites' }, reviewedPi: 'PI 2026.4' }, saved)
+  assert.deepEqual(await review.locator('.pir-review-comment > ul > li').evaluateAll((items) => items.map((item) => item.firstChild.textContent)), ['Learnings of PI 2026.4:', 'Struggles of PI 2026.4:', 'Whether the feature needs to be shifted to PI 2026.5 : Yes', 'Advise to discuss the Feature during the Review meeting : Offline Review', 'Customer impact : Some sites'])
+  assert.match(expected, /<li>Customer impact : Some sites<\/li>/)
   await shot(page, 'review-form-after-change')
   await review.getByRole('button', { name: 'Post to Azure DevOps' }).click()
   await page.getByRole('dialog', { name: 'Post the review to Feature #205?' }).getByRole('button', { name: 'Post review to #205' }).click()
   await until(() => state.posts.length === 1, 'the comment POST')
-  assert.deepEqual(state.posts[0], { id: 205, body: { text: commentHtml(expected) } })
+  assert.deepEqual(state.posts[0], { id: 205, body: { text: expected } })
   assert.deepEqual(errors, [])
   await context.close()
 })
@@ -157,7 +157,7 @@ test('TC-PIR-24: a People Manager sees the form setup read only with the reason;
   setup.fields.splice(4, 0, { id: 'f-6', label: 'Customer impact', heading: 'Customer impact', type: 'dropdown', options: ['None', 'Some sites'], required: true, defaultValue: '', help: '' })
   const gh = fakeGitHub({ files: { 'access.json': policy(), 'pi-review-form.json': serializePiFormSetup(setup) } })
   const comment = buildReviewComment({ ...emptyReviewForm('PI 2026.5', setup), learnings: 'a', struggles: 'b', mode: 'Offline Review', extra: { 'f-6': 'Some sites' } }, setup)
-  const { page, context, errors } = await open(gh, 'pia.patel@example.com', { comments: { 205: [{ id: 7, text: commentHtml(comment), createdBy: rita, createdDate: '2026-11-21T14:30:00Z' }] } })
+  const { page, context, errors } = await open(gh, 'pia.patel@example.com', { comments: { 205: [{ id: 7, text: comment, createdBy: rita, createdDate: '2026-11-21T14:30:00Z' }] } })
   const panel = await openSetup(page)
   await panel.locator('tbody tr', { hasText: 'Customer impact' }).waitFor()
   assert.equal(await panel.getByRole('button', { name: 'Edit form…' }).isDisabled(), true)

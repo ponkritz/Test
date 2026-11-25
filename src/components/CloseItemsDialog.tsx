@@ -31,10 +31,10 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
   const asking = Boolean(reviewed && !reviewBlock)
   // PIR-19: the form setup in use when the pop-up opened, kept while it is open.
   const [setup] = useState(() => formSetupOf(viewer.env))
-  const [forms, setForms] = useState<Record<number, { form: ReviewForm; pi: string; partly: boolean; moveNote: string }>>({})
+  const [forms, setForms] = useState<Record<number, { form: ReviewForm; pi: string; partly: boolean; moveNote: string; prefilledOther?: string }>>({})
   // PIR-25: the iterations for the next PI by its dates; until they are read (or when they cannot be), the PI number.
   const iterations = usePiIterations({ config: viewer.env?.config ?? null, pat: viewer.env?.pat ?? '', isSample: viewer.env?.isSample ?? false }, asking)
-  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items, setup, { list: iterations.list, reading: !iterations.done }); return { form: writing.initial, pi: writing.pi, partly: writing.partly, moveNote: writing.moveNote } })() : undefined
+  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items, setup, { list: iterations.list, reading: !iterations.done }); return { form: writing.initial, pi: writing.pi, partly: writing.partly, moveNote: writing.moveNote, prefilledOther: writing.prefilledOther } })() : undefined
   const problems = asking && start ? reviewFormProblems(start.form, { optionalTexts: true, setup }) : []
   const [tried, setTried] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -77,7 +77,7 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
       {reviewed && reviewBlock && <p className="muted">The PI review of Feature #{reviewed.id} is not asked: {reviewBlock}</p>}
       {asking && reviewed && start && <section className="close-review" aria-label="PI review">
         <h3>PI review of Feature #{reviewed.id}{start.pi ? ` · ${piLabel(start.pi)}` : ''}</h3>
-        <p className="muted">Posted as a new comment in the Feature’s Discussion before the items close. {moveDefaultNote(setup)}</p>
+        <p className="muted">Posted as a new comment in the Feature’s Discussion before the items close. {moveDefaultNote(setup)}{start.prefilledOther ? ` Prefilled from the latest review comment, written for ${start.prefilledOther}: check it before posting.` : ''}</p>
         <ReviewFields form={start.form} onChange={(form) => setForms({ ...forms, [reviewed.id]: { ...start, form } })} pi={start.pi} partly={start.partly} optionalTexts idPrefix="close-review" setup={setup} moveNote={start.moveNote} />
         {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}
       </section>}

@@ -129,6 +129,8 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
       title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : reviewModeLabel(latest.split) || undefined },
       render: ({ item }) => { const latest = latestOf(item); return !latest ? <span className="muted">—</span> : <span className="pir-clip">{oneLine(reviewModeLabel(latest.split))}</span> } },
     textColumn('remarks', 'Additional Remarks', 'The text after the heading “Additional Remarks:” (or Remarks, Additional comments) in the newest comment.', (latest) => latest.split.remarks),
+    // PIR-28: the reviewed PI the newest comment's headings name ("Learnings of PI 26.4:"), also in the export.
+    textColumn('reviewed-pi', 'Reviewed PI', 'The PI the newest comment’s headings name as reviewed, e.g. “Learnings of PI 26.4:” or “Struggles for PI 26.4:” — empty when its headings name none (older reviews).', (latest) => latest.split.reviewedPi),
     // PIR-20: a column for each field added in the PI Review form setup, by its label.
     ...customFields(setup).map((field) => textColumn(`field-${field.id}`, field.label, `The text after the heading “${field.heading}:” in the newest comment (a field added in the PI Review form setup, Admin → Epic & Feature setup → PI Review form).`, (latest) => latest.split.extra?.[field.id])),
     { id: 'split-from', label: 'Split from', defaultHidden: true, export: 'always', hint: 'How Struggles, Learnings and Move to Next PI were filled from the newest comment: Headings, Keywords (suggested: the comment has no heading) or None. Exported even while hidden.',

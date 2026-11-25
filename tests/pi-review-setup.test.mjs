@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildReviewComment, emptyReviewForm, formSetupProblems, readBackReview, reviewFormFrom, reviewFormProblems, myReviewOf } from '../src/piReviewPost.ts'
 import { reviewSplit, reviewFooter } from '../src/piReview.ts'
+import { commentText } from '../src/workItemEdit.ts'
 import { builtInFormSetup, fieldDrafts, fieldsOf, formSetupBlock, maxFormFields, mergePiFormText, parsePiFormSetup, piFormFile, serializePiFormSetup, setupChanges, setupProblems } from '../src/piReviewSetup.ts'
 import { columnsError } from '../src/onDemand.ts'
 import { defaultPolicy, parseAccess, rightsFor, serializeAccess } from '../src/access.ts'
@@ -26,7 +27,10 @@ function changed() {
 test('PIR-19: without a setup the built-in form gives exactly the comment of PIR-14, and every split is the same (TC-PIR-19)', () => {
   const builtIn = builtInFormSetup()
   assert.equal(buildReviewComment(form, builtIn), buildReviewComment(form))
-  assert.equal(buildReviewComment(form), ['Learnings :', 'Book the rig early', 'Struggles :', 'Vendor late', 'Whether the feature needs to be shifted to PI 26.5 : Yes - two stories left', 'Advise to discuss the Feature during the Review meeting : Offline Review', 'Additional Remarks :', 'Thanks team', reviewFooter].join('\n'))
+  assert.equal(buildReviewComment(form), `<ul><li>Learnings:<ul><li>Book the rig early</li></ul></li><li>Struggles:<ul><li>Vendor late</li></ul></li><li>Whether the feature needs to be shifted to PI 26.5 : Yes<ul><li>two stories left</li></ul></li><li>Advise to discuss the Feature during the Review meeting : Offline Review</li><li>Additional Remarks:<ul><li>Thanks team</li></ul></li></ul><p>${reviewFooter}</p>`)
+  // PIR-28: the built-in Learnings and Struggles headings name the reviewed PI.
+  assert.deepEqual(builtIn.fields.slice(0, 2).map((field) => field.heading), ['Learnings of {REVIEWED PI}', 'Struggles of {REVIEWED PI}'])
+  assert.match(buildReviewComment({ ...form, reviewedPi: 'PI 26.4' }), /^<ul><li>Learnings of PI 26\.4:<ul><li>Book the rig early<\/li><\/ul><\/li><li>Struggles of PI 26\.4:/)
   const older = 'Struggles of the Feature: lab late\nLearnings - book early\nWhether the feature needs to be shifted to PI 26.4 Partly, docs'
   assert.deepEqual(reviewSplit(older, builtIn), reviewSplit(older))
   assert.deepEqual(emptyReviewForm('PI 26.5', builtIn), emptyReviewForm('PI 26.5'))
@@ -42,9 +46,10 @@ test('PIR-19, PIR-20: the configured form — order, headings, an added paragrap
   assert.equal(start.move, 'Yes', 'the configured default')
   assert.deepEqual(start.extra, { 'f-1': '', 'f-2': 'Medium' })
   const filled = { ...start, learnings: 'Book early', mode: 'Discuss during Meeting', extra: { 'f-1': 'Two sites waited\n- one escalation', 'f-2': 'High' } }
-  const text = buildReviewComment(filled, setup)
-  assert.equal(text, ['Lessons of this PI :', 'Book early', 'Customer impact :', 'Two sites waited', '- one escalation', 'Confidence in the plan : High', 'Advise to discuss the Feature during the Review meeting : Discuss during Meeting', 'Whether the feature needs to be shifted to PI 26.5 : Yes', reviewFooter].join('\n'))
-  const back = readBackReview(text, setup)
+  const html = buildReviewComment(filled, setup)
+  assert.equal(html, `<ul><li>Lessons of this PI:<ul><li>Book early</li></ul></li><li>Customer impact:<ul><li>Two sites waited</li><li>one escalation</li></ul></li><li>Confidence in the plan : High</li><li>Advise to discuss the Feature during the Review meeting : Discuss during Meeting</li><li>Whether the feature needs to be shifted to PI 26.5 : Yes</li></ul><p>${reviewFooter}</p>`)
+  const text = commentText(html)
+  const back = readBackReview(html, setup)
   assert.equal(back.learnings, 'Book early')
   assert.deepEqual(back.extra, { 'f-1': 'Two sites waited\none escalation', 'f-2': 'High' })
   assert.equal(back.moveValue, 'Yes'); assert.equal(back.movePi, 'PI 26.5'); assert.equal(back.reviewMode, 'Discuss during Meeting')
@@ -90,6 +95,11 @@ test('PIR-21, PIR-22: the setup checks — empty and duplicate headings, a headi
   assert.match(problems((fields) => { for (let index = 0; fields.length <= maxFormFields; index += 1) fields.push({ id: `f-${10 + index}`, label: `Extra ${index}`, heading: `Extra ${index}`, type: 'longtext', options: [], required: false, defaultValue: '', help: '' }) }), new RegExp(`at most ${maxFormFields}`))
   assert.equal(columnsError(fieldDrafts(changed().fields), 'field'), '')
   assert.equal(columnsError([{ id: 'c1', name: '', type: 'text', required: false, options: [] }]), 'Every column needs a name.', 'the On-Demand wording unchanged')
+  // PIR-28: {REVIEWED PI} — at most once in a heading, with words besides it; allowed in any field's heading.
+  assert.match(problems((fields) => { fields[1].heading = 'Impact {REVIEWED PI} and {REVIEWED PI}' }), /\{REVIEWED PI\} \(the reviewed PI\) once only/)
+  assert.match(problems((fields) => { fields[1].heading = 'of {REVIEWED PI}' }), /needs words besides \{REVIEWED PI\}/)
+  assert.equal(problems((fields) => { fields[1].heading = 'Customer impact in {REVIEWED PI}' }), '')
+  assert.equal(problems((fields) => { fields[0].heading = 'Lessons of {REVIEWED PI}' }), '')
   // The fields go through the shared editor's drafts and back unchanged.
   const setup = changed()
   assert.deepEqual(fieldsOf(fieldDrafts(setup.fields), Object.fromEntries(setup.fields.map((field) => [field.id, { heading: field.heading, defaultValue: field.defaultValue }]))), setup.fields)
@@ -145,4 +155,29 @@ test('CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)', 
 test('PIR-19: a newer form setup in Git is loaded quietly, except on Admin → Epic & Feature setup (TC-PIR-22)', () => {
   assert.deepEqual(pagesOfFile('data/pi-review-form.json', 'data/planning-data.json'), { pages: ['admin:epics'], quiet: 'piForm', loader: 'piForm' })
   assert.equal(fileLabel('data/pi-review-form.json', 'data/planning-data.json'), 'PI Review form')
+})
+
+test('PIR-28: {REVIEWED PI} in the headings — written with the reviewed PI (or left out when none is known), read back, and the read-back check of the setup; a saved setup without it keeps its headings (TC-PIR-29)', () => {
+  const setup = changed()
+  setup.fields[1].heading = 'Customer impact in {REVIEWED PI}'
+  assert.deepEqual(formSetupProblems(setup), [])
+  const filled = { ...emptyReviewForm('PI 26.5', setup), learnings: 'a', mode: 'Offline Review', extra: { 'f-1': 'b', 'f-2': 'High' }, reviewedPi: 'PI 2026.4' }
+  const html = buildReviewComment(filled, setup)
+  assert.match(html, /<li>Customer impact in PI 2026\.4:<ul><li>b<\/li>/)
+  const back = readBackReview(html, setup)
+  assert.deepEqual([back.extra['f-1'], back.reviewedPi], ['b', 'PI 2026.4'])
+  assert.deepEqual(reviewFormProblems(filled, { setup }), [])
+  // Without a reviewed PI: "Customer impact:" and "Learnings:", still read into their fields.
+  const none = buildReviewComment({ ...filled, reviewedPi: '' }, setup)
+  assert.match(none, /<li>Customer impact:<ul>/)
+  assert.equal(readBackReview(none, setup).extra['f-1'], 'b')
+  assert.match(buildReviewComment({ ...emptyReviewForm('PI 26.5'), learnings: 'x', mode: 'Offline Review' }), /<li>Learnings:<ul><li>x/)
+  // A file saved before {REVIEWED PI} keeps its headings as saved (nothing is rewritten).
+  const old = builtInFormSetup(); old.fields[0].heading = 'Learnings'; old.fields[1].heading = 'Struggles'
+  const read = parsePiFormSetup(serializePiFormSetup(old))
+  assert.deepEqual(read.fields.slice(0, 2).map((field) => field.heading), ['Learnings', 'Struggles'])
+  assert.match(buildReviewComment({ ...form, reviewedPi: 'PI 26.4' }, read), /^<ul><li>Learnings:<ul>/)
+  // A custom heading "None" would swallow "No learnings or struggles": the setup's read-back check refuses it.
+  const clash = builtInFormSetup(); clash.fields.push({ id: 'f-9', label: 'Nothing', heading: 'None', type: 'longtext', options: [], required: false, defaultValue: '', help: '' })
+  assert.match(formSetupProblems(clash).join(' '), /would not be read back as written: .*Learnings/)
 })

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Modal, Notice, Panel, SaveQueueStatus, SettingsSummary, WriteBlocked } from './ui'
 import { formatDateTime } from '../format'
-import { buildReviewComment, emptyReviewForm, formSetupProblems, withFieldValue } from '../piReviewPost'
-import { piPlaceholder } from '../piReview'
+import { emptyReviewForm, formSetupProblems, reviewBlocks, withFieldValue, type ReviewForm } from '../piReviewPost'
+import { ReviewPreview } from '../pages/PiReviewForm'
+import { headingText, piPlaceholder, reviewedPiPlaceholder } from '../piReview'
 import { builtInFields, fieldDrafts, fieldsOf, isBuiltInField, isChoice, maxFormFields, newFieldId, piFieldTypes, piFormFile, setupChanges, type PiFormField, type PiFormSetup } from '../piReviewSetup'
 import { typeLabel, type ColumnDraft } from '../onDemand'
 import { ColumnListEditor } from './ColumnListEditor'
@@ -20,7 +21,7 @@ export function PiFormSetupPanel({ store, block, by }: { store: PiFormStore; blo
   const setup = store.setup
   return <Panel className="admin-section pir-setup" eyebrow="PI REVIEW" title="PI Review form" info={<>
     <p>The fields of <strong>Write review…</strong> (PI Review, My PI Review and the Close pop-up) and the heading each writes in the Feature’s Discussion comment. PI Review splits the comments by these headings — and still by the built-in ones and the team’s earlier formats, so older reviews keep their columns. A field you add is a column of its own in PI Review.</p>
-    <p><strong>Move to next PI</strong> keeps its behaviour: Yes / No, the PI it moves to ({piPlaceholder} in its heading) and the reason; it can be relabelled, not removed. Shared in Git as {piFormFile}; without the file the built-in form is used.</p>
+    <p><strong>Move to next PI</strong> keeps its behaviour: Yes / No, the PI it moves to ({piPlaceholder} in its heading) and the reason; it can be relabelled, not removed. {reviewedPiPlaceholder} in a heading is the reviewed PI (the PI chosen on the page; in the Close pop-up the Feature’s PI), e.g. “Learnings of {reviewedPiPlaceholder}” is written “Learnings of PI 26.4:” — or “Learnings:” when no PI is known. Shared in Git as {piFormFile}; without the file the built-in form is used.</p>
   </>}>
     {store.error && <Notice tone="warning">{piFormFile} could not be used, so the form stays as it was{store.file ? '' : ' (the built-in form)'}: {store.error}</Notice>}
     <SettingsSummary rows={[
@@ -32,7 +33,7 @@ export function PiFormSetupPanel({ store, block, by }: { store: PiFormStore; blo
       <thead><tr><th>Field</th><th>Heading in the comment</th><th>Type</th><th>Options</th><th>Required</th><th>Default</th></tr></thead>
       <tbody>{setup.fields.map((field) => <tr key={field.id}>
         <td><strong>{field.label}</strong>{field.help && <small className="muted">{field.help}</small>}{isBuiltInField(field.id) ? null : <small className="muted">Added field</small>}</td>
-        <td><code>{field.heading} :</code></td>
+        <td><code>{field.heading}{isChoice(field) ? ' :' : ':'}</code></td>
         <td>{typeLabel(field.type)}</td>
         <td>{isChoice(field) ? field.options.join(' · ') : '—'}</td>
         <td>{yesNo(field.required)}</td>
@@ -48,12 +49,12 @@ export function PiFormSetupPanel({ store, block, by }: { store: PiFormStore; blo
 // The comment a review written with this form gives — each paragraph as a placeholder, each choice its default (else its
 // first option), Move to next PI as pre-selected.
 function sampleComment(setup: PiFormSetup) {
-  let form = { ...emptyReviewForm('PI 26.5', setup) }
+  let form: ReviewForm = { ...emptyReviewForm('PI 26.5', setup), reviewedPi: 'PI 26.4' }
   for (const field of setup.fields) {
     if (field.id === 'move') { if (!form.move) form = { ...form, move: 'No' }; continue }
     form = withFieldValue(form, field.id, isChoice(field) ? field.defaultValue || field.options[0] || '' : `(${field.label.toLowerCase()} as written)`)
   }
-  return buildReviewComment(form, setup)
+  return reviewBlocks(form, setup)
 }
 
 // PIR-22: the editor — the shared column-list editor of the On-Demand pages (OND-05: name, type, Required, ↑ ↓ ✕, the
@@ -89,14 +90,14 @@ function PiFormEditor({ setup, by, blocked, onSave, onClose }: { setup: PiFormSe
           lock={(entry) => entry.id === 'move' ? { name: true, type: true, remove: true, options: true, required: true, why: 'Move to next PI keeps its special behaviour (Yes / No, the PI it moves to, the reason): its heading, default and help can be changed.' } : isBuiltInField(entry.id) ? { type: true, why: 'A built-in field keeps its type.' } : undefined}
           description={{ label: 'Help text (optional)', aria: (index) => `Field ${index + 1} help text`, max: 200, help: 'Shown under the field in the review form.' }}
           extra={(entry, index) => { const extra = extras[entry.id] ?? { heading: '', defaultValue: '' }; const field = draft.fields.find((item) => item.id === entry.id); return <div className="form-row pir-setup-extra">
-            <label>Heading in the comment<input aria-label={`Field ${index + 1} heading`} required maxLength={100} value={extra.heading} onChange={(event) => setExtra(entry.id, { heading: event.target.value })} /><small>{entry.id === 'move' ? `Written as “${extra.heading.replace(piPlaceholder, 'PI 26.5')} : Yes - reason”; ${piPlaceholder} is where the PI it moves to is written.` : `Written as “${extra.heading || '…'} :” at the start of a line; PI Review reads the field by it.`}</small></label>
+            <label>Heading in the comment<input aria-label={`Field ${index + 1} heading`} required maxLength={100} value={extra.heading} onChange={(event) => setExtra(entry.id, { heading: event.target.value })} /><small>{entry.id === 'move' ? `Written as “${extra.heading.replace(piPlaceholder, 'PI 26.5')} : Yes - reason”; ${piPlaceholder} is where the PI it moves to is written.` : `Written as “${headingText(extra.heading || '…', 'PI 26.4')}${entry.type === 'dropdown' ? ' : …' : ':'}” at the start of a line; PI Review reads the field by it. ${reviewedPiPlaceholder} (once at most) is where the reviewed PI is written.`}</small></label>
             {entry.type === 'dropdown' && <label>Default<select aria-label={`Field ${index + 1} default`} value={field?.defaultValue ?? ''} onChange={(event) => setExtra(entry.id, { defaultValue: event.target.value })}><option value="">None — the person chooses</option>{(field?.options ?? []).filter(Boolean).map((option) => <option key={option} value={option}>{option}</option>)}</select><small>Pre-selected in the form and its Preview (UI-STANDARDS §12).</small></label>}
           </div> }}
           addNote={<button type="button" className="ghost" onClick={useBuiltIn}>Use the built-in form</button>} />
       </section>
       <section className="pir-review-preview" aria-label="Comment preview">
         <h3>Comment preview</h3>
-        <pre>{sampleComment(draft)}</pre>
+        <ReviewPreview blocks={sampleComment(draft)} />
         <small className="muted">A review written with this form, as it is posted to the Feature’s Discussion. Reviews written before keep their columns: PI Review reads the built-in headings too.</small>
       </section>
     </div>

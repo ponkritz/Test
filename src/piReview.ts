@@ -136,7 +136,8 @@ export type ReviewMode = typeof reviewModes[number]
 export type SplitFrom = 'Headings' | 'Keywords' | 'None'
 // PIR-15: review (the Review meeting advice as written) with reviewMode (normalized), remarks (Additional Remarks).
 // PIR-20: extra — the texts of the fields added in the PI Review form setup (by field id), read by their configured headings.
-export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; review?: string; reviewMode?: ReviewMode; remarks?: string; extra?: Record<string, string>; from?: SplitFrom }
+// PIR-28: reviewedPi — the reviewed PI a heading names ("Learnings of PI 26.4:"), as "PI 26.4".
+export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; review?: string; reviewMode?: ReviewMode; remarks?: string; extra?: Record<string, string>; reviewedPi?: string; from?: SplitFrom }
 export type BuiltInSection = 'struggles' | 'learnings' | 'move' | 'review' | 'remarks'
 const builtInSections: readonly string[] = ['struggles', 'learnings', 'move', 'review', 'remarks']
 // A section is a built-in one or the id of a field added in the form setup (PIR-20).
@@ -144,10 +145,13 @@ type Section = string
 // PIR-11: the sections the keyword fallback suggests.
 type KeywordSection = 'struggles' | 'learnings' | 'move'
 const gap = String.raw`[ \t]+`
-// PIR-12: "of the Feature" after a heading word ("Learnings of the Feature", "Struggles of this feature").
-const of = String.raw`(?:[ \t]+(?:of|for)[ \t]+(?:the|this)[ \t]+feature)?`
 // PIR-12: the PI named in a Move heading ("… shifted to PI 26.4"), any number, so every review's next PI is read.
 const piNumber = String.raw`pi(?:[ \t]*\d+(?:\.\d+)*)?`
+// PIR-28: the reviewed PI named in a heading — "PI" and its number ("PI 26.4", "PI 2026.4").
+const reviewedPiNumber = String.raw`pi[ \t]*\d+(?:\.\d+)*`
+// PIR-12: "of the Feature" after a heading word ("Learnings of the Feature", "Struggles of this feature"); PIR-28: or the
+// reviewed PI ("Learnings of PI 26.4", "Struggles for PI 26.4", "… for the PI 26.4").
+const of = String.raw`(?:[ \t]+(?:of|for)[ \t]+(?:(?:the|this)[ \t]+feature|(?:the[ \t]+)?${reviewedPiNumber}))?`
 // The heading words of each section, as regular expressions (longer forms first). `inline`: also counts inside a line
 // with a colon; `dash`: also inside a line with a dash and a space.
 const headingWords: { section: Section; pattern: string; inline: boolean; dash?: boolean }[] = [
@@ -200,11 +204,26 @@ export function builtInSectionOf(heading: string): BuiltInSection | undefined {
 }
 // PIR-19: a configured heading as a pattern — its words matched as written (letter case ignored, any spaces between
 // them); "{PI}" in the Move heading stands for the PI ("PI 26.5", "the next PI").
+// PIR-28: "{REVIEWED PI}" stands for the reviewed PI ("PI 26.4"); after "of", "for" or "in" that part is optional, as
+// the heading is written without it when no reviewed PI is known ("Learnings").
 export const piPlaceholder = '{PI}'
+export const reviewedPiPlaceholder = '{REVIEWED PI}'
 export function headingPattern(heading: string): string {
   const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/['’]/g, `['’]`))
-  const parts = heading.trim().split(piPlaceholder)
-  return parts.flatMap((part, index) => [...words(part), ...(index < parts.length - 1 ? [`(?:the${gap}next${gap})?${piNumber}`] : [])]).join(gap)
+  const withPi = (text: string) => { const parts = text.trim().split(piPlaceholder); return parts.flatMap((part, index) => [...words(part), ...(index < parts.length - 1 ? [`(?:the${gap}next${gap})?${piNumber}`] : [])]).join(gap) }
+  const at = heading.indexOf(reviewedPiPlaceholder)
+  if (at < 0) return withPi(heading)
+  const before = heading.slice(0, at).trimEnd(), after = heading.slice(at + reviewedPiPlaceholder.length).trim()
+  const connective = /\s+(?:of|for|in)$/i.exec(before)
+  const head = connective ? before.slice(0, connective.index) : before
+  const tail = after ? `${gap}${withPi(after)}` : ''
+  if (!head.trim()) return `${reviewedPiNumber}${tail}`
+  return `${withPi(head)}(?:${gap}${connective ? `(?:of|for|in)${gap}(?:the${gap})?` : ''}${reviewedPiNumber})?${tail}`
+}
+// PIR-28: a heading as written in the comment — {REVIEWED PI} replaced by the reviewed PI ("PI 26.4"); without one, the
+// placeholder (and an "of", "for" or "in" before it) left out: "Learnings".
+export function headingText(heading: string, reviewedPi: string) {
+  return reviewedPi ? heading.replace(reviewedPiPlaceholder, reviewedPi) : heading.replace(/(?:\s+(?:of|for|in))?\s*\{REVIEWED PI\}/i, '').replace(/\s{2,}/g, ' ').trim()
 }
 // The patterns for a form setup, made once per set of headings.
 const setupPatterns = new Map<string, HeadingPatterns>()
@@ -245,7 +264,7 @@ function byHeadings(text: string, setup?: PiFormSetup): { split: ReviewSplit; fo
     pattern.lastIndex = 0
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       const at = match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase())
-      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length, pi: /\bpi[ \t]*(\d+(?:\.\d+)*)/i.exec(match[1])?.[1] })
+      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length, pi: /(?<![\p{L}\p{N}])pi[ \t]*(\d+(?:\.\d+)*)/iu.exec(match[1])?.[1] })
     }
   }
   // A heading inside another (e.g. "went well" in "What went well:") is dropped: the first, longest one counts.
@@ -258,6 +277,8 @@ function byHeadings(text: string, setup?: PiFormSetup): { split: ReviewSplit; fo
     if (body && builtInSections.includes(heading.section)) { const section = heading.section as BuiltInSection; split[section] = split[section] ? `${split[section]}\n${body}` : body }
     else if (body) { const extra = split.extra ??= {}; extra[heading.section] = extra[heading.section] ? `${extra[heading.section]}\n${body}` : body }
     if (heading.section === 'move' && heading.pi) split.movePi = `PI ${heading.pi}`
+    // PIR-28: the reviewed PI from the first other heading naming one ("Learnings of PI 26.4:").
+    else if (heading.pi && !split.reviewedPi) split.reviewedPi = `PI ${heading.pi}`
   })
   if (split.move) {
     const match = moveStart.exec(split.move)

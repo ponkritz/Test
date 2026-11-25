@@ -1,13 +1,13 @@
 // PI Review, the review form (PIR-13…PIR-15, CON-113): who may post a Feature's review, the next PI, the form's checks,
 // the comment built from it in the standard format PI Review reads back (splitReviewComment), and the post itself — a
 // new comment in the Feature's Discussion, written with the person's own PAT to dev.azure.com only.
-import { commentHtml, isCloudBase, collectionUrl, requestAzure, type AzureConfig, type AzureTransport } from './azureClient.ts'
+import { isCloudBase, collectionUrl, requestAzure, type AzureConfig, type AzureTransport } from './azureClient.ts'
 import { writeBlockedReason, type Action } from './access.ts'
 import { laterPi, piName, piPathOf, type Me } from './myWork.ts'
 import { formatDate } from './format.ts'
 import { commentText } from './workItemEdit.ts'
 import { readDiscussion } from './azureDevOps.ts'
-import { piPlaceholder, reviewFooter, reviewSplit, setDiscussion, tidyReviewText, type ReviewSplit } from './piReview.ts'
+import { headingText, piPlaceholder, reviewFooter, reviewSplit, reviewedPiPlaceholder, setDiscussion, tidyReviewText, type ReviewSplit } from './piReview.ts'
 import { builtInFormSetup, fieldOf, setupProblems, type PiFormField, type PiFormSetup } from './piReviewSetup.ts'
 import type { AzureWorkItem } from './domain'
 import type { WorkItemComment } from './azureDevOps.ts'
@@ -18,7 +18,9 @@ import type { AzureIteration } from './azureRead.ts'
 // meeting advice (one of its options), no default. PIR-20: extra — the fields added in the form setup, by id.
 // PIR-19: the defaults come from the form setup in use (the built-in form without one): Move = its default (No).
 export type ReviewMove = 'Yes' | 'No'
-export interface ReviewForm { learnings: string; struggles: string; move: ReviewMove | ''; moveReason: string; movePi: string; mode: string; remarks: string; extra?: Record<string, string> }
+// PIR-27: noTexts — "No learnings or struggles" is ticked; it holds what was typed before, restored when it is unticked.
+// PIR-28: reviewedPi — the reviewed PI written in the headings with {REVIEWED PI} ("PI 26.4"; '' when not known).
+export interface ReviewForm { learnings: string; struggles: string; move: ReviewMove | ''; moveReason: string; movePi: string; mode: string; remarks: string; extra?: Record<string, string>; noTexts?: Partial<Record<NoneField, string>>; reviewedPi?: string }
 const choiceDefault = (field: PiFormField | undefined) => field?.type === 'dropdown' ? field.defaultValue : ''
 export function emptyReviewForm(movePi = '', setup: PiFormSetup = builtInFormSetup()): ReviewForm {
   const move = choiceDefault(fieldOf(setup, 'move'))
@@ -151,30 +153,50 @@ export function withFieldValue(form: ReviewForm, id: string, value: string): Rev
   if (id === 'review') return { ...form, mode: value }
   return { ...form, extra: { ...form.extra, [id]: value } }
 }
-// PIR-14: the comment posted — plain lines (sent as text: & < > escaped, line breaks kept, commentHtml), in the standard
-// format: "Learnings :", "Struggles :" (each when given), the Move question with its answer and reason, the Review meeting advice,
-// "Additional Remarks :" (when given) and the footer line, which the split ignores.
-// PIR-19, PIR-20: the fields, their order and their headings are those of the form setup in use: a paragraph as
-// "{heading} :" and its lines (left out when empty), a choice as "{heading} : {answer}" (left out when not answered),
-// Move to next PI as its heading with the PI, the answer and the reason.
-export function buildReviewComment(form: ReviewForm, setup: PiFormSetup = builtInFormSetup()): string {
-  const lines = setup.fields.flatMap((field): string[] => {
-    if (field.id === 'move') {
-      const reason = reviewLines(form.moveReason)
-      const first = reason[0]?.replace(/^- /, '')
-      return [`${moveQuestion(form.movePi, field.heading)} : ${form.move}${first ? ` - ${first}` : ''}`, ...reason.slice(1)]
-    }
-    const value = fieldValue(form, field.id)
-    if (field.type === 'dropdown') return value.trim() ? [`${field.heading} : ${value.trim()}`] : []
-    const paragraph = reviewLines(value)
-    return paragraph.length ? [`${field.heading} :`, ...paragraph] : []
-  })
-  return [...lines, reviewFooter].join('\n')
+// PIR-14: the comment posted — a nested bullet list (the product owner's layout, 25 Nov 2026: "Post it like this"):
+// a paragraph field is a top-level bullet "{heading} :" with each line typed as a nested bullet under it (a leading
+// "- ", "* " or "•" dropped; when a line is numbered — "1." or "2)" — the field's lines are a nested numbered list),
+// left out when empty; a choice is one bullet "{heading} : {answer}" (left out when not answered); Move to next PI is
+// its heading with the PI and the answer, its reason as nested bullets. The footer line follows the list as a paragraph;
+// the split ignores it.
+// PIR-19, PIR-20: the fields, their order and their headings are those of the form setup in use.
+export interface ReviewBlock { text: string; items?: string[]; numbered?: boolean }
+const markerless = (line: string, numbered: boolean) => line.replace(numbered ? /^(?:\d{1,2}[.)]|[-*•+–◦▪])[ \t]*(?=\S)/ : /^[-*•+–◦▪][ \t]*(?=\S)/, '')
+const isNumbered = (line: string) => /^\d{1,2}[.)][ \t]+\S/.test(line)
+// A paragraph as its nested items: each non-empty line, trimmed, spaces collapsed, its own marker dropped.
+export function paragraphItems(text: string): { items: string[]; numbered: boolean } {
+  const lines = text.split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).filter(Boolean)
+  const numbered = lines.some(isNumbered)
+  return { items: lines.map((line) => markerless(line, numbered)).filter(Boolean), numbered }
 }
+export function reviewBlocks(form: ReviewForm, setup: PiFormSetup = builtInFormSetup()): ReviewBlock[] {
+  return setup.fields.flatMap((field): ReviewBlock[] => {
+    if (field.id === 'move') {
+      const reason = paragraphItems(form.moveReason)
+      return [{ text: `${moveQuestion(form.movePi, field.heading)} : ${form.move}`, ...(reason.items.length ? reason : {}) }]
+    }
+    const value = fieldValue(form, field.id), heading = headingText(field.heading, piText(form.reviewedPi ?? ''))
+    if (field.type === 'dropdown') return value.trim() ? [{ text: `${heading} : ${value.trim()}` }] : []
+    // PIR-28: a paragraph's heading with no space before its colon, as the product owner writes it ("Learnings of PI 26.4:").
+    const paragraph = paragraphItems(value)
+    return paragraph.items.length ? [{ text: `${heading}:`, ...paragraph }] : []
+  })
+}
+// PIR-14 (SM-183): the comment's HTML — the one place it is built: every text escaped (& < > " '), only the app's own
+// <ul>, <ol>, <li> and <p> raw. The transport accepts nothing else (safeCommentHtml).
+export const escapeHtml = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
+export function reviewCommentHtml(blocks: readonly ReviewBlock[]): string {
+  const item = (block: ReviewBlock) => {
+    const tag = block.numbered ? 'ol' : 'ul'
+    return `<li>${escapeHtml(block.text)}${block.items?.length ? `<${tag}>${block.items.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</${tag}>` : ''}</li>`
+  }
+  return `${blocks.length ? `<ul>${blocks.map(item).join('')}</ul>` : ''}<p>${escapeHtml(reviewFooter)}</p>`
+}
+export const buildReviewComment = (form: ReviewForm, setup: PiFormSetup = builtInFormSetup()) => reviewCommentHtml(reviewBlocks(form, setup))
 
-// PIR-14: the comment as PI Review will read it back — sent as Azure DevOps stores it (commentHtml), read as plain text
-// (commentText) and split (reviewSplit).
-export const readBackReview = (text: string, setup?: PiFormSetup): ReviewSplit => reviewSplit(commentText(commentHtml(text)), setup)
+// PIR-14: the comment as PI Review will read it back — the HTML as it is posted, read as plain text the way the read path
+// does (commentText) and split (reviewSplit).
+export const readBackReview = (html: string, setup?: PiFormSetup): ReviewSplit => reviewSplit(commentText(html), setup)
 // PIR-13: the form's problems, each naming its field — the required fields, the PI, the length, and any field PI Review
 // would read back differently (a line that looks like a heading, e.g. "Issues: …").
 export const maxReviewLength = 30_000
@@ -200,18 +222,17 @@ export function reviewFormProblems(form: ReviewForm, { optionalTexts = false, se
   return problems
 }
 // PIR-14, PIR-21: the fields the split reads back differently from what the form holds (by their labels).
+// PIR-28: and the reviewed PI, when a heading written names it.
 function readBackDiffers(form: ReviewForm, setup: PiFormSetup, back: ReviewSplit): string[] {
-  const expected = (value: string) => tidyReviewText(reviewLines(value).join('\n'))
-  return setup.fields.filter((field) => {
-    if (field.id === 'move') {
-      const [first = '', ...rest] = reviewLines(form.moveReason)
-      const reason = [first.replace(/^- /, ''), tidyReviewText(rest.join('\n'))].filter(Boolean).join('\n')
-      return back.moveValue !== form.move || (back.moveRest ?? '') !== reason || back.movePi !== piText(form.movePi)
-    }
+  const expected = (value: string) => tidyReviewText(paragraphItems(value).items.join('\n'))
+  const writesPi = piText(form.reviewedPi ?? '') && setup.fields.some((field) => field.heading.includes(reviewedPiPlaceholder) && (field.type === 'dropdown' ? fieldValue(form, field.id).trim() : paragraphItems(fieldValue(form, field.id)).items.length))
+  const piDiffers = writesPi && (back.reviewedPi ?? '').toLowerCase() !== piText(form.reviewedPi ?? '').toLowerCase()
+  return [...setup.fields.filter((field) => {
+    if (field.id === 'move') return back.moveValue !== form.move || (back.moveRest ?? '') !== expected(form.moveReason) || back.movePi !== piText(form.movePi)
     const value = fieldValue(form, field.id)
     const read = field.id === 'learnings' || field.id === 'struggles' || field.id === 'remarks' || field.id === 'review' ? back[field.id] ?? '' : back.extra?.[field.id] ?? ''
     return read !== (field.type === 'dropdown' ? value.trim() : expected(value))
-  }).map((field) => field.id === 'move' ? 'Move to next PI' : field.id === 'review' && field.label === 'Advise to discuss the Feature during the Review meeting?' ? 'Review meeting' : field.label)
+  }).map((field) => field.id === 'move' ? 'Move to next PI' : field.id === 'review' && field.label === 'Advise to discuss the Feature during the Review meeting?' ? 'Review meeting' : field.label), ...(piDiffers ? ['the reviewed PI'] : [])]
 }
 
 // PIR-21: the read-back check of a form setup — a sample review with every field filled (each choice with each of its
@@ -223,12 +244,19 @@ export function formSetupProblems(setup: PiFormSetup): string[] {
   const rounds = Math.max(1, ...setup.fields.map((field) => field.type === 'dropdown' ? field.options.length : 1))
   const differs = new Set<string>()
   for (let round = 0; round < rounds; round += 1) {
-    let form: ReviewForm = { ...emptyReviewForm('PI 26.5', setup), move: round % 2 ? 'Yes' : 'No', moveReason: round % 2 ? 'sample reason\n- second point' : '' }
+    let form: ReviewForm = { ...emptyReviewForm('PI 26.5', setup), move: round % 2 ? 'Yes' : 'No', moveReason: round % 2 ? 'sample reason\n- second point' : '', reviewedPi: round % 2 ? '' : 'PI 26.4' }
     for (const [index, field] of setup.fields.entries()) {
       if (field.id === 'move') continue
       form = withFieldValue(form, field.id, field.type === 'dropdown' ? field.options[round % field.options.length] : `Sample answer ${index + 1}\n- sample point ${index + 1}`)
     }
     for (const field of readBackDiffers(form, setup, readBackReview(buildReviewComment(form, setup), setup))) differs.add(field)
+  }
+  // PIR-27: "No learnings or struggles" — the "None" it writes must come back as written too.
+  if (noneFieldsOf(setup).length) {
+    let form: ReviewForm = { ...emptyReviewForm('PI 26.5', setup), move: 'No', reviewedPi: 'PI 26.4' }
+    for (const [index, field] of setup.fields.entries()) if (field.id !== 'move') form = withFieldValue(form, field.id, field.type === 'dropdown' ? field.options[0] : `Sample answer ${index + 1}`)
+    const none = withNoTexts(form, setup, true)
+    for (const field of readBackDiffers(none, setup, readBackReview(buildReviewComment(none, setup), setup))) differs.add(field)
   }
   return differs.size ? [`A review written with this form would not be read back as written: ${[...differs].join(', ')}. A heading probably contains or looks like another field's heading; change it.`] : []
 }
@@ -255,7 +283,7 @@ export function reviewFormFrom(split: ReviewSplit | undefined, movePi: string, s
 // for the rights check, CON-113). Returns the new comment's ID.
 export async function postReview(config: AzureConfig, pat: string, feature: Pick<AzureWorkItem, 'id' | 'assignedToEmail'>, text: string, transport: AzureTransport = requestAzure): Promise<number> {
   if (!text.trim() || text.length > maxReviewLength) throw new Error('The review is empty or too long. Nothing was posted.')
-  const response = await transport({ ...config, pat, operation: 'add-comment', workItemId: feature.id, comment: text, reviewOf: feature.assignedToEmail ?? '' }) as { id?: unknown }
+  const response = await transport({ ...config, pat, operation: 'add-comment', workItemId: feature.id, comment: text, htmlComment: true, reviewOf: feature.assignedToEmail ?? '' }) as { id?: unknown }
   if (typeof response?.id !== 'number') throw new Error(`The review on #${feature.id} could not be confirmed. Check the Discussion in Azure DevOps before posting again.`)
   return response.id
 }
@@ -279,4 +307,81 @@ export function myReviewOf(comments: WorkItemComment[], name: string | undefined
     if (split.from === 'Headings') return { comment, split }
   }
   return undefined
+}
+
+// PIR-27: "No learnings or struggles" — one tick box for the built-in Learnings and Struggles fields of the form setup in
+// use (not pre-ticked, UI-STANDARDS §12). Ticked, it sets them to "None" (written "None" under their headings, read back
+// as "None") and disables their text boxes; unticked, it restores what was typed before. With one of them removed from
+// the setup it sets only the other, and its label says so; with both removed there is no tick box.
+export type NoneField = 'learnings' | 'struggles'
+export const noneText = 'None'
+export const noneFieldsOf = (setup: PiFormSetup): PiFormField[] => setup.fields.filter((field) => (field.id === 'learnings' || field.id === 'struggles') && field.type === 'longtext')
+const lowerFirst = (text: string) => /^\p{Lu}\p{Ll}/u.test(text) ? text[0].toLowerCase() + text.slice(1) : text
+export function noneChoice(setup: PiFormSetup): { label: string; help: string; fields: NoneField[] } | null {
+  const fields = noneFieldsOf(setup)
+  if (!fields.length) return null
+  const ids = fields.map((field) => field.id as NoneField)
+  if (fields.length === 2) return { label: `No ${lowerFirst(fields[0].label)} or ${lowerFirst(fields[1].label)}`, help: `Sets ${fields[0].label} and ${fields[1].label} to “${noneText}”.`, fields: ids }
+  const missing = fields[0].id === 'learnings' ? 'Struggles' : 'Learnings'
+  return { label: `No ${lowerFirst(fields[0].label)} (sets only ${fields[0].label}: ${missing} is not in this form)`, help: `Sets ${fields[0].label} to “${noneText}”.`, fields: ids }
+}
+export function withNoTexts(form: ReviewForm, setup: PiFormSetup, ticked: boolean): ReviewForm {
+  const choice = noneChoice(setup)
+  if (!choice) return form
+  if (ticked) {
+    if (form.noTexts) return form
+    const saved = Object.fromEntries(choice.fields.map((id) => [id, form[id]])) as Partial<Record<NoneField, string>>
+    return { ...form, ...Object.fromEntries(choice.fields.map((id) => [id, noneText])), noTexts: saved }
+  }
+  if (!form.noTexts) return form
+  const { noTexts, ...rest } = form
+  return { ...rest, ...Object.fromEntries(choice.fields.map((id) => [id, noTexts[id] ?? ''])) }
+}
+
+// PIR-26: when a review counts as Reviewed (product owner, 25 Nov 2026: "Use the Chosen PI instead of Current PI") — a
+// review comment counts when (a) its date lies in the date span of the PI chosen in the page's PI filter (its PI-level
+// iteration's dates, else the span of its Sprints' dates — piDates, as PIR-25), or (b) the Feature is Closed now and
+// the comment is dated on or after its Closed Date (the review asked when closing it, PIR-18, is posted just before the
+// Feature closes, so the days are compared). Dates are compared as UTC days, as the PIs are. A review that meets neither
+// is Not reviewed, named by the PI whose dates cover it ("another PI" when none does). When the chosen PI has no dates
+// (or the iterations are not read) every review counts, as before, and `note` says so.
+type DaySpan = { path: string; start: string; finish: string }
+export type ReviewPeriod = { pi: string; start: string; finish: string; spans: DaySpan[]; note: '' } | { pi: string; start?: undefined; note: string }
+export const utcDay = (value: string | undefined) => { const time = Date.parse(value ?? ''); return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : '' }
+export function reviewPeriodOf(pi: string, iterations: readonly AzureIteration[] | null | undefined, { reading = false, problem = '' }: { reading?: boolean; problem?: string } = {}): ReviewPeriod {
+  const every = 'every review comment counts as Reviewed, whatever its date'
+  if (!pi) return { pi, note: '' }
+  const label = piName(pi)
+  if (!iterations) return { pi, note: reading ? '' : `The PI dates could not be read from Azure DevOps${problem ? ` (${problem.replace(/\.$/, '')})` : ''}: ${every}.` }
+  const dates = piDates(iterations)
+  const own = dates.get(pi.toLowerCase()) ?? [...dates.values()].find((entry) => piName(entry.path).toLowerCase() === label.toLowerCase())
+  if (!own) return { pi, note: `${label} has no dates in Azure DevOps (neither its own nor its Sprints’): ${every}.` }
+  return { pi, start: own.start, finish: own.finish, spans: [...dates.values()], note: '' }
+}
+export type ReviewCount = { counts: true; why: 'heading' | 'pi' | 'closed' | 'any' } | { counts: false; why: 'other'; otherPi: string }
+// PIR-28: a review whose heading names the reviewed PI ("Learnings of PI 26.4:") counts for that PI whatever its date,
+// and not for another one (unless the closed-Feature rule applies); without a PI in its headings the dates decide.
+export function reviewCountOf(review: { date: string; reviewedPi?: string }, feature: Pick<AzureWorkItem, 'state' | 'closedDate'>, period: ReviewPeriod): ReviewCount {
+  const day = utcDay(review.date)
+  const closed = feature.state.trim().toLowerCase() === 'closed' ? utcDay(feature.closedDate) : ''
+  const named = piText(review.reviewedPi ?? '')
+  if (named && period.pi) {
+    if (named.toLowerCase() === piText(piName(period.pi)).toLowerCase()) return { counts: true, why: 'heading' }
+    if (day && closed && day >= closed) return { counts: true, why: 'closed' }
+    return { counts: false, why: 'other', otherPi: named }
+  }
+  if (period.start == null) return { counts: true, why: 'any' }
+  if (day && period.start <= day && day <= period.finish) return { counts: true, why: 'pi' }
+  if (day && closed && day >= closed) return { counts: true, why: 'closed' }
+  const covering = day ? period.spans.filter((span) => span.start <= day && day <= span.finish && piText(piName(span.path))).sort((a, b) => b.start.localeCompare(a.start)) : []
+  return { counts: false, why: 'other', otherPi: covering[0] ? piName(covering[0].path) : '' }
+}
+// PIR-26: the hint of a review that does not count — "Last review 12 June 2026 (PI 2026.3)" or "(another PI)".
+export const otherPiHint = (date: string, count: ReviewCount) => count.counts ? '' : `Last review ${formatDate(date)} (${count.otherPi || 'another PI'})`
+// PIR-26: Write review… is still prefilled from the latest review; when that review does not count for the reviewed PI,
+// the PI it was written for ("PI 2026.3", "another PI") — '' when it counts, or while the iterations are read.
+export function prefilledOtherPi(comment: Pick<WorkItemComment, 'date'>, split: Pick<ReviewSplit, 'reviewedPi'> | undefined, feature: Pick<AzureWorkItem, 'state' | 'closedDate'>, reviewed: string, iterations: { list: readonly AzureIteration[] | null; reading?: boolean }): string {
+  if (iterations.reading) return ''
+  const count = reviewCountOf({ date: comment.date, reviewedPi: split?.reviewedPi }, feature, reviewPeriodOf(reviewed, iterations.list))
+  return count.counts ? '' : count.otherPi || 'another PI'
 }
