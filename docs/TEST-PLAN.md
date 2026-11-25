@@ -2166,7 +2166,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-05 The Discussion page token in both transports** — Req DSK-11, PIR-05 — L1 `pi-review.test.mjs` ("DSK-11, PIR-05: the web transport sends the page token URL-encoded on the read only, at most 2,048 characters; 429 names Retry-After (TC-PIR-05)"), `azure-devops.test.mjs` ("DSK-11: the desktop proxy accepts a Discussion page token on the read only — a text of at most 2,048 characters, URL-encoded on the fixed host and path; 429 names Retry-After (TC-PIR-05)").
 
-**TC-PIR-06 A lead reviews a PI's Features and their Discussions** — Req PIR-01, PIR-02, PIR-03, PIR-04, PIR-05, PIR-06 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-06: the current PI is preselected, its Features listed, a Discussion read in the drawer as plain text from both pages, and Read all Discussions completes": against a mocked Azure DevOps — the Time Writing fetch, the iterations with PI 2026.4 current and the Comments API in two pages — PI 2026.4 is chosen with the Current PI chip; its two Features are listed by ID, the toggle adds the Feature with a User Story in the PI; the drawer shows the three comments of both pages newest first as text, "@Ana Costa" and "[image]", no markup rendered, the second page asked with the URL-encoded token; Comments shows 3; ↻ Read all Discussions ends with "1 of 1 read." and fills the column); UAT: on the released build a lead opens PI Review on the current PI, reads two Features' Discussions and runs Read all Discussions.
+**TC-PIR-06 A lead reviews a PI's Features and their Discussions** — Req PIR-01, PIR-02, PIR-03, PIR-04, PIR-05, PIR-06 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-06: the current PI is preselected, its Features listed, a Discussion read in the drawer as plain text from both pages, and Read all Discussions completes": against a mocked Azure DevOps — the Time Writing fetch, the iterations with PI 2026.4 current and the Comments API in two pages — PI 2026.4 is chosen with the Current PI chip; its two Features are listed by ID, the toggle adds the Feature with a User Story in the PI; the drawer shows the four comments of both pages newest first as text, "@Ana Costa" and "[image]", no markup rendered, the second page asked with the URL-encoded token; Comments shows 4; ↻ Read all Discussions ends with "1 of 1 read." and fills the column); UAT: on the released build a lead opens PI Review on the current PI, reads two Features' Discussions and runs Read all Discussions.
+
+**TC-PIR-07 The latest comment by date and time** — Req PIR-07 — L1 `pi-review.test.mjs` ("PIR-07: the latest comment is the newest by date and time, whoever wrote it; the same time: the higher ID (TC-PIR-07)": not the first in the list nor by author, UTC offsets compared as instants, the higher ID at the same time, an unreadable date as the oldest, none for an empty Discussion).
+
+**TC-PIR-08 Split a review comment by its headings** — Req PIR-08 — L1 `pi-review.test.mjs` ("PIR-08: the three headings split the comment, in any order, inline or on their own lines (TC-PIR-08)", "PIR-08: a heading word inside a sentence is not taken; no headings give an empty result (TC-PIR-08)", "PIR-08: Move to next PI — Yes / No / Partly (or Y / N) normalized with the rest after a dash; other text as written (TC-PIR-08)": all three headings inline and on lines, any order, bullets / numbers / # / bold, colon / dash / line end, singular and plural, the Move variants, missing and empty sections, a repeated heading joined, a line's leading bullet dropped; "struggles with the rig", "Learning-curve", "planned for next PI:" and "Mylearnings:" not taken; Yes / YES / no. / Partially / Y normalized, "N/A", "Not decided" and "Nothing moves" as written).
+
+**TC-PIR-09 A lead sees each Feature's latest review comment in five columns** — Req PIR-07, PIR-08, PIR-09, PIR-10 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-09: after Read all Discussions the five columns show each Feature's newest comment, split by its headings, can be filtered by Move to next PI and are exported": against the mocked Azure DevOps of TC-PIR-06 — Feature 201's newest comment written with the headings, Feature 202's newest one, listed after an older one, without — the five cells show "—" with the hint before the read; after ↻ Read all Discussions ("2 of 2 read.") 201 shows the local date-time, the whole comment on one line with " · ", "test rig late", "book the rig early · share the calendar" and "Yes — waiting for vendor", 202 only its date and "Ready for review"; the date sorts newest first then oldest first; the Move to next PI filter Yes leaves 201 and Reset filters clears it; the CSV export has the five headings, the whole comment with its line breaks and Move as shown; the drawer's Latest comment block shows the author, date and the three sections); UAT: on the released build a lead writes a review comment with the three headings on a test Feature, opens PI Review, runs Read all Discussions and checks the five columns, the drawer and an Excel export.
 
 ## 7. Requirements coverage matrix
 
@@ -2939,6 +2945,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-04 | TC-PIR-06 |
 | PIR-05 | TC-PIR-03, TC-PIR-05, TC-PIR-06 |
 | PIR-06 | TC-PIR-04, TC-PIR-06 |
+| PIR-07 | TC-PIR-07, TC-PIR-09 |
+| PIR-08 | TC-PIR-08, TC-PIR-09 |
+| PIR-09 | TC-PIR-09 |
+| PIR-10 | TC-PIR-09 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -2992,7 +3002,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…98, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…06 |
+| UC-40 | TC-PIR-01…09 |
 
 ## 8. Result record
 
