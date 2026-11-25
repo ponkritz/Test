@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.45.0 — 2026-11-25
+
+**Added**
+- **Built-in lists: the QE list from Azure DevOps** — a team list holds the members of an Azure DevOps team (display names and Azure DevOps identity ids — no emails), shared in Git as shared-lists.json (queued and merged, read strictly, newer data loaded quietly) and managed in Admin → Epic & Feature setup → Value lists → Team lists from Azure DevOps: ＋ New list… reads the team, ↻ Refresh… reads it again with your own PAT (read only, nothing written to Azure DevOps) and shows who is added, removed and renamed before Save to Git, and every list keeps a log (LST-01…LST-07, LST-13, LST-14).
+- **Column types "Dropdown (built-in list)" and "Multi-select (built-in list)"** — an On-Demand column takes its choices from a team list or a Value list; a row keeps the name and, for a person, the Azure DevOps identity id as a stable key, so a renamed person keeps their rows; two people with the same name stay two, shown as "Name (#3f2a)" and a person who left is kept and marked "not in the list". Filters, Insights, Replace… and the bulk upload's Excel template follow the list as it is now (LST-08…LST-11, LST-15, OND-05).
+- **New permission "Manage built-in lists"** (permissions 9) for Tool Owner, Admin and Scrum Master; co-owners of On-Demand pages create and refresh lists too; everyone else sees them read only with the reason (CON-115, LST-12).
+
+DF-329, DF-330, DF-331, SM-188, SM-189, R-24, LIM-105, LIM-106; TC-LST-01…TC-LST-11.
+
+PR #427.
+
 ## v10.44.0 — 2026-11-25
 
 **New**
