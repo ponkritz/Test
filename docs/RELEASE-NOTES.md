@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.30.0 — 2026-11-25
+
+**Added**
+- **PI Review: more heading styles.** The latest comment is also split by synonyms of the three headings. Struggles: Challenges, Issues, Problems, Blockers, Impediments, Risks, Pain points, What went wrong, What didn't go well. Learnings: Lessons, Lessons learnt / learned, Takeaways, What went well, Went well, Improvements, Improve, Next time. Move to Next PI: Spill over, Carry over, Next PI, Moving to next PI, Continue in next PI. The placement rules stay the same, and a dash with a space now works too. Inline forms like "struggle – …", "learning - …" and "lesson: …" also count. A plain sentence without a colon or a dash is still not a heading (PIR-08).
+- **Suggested from keywords.** When the newest comment has no heading at all, its sentences are suggested for Struggles, Learnings and Move to Next PI by a built-in keyword list (blocked, delayed, risk… · learned, next time, went well… · carry over, next PI, spill over…). Whole words only, and "no blockers" or "not blocked" are not taken. A sentence with words of two columns goes to both. A suggested Move gets Yes / No / Partly only when the sentence says so right after the phrase (PIR-11).
+- **Marked as suggested.** A suggested cell shows "(suggested)" before its text in italics, with the tooltip "Suggested from keywords, not headings". The drawer's Latest comment says "Suggested from keywords". Export adds the column **Split from** (Headings, Keywords or None). Nothing is stored, as before (PIR-09, PIR-10, PIR-11).
+
+DF-303, DF-306; SM-177; LIM-89, LIM-91; TC-PIR-08, TC-PIR-10, TC-PIR-11 (UAT).
+
+PR #411.
+
 ## v10.29.0 — 2026-11-25
 
 **Added**
