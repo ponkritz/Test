@@ -6,6 +6,7 @@ import { currentIterationPairs, type AzureIteration } from './azureRead.ts'
 import { laterPi, piName, piPathOf } from './myWork.ts'
 import type { AzureWorkItem } from './domain'
 import type { WorkItemComment } from './azureDevOps.ts'
+import type { PiFormSetup } from './piReviewSetup.ts'
 
 const lower = (value: string) => value.toLowerCase()
 const isRemoved = (item: Pick<AzureWorkItem, 'state'>) => item.state.trim().toLowerCase() === 'removed'
@@ -134,8 +135,12 @@ export type ReviewMode = typeof reviewModes[number]
 // PIR-11: where the columns come from — the headings, the keywords (suggested) or nothing.
 export type SplitFrom = 'Headings' | 'Keywords' | 'None'
 // PIR-15: review (the Review meeting advice as written) with reviewMode (normalized), remarks (Additional Remarks).
-export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; review?: string; reviewMode?: ReviewMode; remarks?: string; from?: SplitFrom }
-type Section = 'struggles' | 'learnings' | 'move' | 'review' | 'remarks'
+// PIR-20: extra — the texts of the fields added in the PI Review form setup (by field id), read by their configured headings.
+export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; review?: string; reviewMode?: ReviewMode; remarks?: string; extra?: Record<string, string>; from?: SplitFrom }
+export type BuiltInSection = 'struggles' | 'learnings' | 'move' | 'review' | 'remarks'
+const builtInSections: readonly string[] = ['struggles', 'learnings', 'move', 'review', 'remarks']
+// A section is a built-in one or the id of a field added in the form setup (PIR-20).
+type Section = string
 // PIR-11: the sections the keyword fallback suggests.
 type KeywordSection = 'struggles' | 'learnings' | 'move'
 const gap = String.raw`[ \t]+`
@@ -168,17 +173,49 @@ const headingWords: { section: Section; pattern: string; inline: boolean; dash?:
   { section: 'remarks', pattern: String.raw`additional${gap}(?:remarks?|comments?)(?:${gap}\(if${gap}any\))?`, inline: true },
   { section: 'remarks', pattern: String.raw`remarks?(?:${gap}\(if${gap}any\))?`, inline: false },
 ]
-const names = (pick: (word: typeof headingWords[number]) => boolean | undefined) => `(${headingWords.filter(pick).map((word) => word.pattern).join('|')})`
+type HeadingWord = { section: Section; pattern: string; inline: boolean; dash?: boolean }
 const bold = String.raw`(?:\*\*|__)?`
-const lineHeading = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${names(() => true)}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu')
-const inlineHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.inline)}[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu')
-const inlineDashHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.dash)}[ \t]*\??[ \t]*${bold}[ \t]*[\-–—][ \t]+${bold}`, 'giu')
 // PIR-12: the Move question at the start of a line answered on the same line after a space ("… shifted to PI 26.4 Yes,
 // docs pending") — only when the answer starts with yes / no / partly / partially.
 const moveQuestion = headingWords.find((word) => word.pattern.includes('whether'))!.pattern
 const moveQuestionLine = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}(${moveQuestion})[ \t]*\??[ \t]*${bold}[ \t]+(?=(?:yes|no|partly|partially)(?![\p{L}\p{N}]))`, 'gimu')
-const sectionTests = headingWords.map((word) => ({ section: word.section, test: new RegExp(`^(?:${word.pattern})$`, 'iu') }))
-const sectionOf = (name: string): Section => sectionTests.find((entry) => entry.test.test(name))?.section ?? 'struggles'
+// PIR-19, PIR-20: the patterns of one list of heading words — the built-in ones (PIR-08, PIR-12, PIR-15), after the
+// headings of the PI Review form setup when one is in use (so a configured heading wins where both would match).
+interface HeadingPatterns { line: RegExp; inline: RegExp; dash: RegExp; tests: { section: Section; test: RegExp }[] }
+function patternsOf(words: HeadingWord[]): HeadingPatterns {
+  const names = (pick: (word: HeadingWord) => boolean | undefined) => `(${words.filter(pick).map((word) => word.pattern).join('|')})`
+  return {
+    line: new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${names(() => true)}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu'),
+    inline: new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.inline)}[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu'),
+    dash: new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.dash)}[ \t]*\??[ \t]*${bold}[ \t]*[\-–—][ \t]+${bold}`, 'giu'),
+    tests: words.map((word) => ({ section: word.section, test: new RegExp(`^(?:${word.pattern})$`, 'iu') })),
+  }
+}
+const builtInPatterns = patternsOf(headingWords)
+// PIR-21: the built-in section a heading text is read as on its own ("Issues" → struggles), or undefined — the form
+// setup refuses a heading that older reviews already use for another field.
+export function builtInSectionOf(heading: string): BuiltInSection | undefined {
+  const name = heading.trim().replace(/[ \t]*\?$/, '')
+  return builtInPatterns.tests.find((entry) => entry.test.test(name))?.section as BuiltInSection | undefined
+}
+// PIR-19: a configured heading as a pattern — its words matched as written (letter case ignored, any spaces between
+// them); "{PI}" in the Move heading stands for the PI ("PI 26.5", "the next PI").
+export const piPlaceholder = '{PI}'
+export function headingPattern(heading: string): string {
+  const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/['’]/g, `['’]`))
+  const parts = heading.trim().split(piPlaceholder)
+  return parts.flatMap((part, index) => [...words(part), ...(index < parts.length - 1 ? [`(?:the${gap}next${gap})?${piNumber}`] : [])]).join(gap)
+}
+// The patterns for a form setup, made once per set of headings.
+const setupPatterns = new Map<string, HeadingPatterns>()
+function patternsFor(setup: PiFormSetup | undefined): HeadingPatterns {
+  if (!setup) return builtInPatterns
+  const configured: HeadingWord[] = setup.fields.filter((field) => field.heading.trim()).map((field) => ({ section: field.id, pattern: headingPattern(field.heading), inline: true }))
+  const key = JSON.stringify(configured)
+  let found = setupPatterns.get(key)
+  if (!found) { found = patternsOf([...configured, ...headingWords]); if (setupPatterns.size > 20) setupPatterns.clear(); setupPatterns.set(key, found) }
+  return found
+}
 const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]|\d{1,2}[.)])\s+/, '')).filter(Boolean).join('\n')
 // The Move value: the text starts with yes / y, no / n or partly / partially / partial (any case), followed by the end,
 // a space or punctuation (so "N/A", "Not decided" and "Nothing" give no value).
@@ -199,10 +236,12 @@ const footerLine = /^[ \t]*[—–-]+[ \t]*posted[ \t]+from[ \t]+demand[ \t]+pla
 export const withoutFooter = (text: string) => text.replace(footerLine, '')
 // PIR-14: a section's lines as the split gives them back (trimmed, a leading bullet or number dropped, no empty lines).
 export const tidyReviewText = (text: string) => tidy(text)
-function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
+function byHeadings(text: string, setup?: PiFormSetup): { split: ReviewSplit; found: boolean } {
   text = withoutFooter(text)
+  const patterns = patternsFor(setup)
+  const sectionOf = (name: string): Section => patterns.tests.find((entry) => entry.test.test(name))?.section ?? 'struggles'
   const found = new Map<number, { section: Section; start: number; end: number; pi?: string }>()
-  for (const pattern of [lineHeading, moveQuestionLine, inlineHeading, inlineDashHeading]) {
+  for (const pattern of [patterns.line, moveQuestionLine, patterns.inline, patterns.dash]) {
     pattern.lastIndex = 0
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       const at = match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase())
@@ -215,7 +254,9 @@ function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
   const split: ReviewSplit = {}
   headings.forEach((heading, index) => {
     const body = tidy(text.slice(heading.end, headings[index + 1]?.start ?? text.length))
-    if (body) split[heading.section] = split[heading.section] ? `${split[heading.section]}\n${body}` : body
+    // PIR-20: a field added in the form setup has its text under extra, by its id.
+    if (body && builtInSections.includes(heading.section)) { const section = heading.section as BuiltInSection; split[section] = split[section] ? `${split[section]}\n${body}` : body }
+    else if (body) { const extra = split.extra ??= {}; extra[heading.section] = extra[heading.section] ? `${extra[heading.section]}\n${body}` : body }
     if (heading.section === 'move' && heading.pi) split.movePi = `PI ${heading.pi}`
   })
   if (split.move) {
@@ -226,8 +267,9 @@ function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
   if (mode) split.reviewMode = mode
   return { split, found: headings.length > 0 }
 }
-export function splitReviewComment(text: string | undefined): ReviewSplit {
-  return text ? byHeadings(text).split : {}
+// setup (PIR-19): the PI Review form setup in use — its headings are read besides the built-in ones.
+export function splitReviewComment(text: string | undefined, setup?: PiFormSetup): ReviewSplit {
+  return text ? byHeadings(text, setup).split : {}
 }
 
 // PIR-11: the keywords that suggest a column when the comment has no heading at all — built in, one list to change
@@ -282,9 +324,9 @@ export function splitByKeywords(text: string | undefined): ReviewSplit {
 }
 // PIR-08, PIR-11: the split shown — by the headings when the comment has at least one; otherwise suggested from the
 // keywords; "None" when neither fills a column.
-export function reviewSplit(text: string | undefined): ReviewSplit & { from: SplitFrom } {
+export function reviewSplit(text: string | undefined, setup?: PiFormSetup): ReviewSplit & { from: SplitFrom } {
   if (!text) return { from: 'None' }
-  const headings = byHeadings(text)
+  const headings = byHeadings(text, setup)
   if (headings.found) return { ...headings.split, from: 'Headings' }
   const suggested = splitByKeywords(text)
   return { ...suggested, from: suggested.struggles || suggested.learnings || suggested.move ? 'Keywords' : 'None' }

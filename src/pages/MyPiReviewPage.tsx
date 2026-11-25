@@ -7,7 +7,8 @@ import { discussionOf, discussionsVersion, moveLabel, oneLine, piFeatures, piLab
 import { rateLimitWait } from '../azureDevOps'
 import { myReviewOf, readDiscussionInto, reviewPageBlock, reviewPostBlock } from '../piReviewPost'
 import { ReviewDialog } from './PiReviewForm'
-import { useReviewViewer, useReviewWriter } from '../piReviewWriter'
+import { formSetupOf, useReviewViewer, useReviewWriter } from '../piReviewWriter'
+import type { PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
@@ -20,12 +21,12 @@ import type { MyWork } from '../useMyWork'
 // page opens (only mine, 3 at a time) and kept for this page load, shared with PI Review.
 const piKey = 'demand-planning-my-pi-review-pi-v1'
 type Status = { state: 'unread' | 'loading' | 'error' | 'none' | 'reviewed'; comment?: WorkItemComment; split?: ReviewSplit; error?: string }
-function statusOf(item: AzureWorkItem, name: string | undefined): Status {
+function statusOf(item: AzureWorkItem, name: string | undefined, setup?: PiFormSetup): Status {
   const entry = discussionOf(item.key)
   if (!entry) return { state: 'unread' }
   if (entry.state === 'loading') return { state: 'loading' }
   if (entry.state === 'error') return { state: 'error', error: entry.error }
-  const mine = myReviewOf([...entry.comments].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id), name)
+  const mine = myReviewOf([...entry.comments].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id), name, setup)
   return mine ? { state: 'reviewed', ...mine } : { state: 'none' }
 }
 const statusLabel: Record<Status['state'], string> = { unread: 'Not read', loading: 'Reading…', error: 'Not read', none: 'Not reviewed', reviewed: 'Reviewed' }
@@ -33,6 +34,8 @@ const statusLabel: Record<Status['state'], string> = { unread: 'Not read', loadi
 export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWork }) {
   const { config, pat, items, isSample } = azure
   const poster = useReviewViewer()
+  // PIR-19: my review is found by the headings of the form setup in use (and the built-in ones).
+  const setup = formSetupOf(poster.env)
   useSyncExternalStore(subscribeDiscussions, discussionsVersion)
   const { options, current, pi, choose, fallback, remembered, iterations } = usePiChoice(azure, piKey)
   const name = my.me.name
@@ -55,15 +58,15 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     { id: 'title', label: 'Title', value: (item) => item.title },
     { id: 'state', label: 'State', value: (item) => item.state },
     { id: 'status', label: 'My review', hint: 'Reviewed: you wrote a review comment (with the review headings) in the Feature’s Discussion; Not reviewed: none yet. Read from Azure DevOps when the page opens.',
-      value: (item) => statusLabel[statusOf(item, name).state], title: (item) => statusOf(item, name).error,
-      render: (item) => { const status = statusOf(item, name); return <Pill tone={status.state === 'reviewed' ? 'open' : status.state === 'none' ? 'warning' : status.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[status.state]}</Pill> } },
-    { id: 'date', label: 'Date of my review', firstSortDesc: true, value: (item) => statusOf(item, name).comment?.date ?? '', render: (item) => { const status = statusOf(item, name); return status.comment ? formatDateTime(status.comment.date) : <span className="muted">—</span> } },
-    { id: 'move', label: 'Move to Next PI', value: (item) => { const split = statusOf(item, name).split; return split ? moveLabel(split) : '' }, render: (item) => { const split = statusOf(item, name).split; return split ? <span className="pir-clip">{oneLine(moveLabel(split))}</span> : <span className="muted">—</span> } },
-    { id: 'review-mode', label: 'Review mode', value: (item) => { const split = statusOf(item, name).split; return split ? reviewModeLabel(split) : '' } },
+      value: (item) => statusLabel[statusOf(item, name, setup).state], title: (item) => statusOf(item, name, setup).error,
+      render: (item) => { const status = statusOf(item, name, setup); return <Pill tone={status.state === 'reviewed' ? 'open' : status.state === 'none' ? 'warning' : status.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[status.state]}</Pill> } },
+    { id: 'date', label: 'Date of my review', firstSortDesc: true, value: (item) => statusOf(item, name, setup).comment?.date ?? '', render: (item) => { const status = statusOf(item, name, setup); return status.comment ? formatDateTime(status.comment.date) : <span className="muted">—</span> } },
+    { id: 'move', label: 'Move to Next PI', value: (item) => { const split = statusOf(item, name, setup).split; return split ? moveLabel(split) : '' }, render: (item) => { const split = statusOf(item, name, setup).split; return split ? <span className="pir-clip">{oneLine(moveLabel(split))}</span> : <span className="muted">—</span> } },
+    { id: 'review-mode', label: 'Review mode', value: (item) => { const split = statusOf(item, name, setup).split; return split ? reviewModeLabel(split) : '' } },
     { id: 'actions', label: 'Actions', export: false, sortable: false,
       render: (item) => { const why = reviewPostBlock(poster, item); return <button type="button" className="ghost" disabled={Boolean(why)} title={why || `Write the PI review of Feature #${item.id}`} aria-label={`Write review of Feature ${item.id}`} onClick={() => void writer.start(item)}>Write review…</button> } },
   ]
-  const reviewed = rows.filter((item) => statusOf(item, name).state === 'reviewed').length
+  const reviewed = rows.filter((item) => statusOf(item, name, setup).state === 'reviewed').length
   const notice = !iterations.done ? '' : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
   const toolbar = <span className="people-filters pir-filters">
     <label className="inline-select">PI<select aria-label="PI" value={pi} onChange={(event) => choose(event.target.value)}>

@@ -713,6 +713,17 @@ Instead of typing the headings yourself, fill in the review form; the app writes
 
 **When you close a Feature** (Close in My Tasks [Board], Sprint check or Time Writing), the Close pop-up asks the same questions for that Feature (Learnings and Struggles optional, **Move to next PI = No** pre-selected, the Review meeting advice required) and **posts the review first, then closes**. If the review cannot be posted nothing is closed: choose **Close without the review** or **Cancel**. When several Features are closed at once, write their reviews in PI Review or My PI Review.
 
+#### Change the review form (Scrum Master, Tool Owner)
+
+The fields of the review form are a shared setup: when the review changes, the Scrum Master or the Tool Owner changes the form in the app, and everyone's next review uses it.
+
+1. **Open it.** **Admin → Epic & Feature setup → PI Review form**, or **Form setup** at the top of PI Review. Everyone sees the form in use: each field with the heading it writes in the comment, its type, options, whether it is required and its default. Without a setup in Git it says *The built-in form*.
+2. **Edit form…** opens the editor — the same column editor as **Set up columns…** on the On-Demand pages. For each field: **Name** (the label in the form), **Type** (**Long text** for a paragraph, **Dropdown (one value)** for a choice), **Required**, ↑ ↓ to reorder, ✕ to remove, the **Heading in the comment**, the **Default** of a Dropdown, a **Help text**, and the **options** of a Dropdown. **＋ Add field** adds one (at most 15); **Use the built-in form** starts again from the built-in fields. The **Comment preview** shows what a review written with the form looks like.
+3. **Move to next PI** keeps its behaviour — Yes / No, the PI it moves to and the reason — so its name, type, options and Required are locked and it cannot be removed; its heading (with **{PI}** where the PI is written), its default (No unless you change it) and its help can be changed. The other built-in fields keep their type.
+4. **Save to Git.** The form is checked first: a heading that is empty, used twice, or already read as another field (for example "Issues" or "What went wrong" is read as Struggles, so older reviews would land in the wrong column) is refused, and a review written with every field must read back exactly. The result is in **Background jobs** ("PI Review form · Save to Git").
+
+PI Review reads your headings and still the built-in ones and the earlier formats, so older reviews keep their columns; each field you add is a column of its own in PI Review. **Edit form…** is greyed out, with the reason next to it, for everyone without the right "PI Review: set up the review form" (Scrum Master and Tool Owner by default), in View as, with the synthetic sample and without Git storage.
+
 ### Planning Overview and Capacity vs Actual (Testing)
 
 Admins see a **Testing** group with pages that are being tried out:

@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { closeSelection, defaultTicks, toggleTick, type CloseRow } from '../closeList'
 import type { AzureWorkItem } from '../domain'
 import { recordJob } from '../backgroundJobs'
-import { buildReviewComment, reviewFormProblems, reviewPostBlock, type ReviewForm } from '../piReviewPost'
+import { buildReviewComment, moveDefaultNote, reviewFormProblems, reviewPostBlock, reviewSummary, type ReviewForm } from '../piReviewPost'
 import { piLabel } from '../piReview'
 import { ReviewFields } from '../pages/PiReviewForm'
-import { forgetDiscussion, postAndAudit, startForm, useReviewViewer } from '../piReviewWriter'
+import { formSetupOf, forgetDiscussion, postAndAudit, startForm, useReviewViewer } from '../piReviewWriter'
 import { Modal, Notice, WriteBlocked } from './ui'
 
 // BKL-39: the pop-up of Close Feature / Close User Story — every open item that would close, with a tick box (yours
@@ -26,9 +26,11 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
   const reviewed = features.length === 1 && viewer.env ? features[0] : undefined
   const reviewBlock = reviewed ? reviewPostBlock(viewer, reviewed) : ''
   const asking = Boolean(reviewed && !reviewBlock)
+  // PIR-19: the form setup in use when the pop-up opened, kept while it is open.
+  const [setup] = useState(() => formSetupOf(viewer.env))
   const [forms, setForms] = useState<Record<number, { form: ReviewForm; pi: string; partly: boolean }>>({})
-  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items); return { form: writing.initial, pi: writing.pi, partly: writing.partly } })() : undefined
-  const problems = asking && start ? reviewFormProblems(start.form, { optionalTexts: true }) : []
+  const start = reviewed && viewer.env ? forms[reviewed.id] ?? (() => { const writing = startForm(reviewed, '', viewer.env!.items, setup); return { form: writing.initial, pi: writing.pi, partly: writing.partly } })() : undefined
+  const problems = asking && start ? reviewFormProblems(start.form, { optionalTexts: true, setup }) : []
   const [tried, setTried] = useState(false)
   const [busy, setBusy] = useState(false)
   const [postError, setPostError] = useState('')
@@ -38,9 +40,9 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
     if (problems.length) return
     setBusy(true); setPostError('')
     try {
-      await postAndAudit(viewer.env, reviewed, start.form, buildReviewComment(start.form), start.pi)
+      await postAndAudit(viewer.env, reviewed, start.form, buildReviewComment(start.form, setup), start.pi)
       forgetDiscussion(reviewed)
-      recordJob(`pireview:post:${reviewed.key}`, `Post review · #${reviewed.id}`, { text: `Posted to the Discussion of #${reviewed.id} before closing it: Move to next PI ${start.form.move} (to ${start.form.movePi.trim()}), ${start.form.mode}.`, failed: false })
+      recordJob(`pireview:post:${reviewed.key}`, `Post review · #${reviewed.id}`, { text: `Posted to the Discussion of #${reviewed.id} before closing it: ${reviewSummary(start.form)}.`, failed: false })
       onConfirm(selection)
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'The review was not posted.'
@@ -70,8 +72,8 @@ export function CloseItemsDialog({ title, intro, rows, asked, blocked, onConfirm
       {reviewed && reviewBlock && <p className="muted">The PI review of Feature #{reviewed.id} is not asked: {reviewBlock}</p>}
       {asking && reviewed && start && <section className="close-review" aria-label="PI review">
         <h3>PI review of Feature #{reviewed.id}{start.pi ? ` · ${piLabel(start.pi)}` : ''}</h3>
-        <p className="muted">Posted as a new comment in the Feature’s Discussion before the items close. Move to next PI is pre-selected No; say whether to discuss it in the Review meeting.</p>
-        <ReviewFields form={start.form} onChange={(form) => setForms({ ...forms, [reviewed.id]: { ...start, form } })} pi={start.pi} partly={start.partly} optionalTexts idPrefix="close-review" />
+        <p className="muted">Posted as a new comment in the Feature’s Discussion before the items close. {moveDefaultNote(setup)}</p>
+        <ReviewFields form={start.form} onChange={(form) => setForms({ ...forms, [reviewed.id]: { ...start, form } })} pi={start.pi} partly={start.partly} optionalTexts idPrefix="close-review" setup={setup} />
         {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}
       </section>}
       {blocked && <Notice tone="warning">{blocked}</Notice>}

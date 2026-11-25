@@ -9,7 +9,7 @@ import { ResultTabs } from '../components/ResultTabs'
 import { Drawer, EmptyState, Info, Modal, Notice, Page, Pill, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText, type QueuedOutcome } from '../gitSaveQueue'
 import { formatDateTime } from '../format'
-import { applyColumns, hasTable, isRowHidden, withoutHidden, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, filterRows, hasOptions, lastUpdate, maxDescription, maxLog, maxLongValue, moneyOf, newId, onDemandPath, onDemandTypes, pageFileBytes, suggestRowFiles, renamePage, rowError, rowId, rowSave, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
+import { applyColumns, hasTable, isRowHidden, withoutHidden, hasRowKeys, setKeyPrefix, cellProblem, cellSortValue, cellText, columnDrafts, columnEffects, columnsError, currencyCodes, defaultCurrency, displayText, filterRows, hasOptions, lastUpdate, maxLog, maxLongValue, moneyOf, newId, onDemandPath, pageFileBytes, suggestRowFiles, renamePage, rowError, rowId, rowSave, valuesOf, type ColumnDraft, type OnDemandColumn, type OnDemandPage as PageFile, type OnDemandRow, type OnDemandValue } from '../onDemand'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
@@ -26,6 +26,7 @@ import { isSamplePage, sampleNotice, sampleReason, sampleRowCount } from '../sam
 import { ExportNoteContext, sampleExportNote } from '../exportNote'
 import { PublishDialog } from '../components/PublishDialog'
 import { ReplaceDialog } from '../components/ReplaceDialog'
+import { ColumnListEditor } from '../components/ColumnListEditor'
 import { applyOnDemandReplace, distinctValues, onDemandReplaceCommit, onDemandReplacePlan, replaceError, replaceMessage, replaceableColumns } from '../replaceValues'
 import { prepareTable, useSchedules, viewerChoice } from '../publishRun'
 import { TemplateDialog, UploadDialog } from '../components/BulkUploadDialogs'
@@ -658,8 +659,6 @@ function ColumnsDialog({ page, onCancel, onSave }: { page: PageFile; onCancel: (
   const [error, setError] = useState('')
   const [effects, setEffects] = useState<string[] | null>(null)
   const [busy, setBusy] = useState(false)
-  const edit = (index: number, change: Partial<ColumnDraft>) => { setDrafts(drafts.map((draft, at) => at === index ? { ...draft, ...change } : draft)); setError(''); setEffects(null) }
-  const move = <T,>(list: T[], at: number, by: number) => { const to = at + by; if (to < 0 || to >= list.length) return list; const next = [...list];[next[at], next[to]] = [next[to], next[at]]; return next }
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     const problem = columnsError(drafts)
@@ -680,31 +679,11 @@ function ColumnsDialog({ page, onCancel, onSave }: { page: PageFile; onCancel: (
       </div> : <>
         <label className="od-prefix">Row key prefix<input aria-label="Row key prefix" required maxLength={8} pattern="[A-Za-z0-9]{1,8}" value={prefix} disabled={prefixFixed} onChange={(event) => { setPrefix(event.target.value.toUpperCase()); setError('') }} />
           <small>{prefixFixed ? `Fixed: rows already have keys such as ${page.rows.find((row) => row.key)?.key}.` : `Every row gets a key such as ${prefix || page.keyPrefix}-261123-K7Q2 (prefix, date, 4 random characters) the moment it is added. 1 to 8 letters or digits; it cannot change once rows have keys.`}</small></label>
-        {!drafts.length && <EmptyState title="No columns yet." detail="Add the first one with ＋ Add column." />}
-        <ol className="od-columns">{drafts.map((draft, index) => <li key={draft.id} className="od-column">
-          <div className="od-column-head">
-            <label>Name<input aria-label={`Column ${index + 1} name`} autoFocus={index === drafts.length - 1 && draft.isNew} required maxLength={120} value={draft.name} onChange={(event) => edit(index, { name: event.target.value })} /></label>
-            <label>Type<select aria-label={`Column ${index + 1} type`} value={draft.type} onChange={(event) => edit(index, { type: event.target.value as ColumnDraft['type'] })}>{onDemandTypes.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}</select></label>
-            <label className="check"><input type="checkbox" checked={draft.required} onChange={(event) => edit(index, { required: event.target.checked })} />Required</label>
-            <span className="button-row od-column-moves">
-              <button type="button" className="ghost" aria-label={`Move ${draft.name || `column ${index + 1}`} up`} disabled={index === 0} onClick={() => { setDrafts(move(drafts, index, -1)); setEffects(null) }}>↑</button>
-              <button type="button" className="ghost" aria-label={`Move ${draft.name || `column ${index + 1}`} down`} disabled={index === drafts.length - 1} onClick={() => { setDrafts(move(drafts, index, 1)); setEffects(null) }}>↓</button>
-              <button type="button" className="text-button danger-text" aria-label={`Remove column ${draft.name || index + 1}`} onClick={() => { setDrafts(drafts.filter((_, at) => at !== index)); setError(''); setEffects(null) }}>✕</button>
-            </span>
-          </div>
-          {draft.type === 'currency' && <CurrencyDefault index={index} value={draft.currency ?? defaultCurrency} onChange={(currency) => edit(index, { currency })} />}
-          <label className="od-description">Description (optional)<textarea aria-label={`Column ${index + 1} description`} rows={2} maxLength={maxDescription} value={draft.description ?? ''} placeholder="How or what to fill, e.g. “The cost in the supplier’s currency, without VAT.”" onChange={(event) => edit(index, { description: event.target.value })} /><small>Shown under the field in the row drawer and behind ⓘ on the column heading; up to {maxDescription} characters.</small></label>
-          {hasOptions(draft.type) && <div className="od-options"><small>Options of “{draft.name || `column ${index + 1}`}”</small>
-            {draft.options.map((option, at) => <div key={at} className="od-option">
-              <input aria-label={`${draft.name || `Column ${index + 1}`} option ${at + 1}`} maxLength={120} value={option.label} onChange={(event) => edit(index, { options: draft.options.map((entry, i) => i === at ? { ...entry, label: event.target.value } : entry) })} />
-              <button type="button" className="ghost" aria-label={`Move option ${option.label || at + 1} up`} disabled={at === 0} onClick={() => edit(index, { options: move(draft.options, at, -1) })}>↑</button>
-              <button type="button" className="ghost" aria-label={`Move option ${option.label || at + 1} down`} disabled={at === draft.options.length - 1} onClick={() => edit(index, { options: move(draft.options, at, 1) })}>↓</button>
-              <button type="button" className="text-button danger-text" aria-label={`Remove option ${option.label || at + 1}`} onClick={() => edit(index, { options: draft.options.filter((_, i) => i !== at) })}>✕</button>
-            </div>)}
-            <button type="button" className="text-button" onClick={() => edit(index, { options: [...draft.options, { label: '' }] })}>＋ Add option</button>
-          </div>}
-        </li>)}</ol>
-        <div><button type="button" className="ghost" onClick={() => { setDrafts([...drafts, { id: newId('c'), name: '', type: 'text', required: false, options: [], isNew: true }]); setEffects(null) }}>＋ Add column</button> <Info label="Types">Text: any text on one line (up to 2,000 characters). Long text: a paragraph (up to 10,000 characters), shown in 3 lines in the table, in full in the row drawer and in the export. Number: a number (right-aligned, sorted as a number). Currency: an amount and its currency, the column’s default currency to start with (shown “1,200.00 EUR”; Insights never add up different currencies). Date: a date. Dropdown (one value): one option of its list. Multi-select: any number of options of its list. Changing a type keeps the values: one that does not fit is marked until changed.</Info></div>
+        {/* OND-05, OND-06: the shared column-list editor (also the PI Review form setup's, PIR-22). */}
+        <ColumnListEditor drafts={drafts} onChange={(next, change) => { setDrafts(next); if (change === 'edit' || change === 'remove') setError(''); setEffects(null) }}
+          newDraft={() => ({ id: newId('c'), name: '', type: 'text', required: false, options: [], isNew: true })}
+          extra={(draft, index, edit) => draft.type === 'currency' && <CurrencyDefault index={index} value={draft.currency ?? defaultCurrency} onChange={(currency) => edit({ currency })} />}
+          addNote={<Info label="Types">Text: any text on one line (up to 2,000 characters). Long text: a paragraph (up to 10,000 characters), shown in 3 lines in the table, in full in the row drawer and in the export. Number: a number (right-aligned, sorted as a number). Currency: an amount and its currency, the column’s default currency to start with (shown “1,200.00 EUR”; Insights never add up different currencies). Date: a date. Dropdown (one value): one option of its list. Multi-select: any number of options of its list. Changing a type keeps the values: one that does not fit is marked until changed.</Info>} />
       </>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions">

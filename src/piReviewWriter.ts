@@ -1,11 +1,12 @@
 import { useContext, useState } from 'react'
 import { runInBackground, recordJob } from './backgroundJobs'
-import { featurePi, nextPi, postReview, readDiscussionInto, reviewFormFrom, type ReviewForm, type ReviewViewer } from './piReviewPost'
+import { featurePi, nextPi, postReview, readDiscussionInto, reviewFormFrom, reviewSummary, type ReviewForm, type ReviewViewer } from './piReviewPost'
 import { discussionOf, latestComment, piLabel, piOptions, reviewSplit, setDiscussion } from './piReview'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
 import { ReadOnlyContext, useCan } from './useCan'
 import type { WorkItemComment } from './azureDevOps'
 import type { AzureWorkItem } from './domain'
+import { builtInFormSetup, builtInSetup, type PiFormSetup } from './piReviewSetup'
 
 // PIR-13, PIR-17, PIR-18: writing a PI review from any page — the viewer's rights, the form a Feature starts from, the
 // post with its audit, and the Write review… state with its Background jobs entry. The form itself: pages/PiReviewForm.
@@ -16,17 +17,20 @@ export function useReviewViewer(): ReviewViewer & { env: ReviewEnv | null } {
 }
 
 // PIR-13: the review being written — the Feature, its PI, the form it starts from, the comment it was prefilled from.
-export type Writing = { item: AzureWorkItem; pi: string; initial: ReviewForm; prefilledFrom?: WorkItemComment; partly: boolean }
+// PIR-19: setup — the form setup it is written with (kept while the pop-up is open).
+export type Writing = { item: AzureWorkItem; pi: string; initial: ReviewForm; prefilledFrom?: WorkItemComment; partly: boolean; setup: PiFormSetup }
+// PIR-19: the form setup in use (the built-in form without a provider or a file).
+export const formSetupOf = (env: ReviewEnv | null | undefined) => env?.formSetup ?? builtInSetup
 
 // PIR-13: the form as it starts for a Feature — prefilled from its latest review comment (split by headings) when its
 // Discussion was read, and Moves to the PI after the reviewed one (pi, else the Feature's own PI).
-export function startForm(item: AzureWorkItem, pi: string, items: AzureWorkItem[]): Writing {
+export function startForm(item: AzureWorkItem, pi: string, items: AzureWorkItem[], setup: PiFormSetup = builtInFormSetup()): Writing {
   const reviewed = pi || featurePi(item.iterationPath) || ''
   const entry = discussionOf(item.key)
   const comment = entry?.state === 'done' ? latestComment(entry.comments) : undefined
-  const split = comment ? reviewSplit(comment.text) : undefined
+  const split = comment ? reviewSplit(comment.text, setup) : undefined
   const headings = split?.from === 'Headings'
-  return { item, pi: reviewed, initial: reviewFormFrom(split, reviewed ? nextPi(reviewed, piOptions([], items)) : ''), ...(headings && comment ? { prefilledFrom: comment } : {}), partly: headings && split?.moveValue === 'Partly' }
+  return { item, pi: reviewed, initial: reviewFormFrom(split, reviewed ? nextPi(reviewed, piOptions([], items)) : '', setup), ...(headings && comment ? { prefilledFrom: comment } : {}), partly: headings && split?.moveValue === 'Partly', setup }
 }
 
 // PIR-13, PIR-14: post the review and record it — the audit entry (as other Azure DevOps writes) and, for the Discussion
@@ -34,7 +38,7 @@ export function startForm(item: AzureWorkItem, pi: string, items: AzureWorkItem[
 export async function postAndAudit(env: ReviewEnv, item: AzureWorkItem, form: ReviewForm, text: string, pi: string) {
   if (!env.config) throw new Error('Connect the Time Writing connection (with its PAT) to post a review.')
   const id = await postReview(env.config, env.pat, item, text)
-  env.addAudit({ actor: 'u-owner', action: 'Post PI review', entity: 'AzureDevOps Feature', entityId: String(item.id), detail: `PI review comment ${id} added to the Discussion of Feature #${item.id}${pi ? ` (${piLabel(pi)})` : ''}: Move to next PI ${form.move} (to ${form.movePi.trim()}), ${form.mode}.` })
+  env.addAudit({ actor: 'u-owner', action: 'Post PI review', entity: 'AzureDevOps Feature', entityId: String(item.id), detail: `PI review comment ${id} added to the Discussion of Feature #${item.id}${pi ? ` (${piLabel(pi)})` : ''}: ${reviewSummary(form)}.` })
   return id
 }
 
@@ -47,7 +51,7 @@ export function useReviewWriter(pi: string) {
   async function start(item: AzureWorkItem) {
     if (!env?.config) return
     if (discussionOf(item.key)?.state !== 'done') await readDiscussionInto(env.config, env.pat, item).catch(() => { /* shown in the table and the drawer */ })
-    setWriting(startForm(item, pi, env.items))
+    setWriting(startForm(item, pi, env.items, formSetupOf(env)))
   }
   function post(form: ReviewForm, text: string) {
     if (!env?.config || !writing) return
@@ -58,7 +62,7 @@ export function useReviewWriter(pi: string) {
       await postAndAudit(env, item, form, text, reviewed)
       progress(`Reading the Discussion of #${item.id} again…`)
       try { await readDiscussionInto(config, env.pat, item) } catch (failure) { return { text: `Posted to the Discussion of #${item.id}, but it could not be read again: ${failure instanceof Error ? failure.message : 'unknown error'} Use ↻ Read again in the Feature.`, failed: true } }
-      return { text: `Posted to the Discussion of #${item.id} and read back: Move to next PI ${form.move} (to ${form.movePi.trim()}), ${form.mode}.`, failed: false }
+      return { text: `Posted to the Discussion of #${item.id} and read back: ${reviewSummary(form)}.`, failed: false }
     })
     if (!started) recordJob(`pireview:post:${item.key}:busy`, `Post review · #${item.id}`, { text: `A review of #${item.id} is being posted already: wait for it, then write again if needed. Nothing else was posted.`, failed: true })
   }

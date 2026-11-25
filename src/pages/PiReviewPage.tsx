@@ -9,7 +9,8 @@ import { formatDate, formatDateTime } from '../format'
 import { discussionOf, discussionsVersion, epicOf, latestComment, moveLabel, oneLine, piFeatures, piLabel, readDiscussions, reviewModeLabel, reviewModes, reviewSplit, samePi, subscribeDiscussions, type ReviewSplit, type SplitFrom } from '../piReview'
 import { isReviewLead, readDiscussionInto as readInto, reviewPageBlock, reviewPostBlock } from '../piReviewPost'
 import { ReviewDialog } from './PiReviewForm'
-import { useReviewViewer, useReviewWriter } from '../piReviewWriter'
+import { formSetupOf, useReviewViewer, useReviewWriter } from '../piReviewWriter'
+import { customFields, type PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
@@ -34,15 +35,16 @@ const noFilters: Filters = { epics: [], states: [], people: [], moves: [], modes
 // read (yet).
 type Split = ReviewSplit & { from: SplitFrom }
 type Latest = { comment?: WorkItemComment; split: Split }
-const splits = new WeakMap<WorkItemComment, Split>()
-function latestOf(item: AzureWorkItem): Latest | undefined {
+// PIR-19: split with the headings of the form setup in use (cached per comment and setup).
+const splits = new WeakMap<WorkItemComment, { setup: PiFormSetup; split: Split }>()
+function latestFor(item: AzureWorkItem, setup: PiFormSetup): Latest | undefined {
   const entry = discussionOf(item.key)
   if (entry?.state !== 'done') return undefined
   const comment = latestComment(entry.comments)
   if (!comment) return { split: { from: 'None' } }
-  let split = splits.get(comment)
-  if (!split) { split = reviewSplit(comment.text); splits.set(comment, split) }
-  return { comment, split }
+  let cached = splits.get(comment)
+  if (!cached || cached.setup !== setup) { cached = { setup, split: reviewSplit(comment.text, setup) }; splits.set(comment, cached) }
+  return { comment, split: cached.split }
 }
 // PIR-09: the Move to next PI filter — the normalized value, Other (text without one), Not given, Not read.
 const moveOptions: [string, string][] = [['Yes', 'Yes'], ['No', 'No'], ['Partly', 'Partly'], ['other', 'Other text'], ['none', 'Not given'], ['unread', 'Discussion not read']]
@@ -60,6 +62,10 @@ const Suggested = ({ text }: { text: string }) => <span className="pir-clip pir-
 export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: PageProps['store'] }) {
   const { config, pat, items, isSample } = azure
   const poster = useReviewViewer()
+  // PIR-19, PIR-20: the form setup in use — its headings split the comments, its added fields are columns of their own.
+  const setup = formSetupOf(poster.env)
+  const latestOf = (item: AzureWorkItem) => latestFor(item, setup)
+  const textColumn = (id: string, label: string, hint: string, pick: (latest: Latest) => string | undefined) => textColumnOf(id, label, hint, pick, latestOf)
   useSyncExternalStore(subscribeDiscussions, discussionsVersion)
   const jobs = useSyncExternalStore(subscribeJobs, listJobs)
   const reading = jobs.some((job) => job.key === jobKey && job.state === 'running')
@@ -123,6 +129,8 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
       title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : reviewModeLabel(latest.split) || undefined },
       render: ({ item }) => { const latest = latestOf(item); return !latest ? <span className="muted">—</span> : <span className="pir-clip">{oneLine(reviewModeLabel(latest.split))}</span> } },
     textColumn('remarks', 'Additional Remarks', 'The text after the heading “Additional Remarks:” (or Remarks, Additional comments) in the newest comment.', (latest) => latest.split.remarks),
+    // PIR-20: a column for each field added in the PI Review form setup, by its label.
+    ...customFields(setup).map((field) => textColumn(`field-${field.id}`, field.label, `The text after the heading “${field.heading}:” in the newest comment (a field added in the PI Review form setup, Admin → Epic & Feature setup → PI Review form).`, (latest) => latest.split.extra?.[field.id])),
     { id: 'split-from', label: 'Split from', defaultHidden: true, export: 'always', hint: 'How Struggles, Learnings and Move to Next PI were filled from the newest comment: Headings, Keywords (suggested: the comment has no heading) or None. Exported even while hidden.',
       value: ({ item }) => latestOf(item)?.split.from ?? '', title: ({ item }) => latestOf(item) ? undefined : unreadHint,
       render: ({ item }) => latestOf(item)?.split.from ?? <span className="muted">—</span> },
@@ -170,7 +178,7 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
   const notice = !iterations.done ? null : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
 
   return <Page intro="The Features of a PI and their Discussions, read from Azure DevOps with your PAT, kept for this page load only. Write review… posts a Feature’s review to its Discussion as a new comment."
-    actions={<><button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}</>}>
+    actions={<>{poster.env?.openFormSetup && <button type="button" className="ghost" title="The fields of the review form and the headings written in the comment (Admin → Epic & Feature setup → PI Review form)" onClick={poster.env.openFormSetup}>Form setup</button>}<button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}</>}>
     {!items.length && <EmptyState title="No QMS-0025 data yet." detail="Fetch the Time Writing connection (↻ in the top bar) or load the synthetic sample; the PIs and Features come from that data." />}
     {notice && <Notice tone="warning">{notice}</Notice>}
     {items.length > 0 && <TablePanel title="Features" info="The Features whose Iteration Path is in the chosen PI (with the toggle also those with a User Story in the PI), without Removed Features and those under the absence Epic. The PIs come from the Time Writing connection’s iterations and the fetched data; the current PI (by the Sprint dates, UTC) is chosen first, and your last choice is remembered in this browser. Click a Feature to read its Discussion; Write review… posts the Feature’s review as a new comment in its Discussion.">
@@ -180,7 +188,7 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
         onRowOpen={(row, order) => setOpen({ key: row.item.key, order: order.map((entry) => entry.item.key) })} rowLabel={(row) => `Feature ${row.item.id}: open`}
         empty={<EmptyState title={!pi ? 'Choose a PI.' : rows.length ? 'No Feature matches the filters.' : `No Features in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI to review in the PI list.' : rows.length ? 'Change the filters, or Reset filters.' : 'Tick “Also Features with User Stories in this PI”, choose another PI, or fetch the data again.'} />} />
     </TablePanel>}
-    {open && openRow && <FeatureDrawer key={openRow.item.key} row={openRow} position={{ at: open.order.indexOf(open.key), of: open.order.length }} onStep={step} onClose={() => setOpen(null)} config={config} pat={pat} blocked={readBlocked} postBlocked={reviewPostBlock(poster, openRow.item)} onWrite={() => void writer.start(openRow.item)} />}
+    {open && openRow && <FeatureDrawer key={openRow.item.key} row={openRow} setup={setup} position={{ at: open.order.indexOf(open.key), of: open.order.length }} onStep={step} onClose={() => setOpen(null)} config={config} pat={pat} blocked={readBlocked} postBlocked={reviewPostBlock(poster, openRow.item)} onWrite={() => void writer.start(openRow.item)} />}
     {writer.writing && byKey.get(writer.writing.item.key) && <ReviewDialog key={`review:${writer.writing.item.key}`} writing={writer.writing} blocked={reviewPostBlock(poster, writer.writing.item)} onPost={writer.post} onClose={writer.cancel} />}
   </Page>
 }
@@ -188,7 +196,7 @@ export function PiReviewPage({ azure, store }: { azure: AzureWorkspace; store: P
 // PIR-09: a text column of the latest comment — one line in the cell (line breaks as " · ", cut with …), the whole
 // text in the tooltip and in the export (line breaks kept); "—" with the hint until the Discussion is read. PIR-11: a
 // split text suggested from keywords is marked in the cell and the tooltip (the export has Split from).
-function textColumn(id: string, label: string, hint: string, pick: (latest: Latest) => string | undefined): DataColumn<Row> {
+function textColumnOf(id: string, label: string, hint: string, pick: (latest: Latest) => string | undefined, latestOf: (item: AzureWorkItem) => Latest | undefined): DataColumn<Row> {
   const of = (row: Row) => { const latest = latestOf(row.item); return latest ? pick(latest) ?? '' : '' }
   const suggested = (row: Row) => id !== 'latest-comment' && latestOf(row.item)?.split.from === 'Keywords'
   return { id, label, hint: `${hint} Filled once the Discussion is read: open the Feature, or ↻ Read all Discussions.`, value: of,
@@ -198,7 +206,7 @@ function textColumn(id: string, label: string, hint: string, pick: (latest: Late
 
 // PIR-05: one Feature in a drawer (UI-STANDARDS §4a), read only: its details, then its Discussion, newest first, as
 // plain text (mentions as @Name, images as [image]); read when the drawer opens unless read before, ↻ Read again.
-function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, postBlocked, onWrite }: { row: Row; position: { at: number; of: number }; onStep: (by: number) => void; onClose: () => void; config: AzureConfig | null; pat: string; blocked: string; postBlocked: string; onWrite: () => void }) {
+function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, postBlocked, onWrite, setup }: { setup: PiFormSetup; row: Row; position: { at: number; of: number }; onStep: (by: number) => void; onClose: () => void; config: AzureConfig | null; pat: string; blocked: string; postBlocked: string; onWrite: () => void }) {
   const { item, epic } = row
   const entry = discussionOf(item.key)
   const read = () => { if (!blocked && config) readInto(config, pat, item).catch(() => { /* shown from the entry */ }) }
@@ -221,7 +229,7 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, p
       <div><dt>Iteration</dt><dd>{item.iterationPath || '—'}</dd></div>
       <div><dt>Target date</dt><dd>{formatDate(item.targetDate)}</dd></div>
     </dl>
-    {entry?.state === 'done' && <LatestComment comments={entry.comments} />}
+    {entry?.state === 'done' && <LatestComment comments={entry.comments} setup={setup} />}
     <section aria-label="Discussion" className="pir-discussion">
       <div className="pir-discussion-head"><h3>Discussion{entry?.state === 'done' ? ` (${entry.comments.length.toLocaleString()}${entry.capped ? '+' : ''})` : ''}</h3>
         <button type="button" className="ghost" disabled={Boolean(blocked) || entry?.state === 'loading'} title={blocked || undefined} onClick={read}>↻ Read again</button></div>
@@ -244,11 +252,12 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, p
 // PIR-10: the newest comment's split in the drawer, above the Discussion: when and by whom, then Struggles, Learnings
 // and Move to next PI (or that the comment has none of the headings; the whole comment is the first of the Discussion).
 // PIR-11: without a heading, the texts suggested from keywords, in italics after "Suggested from keywords".
-function LatestComment({ comments }: { comments: WorkItemComment[] }) {
+// PIR-20: then the fields added in the PI Review form setup.
+function LatestComment({ comments, setup }: { comments: WorkItemComment[]; setup: PiFormSetup }) {
   const comment = latestComment(comments)
   if (!comment) return null
-  const split = reviewSplit(comment.text)
-  const any = Boolean(split.struggles || split.learnings || split.move || split.review || split.remarks)
+  const split = reviewSplit(comment.text, setup)
+  const any = Boolean(split.struggles || split.learnings || split.move || split.review || split.remarks || Object.keys(split.extra ?? {}).length)
   const suggested = split.from === 'Keywords'
   return <section aria-label="Latest comment" className="pir-latest">
     <h3>Latest comment</h3>
@@ -260,6 +269,7 @@ function LatestComment({ comments }: { comments: WorkItemComment[] }) {
       <div><dt>Move to Next PI</dt><dd>{moveLabel(split) || '—'}</dd></div>
       {split.from === 'Headings' && <div><dt>Review mode</dt><dd>{reviewModeLabel(split) || '—'}</dd></div>}
       {split.from === 'Headings' && <div><dt>Additional Remarks</dt><dd>{split.remarks || '—'}</dd></div>}
+      {split.from === 'Headings' && customFields(setup).map((field) => <div key={field.id}><dt>{field.label}</dt><dd>{split.extra?.[field.id] || '—'}</dd></div>)}
     </dl> : <p className="muted">No Struggles, Learnings or Move to next PI heading or keyword in this comment: see the whole comment in the Discussion below.</p>}
   </section>
 }

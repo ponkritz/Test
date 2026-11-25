@@ -2206,6 +2206,20 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-18 Closing a Feature posts its review first** — Req PIR-18, BKL-39, PIR-13 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the advice required — posts it first and closes only once it is posted": Close on my Feature 205 in My Tasks [Board] shows the PI review section with No pre-selected and Moves to PI 2026.5; without the advice nothing is sent; a failed post (500) closes nothing and offers Close without the review; again: the POST, then the PATCH to Closed, the comment as built, "Post review · #205" in Background jobs); UAT (day 4): a Feature owner closes a test Feature from My Tasks [Board], answers the review and finds the comment in its Discussion before the Feature is Closed.
 
+**TC-PIR-19 Without a setup the built-in form applies** — Req PIR-19, PIR-14 — L1 `pi-review-setup.test.mjs` ("PIR-19: without a setup the built-in form gives exactly the comment of PIR-14, and every split is the same (TC-PIR-19)": the comment, the splits of older formats, the empty form with Move = No and the file's round trip unchanged).
+
+**TC-PIR-20 The configured form is written, checked and read back; older comments keep their columns** — Req PIR-20, PIR-13, PIR-17, PIR-18 — L1 `pi-review-setup.test.mjs` ("PIR-19, PIR-20: the configured form — order, headings, an added paragraph and Dropdown, the Move default — is written and read back; older comments keep their columns (TC-PIR-20)", "PIR-20: the form checks follow the setup — a required added field, a Dropdown answer, a removed field; the prefill takes the added fields (TC-PIR-20)").
+
+**TC-PIR-21 The setup checks** — Req PIR-21, PIR-22, OND-05 — L1 `pi-review-setup.test.mjs` ("PIR-21, PIR-22: the setup checks — empty and duplicate headings, a heading colliding with another field, {PI}, the limits, the shared column checks (TC-PIR-21)": empty, duplicate and colliding headings ("Issues", "What went wrong"), a colon, {PI} missing or misplaced, Move removed or with other options, a built-in's type, one option, a default not in the options, the shared column check worded for fields and unchanged for columns, at most 15 fields, the fields through the shared editor's drafts and back).
+
+**TC-PIR-22 The strict reader, the merged save and newer data in Git** — Req PIR-19, GIT-17, GIT-18 — L1 `pi-review-setup.test.mjs` ("PIR-19: the strict reader refuses a file that is not a usable setup; the merge keeps both saves (TC-PIR-22)", "PIR-19: a newer form setup in Git is loaded quietly, except on Admin → Epic & Feature setup (TC-PIR-22)").
+
+**TC-PIR-23 The Scrum Master changes the PI Review form** — Req PIR-19, PIR-20, PIR-21, PIR-22, CON-114, OND-05 — **UAT** — E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-23: the Scrum Master changes the PI Review form in the shared column editor — a colliding heading refused, saved to Git; Write review… follows it and posts the new field": against a mocked GitHub and a fake dev.azure.com — the built-in form shown; in Edit form… (the On-Demand column editor) Move to next PI locked and the built-ins' type locked, the types Long text and Dropdown (one value); a Dropdown field "Customer impact" added with three options and moved up, the Move default set to Yes; the heading "Issues" refused (already read as Struggles), nothing saved; fixed, Required, the Comment preview, Save to Git writes pi-review-form.json; My PI Review → Write review… shows the field and Yes pre-selected, asks for the required choice, previews and posts exactly the comment the setup builds); UAT (day 4): the Scrum Master adds a field, a Team Member writes a review with it and the PI Review table shows it as a column.
+
+**TC-PIR-24 Read only for everyone else; the added field as a column** — Req PIR-23, PIR-20, CON-114 — E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-24: a People Manager sees the form setup read only with the reason; PI Review reads the added field into a column of its own": Edit form… disabled with the reason line; after ↻ Read all Discussions the Customer impact column after Additional Remarks shows the answer; Form setup opens the setup); L1 `pi-review-setup.test.mjs` ("CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)": View as, roles not loaded, the permission, sample data, no Git, a read-only token, the file unusable, loading).
+
+**TC-CON-71 "PI Review: set up the review form"** — Req CON-114, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-23: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
+
 ## 7. Requirements coverage matrix
 
 | Requirement | Test cases |
@@ -2293,7 +2307,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-91 | TC-ACC-04 |
 | CON-92 | TC-ACC-04, TC-ACC-05 |
 | CON-93 | TC-CON-57 |
-| CON-94 | TC-CON-58, TC-OND-06, TC-CON-70 |
+| CON-94 | TC-CON-58, TC-OND-06, TC-CON-70, TC-CON-71 |
 | CON-95 | TC-CON-59, TC-CON-60 |
 | CON-96 | TC-CON-60 |
 | CON-97 | TC-CON-60 |
@@ -2741,7 +2755,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-02 | TC-OND-01, TC-OND-08 |
 | OND-03 | TC-OND-01, TC-OND-03 |
 | OND-04 | TC-OND-01, TC-OND-03 |
-| OND-05 | TC-OND-01, TC-OND-04 |
+| OND-05 | TC-OND-01, TC-OND-04, TC-PIR-21, TC-PIR-23 |
 | OND-06 | TC-OND-04, TC-OND-18 |
 | OND-07 | TC-OND-06, TC-OND-07 |
 | OND-08 | TC-OND-02 |
@@ -2845,6 +2859,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-111 | TC-CON-68, TC-CON-69 |
 | CON-112 | TC-CON-68 |
 | CON-113 | TC-CON-70, TC-PIR-16 |
+| CON-114 | TC-CON-71, TC-PIR-23, TC-PIR-24 |
 | PGB-01 | TC-PGB-01, TC-PGB-07 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
 | PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
@@ -3000,6 +3015,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-16 | TC-PIR-16 |
 | PIR-17 | TC-PIR-17 |
 | PIR-18 | TC-PIR-14, TC-PIR-18 |
+| PIR-19 | TC-PIR-19, TC-PIR-22, TC-PIR-23 |
+| PIR-20 | TC-PIR-20, TC-PIR-23, TC-PIR-24 |
+| PIR-21 | TC-PIR-21, TC-PIR-23 |
+| PIR-22 | TC-PIR-21, TC-PIR-23 |
+| PIR-23 | TC-PIR-24, TC-CON-71 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -3035,7 +3055,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70, TC-CON-71 |
 | UC-23 | TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
@@ -3053,7 +3073,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…102, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…18 |
+| UC-40 | TC-PIR-01…24 |
 
 ## 8. Result record
 

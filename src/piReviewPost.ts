@@ -6,15 +6,24 @@ import { writeBlockedReason, type Action } from './access.ts'
 import { laterPi, piName } from './myWork.ts'
 import { commentText } from './workItemEdit.ts'
 import { readDiscussion } from './azureDevOps.ts'
-import { reviewFooter, reviewSplit, setDiscussion, tidyReviewText, type ReviewMode, type ReviewSplit } from './piReview.ts'
+import { piPlaceholder, reviewFooter, reviewSplit, setDiscussion, tidyReviewText, type ReviewSplit } from './piReview.ts'
+import { builtInFormSetup, fieldOf, setupProblems, type PiFormField, type PiFormSetup } from './piReviewSetup.ts'
 import type { AzureWorkItem } from './domain'
 import type { WorkItemComment } from './azureDevOps.ts'
 
 // PIR-13: the form. move: Yes or No only (an older comment's Partly is read, never offered), **No** pre-selected (the
-// product owner's choice, UI-STANDARDS §12 exception of 2026-11-25); movePi: the PI it moves to. mode: no default.
+// product owner's choice, UI-STANDARDS §12 exception of 2026-11-25); movePi: the PI it moves to. mode: the Review
+// meeting advice (one of its options), no default. PIR-20: extra — the fields added in the form setup, by id.
+// PIR-19: the defaults come from the form setup in use (the built-in form without one): Move = its default (No).
 export type ReviewMove = 'Yes' | 'No'
-export interface ReviewForm { learnings: string; struggles: string; move: ReviewMove | ''; moveReason: string; movePi: string; mode: ReviewMode | ''; remarks: string }
-export const emptyReviewForm = (movePi = ''): ReviewForm => ({ learnings: '', struggles: '', move: 'No', moveReason: '', movePi, mode: '', remarks: '' })
+export interface ReviewForm { learnings: string; struggles: string; move: ReviewMove | ''; moveReason: string; movePi: string; mode: string; remarks: string; extra?: Record<string, string> }
+const choiceDefault = (field: PiFormField | undefined) => field?.type === 'dropdown' ? field.defaultValue : ''
+export function emptyReviewForm(movePi = '', setup: PiFormSetup = builtInFormSetup()): ReviewForm {
+  const move = choiceDefault(fieldOf(setup, 'move'))
+  const extra = Object.fromEntries(setup.fields.filter((field) => !builtIn.has(field.id)).map((field) => [field.id, choiceDefault(field)]))
+  return { learnings: '', struggles: '', move: move === 'Yes' || move === 'No' ? move : '', moveReason: '', movePi, mode: choiceDefault(fieldOf(setup, 'review')), remarks: '', ...(Object.keys(extra).length ? { extra } : {}) }
+}
+const builtIn = new Set(['learnings', 'struggles', 'move', 'review', 'remarks'])
 
 // PIR-13: the PI written in the Move question — "PI" and its number ("PI 26.5", "PI 2026.5").
 const piPattern = /^pi[ \t]*(\d+(?:\.\d+)*)$/i
@@ -61,66 +70,130 @@ export function reviewLines(text: string): string[] {
   return text.split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).filter(Boolean).map((line) => line.replace(/^[-*•+–][ \t]*(?=\S)/, '- '))
 }
 // PIR-14: the Move question names the PI it moves to ("Whether the feature needs to be shifted to PI 26.5").
-export const moveQuestion = (pi: string) => `Whether the feature needs to be shifted to ${piText(pi) || 'the next PI'}`
+// PIR-19: the heading of the form setup in use, {PI} replaced by the PI.
+export const moveQuestion = (pi: string, heading = `Whether the feature needs to be shifted to ${piPlaceholder}`) => heading.replace(piPlaceholder, piText(pi) || 'the next PI')
 export const reviewQuestion = 'Advise to discuss the Feature during the Review meeting'
+// PIR-13: the decision in words, for the audit, the confirmation and Background jobs — "Move to next PI Yes (to PI 26.5),
+// Offline Review" (the advice left out when the form has none).
+export const reviewSummary = (form: ReviewForm) => `Move to next PI ${form.move} (to ${form.movePi.trim()})${form.mode.trim() ? `, ${form.mode.trim()}` : ''}`
+// PIR-13: what Move to next PI starts with, said in the form (UI-STANDARDS §12: a default that matters is visible).
+// PIR-19: the default of the form setup in use (No in the built-in form).
+export function moveDefaultNote(setup: PiFormSetup) {
+  const value = fieldOf(setup, 'move')?.defaultValue
+  return value ? `${fieldOf(setup, 'move')?.label || 'Move to next PI'} is pre-selected ${value}.` : ''
+}
+
+// PIR-20: the value of a field of the form (a built-in one by its key, an added one from extra).
+export function fieldValue(form: ReviewForm, id: string): string {
+  if (id === 'learnings' || id === 'struggles' || id === 'remarks' || id === 'moveReason') return form[id]
+  if (id === 'move') return form.move
+  if (id === 'review') return form.mode
+  return form.extra?.[id] ?? ''
+}
+export function withFieldValue(form: ReviewForm, id: string, value: string): ReviewForm {
+  if (id === 'learnings' || id === 'struggles' || id === 'remarks') return { ...form, [id]: value }
+  if (id === 'move') return { ...form, move: value === 'Yes' || value === 'No' ? value : '' }
+  if (id === 'review') return { ...form, mode: value }
+  return { ...form, extra: { ...form.extra, [id]: value } }
+}
 // PIR-14: the comment posted — plain lines (sent as text: & < > escaped, line breaks kept, commentHtml), in the standard
 // format: "Learnings :", "Struggles :" (each when given), the Move question with its answer and reason, the Review meeting advice,
 // "Additional Remarks :" (when given) and the footer line, which the split ignores.
-export function buildReviewComment(form: ReviewForm): string {
-  const reason = reviewLines(form.moveReason)
-  const first = reason[0]?.replace(/^- /, '')
-  return [
-    ...(reviewLines(form.learnings).length ? ['Learnings :', ...reviewLines(form.learnings)] : []),
-    ...(reviewLines(form.struggles).length ? ['Struggles :', ...reviewLines(form.struggles)] : []),
-    `${moveQuestion(form.movePi)} : ${form.move}${first ? ` - ${first}` : ''}`, ...reason.slice(1),
-    `${reviewQuestion} : ${form.mode}`,
-    ...(reviewLines(form.remarks).length ? ['Additional Remarks :', ...reviewLines(form.remarks)] : []),
-    reviewFooter,
-  ].join('\n')
+// PIR-19, PIR-20: the fields, their order and their headings are those of the form setup in use: a paragraph as
+// "{heading} :" and its lines (left out when empty), a choice as "{heading} : {answer}" (left out when not answered),
+// Move to next PI as its heading with the PI, the answer and the reason.
+export function buildReviewComment(form: ReviewForm, setup: PiFormSetup = builtInFormSetup()): string {
+  const lines = setup.fields.flatMap((field): string[] => {
+    if (field.id === 'move') {
+      const reason = reviewLines(form.moveReason)
+      const first = reason[0]?.replace(/^- /, '')
+      return [`${moveQuestion(form.movePi, field.heading)} : ${form.move}${first ? ` - ${first}` : ''}`, ...reason.slice(1)]
+    }
+    const value = fieldValue(form, field.id)
+    if (field.type === 'dropdown') return value.trim() ? [`${field.heading} : ${value.trim()}`] : []
+    const paragraph = reviewLines(value)
+    return paragraph.length ? [`${field.heading} :`, ...paragraph] : []
+  })
+  return [...lines, reviewFooter].join('\n')
 }
 
 // PIR-14: the comment as PI Review will read it back — sent as Azure DevOps stores it (commentHtml), read as plain text
 // (commentText) and split (reviewSplit).
-export const readBackReview = (text: string): ReviewSplit => reviewSplit(commentText(commentHtml(text)))
+export const readBackReview = (text: string, setup?: PiFormSetup): ReviewSplit => reviewSplit(commentText(commentHtml(text)), setup)
 // PIR-13: the form's problems, each naming its field — the required fields, the PI, the length, and any field PI Review
 // would read back differently (a line that looks like a heading, e.g. "Issues: …").
 export const maxReviewLength = 30_000
-// optionalTexts (PIR-18, the Close flow): Learnings and Struggles may stay empty.
-export function reviewFormProblems(form: ReviewForm, { optionalTexts = false }: { optionalTexts?: boolean } = {}): string[] {
+// optionalTexts (PIR-18, the Close flow): Learnings and Struggles — every paragraph — may stay empty.
+// PIR-19…PIR-21: the fields of the form setup in use — its required fields and its choices — and the read-back of each.
+export function reviewFormProblems(form: ReviewForm, { optionalTexts = false, setup = builtInFormSetup() }: { optionalTexts?: boolean; setup?: PiFormSetup } = {}): string[] {
   const problems: string[] = []
-  if (!optionalTexts && !reviewLines(form.learnings).length) problems.push('Enter the Learnings (write “None” when there are none).')
-  if (!optionalTexts && !reviewLines(form.struggles).length) problems.push('Enter the Struggles (write “None” when there are none).')
-  if (form.move !== 'Yes' && form.move !== 'No') problems.push('Choose whether the Feature moves to the next PI: Yes or No.')
-  if (!piText(form.movePi)) problems.push('Enter the PI it moves to as “PI” and its number, e.g. PI 26.5.')
-  if (form.mode !== 'Discuss during Meeting' && form.mode !== 'Offline Review') problems.push('Choose whether to discuss the Feature during the Review meeting or review it offline.')
+  for (const field of setup.fields) {
+    const value = fieldValue(form, field.id).trim()
+    if (field.id === 'move') {
+      if (form.move !== 'Yes' && form.move !== 'No') problems.push(`Choose whether the Feature moves to the next PI (${field.label}): Yes or No.`)
+      if (!piText(form.movePi)) problems.push('Enter the PI it moves to as “PI” and its number, e.g. PI 26.5.')
+    } else if (field.type === 'longtext') {
+      if (field.required && !optionalTexts && !reviewLines(value).length) problems.push(`Enter the ${field.label} (write “None” when there are none).`)
+    } else if (value && !field.options.includes(value)) problems.push(`Choose ${field.label}: ${field.options.join(' or ')}.`)
+    else if (!value && field.required) problems.push(field.id === 'review' && field.label === 'Advise to discuss the Feature during the Review meeting?' ? 'Choose whether to discuss the Feature during the Review meeting or review it offline.' : `Choose ${field.label}: ${field.options.join(' or ')}.`)
+  }
   if (problems.length) return problems
-  const text = buildReviewComment(form)
+  const text = buildReviewComment(form, setup)
   if (text.length > maxReviewLength) return [`The review is too long (${text.length.toLocaleString()} characters; at most ${maxReviewLength.toLocaleString()}).`]
-  const back = readBackReview(text), expected = (value: string) => tidyReviewText(reviewLines(value).join('\n'))
-  const [first = '', ...rest] = reviewLines(form.moveReason)
-  const reason = [first.replace(/^- /, ''), tidyReviewText(rest.join('\n'))].filter(Boolean).join('\n')
-  const differs = [
-    (back.learnings ?? '') !== expected(form.learnings) && 'Learnings',
-    (back.struggles ?? '') !== expected(form.struggles) && 'Struggles',
-    (back.moveValue !== form.move || (back.moveRest ?? '') !== reason || back.movePi !== piText(form.movePi)) && 'Move to next PI',
-    back.reviewMode !== form.mode && 'Review meeting',
-    (back.remarks ?? '') !== expected(form.remarks) && 'Additional Remarks',
-  ].filter((field): field is string => Boolean(field))
+  const differs = readBackDiffers(form, setup, readBackReview(text, setup))
   if (differs.length) problems.push(`PI Review would read ${differs.join(', ')} back differently: a line looks like a heading (e.g. “Issues:”, “Next PI:” or “Remarks”). Reword that line, e.g. without the colon.`)
   return problems
+}
+// PIR-14, PIR-21: the fields the split reads back differently from what the form holds (by their labels).
+function readBackDiffers(form: ReviewForm, setup: PiFormSetup, back: ReviewSplit): string[] {
+  const expected = (value: string) => tidyReviewText(reviewLines(value).join('\n'))
+  return setup.fields.filter((field) => {
+    if (field.id === 'move') {
+      const [first = '', ...rest] = reviewLines(form.moveReason)
+      const reason = [first.replace(/^- /, ''), tidyReviewText(rest.join('\n'))].filter(Boolean).join('\n')
+      return back.moveValue !== form.move || (back.moveRest ?? '') !== reason || back.movePi !== piText(form.movePi)
+    }
+    const value = fieldValue(form, field.id)
+    const read = field.id === 'learnings' || field.id === 'struggles' || field.id === 'remarks' || field.id === 'review' ? back[field.id] ?? '' : back.extra?.[field.id] ?? ''
+    return read !== (field.type === 'dropdown' ? value.trim() : expected(value))
+  }).map((field) => field.id === 'move' ? 'Move to next PI' : field.id === 'review' && field.label === 'Advise to discuss the Feature during the Review meeting?' ? 'Review meeting' : field.label)
+}
+
+// PIR-21: the read-back check of a form setup — a sample review with every field filled (each choice with each of its
+// options in turn) is built, sent as Azure DevOps stores it and split again with the setup's headings: every field must
+// come back as written. Together with setupProblems (the shape, empty, duplicate and colliding headings, the limits).
+export function formSetupProblems(setup: PiFormSetup): string[] {
+  const shape = setupProblems(setup)
+  if (shape.length) return shape
+  const rounds = Math.max(1, ...setup.fields.map((field) => field.type === 'dropdown' ? field.options.length : 1))
+  const differs = new Set<string>()
+  for (let round = 0; round < rounds; round += 1) {
+    let form: ReviewForm = { ...emptyReviewForm('PI 26.5', setup), move: round % 2 ? 'Yes' : 'No', moveReason: round % 2 ? 'sample reason\n- second point' : '' }
+    for (const [index, field] of setup.fields.entries()) {
+      if (field.id === 'move') continue
+      form = withFieldValue(form, field.id, field.type === 'dropdown' ? field.options[round % field.options.length] : `Sample answer ${index + 1}\n- sample point ${index + 1}`)
+    }
+    for (const field of readBackDiffers(form, setup, readBackReview(buildReviewComment(form, setup), setup))) differs.add(field)
+  }
+  return differs.size ? [`A review written with this form would not be read back as written: ${[...differs].join(', ')}. A heading probably contains or looks like another field's heading; change it.`] : []
 }
 
 // PIR-13: the form prefilled from the Feature's latest review comment split by its headings (a correction starts from
 // what was posted); Partly (from an older comment) is not offered, so Move starts at No (the caller says so). Otherwise
 // the empty form (Move No).
-export function reviewFormFrom(split: ReviewSplit | undefined, movePi: string): ReviewForm {
-  if (!split || split.from !== 'Headings') return emptyReviewForm(movePi)
-  return {
-    learnings: split.learnings ?? '', struggles: split.struggles ?? '',
-    move: split.moveValue === 'Yes' ? 'Yes' : 'No',
-    moveReason: split.moveValue ? split.moveRest ?? '' : split.move ?? '',
-    movePi: split.movePi ?? movePi, mode: split.reviewMode ?? '', remarks: split.remarks ?? '',
+// PIR-19, PIR-20: only the fields of the form setup in use; a choice takes the answer written when it is one of its
+// options (letter case ignored; the advice also by its normalized value), else its default.
+export function reviewFormFrom(split: ReviewSplit | undefined, movePi: string, setup: PiFormSetup = builtInFormSetup()): ReviewForm {
+  const empty = emptyReviewForm(movePi, setup)
+  if (!split || split.from !== 'Headings') return empty
+  const option = (field: PiFormField, ...written: (string | undefined)[]) => { for (const text of written) { const found = field.options.find((entry) => entry.toLowerCase() === (text ?? '').trim().toLowerCase()); if (found) return found } return field.defaultValue }
+  let form: ReviewForm = { ...empty, move: split.moveValue === 'Yes' ? 'Yes' : 'No', moveReason: split.moveValue ? split.moveRest ?? '' : split.move ?? '', movePi: split.movePi ?? movePi }
+  for (const field of setup.fields) {
+    if (field.id === 'move') continue
+    const written = field.id === 'learnings' || field.id === 'struggles' || field.id === 'remarks' || field.id === 'review' ? split[field.id] : split.extra?.[field.id]
+    form = withFieldValue(form, field.id, field.type === 'dropdown' ? option(field, written, field.id === 'review' ? split.reviewMode : undefined) : written ?? '')
   }
+  return form
 }
 
 // PIR-13: post the review as a new comment on the Feature (the add-comment write, with the Feature's Assigned To email
@@ -142,12 +215,12 @@ export async function readDiscussionInto(config: AzureConfig, pat: string, item:
 export { piPathOf as featurePi } from './myWork.ts'
 
 // PIR-17: my latest review — the newest comment written by me (author = my name, ignoring case) split by headings.
-export function myReviewOf(comments: WorkItemComment[], name: string | undefined): { comment: WorkItemComment; split: ReviewSplit } | undefined {
+export function myReviewOf(comments: WorkItemComment[], name: string | undefined, setup?: PiFormSetup): { comment: WorkItemComment; split: ReviewSplit } | undefined {
   const me = name?.trim().toLowerCase()
   if (!me) return undefined
   for (const comment of comments) { // newest first
     if (comment.author.trim().toLowerCase() !== me) continue
-    const split = reviewSplit(comment.text)
+    const split = reviewSplit(comment.text, setup)
     if (split.from === 'Headings') return { comment, split }
   }
   return undefined
