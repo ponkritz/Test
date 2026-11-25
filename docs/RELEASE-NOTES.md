@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v11.1.0 — 2026-11-25
+
+**Added**
+- **Start and Target dates for DP bulk Features** — DP Create Features sets each Feature's Start date from the DRPE Date (RPE) and its Target date from the DDT Date (DT), or from the DP date columns mapped in Admin → Stream options → Bulk creation Epics → DP bulk creation dates (shared, saved straight to Git); the pop-up shows the dates per release, creates a release without a date without it (named on the row) and skips one whose Start date is after its Target date (DPF-13, DPF-14, DPF-15).
+- **Optional month Tasks from the Start date in DP bulk creation** — a tick box, not ticked by default, "Create Time Writing month Tasks from the Start date to the Target date": unticked one Task for the current month, as before; ticked one Task per month from the Start date's month to the Target date's month (a Start date in an earlier month, or none, starts at the current month and the row says so), with the months per release and the total shown before Create (DPF-16).
+
+**Changed**
+- **Full-size bulk pop-ups** — the DP and IOCC Create Features pop-ups fill the window with a small margin, the page dimmed behind; only the list scrolls, the title and buttons stay in view; the whole screen on a phone (UI-30, UI-STANDARDS §4).
+
+DF-370, DF-371, DF-372, DF-373, SM-220, LIM-140, LIM-141; TC-DPF-12…TC-DPF-16, TC-UI-26.
+
+PR #433.
+
 ## v11.0.0 — 2026-11-25
 
 **Removed**
