@@ -2,6 +2,12 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v10.31.0 — 2026-11-25
+
+- **PI Review reads the team's two review formats** (PIR-12). "Learnings : / Struggles :" and "Learnings of the Feature / Struggles of the Feature" are split, with sub-points as bullets, numbers or one per line. The question "Whether the feature needs to be shifted to PI 26.4" is the Move heading for any PI number, and its answer (next line, after a colon or dash, or after a space when it starts with Yes / No / Partly) is shown with the PI, e.g. "Yes — two stories left · to PI 26.4".
+
+PR #412.
+
 ## v10.30.0 — 2026-11-25
 
 **Added**
