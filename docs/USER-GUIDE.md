@@ -883,7 +883,8 @@ The row under the search box groups and filters the table.
 - A **Multi-select** row appears under **each** of its options, so the counts of one level can add up to more than the rows. It is still one row: the count, the selection and Export hold it once.
 - Dates and amounts are grouped as shown, so "1,200.00 EUR" and "1,200.00 USD" are two groups. The ID and Key are not offered in Group by (one group per row) but can be filtered.
 - While a filter is set, a line says how many rows match and on which columns, also a column you have hidden. **Clear column filters** removes them; **Hide filters** too.
-- **Export** writes the rows that match the search and filters, in the order of the groups — also rows in a closed group. A grouped-by column is in the file even when it is hidden.
+- **Export** writes the rows you see, in the order of the groups: rows in a **closed group are left out**, and Export says so ("Exports the 4 rows shown (3 rows in closed groups left out)"). Open the group to include them. A grouped-by column is in the file even when it is hidden.
+- The drawer's **‹ ›** (Previous / Next) — also after **Edit** — and **Select every row shown** work on the rows you see as well; the row count above the table still counts every matching row.
 - Your grouping and filters are part of **your own view** and kept in your browser. Which groups are open is for this visit only.
 - The Tool Owner can save the grouping and filters **for everyone** (see [Save view for everyone](#save-view-for-everyone)), with **Start collapsed** if the page should open with only the outermost groups.
 

@@ -13,7 +13,7 @@ import { downloadCsv, downloadXlsx } from '../download'
 import { writeXlsx } from '../xlsx'
 import { Info, Modal } from './ui'
 import { StickyScrollbar } from './StickyScrollbar'
-import { activeFilters, canCollapseAll, canExpandAll, filterTableRows, groupedOrder, groupKeys, groupLines, groupTree, isGroupOpen, maxGroupLevels, toggleGroup, type GroupState, type ShownValue } from '../tableGroups'
+import { activeFilters, canCollapseAll, canExpandAll, filterTableRows, groupedOrder, groupKeys, groupLines, groupTree, isGroupOpen, maxGroupLevels, toggleGroup, visibleRows, type GroupState, type ShownValue } from '../tableGroups'
 
 // The one table of the app (UI-07…12). Every table is built on it and follows the design default (Settings → Table
 // defaults): resizable columns, columns moved by dragging a heading or with ↑ ↓ in the Columns list, columns ticked on
@@ -98,9 +98,12 @@ export interface DataTableProps<T> {
   // UI-25…UI-28: Group by, Expand all / Collapse all and Filter by column for this table (OND-132: the On-Demand Table
   // pages). Another table gets them with this one prop.
   groupFilter?: boolean
+  // UI-29: kept up to date with the rows actually visible (in the order shown, closed groups left out), for an action
+  // outside the row click (e.g. a row's Edit button) that needs Previous / Next in that order.
+  shownRef?: { current: T[] }
 }
 
-export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName, toolbar, status, limit, defaultSort, sort: controlledSort, onSort, rowClassName, empty, footer, className = '', caption, expand, group, totals, subRows, onRowOpen, rowLabel, selection, groupFilter = false }: DataTableProps<T>) {
+export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName, toolbar, status, limit, defaultSort, sort: controlledSort, onSort, rowClassName, empty, footer, className = '', caption, expand, group, totals, subRows, onRowOpen, rowLabel, selection, groupFilter = false, shownRef }: DataTableProps<T>) {
   const defaults = useTableDefaults()
   // UI-20…UI-23: the viewer's own view (this browser), else the view for everyone (shared views defaults in Git), else
   // the table's built-in one.
@@ -164,21 +167,26 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
   // eslint-disable-next-line react-hooks/exhaustive-deps -- grouped by the level ids; shownOf reads the columns
   const groups = useMemo(() => levels.length ? groupTree(filtered, levels, shownOf) : null, [filtered, levels.join('\n'), ownColumns])
   const allGroupKeys = useMemo(() => groups ? groupKeys(groups) : [], [groups])
-  // Every row left, once, in the order shown (by group when grouped): selection, Previous / Next, Export, the count.
+  // Every row left, once, in the order shown (by group when grouped): the count and paging.
   const shownRows = useMemo(() => groups ? groupedOrder(groups) : filtered, [groups, filtered])
   // UI-27: which groups are open, for this visit — starting open, or closed with "Start collapsed"; a new grouping (or
   // Reset) starts again.
   const startClosed = Boolean(layout.startCollapsed)
   const groupSig = JSON.stringify([levels, startClosed])
   const [openGroups, setOpenGroups] = useState<{ sig: string; state: GroupState }>({ sig: groupSig, state: { closed: startClosed, flipped: [] } })
-  const groupState: GroupState = openGroups.sig === groupSig ? openGroups.state : { closed: startClosed, flipped: [] }
+  const groupState: GroupState = useMemo(() => openGroups.sig === groupSig ? openGroups.state : { closed: startClosed, flipped: [] }, [openGroups, groupSig, startClosed])
   const setGroupState = (state: GroupState) => setOpenGroups({ sig: groupSig, state })
+  // UI-29: the rows actually visible — those in a closed group left out — for Export, "Select every row shown" and
+  // Previous / Next; `closedCount` rows match the search and filters but sit in closed groups.
+  const visible = useMemo(() => groups ? visibleRows(groups, (key) => isGroupOpen(groupState, key)) : shownRows, [groups, groupState, shownRows])
+  const closedCount = shownRows.length - visible.length
+  useEffect(() => { if (shownRef) shownRef.current = visible })
   const [filterRow, setFilterRow] = useState(false)
   const [savingView, setSavingView] = useState<{ collapsed: boolean } | null>(null)
   const setFilter = (id: string, text: string) => { const next = { ...filters }; if (text.trim()) next[id] = text; else delete next[id]; setLayout({ filters: next }) }
   const regroup = (next: string[]) => setLayout({ groupBy: next })
 
-  const shownKeys = selection ? shownRows.map(keyOf) : []
+  const shownKeys = selection ? visible.map(keyOf) : []
   const allTicked = Boolean(shownKeys.length) && shownKeys.every((key) => selection!.selected.includes(key))
   const columns: DataColumn<T>[] = selection ? [{ id: '@select', label: 'Select', fixed: true, sortable: false, export: false,
     heading: <input type="checkbox" aria-label={allTicked ? 'Clear the selection of every row shown' : 'Select every row shown'} checked={allTicked} disabled={!shownKeys.length} onChange={() => selection.onChange(allTicked ? selection.selected.filter((key) => !shownKeys.includes(key)) : [...new Set([...selection.selected, ...shownKeys])])} />,
@@ -215,8 +223,8 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
     const key = rowKey(row, index), detail = expand?.(row)
     const opens = onRowOpen ? {
       tabIndex: 0, 'data-row-key': key, 'aria-label': rowLabel?.(row),
-      onClick: (event: ReactMouseEvent) => { if (!(event.target instanceof Element) || !event.target.closest('button, a, input, select, textarea, label')) onRowOpen(row, shownRows) },
-      onKeyDown: (event: ReactKeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) { event.preventDefault(); onRowOpen(row, shownRows) } },
+      onClick: (event: ReactMouseEvent) => { if (!(event.target instanceof Element) || !event.target.closest('button, a, input, select, textarea, label')) onRowOpen(row, visible) },
+      onKeyDown: (event: ReactKeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) { event.preventDefault(); onRowOpen(row, visible) } },
     } : {}
     return [<tr key={`${prefix}${key}`} className={[rowClassName?.(row), onRowOpen ? 'data-table-row-open' : ''].filter(Boolean).join(' ') || undefined} {...opens}>{shownColumns.map((column) => {
       const value = valueOf(column, row)
@@ -234,7 +242,7 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
   }) : []
   // UI-25: a grouped-by column is exported even while hidden, so that the file shows the grouping; no extra columns.
   const exported = [...fixed, ...ordered].filter((column) => column.value && (column.export === 'always' || (column.export !== false && (shownColumns.includes(column) || levels.includes(column.id)))))
-  const exportRows = () => [...shownRows.map((row) => exported.map((column) => column.exportValue ? column.exportValue(row) : valueOf(column, row))), ...(totals?.exportValues ? [totalsRow(exported.map((column) => column.id), totals.exportValues, totals.label ?? 'Total')] : [])]
+  const exportRows = () => [...visible.map((row) => exported.map((column) => column.exportValue ? column.exportValue(row) : valueOf(column, row))), ...(totals?.exportValues ? [totalsRow(exported.map((column) => column.id), totals.exportValues, totals.label ?? 'Total')] : [])]
   const note = useContext(ExportNoteContext)
   const runExport = (format: ExportFormat) => {
     setExporting(false)
@@ -244,6 +252,7 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
     if (format === 'csv') downloadCsv(`${note ? `${csvCell(note.line)}\r\n` : ''}${tableCsv(exported.map((column) => column.label), exportRows())}`, `${file}.csv`)
     else downloadXlsx(writeXlsx([{ name: exportName.slice(0, 31), rows: [...(note ? [[note.line]] : []), ...tableSheet(exported.map((column) => column.label), exportRows())] }], defaults.excelDateFormat), `${file}.xlsx`)
   }
+  const exportNote = closedCount ? `Exports the ${visible.length} row${visible.length === 1 ? '' : 's'} shown (${closedCount} row${closedCount === 1 ? '' : 's'} in closed groups left out)` : undefined
   // CON-94: export needs "Export tables".
   const can = useCan()
   const formats = exportName && can('data.export') ? defaults.exportFormats : []
@@ -265,9 +274,9 @@ export function DataTable<T>({ id, columns: ownColumns, rows, rowKey, exportName
         {defaults.densityToggle && <select className="data-table-density" aria-label="Row density" value={density} onChange={(event) => setLayout({ density: event.target.value as TableDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select>}
         {changed && <button type="button" className="text-button" title={everyone ? `Back to the view for everyone: its widths, order, columns, wrap, density and sort${groupFilter ? ', grouping and column filters' : ''}` : `Back to the table\u2019s default widths, order, columns, wrap, density and sort${groupFilter ? ', without grouping or column filters' : ''}`} onClick={() => { setOwn(undefined); setOpenGroups({ sig: '', state: { closed: false, flipped: [] } }) }}>Reset layout</button>}
         {formats.length > 0 && <span className="data-table-export" ref={menu}>
-          {formats.length === 1 ? <button type="button" className="ghost data-table-button" onClick={() => runExport(formats[0])}>Export {formats[0] === 'xlsx' ? 'Excel' : 'CSV'}</button>
-            : <button type="button" className="ghost data-table-button" aria-haspopup="menu" aria-expanded={exporting} onClick={() => setExporting(!exporting)}>Export ▾</button>}
-          {exporting && <span className="view-actions-menu" role="menu">{formats.map((format) => <button key={format} type="button" role="menuitem" onClick={() => runExport(format)}>{format === 'xlsx' ? 'Excel (.xlsx)' : 'CSV (.csv)'}</button>)}</span>}
+          {formats.length === 1 ? <button type="button" className="ghost data-table-button" title={exportNote} onClick={() => runExport(formats[0])}>Export {formats[0] === 'xlsx' ? 'Excel' : 'CSV'}</button>
+            : <button type="button" className="ghost data-table-button" aria-haspopup="menu" aria-expanded={exporting} title={exportNote} onClick={() => setExporting(!exporting)}>Export ▾</button>}
+          {exporting && <span className="view-actions-menu" role="menu">{exportNote && <span className="muted data-table-export-note" role="note">{exportNote}.</span>}{formats.map((format) => <button key={format} type="button" role="menuitem" onClick={() => runExport(format)}>{format === 'xlsx' ? 'Excel (.xlsx)' : 'CSV (.csv)'}</button>)}</span>}
         </span>}
       </span>
     </div>

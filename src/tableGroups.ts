@@ -83,3 +83,13 @@ export const isGroupOpen = (state: GroupState, key: string) => state.closed === 
 export const toggleGroup = (state: GroupState, key: string): GroupState => ({ ...state, flipped: state.flipped.includes(key) ? state.flipped.filter((entry) => entry !== key) : [...state.flipped, key] })
 export const canExpandAll = (state: GroupState, keys: string[]) => keys.some((key) => !isGroupOpen(state, key))
 export const canCollapseAll = (state: GroupState, keys: string[]) => keys.some((key) => isGroupOpen(state, key))
+
+// UI-29: the rows actually visible — every row once, in the order of the groups, under a group whose every level is
+// open (a Multi-select row is visible when any of its groups is open, and listed where it first shows). Export, "Select every row shown" and Previous /
+// Next in the row drawer act on these only; opening a group brings its rows back.
+export function visibleRows<T>(groups: TableGroup<T>[], isOpen: (key: string) => boolean): T[] {
+  const seen = new Set<T>(), out: T[] = []
+  const walk = (list: TableGroup<T>[]) => { for (const group of list) { if (!isOpen(group.key)) continue; if (group.children.length) walk(group.children); else for (const row of group.rows) if (!seen.has(row)) { seen.add(row); out.push(row) } } }
+  walk(groups)
+  return out
+}

@@ -1287,3 +1287,4 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 @media print{.data-table-group-bar,.data-table-filters{display:none}}
 /* CHT-78: a Pivot table's Rows and Columns in the chart editor — a line per field with ↑ ↓ ✕, then ＋ then by. */
 .pivot-fields{display:grid;gap:6px;border:0;padding:0;margin:0}.pivot-fields legend{font-weight:600;padding:0;margin-bottom:4px}.pivot-field{display:flex;align-items:center;gap:6px}.pivot-field select{flex:1;min-width:0}.pivot-fields>.text-button{justify-self:start}
+.data-table-export-note{display:block;max-width:240px;padding:4px 8px 6px;font-size:12px;line-height:1.35}

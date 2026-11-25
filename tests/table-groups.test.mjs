@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canCollapseAll, canExpandAll, compareGroupValues, filterTableRows, groupedOrder, groupKeys, groupLines, groupTree, isGroupOpen, matchesColumnFilter, shownValues, toggleGroup } from '../src/tableGroups.ts'
+import { canCollapseAll, canExpandAll, compareGroupValues, filterTableRows, groupedOrder, groupKeys, groupLines, groupTree, isGroupOpen, matchesColumnFilter, shownValues, toggleGroup, visibleRows } from '../src/tableGroups.ts'
 import { chooseTableView, fitTableView, parseTableView, readOwnView, shareableView, startOwnView, writeOwnView } from '../src/tableViews.ts'
 
 // Synthetic rows of an On-Demand Table page: State (Dropdown), Assignee (Text), Sites (Multi-select), Due (Date as shown).
@@ -140,4 +140,26 @@ test('UI-28: older views without grouping or filters keep working and take them 
   assert.deepEqual(fitted.groupBy, ['State'])
   assert.deepEqual(fitted.filters, { Sites: 'Berlin' })
   assert.equal(fitted.startCollapsed, true)
+})
+
+test('UI-29: Export, “Select every row shown” and Previous / Next take only the rows visible — rows in closed groups left out until opened (TC-UI-25)', () => {
+  const tree = groupTree(rows, ['State', 'Assignee'], valueOf)
+  const ids = (list) => list.map((row) => row.id)
+  const visible = (state) => ids(visibleRows(tree, (key) => isGroupOpen(state, key)))
+  const open = { closed: false, flipped: [] }, closed = { closed: true, flipped: [] }
+  assert.deepEqual(visible(open), ids(groupedOrder(tree)), 'all open: every row, in the order of the groups')
+  assert.deepEqual(visible(closed), [], 'Collapse all / Start collapsed: no row visible')
+  // State: Active opened, its sub-groups still closed: still nothing; Rita Gomez opened under it: her row.
+  const active = toggleGroup(closed, tree[0].key)
+  assert.deepEqual(visible(active), [])
+  const rita = toggleGroup(active, tree[0].children[1].key)
+  assert.deepEqual(visible(rita), ['r1'])
+  // A sub-group open under a closed parent stays hidden.
+  assert.deepEqual(visible(toggleGroup(rita, tree[0].key)), [], 'the parent closed again hides it')
+  // One group closed among open ones: its rows only are left out (6 rows, State: Active's 3 closed → 3).
+  assert.deepEqual(visible(toggleGroup(open, tree[0].key)), ['r6', 'r2', 'r4'])
+  // A Multi-select row is visible while any of its groups is open, once, where it first shows.
+  const sites = groupTree(rows, ['Sites'], valueOf)
+  const berlinClosed = toggleGroup(open, sites[0].key)
+  assert.deepEqual(ids(visibleRows(sites, (key) => isGroupOpen(berlinClosed, key))), ['r1', 'r2', 'r4', 'r6', 'r3'], 'Berlin closed: r1 still under Leeds, r6 under Lyon; r5 (Berlin only) left out')
 })
