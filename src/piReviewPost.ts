@@ -3,7 +3,7 @@
 // new comment in the Feature's Discussion, written with the person's own PAT to dev.azure.com only.
 import { isCloudBase, collectionUrl, requestAzure, type AzureConfig, type AzureTransport } from './azureClient.ts'
 import { writeBlockedReason, type Action } from './access.ts'
-import { laterPi, piName, piPathOf, type Me } from './myWork.ts'
+import { piName, piPathOf, type Me } from './myWork.ts'
 import { formatDate } from './format.ts'
 import { commentText } from './workItemEdit.ts'
 import { readDiscussion } from './azureDevOps.ts'
@@ -29,24 +29,52 @@ export function emptyReviewForm(movePi = '', setup: PiFormSetup = builtInFormSet
 }
 const builtIn = new Set(['learnings', 'struggles', 'move', 'review', 'remarks'])
 
-// PIR-13: the PI written in the Move question — "PI" and its number ("PI 26.5", "PI 2026.5").
-const piPattern = /^pi[ \t]*(\d+(?:\.\d+)*)$/i
+// PIR-13: the PI written in the Move question — "PI" and its number ("PI 26.5", "PI 2026.5"); PIR-25: also read from
+// "PI26.4", "PI-26.4" and "Program Increment 26.4"; '' when the name has no PI number ("PI Planning").
+const piPattern = /^(?:pi|program[ \t]*increment)[ \t_-]*(\d+(?:\.\d+)*)$/i
 export const piText = (name: string) => { const match = piPattern.exec(name.trim()); return match ? `PI ${match[1]}` : '' }
-// PIR-13: the PI after the reviewed one — the next later PI in the PI list (by laterPi), else the reviewed PI's last
-// number increased by one ("PI 26.4" → "PI 26.5"); as "PI <number>", '' when the reviewed PI has no number.
-export function nextPi(reviewed: string, options: readonly string[]): string {
-  const later = options.filter((pi) => laterPi(pi, reviewed) && piText(piName(pi))).reduce<string | undefined>((next, pi) => !next || laterPi(next, pi) ? pi : next, undefined)
-  if (later) return piText(piName(later))
-  const name = piText(piName(reviewed))
-  return name ? name.replace(/(\d+)$/, (last) => String(Number(last) + 1)) : ''
+// PIR-25: a PI's number parts ("Q\\PI 26.4" → [26, 4]); null without a PI number. Compared with a two-digit year read
+// as 20xx, so PI 26.4 and PI 2026.4 are the same PI and PI 26.4 comes before PI 2027.1.
+const piParts = (path: string) => { const text = piText(piName(path)); return text ? text.slice(3).split('.').map(Number) : null }
+const comparable = (parts: readonly number[]) => parts.length >= 2 && parts[0] < 100 ? [parts[0] + 2000, ...parts.slice(1)] : [...parts]
+export function comparePiNumbers(a: readonly number[], b: readonly number[]): number {
+  const x = comparable(a), y = comparable(b)
+  for (let index = 0; index < Math.max(x.length, y.length); index++) { const diff = (x[index] ?? -1) - (y[index] ?? -1); if (diff) return diff }
+  return 0
+}
+// PIR-25: the PIs in a year — the highest last number of any known "year.number" PI, at least 4 (PI x.1…x.4).
+export const PIS_PER_YEAR_MIN = 4
+export function pisPerYear(known: readonly string[]): number {
+  return known.map(piParts).reduce((most, parts) => parts?.length === 2 ? Math.max(most, parts[1]) : most, PIS_PER_YEAR_MIN)
+}
+// PIR-13, PIR-25: the PI after the reviewed one by number — the next later PI in the PI list (by its numbers), else
+// worked out from the reviewed PI's number: the last PI of its year (its last number the highest of pisPerYear) rolls
+// over to the next year's first, keeping the year's digits ("PI 26.4" → "PI 27.1", "PI 2026.4" → "PI 2027.1"); any
+// other adds one ("PI 26.2" → "PI 26.3"); as "PI <number>", '' when the reviewed PI has no number.
+export function nextPi(reviewed: string, options: readonly string[]): string { return nextByNumber(reviewed, options).pi }
+function nextByNumber(reviewed: string, options: readonly string[]): { pi: string; how: 'list' | 'rollover' | 'plus-one' | '' } {
+  const own = piParts(reviewed)
+  if (!own) return { pi: '', how: '' }
+  const later = options.map((pi) => ({ pi, parts: piParts(pi) })).filter((entry): entry is { pi: string; parts: number[] } => entry.parts !== null && comparePiNumbers(entry.parts, own) > 0)
+    .sort((a, b) => comparePiNumbers(a.parts, b.parts))[0]
+  if (later) return { pi: piText(piName(later.pi)), how: 'list' }
+  const last = own.length - 1
+  if (own.length === 2 && own[1] >= pisPerYear([...options, reviewed])) return { pi: `PI ${String(own[0] + 1).padStart(String(own[0]).length, '0')}.1`, how: 'rollover' }
+  return { pi: `PI ${own.map((part, index) => index === last ? part + 1 : part).join('.')}`, how: 'plus-one' }
 }
 
-// PIR-25: the PI after the reviewed one from the Azure DevOps iteration tree by its dates. A PI's dates are those of
-// its PI-level iteration (the path ending at the PI segment, ATM-30), else the span of the dated iterations under it
-// (teams often date only the Sprints). The next PI is the dated PI with a PI number that starts earliest after the
-// reviewed PI's start — the first one starting after the reviewed PI ends, or, when the dates overlap, the overlapping
-// one. Without the iterations, without the reviewed PI's dates or without a later dated PI, the number order of nextPi
-// applies. `note` says which source was used, for the form.
+// PIR-25: the PI after the reviewed one from the Azure DevOps iteration tree (every PI in it, future ones too), in
+// this order:
+//  1. by the dates — a PI's dates are those of its PI-level iteration (the path ending at the PI segment, ATM-30), else
+//     the span of the dated iterations under it (teams often date only the Sprints). The period is the reviewed PI's
+//     own; when it has no dates, the period of the PI whose dates cover today (UTC; one PI only), said so. The next PI
+//     is the dated PI with a PI number that starts earliest after that period's start — the first one starting after it
+//     ends, or, when the dates overlap, the overlapping one. With today's PI the next PI must also be later than the
+//     reviewed PI by number, and is today's PI itself when that is later (a late review of an older PI);
+//  2. by the PIs in the tree without dates — the next later PI by number among the PIs of the tree and the PI list;
+//  3. by the PI number alone (nextByNumber): the last PI of a year rolls over to the next year's first.
+// Without the iterations, steps 2–3 use the PI list. `note` says which source was used, for the form; PI names without
+// a PI number ("PI Planning") are never chosen, and the note names them when they could have mattered.
 export type NextPi = { pi: string; source: 'dates' | 'number'; note: string }
 type PiSpan = { path: string; start: string; finish: string }
 const isoDay = (value: string | undefined) => { const day = value?.slice(0, 10) ?? ''; return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '' }
@@ -62,23 +90,55 @@ export function piDates(iterations: readonly AzureIteration[]): Map<string, PiSp
   }
   return new Map([...span, ...own])
 }
-export function nextPiOf(reviewed: string, iterations: readonly AzureIteration[] | null | undefined, options: readonly string[], { reading = false }: { reading?: boolean } = {}): NextPi {
-  const byNumber = (why: string): NextPi => { const pi = nextPi(reviewed, options); return { pi, source: 'number', note: pi ? `${why}: worked out from the PI number.` : '' } }
+const leftOut = (names: readonly string[]) => names.length ? ` Left out (no PI number in the name): ${[...new Set(names)].join(', ')}.` : ''
+const startsAfter = (next: PiSpan, period: PiSpan, label: string) => `${piName(next.path)} starts ${formatDate(next.start)}, ${next.start <= period.finish ? `while ${label} runs until ${formatDate(period.finish)} (the PIs overlap)` : `after ${label} ends ${formatDate(period.finish)}`}`
+export function nextPiOf(reviewed: string, iterations: readonly AzureIteration[] | null | undefined, options: readonly string[], { reading = false, today = new Date() }: { reading?: boolean; today?: Date } = {}): NextPi {
   if (!reviewed) return { pi: '', source: 'number', note: '' }
-  const label = piName(reviewed), name = label.toLowerCase(), path = reviewed.toLowerCase()
-  if (!iterations) return byNumber(reading ? 'The PI dates are still being read from Azure DevOps' : 'The PI dates are not read from Azure DevOps here')
-  const dates = piDates(iterations)
-  const own = dates.get(path) ?? [...dates.values()].find((entry) => piName(entry.path).toLowerCase() === name)
-  if (!own) {
-    const inTree = iterations.some((iteration) => piPathOf(iteration.path)?.toLowerCase() === path || piName(piPathOf(iteration.path) ?? '').toLowerCase() === name)
-    return byNumber(inTree ? `${label} has no dates in Azure DevOps` : `${label} is not in the Azure DevOps iteration tree`)
+  const label = piName(reviewed), name = label.toLowerCase(), path = reviewed.toLowerCase(), parts = piParts(reviewed)
+  const samePiAs = (other: string) => { const theirs = piParts(other); return other.toLowerCase() === path || piName(other).toLowerCase() === name || Boolean(parts && theirs && comparePiNumbers(theirs, parts) === 0) }
+  const treePis = iterations ? [...new Map(iterations.map((iteration) => piPathOf(iteration.path)).filter((pi): pi is string => Boolean(pi)).map((pi) => [pi.toLowerCase(), pi])).values()] : []
+  const dates = iterations ? [...piDates(iterations).values()] : []
+  const byNumber = (why: string): NextPi => {
+    const known = [...treePis, ...options]
+    const next = nextByNumber(reviewed, known)
+    if (!next.pi) return { pi: '', source: 'number', note: '' }
+    const isNext = (pi: string) => piText(piName(pi)).toLowerCase() === next.pi.toLowerCase()
+    const inTree = next.how === 'list' && treePis.some(isNext)
+    const how = inTree ? `${next.pi} is the next PI by number in the Azure DevOps iteration tree${dates.some((entry) => isNext(entry.path)) ? '' : ' (it has no dates)'}`
+      : next.how === 'list' ? `${next.pi} is the next PI by number in the PI list`
+        : next.how === 'rollover' ? `worked out from the PI number — ${piText(label)} is the last PI of its year (${pisPerYear([...known, reviewed])} a year), so the next is ${next.pi}`
+          : 'worked out from the PI number'
+    return { pi: next.pi, source: 'number', note: `${why}: ${how}.${leftOut(known.filter((pi) => !piText(piName(pi))).map(piName))}` }
   }
-  const later = [...dates.values()].filter((entry) => piName(entry.path).toLowerCase() !== name && piText(piName(entry.path)) && entry.start > own.start)
-    .sort((a, b) => a.start.localeCompare(b.start) || (laterPi(a.path, b.path) ? 1 : laterPi(b.path, a.path) ? -1 : 0))
-  const next = later[0]
-  if (!next) return byNumber('No later PI with dates in Azure DevOps')
-  const overlap = next.start <= own.finish
-  return { pi: piText(piName(next.path)), source: 'dates', note: `From Azure DevOps iteration dates: ${piName(next.path)} starts ${formatDate(next.start)}, ${overlap ? `while ${label} runs until ${formatDate(own.finish)} (the PIs overlap)` : `after ${label} ends ${formatDate(own.finish)}`}.` }
+  if (!iterations) return byNumber(reading ? 'The PI dates are still being read from Azure DevOps' : 'The PI dates are not read from Azure DevOps here')
+  const numbered = dates.filter((entry) => piText(piName(entry.path)))
+  const own = dates.find((entry) => entry.path.toLowerCase() === path) ?? dates.find((entry) => samePiAs(entry.path))
+  const day = today.toISOString().slice(0, 10)
+  let why = 'No later PI has dates in Azure DevOps', current: PiSpan | undefined
+  if (!own) {
+    const covering = numbered.filter((entry) => entry.start <= day && day <= entry.finish)
+    current = covering.length === 1 ? covering[0] : undefined
+    why = treePis.some(samePiAs) ? `${label} has no dates in Azure DevOps (neither its own nor its Sprints’)` : `${label} is not in the Azure DevOps iteration tree`
+    if (!current) why += covering.length > 1 ? `, and ${covering.length} PIs are current today` : ', and no PI has dates covering today'
+  }
+  const period = own ?? current
+  if (period) {
+    const later = numbered.filter((entry) => {
+      if (samePiAs(entry.path)) return false
+      if (!current || !parts) return entry !== current && entry.start > period.start
+      return comparePiNumbers(piParts(entry.path)!, parts) > 0 && (entry === current || entry.start > period.start)
+    }).sort((a, b) => a.start.localeCompare(b.start) || comparePiNumbers(piParts(a.path)!, piParts(b.path)!))
+    const next = later[0]
+    if (next) {
+      const skipped = leftOut(dates.filter((entry) => !piText(piName(entry.path)) && entry.start > period.start && entry.start <= next.start).map((entry) => piName(entry.path)))
+      if (!current) return { pi: piText(piName(next.path)), source: 'dates', note: `From Azure DevOps iteration dates: ${startsAfter(next, period, label)}.${skipped}` }
+      const currentName = piName(current.path)
+      const where = `${why}; today (${formatDate(day)}) falls in ${currentName} (${formatDate(current.start)} – ${formatDate(current.finish)})`
+      return { pi: piText(piName(next.path)), source: 'dates', note: `From Azure DevOps iteration dates, by today’s PI: ${where}${next === current ? `, which comes after ${label}` : `, and ${startsAfter(next, current, currentName)}`}.${skipped}` }
+    }
+    if (current) why += `; today (${formatDate(day)}) falls in ${piName(current.path)}, and no later PI has dates`
+  }
+  return byNumber(why)
 }
 
 // PIR-24: who may show another person's Features in My PI Review — a lead with "PI Review: post the review of a

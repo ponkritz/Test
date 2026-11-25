@@ -6,7 +6,7 @@ import { buildReviewComment } from '../src/piReviewPost.ts'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 
 // PI Review, the review form (PIR-13…PIR-18, PIR-24, PIR-25, CON-113; TC-PIR-16 UAT, TC-PIR-17, TC-PIR-18 UAT,
-// TC-PIR-25, TC-PIR-26 UAT): against a fake
+// TC-PIR-25, TC-PIR-26 UAT, TC-PIR-32): against a fake
 // dev.azure.com that also accepts a comment POST (recording its body, then listing it in the Discussion) and the Close
 // PATCH. Rita Gomez is a Team Member and the assignee of Features 201 and 205; Feature 202 is Ben Okafor's; Lena Berg
 // is a People Manager (a lead) with no Feature of her own. Synthetic data only; every step waits for what it needs,
@@ -228,6 +228,9 @@ test('TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the
   const review = dialog.getByRole('region', { name: 'PI review' })
   await review.waitFor()
   assert.equal(await review.getByRole('radio', { name: 'No', exact: true }).isChecked(), true, 'Move to next PI pre-selected No')
+  // PIR-25: the iterations are read when the review is asked; until then Moves to comes from the PI number (PI 2027.1
+  // after PI 2026.4), then from the tree (its undated PI 2026.5).
+  await review.locator('.pir-next-pi', { hasText: 'PI 2026.5 is the next PI by number in the Azure DevOps iteration tree (it has no dates)' }).waitFor()
   assert.equal(await review.getByRole('textbox', { name: /^Moves to/ }).inputValue(), 'PI 2026.5')
   assert.equal(await review.getByRole('checkbox', { name: 'No learnings or struggles' }).isChecked(), false, 'PIR-27: in the Close pop-up too, not ticked')
   const go = dialog.getByRole('button', { name: /^Post review and close 1 item$/ })
@@ -287,6 +290,26 @@ test('TC-PIR-26: a lead chooses another person and a PI in My PI Review and sees
   await page.getByRole('heading', { name: 'My Features' }).waitFor()
   assert.equal(await page.getByLabel('PI', { exact: true }).inputValue(), 'Project\\PI 2026.4')
   assert.equal(await page.getByRole('button', { name: 'Reset filters' }).isDisabled(), true)
+  assert.deepEqual(state.posts, [], 'nothing posted')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// PIR-25 (TC-PIR-32; product owner, 25 Nov 2026: "The next PI is 27.1, not 26.5"): the iteration tree holds PI 2026.4
+// only (current by its Sprint) and a PI without a number; no later PI is known, so the PI number rolls the year over.
+const lastPiTree = () => node('', [node('PI 2026.4', [node('PI 2026.4\\Sprint 2', [], span('2000-01-01', '2099-12-31'))]), node('PI Planning')])
+test('TC-PIR-32: the last PI of the year — no later PI in Azure DevOps, the review form moves to PI 2027.1 and says why', async () => {
+  const { page, context, errors, state } = await open({ tree: lastPiTree(), ...(shots ? { width: 1440, height: 900, scale: 2 } : {}) })
+  await navigate(page, 'My PI Review')
+  await page.locator('.pir-filters .pill', { hasText: 'Current PI' }).waitFor()
+  await page.getByRole('button', { name: 'Write review of Feature 205' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review of Feature #205' })
+  await dialog.waitFor()
+  assert.equal(await dialog.getByRole('textbox', { name: /^Moves to/ }).inputValue(), 'PI 2027.1')
+  assert.equal(await text(dialog.locator('.pir-next-pi')), 'The next PI after PI 2026.4. No later PI has dates in Azure DevOps: worked out from the PI number — PI 2026.4 is the last PI of its year (4 a year), so the next is PI 2027.1. Left out (no PI number in the name): PI Planning. Change it if needed.')
+  if (shots) { mkdirSync(shots, { recursive: true }); await page.emulateMedia({ colorScheme: 'light' }); await page.screenshot({ path: `${shots}/review-form-next-pi-rollover-1440-light.png` }) }
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await dialog.waitFor({ state: 'detached' })
   assert.deepEqual(state.posts, [], 'nothing posted')
   assert.deepEqual(errors, [])
   await context.close()
