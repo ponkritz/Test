@@ -28,6 +28,8 @@ import { PublishDialog } from '../components/PublishDialog'
 import { ReplaceDialog } from '../components/ReplaceDialog'
 import { applyOnDemandReplace, distinctValues, onDemandReplaceCommit, onDemandReplacePlan, replaceError, replaceMessage, replaceableColumns } from '../replaceValues'
 import { prepareTable, useSchedules, viewerChoice } from '../publishRun'
+import { TemplateDialog, UploadDialog } from '../components/BulkUploadDialogs'
+import { applyUpload, uploadCommit, uploadResult, type UploadDone, type UploadPlan } from '../bulkUpload'
 
 // OND-03…OND-07 One On-Demand page (CoNQ, or one added under On-Demand): a work table in the shared DataTable — one
 // column per configured column, search, sort, the row count and Export. OND-27: a click on a row (or Enter / Space on it)
@@ -66,6 +68,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   const [publishing, setPublishing] = useState(false)
   // OND-100: the Replace… pop-up (a value of one column replaced in every row that holds it).
   const [replacing, setReplacing] = useState(false)
+  // OND-103…OND-108: the Download Excel template and Upload Excel pop-ups (bulk upload).
+  const [bulk, setBulk] = useState<'template' | 'upload' | null>(null)
   const schedule = useSchedules()[pageId]
   const block = useWriteBlock()
   // OND-07: what may be changed — the rights of the viewer's roles, a Git token that can save, no synthetic sample.
@@ -99,6 +103,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
   useEffect(() => { if (drawerRow) void refreshLocks() }, [drawerRow, refreshLocks])
   // OND-101: the row locks are read again when Replace… opens, so its preview skips the rows being edited now.
   useEffect(() => { if (replacing) void refreshLocks() }, [replacing, refreshLocks])
+  // OND-106: and when Upload Excel… opens, so its preview skips the rows being edited now.
+  useEffect(() => { if (bulk === 'upload') void refreshLocks() }, [bulk, refreshLocks])
   const [converting, setConverting] = useState(false)
   // OND-62: the suggestion to convert a large single-file page, dismissed per page and person in this browser.
   const hintKey = `${me}|${pageId}`
@@ -189,6 +195,18 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
     })
     setReplacing(false)
   }
+  // OND-103: the template — any viewer of a page with columns; not in Sample (made-up rows with real-looking IDs must
+  // never come back as updates). OND-107: Upload Excel… — the right to edit the page's rows, failing closed as Replace….
+  const templateReason = sample ? `Switch ${page.name} to Live to download its template: sample rows are made up.` : !page.columns.length ? 'The page has no columns yet.' : ''
+  const uploadReason = editRowsReason || (viewer.viewingAs ? 'Read only while viewing as someone else: nothing is saved. Exit View as to upload.' : '') || (!page.columns.length ? 'The page has no columns yet.' : '')
+  async function uploadNow(plan: UploadPlan, fileName: string) {
+    let done: Omit<UploadDone, 'page'> = { added: 0, updated: 0, locked: 0, missing: 0 }
+    await inBackground(`Bulk upload · ${page.name} · ${fileName}`, async () => {
+      const saved = await store.update(page.id, (base) => { const next = applyUpload(base, plan, { by: me, fileName, locked: lockedKeys }); done = next; return next.page }, uploadCommit(page, fileName, plan))
+      return { value: saved, text: resultText(saved, uploadResult(done, plan.errors.length)) }
+    })
+    setBulk(null)
+  }
   const canDelete = !gitReason && !sample && viewer.manager && !viewer.readOnly
   const hiddenCount = page.rows.filter(isRowHidden).length
   const visibleCount = page.rows.length - hiddenCount
@@ -248,6 +266,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
         { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
         { key: 'delete', label: 'Delete page…', danger: true, disabled: Boolean(removeReason), title: removeReason || undefined, onClick: () => setPageDialog('remove') },
       ]),
+      { key: 'template', label: 'Download Excel template…', disabled: Boolean(templateReason), title: templateReason || 'An Excel file of the page’s columns with drop-down lists and checks, to fill and upload', onClick: () => setBulk('template') },
+      { key: 'upload', label: 'Upload Excel…', disabled: Boolean(uploadReason), title: uploadReason || 'Add and update rows from the filled template, after a preview', onClick: () => setBulk('upload') },
       { key: 'replace', label: 'Replace…', disabled: Boolean(replaceReason), title: replaceReason || 'Replace a value of one column in every row that holds it', onClick: () => setReplacing(true) },
       { key: 'publish', label: 'Publish interactive HTML…', disabled: Boolean(publishReason), title: publishReason || undefined, onClick: () => setPublishing(true) },
       ...(showConvert ? [{ key: 'convert', label: 'Convert to row files…', disabled: Boolean(convertReason), title: convertReason || undefined, onClick: () => setConverting(true) }] : []),
@@ -303,6 +323,8 @@ export function OnDemandPage({ git, store, pageId, me, onOpen, kind = 'table-ins
       check={(id, find, to) => replaceError(page.columns.find((entry) => entry.id === id), find, to)}
       note={<p className="muted">Hidden rows are not changed. Each changed row gets an entry in its History; saved to Git at once{rowFiles ? ', every changed row file in one commit' : ''}.</p>}
       onReplace={replaceNow} onCancel={() => setReplacing(false)} />}
+    {bulk === 'template' && <TemplateDialog eyebrow={eyebrowOf(page)} page={page} shown={rows} onCancel={() => setBulk(null)} />}
+    {bulk === 'upload' && <UploadDialog eyebrow={eyebrowOf(page)} page={page} locked={lockedKeys} rowFiles={rowFiles} onSave={uploadNow} onCancel={() => setBulk(null)} />}
     {/* OND-91: Publish now cuts the rows with the publisher's Insights filter row as it is now. */}
     {publishing && (() => { const cut = { kind: 'table' as const, choice: viewerChoice(page.id, views) }; return <PublishDialog pageId={page.id} name={page.name} cut={cut} prepare={prepareTable(page, kind, cut, publisherName || me)} onClose={() => setPublishing(false)} /> })()}
     {converting && <ConvertDialog page={page} onCancel={() => setConverting(false)} onConvert={async () => {

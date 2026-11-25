@@ -1233,3 +1233,6 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .replace-form .modal-actions{align-items:center;flex-wrap:wrap}.replace-form .modal-actions .write-blocked{margin-right:auto}
 /* A destructive main action in a pop-up footer lines up with Cancel (UI-STANDARDS §4, §6). */
 .modal-actions .danger-button{margin-top:0}
+/* OND-105: the Upload Excel preview — narrow Line, Row ID and Result columns, error rows marked, the error line in body text. */
+.bulk-rows .bulk-col-line{width:64px}.bulk-rows .bulk-col-id{width:120px}.bulk-rows .bulk-col-result{width:100px}.bulk-rows td.num,.bulk-rows th.num{text-align:right}.bulk-rows tr.bulk-error td{color:var(--danger-text)}.bulk-preview .bulk-errors-line{font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bulk-template-form>p.muted{font-size:12px;margin:0}

@@ -872,7 +872,7 @@ Large pages can be converted to **row files** (see below). On such a page **Edit
 
 ### The page menu (⋯)
 
-The **⋯** next to the page's main action holds **Rename page…**, **Hide page**, **Delete page…** (Tool Owner), **Replace…**, **Convert to row files…** (Tool Owner), **Publish interactive HTML…** and **↻ Reload from Git**.
+The **⋯** next to the page's main action holds **Rename page…**, **Hide page**, **Delete page…** (Tool Owner), **Download Excel template…**, **Upload Excel…**, **Replace…**, **Convert to row files…** (Tool Owner), **Publish interactive HTML…** and **↻ Reload from Git**.
 
 ![The page menu of CoNQ](user-guide/images/page-menu.png)
 
@@ -886,6 +886,23 @@ When one person hands their work over to another — a QE leaves and their relea
 4. Check the preview — **"N rows will change"** and the first rows with the old and new value — and choose **Replace**.
 
 The change is saved to Git at once. On an On-Demand page each changed row gets an entry in its **History** ("Replaced “Alex Example” with “Sam Example” in QE") and the result is in **Background jobs**; hidden rows are not changed, and rows someone else is editing are skipped (the preview says how many). On QE Mapping every row of the tab is changed, also rows a search or filter hides; the commit names the change. Without the right to edit the page or QE Mapping, without Git storage that can save, with sample data, or while viewing as someone else, **Replace…** is greyed out with the reason.
+
+### Add and update many rows from Excel (bulk upload)
+
+To add or change many rows at once, fill the page's Excel template and upload it. Both are in the page's **⋯** menu on a Table or Table + Insights page (and CoNQ).
+
+1. Choose **⋯ → Download Excel template…**. Pick **With the N rows shown** (the rows the table shows now, each with its Row ID — to change them) or **Empty template** (only the header row — to add rows), then **Download template**.
+2. Open "{page} - upload template.xlsx" in Excel. The sheet has the page's columns in order; **Row ID** is the first column (grey) — **do not change it**: it finds the row to update. Required columns are highlighted. Click a header or cell to see what to fill.
+3. Fill the rows:
+   - **Change a value** in a row with a Row ID to update that row. An emptied cell clears the value.
+   - **Add a row** below without a Row ID to add a new row.
+   - **Dropdown** columns: pick a value from the list. **Multi-select** columns: pick one value, or type several separated by **;** (for example `Customer; Audit`). **Dates** as dates (2026-11-25), **numbers** as numbers, **Currency** as an amount with its code (`1200.50 EUR`).
+   - Delete rows you do not change, or leave them: unchanged rows are only counted.
+4. Save the file as .xlsx (or CSV) and choose **⋯ → Upload Excel…**, then the file.
+5. Check the preview: **"N added · N updated · N unchanged · N with errors"**, the columns that were ignored or are missing, and the first rows with what happens to each (rows with errors first, with the reason). **Download error report (CSV)** lists every row with an error.
+6. Choose **Save to Git**. Only the valid rows are saved; rows with errors are left out — fix them in the file and upload it again (rows already saved then count as unchanged).
+
+The result is in **Background jobs**, and each added or changed row's **History** says "Bulk upload from {file}". Rows someone else is editing are skipped and counted; a hidden row can be updated by its Row ID; a Row ID that is not on the page gives **Row not found**. An upload reads at most 10 MB and 5,000 rows and adds or updates up to 2,000 rows. Text starting with = + - or @ is saved with an apostrophe first, so it never runs as a formula. Without the right to edit the page's rows, without Git storage that can save, with sample data or while viewing as someone else, **Upload Excel…** is greyed out with the reason; in Sample the template is too.
 
 ### Convert to row files
 

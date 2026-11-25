@@ -1901,6 +1901,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-OND-98 Replace a value on an On-Demand Table page: preview, locked and hidden rows, History, Background jobs** — Req OND-100, OND-101, OND-102, OND-21 — **UAT** — L1 `replace-values.test.mjs` ("Replace: a cell matches as a whole, ignoring case and the spaces around it (TC-QEM-10, TC-OND-98)", "OND-100, OND-101: the On-Demand replace — locked rows skipped and counted, hidden rows left, a History entry per changed row (TC-OND-98)", "OND-100: Multi-select values are replaced one by one; Dropdown and Multi-select take only an option; Number, Currency and Date are not offered (TC-OND-98)", "OND-101: on a page of row files the replace writes every changed row file in one commit, applied to the rows as they are in Git (TC-OND-98)"); E2E `replace-values.e2e.mjs` ("TC-OND-98: on an On-Demand Table page, Replace… in the ⋯ menu replaces the QE in every row — preview, Replace, saved to Git with a History entry per row"); browser check (also on a 4x slower CPU): on a Table page with a QE column, ⋯ → **Replace…**, Column QE, Find "Alex Example (2 rows)", Replace with "Sam Example": "2 rows will change" with their IDs; **Replace** — Background jobs "Replace · {page} · QE": "Replaced “Alex Example” with “Sam Example” in QE: 2 rows"; each row's History shows the entry with the comment; a hidden row holding Alex Example is unchanged. On a page of row files, a second person editing one of the rows: the preview says "1 matching row is being edited by someone else and is skipped" and that row stays. In Sample, with View as, a read-only token or without "Edit On-Demand data", Replace… is greyed out with the reason as its tooltip; a Dropdown replaced with a value outside its options is refused with the reason.
 
+**TC-OND-99 Download the Excel template with data validation** — Req OND-103, OND-104 — **UAT** — L1 `bulk-upload.test.mjs` ("OND-104: writeXlsx writes data validations — inline list, range list, date, decimal, text length, input messages — in the schema order (TC-OND-99)", "OND-104: an inline list doubles quotes; an item with a comma, a line break or a list over 255 characters needs the range form (TC-OND-99)", "OND-103, OND-104: the template — one sheet named after the page, Row ID first, the columns in order, a validation per column, long lists on a hidden Lists sheet (TC-OND-99)"); E2E `bulk-upload.e2e.mjs` ("TC-OND-99: ⋯ → Download Excel template… gives the page’s columns with the rows shown, their Row IDs and data validation"); browser check (also on a 4x slower CPU): on a Table page with a Dropdown, a long Dropdown (30 options), a Multi-select, a Number and a Date column, ⋯ → **Download Excel template…**: "With the 3 rows shown" is preselected; **Download template** gives "{page} - upload template.xlsx"; opened in Excel (or LibreOffice Calc): one visible sheet named after the page, Row ID first (grey), the required column highlighted, the header kept in view; a Dropdown cell offers its options and refuses another value; the long Dropdown offers the options of the hidden Lists sheet; a Multi-select cell offers its options and accepts "A; B"; a Date cell refuses "tomorrow", a Number cell "many"; selecting a header or cell shows its input message. In Sample the item is greyed out with the reason.
+
+**TC-OND-100 Upload a filled template: preview, Save to Git, History** — Req OND-105, OND-106, OND-21 — **UAT** — L1 `bulk-upload.test.mjs` ("OND-105: the header row is matched by name ignoring case and spaces; unknown columns ignored, duplicates and missing required ones listed (TC-OND-100)", "OND-105: each cell is checked for its column — options in their spelling, Multi-select split at ;, numbers, dates, amounts, required, length (TC-OND-100)", "OND-105, OND-106: the plan — rows with a Row ID update, rows without are added, unchanged counted, a Row ID not found is an error, locked rows skipped, hidden rows updated (TC-OND-100)", "OND-106: the save — updates and adds applied to the page as it is in Git, a History entry “Bulk upload from {file}” per row, locked and deleted rows skipped (TC-OND-100)", "OND-106: on a page of row files every added and changed row file is written in one commit, the new rows with the next IDs (TC-OND-100)", "OND-105: a CSV file is read the same way (TC-OND-100)"); E2E `bulk-upload.e2e.mjs` ("TC-OND-100: ⋯ → Upload Excel… — 2 rows added, 1 updated, 1 unchanged, 1 with an error in the preview; Save to Git saves the valid rows with a History entry each"); browser check (also on a 4x slower CPU): fill the template — change a value of one row, add two rows without a Row ID, add one row with a value outside a Dropdown's list, add a column "Comment" — and ⋯ → **Upload Excel…**: the preview shows "2 added · 1 updated · 1 unchanged · 1 with errors", "Ignored column … “Comment”", the error row first with its reason, "Only the 3 valid rows are saved to Git"; **Download error report (CSV)** lists the error row; **Save to Git** — Background jobs "Bulk upload · {page} · {file}": "2 rows added, 1 row updated; 1 row with errors not saved"; the new rows have the next IDs and each changed row's History shows "Bulk upload from {file}". A Row ID changed to one that does not exist gives "Row not found"; on a page of row files a row someone else is editing is skipped and counted, and every changed row file is in one commit; a hidden row is updated by its ID.
+
+**TC-OND-101 Formula text in an uploaded file is stored as text** — Req OND-108 — L1 `bulk-upload.test.mjs` ("OND-108: text a spreadsheet would run as a formula is stored with an apostrophe first, as every CSV export does (TC-OND-101)"); browser check: a Text cell "=HYPERLINK(“http://example.com”;“x”)" and "@SUM(A1)" uploaded — the preview says "2 text values starting with =, +, - or @ are stored with an apostrophe first"; the saved rows show the text with the apostrophe and the table's Excel and CSV exports open as text in Excel; "-12.5" stays as it is.
+
+**TC-OND-102 Upload rights and limits** — Req OND-107 — L1 `bulk-upload.test.mjs` ("OND-107: the limits — 10 MB and .xlsx / .csv only before reading, 5,000 rows read, 2,000 added or updated, a page of at most 5,000 rows (TC-OND-102)"); browser check: a file of 11 MB is refused before it is read with the reason; an .xls file is refused ("Old .xls files cannot be read…"); a template with 2,001 new rows is refused whole ("2,001 rows would be added or updated; one upload changes at most 2,000…") and Save to Git stays disabled; in Sample, with View as, a read-only token, without Git storage or without "Edit On-Demand data", **Upload Excel…** is greyed out with the reason as its tooltip.
+
 ### 6.29 Custom streams
 
 **TC-STR-01 Built-in then custom streams everywhere; the longest name wins** — Req STR-02 — L1 `custom-streams.test.mjs` ("STR-02: allStreams — the built-in streams then the custom ones; a connection goes to the stream with the longest name (TC-STR-01)"); browser check as Tool Owner with a custom stream "Labeling" mapped and fetched: it is listed in the Stream mapping (Custom), under Release Details (in A–Z order, NAV-52), on the Home tile Release Details, in Pulse Check (Releases and Supported), in the Dashboard delivery counts, in Reports → Monthly pack setup (stream ticks) and in Release naming patterns; its view is not under Other views; a custom "DP Labels" connection is not DP's
@@ -2735,7 +2743,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-18 | TC-OND-15 |
 | OND-19 | TC-OND-16 |
 | OND-20 | TC-OND-16, TC-OND-17 |
-| OND-21 | TC-OND-16, TC-OND-17, TC-OND-98 |
+| OND-21 | TC-OND-16, TC-OND-17, TC-OND-98, TC-OND-100 |
 | OND-22 | TC-OND-16, TC-OND-18 |
 | OND-23 | TC-OND-16, TC-OND-18 |
 | OND-24 | TC-OND-19 |
@@ -2799,6 +2807,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | OND-100 | TC-OND-98 |
 | OND-101 | TC-OND-98 |
 | OND-102 | TC-OND-98 |
+| OND-103 | TC-OND-99 |
+| OND-104 | TC-OND-99 |
+| OND-105 | TC-OND-100 |
+| OND-106 | TC-OND-100 |
+| OND-107 | TC-OND-102 |
+| OND-108 | TC-OND-101 |
 | CON-103 | TC-OND-06, TC-OND-07, TC-OND-13 |
 | CON-104 | TC-CON-65 |
 | CON-105 | TC-CON-66 |
@@ -3015,7 +3029,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
-| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…98, TC-CHT-01…42, TC-CHT-50…59 |
+| UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…102, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…12 |
