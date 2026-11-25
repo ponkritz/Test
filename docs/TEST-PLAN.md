@@ -2244,7 +2244,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-05 The Discussion page token in both transports** — Req DSK-11, PIR-05 — L1 `pi-review.test.mjs` ("DSK-11, PIR-05: the web transport sends the page token URL-encoded on the read only, at most 2,048 characters; 429 names Retry-After (TC-PIR-05)"), `azure-devops.test.mjs` ("DSK-11: the desktop proxy accepts a Discussion page token on the read only — a text of at most 2,048 characters, URL-encoded on the fixed host and path; 429 names Retry-After (TC-PIR-05)").
 
-**TC-PIR-06 A lead reviews a PI's Features and their Discussions** — Req PIR-01, PIR-02, PIR-03, PIR-04, PIR-05, PIR-06 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-06: the current PI is preselected, its Features listed, a Discussion read in the drawer as plain text from both pages, and Read all Discussions completes": against a mocked Azure DevOps — the Time Writing fetch, the iterations with PI 2026.4 current and the Comments API in two pages — PI 2026.4 is chosen with the Current PI chip; its two Features are listed by ID, the toggle adds the Feature with a User Story in the PI; the drawer shows the four comments of both pages newest first as text, "@Ana Costa" and "[image]", no markup rendered, the second page asked with the URL-encoded token; Comments shows 4; ↻ Read all Discussions ends with "1 of 1 read." and fills the column); UAT: on the released build a lead opens PI Review on the current PI, reads two Features' Discussions and runs Read all Discussions.
+**TC-PIR-06 A lead reviews a PI's Features and their Discussions** — Req PIR-01, PIR-02, PIR-03, PIR-04, PIR-05, PIR-06 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-06: the current PI is preselected, its Features listed, a Discussion read in the drawer as plain text from both pages, and Read all Discussions completes": against a mocked Azure DevOps — the Time Writing fetch, the iterations with PI 2026.4 current and the Comments API in two pages — PI 2026.4 is chosen with the Current PI chip and is the only PI offered (PI 2026.3, its Sprint dated in 2000, ended before PI Review starts, PIR-33); its two Features are listed by ID, the toggle adds the Feature with a User Story in the PI; the drawer shows the four comments of both pages newest first as text, "@Ana Costa" and "[image]", no markup rendered, the second page asked with the URL-encoded token; Comments shows 4; ↻ Read all Discussions ends with "1 of 1 read." and fills the column); UAT: on the released build a lead opens PI Review on the current PI, reads two Features' Discussions and runs Read all Discussions.
 
 **TC-PIR-07 The latest comment by date and time** — Req PIR-07 — L1 `pi-review.test.mjs` ("PIR-07: the latest comment is the newest by date and time, whoever wrote it; the same time: the higher ID (TC-PIR-07)": not the first in the list nor by author, UTC offsets compared as instants, the higher ID at the same time, an unreadable date as the oldest, none for an empty Discussion).
 
@@ -2301,6 +2301,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-PIR-31 ⚙ PI Review Setup in My PI Review and PI Review** — Req PIR-30, PIR-31, CON-114, PIR-17 — **UAT** — L1 `pi-review-setup.test.mjs` ("PIR-30: the ⚙ PI Review Setup button — shown exactly when the page is in the menu: by the permission, not the role; in View as by the viewed role (TC-PIR-31)": its label, shown with the permission, hidden without it; gear and menu agree; the starting matrix shows it to the Scrum Master and the Tool Owner only — not Team Member, Admin, People Manager; a Team Member allowed in Role rights sees it, a Scrum Master without it does not; no roles file: hidden; viewing as the Scrum Master: shown, the page read only with the View as reason); E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-31: ⚙ PI Review Setup in My PI Review and PI Review — the Tool Owner opens the setup with it; in View as it follows the viewed role (read only); the Team Member has neither the gear nor the page": the Tool Owner sees the gear (title PI Review Setup) in My PI Review and opens the page with Edit form… enabled; on PI Review the gear replaces Form setup, last in the page actions, and opens the page; View as the Scrum Master: the gear, the page with Edit form… disabled "Read only while viewing as the role Scrum Master"; the Team Member: no gear, no menu entry; "TC-PIR-24: …": no gear for the People Manager); browser check: with the synthetic sample loaded a Scrum Master still sees the gear, and the page says the sample is not saved to Git; UAT (day 4): the Scrum Master opens My PI Review and uses ⚙ to reach PI Review Setup; a Team Member sees neither ⚙ on My PI Review nor PI Review Setup in the menu.
 
 **TC-PIR-33 A clean review form: the explanations behind ⓘ** — Req PIR-32, PIR-20, PIR-13, PIR-18 — E2E `pi-review-form.e2e.mjs` ("TC-PIR-16: the Feature’s assignee writes its review — …": "ⓘ How to fill in" holds "Posting adds a new comment …", "Move to next PI is pre-selected No. With Yes, Moves to …", "Learnings: One point per line; …", "Additional Remarks: Anything else for the review."; "About the preview" holds "The comment posted, as you, …"; none of these texts on the form itself; "TC-PIR-18: closing a Feature asks its review — …": "Posted as a new comment …" in the Close pop-up's ⓘ; "TC-PIR-26: … TC-PIR-25: …" and "TC-PIR-32: …": the source of Moves to in "Where the next PI comes from", one short line or warning under it); E2E `pi-review-form-setup.e2e.mjs` ("TC-PIR-23: the Scrum Master changes the PI Review form …": "Move to next PI is pre-selected Yes." in ⓘ How to fill in, not on the form, the checked Yes visible); browser check (1440 px, light and dark): the ⓘ texts open above the pop-up, by pointer and keyboard; labels, (optional), the Partly hint, the Prefilled line and the errors stay visible.
+
+**TC-PIR-34 PI Review starts from a date: older PIs and comments left out** — Req PIR-33, PIR-02, PIR-05, PIR-07, PIR-19, PIR-25, PIR-26, PIR-29 — **UAT** — L1 `pi-review-start.test.mjs` ("PIR-33: the start date is part of the PI Review form setup — …": 21 Sep 2026 by default, a file without `reviewStart` read and written back without it, a date that is not a real day, another format or a number refusing the file, `setupProblems` naming it, the merge taking the side that changed the date and the later save when both did; "PIR-33: the PI pickers leave out the PIs that ended before the date — …": a tree with PI 26.2 undated, PI 26.3 ending the day before, PI 26.4 dated by its Sprints from the start day, PI 27.1 undated → PI 27.1 and PI 26.4 shown, PI 26.3 and PI 26.2 left out; PI 2026.4 / PI 2026.3 of another subtree, a Sprint path, "PI Planning" kept; a PI ending on the start day kept; a later date; no PI dated → by the quarter number (PI 26.3 kept, PI 26.2 left out); the Info sentence; "PIR-33: comments before the date are ignored — …": UTC days compared (a +02:00 comment on the 21st is the 20th in UTC and ignored, a −02:00 comment on the 20th is kept), an unreadable date ignored, the latest comment and my review from the kept ones only, an old review not found, a later one counting for PI 26.4; "PIR-33: the Discussions are kept with the date they were read for; …": a new date forgets them; "PIR-33: the next PI is never suggested before the date — …": PI 26.2 by number for a Feature of PI 26.1 without dates → Moves to empty with the warning and the reason); E2E `pi-review-start.e2e.mjs` ("TC-PIR-34: PI Review starts from a date — …": a mocked GitHub with `pi-review-form.json` holding a start date 65 days ago and an iteration tree dated around it, so the scenario does not depend on the clock; PI 2026.3 remembered — PI Review offers PI 2027.1 and PI 2026.4 (current), chooses PI 2026.4 without a warning; after ↻ Read all Discussions Feature 201 has 1 comment, its Learnings from the newer review, Feature 202 none, its drawer saying "No comments since …" and "1 older comment (before …, when PI Review starts) is ignored."; My PI Review: the same PIs, 201 Reviewed, 202 Not reviewed, "1 of 2 reviewed", Write review… on 202 not prefilled; the Scrum Master opens PI Review Setup, sees the date from Git, moves it to 170 days ago with Edit start date… → Save to Git, the file keeps its five fields; PI Review then offers PI 2026.3 and PI 2026.2 again (the remembered PI 2026.3 chosen) and reads 201's two comments); E2E `pi-review.e2e.mjs` ("TC-PIR-06: …": only PI 2026.4 offered); E2E `pi-review-form.e2e.mjs` ("TC-PIR-27: …": the start date before the relative reviews, kept in the browser as the last setup read); browser check (1440 px, light and dark): the PI Review starts from panel and its pop-up (UI-STANDARDS §2, §3, §4).
+
+**TC-PIR-35 Edit review… changes my own review in place** — Req PIR-34, PIR-17, PIR-26, PIR-13, PIR-14, CON-113, IF-02 — **UAT** — L1 `pi-review-edit.test.mjs` ("PIR-34: a comment is the viewer’s own by the author’s email when Azure DevOps gives it, else by the display name": same name with another email not mine, no email → by name ignoring case and spaces, nothing known → never; "PIR-34: Edit review… edits only my newest review comment, and only when it counts for the chosen PI — never someone else’s": Ben's newer review and my plain comment skipped, Ben's review only → nothing, my newest review for PI 26.3 → nothing (no older one picked), the higher ID at the same time; "PIR-34: the edit is sent as update-comment — PATCH …/comments/{id} …": the URL, PATCH and the app-built HTML; someone else's Feature without the lead right, markup outside the allowlist, no comment id, plain text, a comment id on add-comment, an on-premises server — each refused before anything is sent; a 400 from Azure DevOps named; "PIR-34 (SM-192): the desktop proxy sends update-comment as PATCH …": the fixed address, the allowlist, the comment id, dev.azure.com only; "PIR-34: an edited comment keeps its createdDate — …": the edited flag from modifiedDate, the date and the author's email read); E2E `pi-review-form.e2e.mjs` ("TC-PIR-35: Edit review… changes my own review in place — …": Rita's Reviewed Feature 205 has Edit review… in place of Write review…, her Feature without a review keeps Write review…; the pop-up "Edit review of Feature #205" says "Editing your review comment of …", prefilled (Learnings, Offline Review); edited and saved → confirmation "Save the edited review of Feature #205?" → Background jobs "Edit review · #205 … Edited the review of #205 and read back"; the fake dev.azure.com recorded one PATCH of comment 41 of 205 with the new list item and no POST; Review mode shows Discuss during Meeting, still Reviewed; a second edit refused by the fake → the form opens again with what was typed, the error and Post as a new review instead → posted as a new comment); browser check (1440 px, light): the Edit review… button and the pop-up in edit mode.
+
+**TC-PIR-36 Edit review… on PI Review** — Req PIR-34, PIR-13, PIR-26, CON-113 — L1 `pi-review-edit.test.mjs` ("PIR-34: PI Review offers Edit review… by the same rule — …": `ownReviewOf` on a Feature with Rita's review and a newer one by Lena, a lead — each edits only their own, Lena none on Rita's; not read or the PI dates still read → none; a review for another PI → none; Closed and reviewed after its Closed Date → Edit); E2E `pi-review-form.e2e.mjs` ("TC-PIR-36: PI Review offers Edit review… on my own review — …": after ↻ Read all Discussions Rita's Feature 205 with her review has Edit review… and no Write review…, Feature 202 with Lena's review has Write review… (disabled for Rita) and no Edit; the drawer's footer offers Edit review…, the pop-up is prefilled, saved → "Edit review · #205 … Edited the review of #205 and read back", one PATCH of comment 41, no POST, Review mode updated; Lena (a lead) sees Write review… enabled and no Edit on 205, and Edit review… on 202, her own review); browser check (1440 px, light): the row with Edit review….
 
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
@@ -3101,12 +3107,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | TVL-35 | TC-TVL-32, TC-TVL-18 |
 | TVL-36 | TC-TVL-33, TC-TVL-18 |
 | PIR-01 | TC-PIR-06, TC-PIR-16 |
-| PIR-02 | TC-PIR-01, TC-PIR-06, TC-PIR-26 |
+| PIR-02 | TC-PIR-01, TC-PIR-06, TC-PIR-26, TC-PIR-34 |
 | PIR-03 | TC-PIR-02, TC-PIR-06 |
 | PIR-04 | TC-PIR-06 |
-| PIR-05 | TC-PIR-03, TC-PIR-05, TC-PIR-06 |
+| PIR-05 | TC-PIR-03, TC-PIR-05, TC-PIR-06, TC-PIR-34 |
 | PIR-06 | TC-PIR-04, TC-PIR-06 |
-| PIR-07 | TC-PIR-07, TC-PIR-09 |
+| PIR-07 | TC-PIR-07, TC-PIR-09, TC-PIR-34 |
 | PIR-08 | TC-PIR-08, TC-PIR-09, TC-PIR-10, TC-PIR-11 |
 | PIR-09 | TC-PIR-09, TC-PIR-11, TC-PIR-29 |
 | PIR-10 | TC-PIR-09, TC-PIR-11 |
@@ -3116,22 +3122,24 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-14 | TC-PIR-13, TC-PIR-16, TC-PIR-28, TC-PIR-29 |
 | PIR-15 | TC-PIR-15, TC-PIR-16 |
 | PIR-16 | TC-PIR-16 |
-| PIR-17 | TC-PIR-17, TC-PIR-26, TC-PIR-27 |
+| PIR-17 | TC-PIR-17, TC-PIR-26, TC-PIR-27, TC-PIR-35 |
 | PIR-18 | TC-PIR-14, TC-PIR-18, TC-PIR-25, TC-PIR-28, TC-PIR-33 |
-| PIR-19 | TC-PIR-19, TC-PIR-22, TC-PIR-23, TC-PIR-30 |
+| PIR-19 | TC-PIR-19, TC-PIR-22, TC-PIR-23, TC-PIR-30, TC-PIR-34 |
 | PIR-20 | TC-PIR-20, TC-PIR-23, TC-PIR-24, TC-PIR-33 |
 | PIR-21 | TC-PIR-21, TC-PIR-23, TC-PIR-28, TC-PIR-29 |
 | PIR-22 | TC-PIR-21, TC-PIR-23 |
 | PIR-23 | TC-PIR-24, TC-CON-71 |
 | PIR-24 | TC-PIR-26, TC-PIR-17, TC-PIR-27 |
-| PIR-25 | TC-PIR-25, TC-PIR-32 |
-| PIR-26 | TC-PIR-27, TC-PIR-29 |
+| PIR-25 | TC-PIR-25, TC-PIR-32, TC-PIR-34 |
+| PIR-26 | TC-PIR-27, TC-PIR-29, TC-PIR-34, TC-PIR-35 |
 | PIR-27 | TC-PIR-28 |
 | PIR-28 | TC-PIR-29, TC-PIR-13 |
-| PIR-29 | TC-PIR-30, TC-PIR-22, TC-PIR-23, TC-PIR-24 |
+| PIR-29 | TC-PIR-30, TC-PIR-22, TC-PIR-23, TC-PIR-24, TC-PIR-34 |
 | PIR-30 | TC-PIR-31, TC-PIR-24 |
 | PIR-31 | TC-PIR-24, TC-PIR-30, TC-PIR-31, TC-CON-71 |
 | PIR-32 | TC-PIR-33 |
+| PIR-33 | TC-PIR-34 |
+| PIR-34 | TC-PIR-35, TC-PIR-36 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -3140,7 +3148,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | NFR-09 | TC-CSP-01 |
 | NFR-07 | TC-INS-01 |
 | IF-01, IF-03, IF-04 | TC-INS-04 |
-| IF-02 | TC-DSK-02, TC-PIR-16 |
+| IF-02 | TC-DSK-02, TC-PIR-16, TC-PIR-35 |
 
 ### Use-case coverage
 
@@ -3185,7 +3193,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…33 |
+| UC-40 | TC-PIR-01…36 |
 
 ## 8. Result record
 

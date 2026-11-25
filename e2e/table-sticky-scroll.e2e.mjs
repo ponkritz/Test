@@ -27,9 +27,10 @@ test('TC-UI-18: a wide table’s horizontal scroll bar stays above the footer wh
   await loadSample(page)
   await navigate(page, 'PI Review')
   await page.locator('.pir-table tbody tr').nth(5).waitFor()
-  await page.evaluate(() => window.scrollTo(0, 0))
+  // The table's top 250 px below the window's top, whatever is above it on the page (e.g. notices).
+  await page.evaluate(() => window.scrollTo(0, Math.max(0, document.querySelector('.pir-table .data-table-scroll').getBoundingClientRect().top + window.scrollY - 250)))
 
-  // At the top of the page: the table is wider than its box and runs below the footer — the bar shows right above it.
+  // Near the top of the page: the table is wider than its box and runs below the footer — the bar shows right above it.
   await until(page, barShown)
   let now = await state(page)
   assert.ok(now.scrollWidth > now.clientWidth + 100, `the table is wider than its box (${now.scrollWidth} > ${now.clientWidth})`)
@@ -76,8 +77,8 @@ test('TC-UI-18: a wide table’s horizontal scroll bar stays above the footer wh
   await until(page, barHidden)
   now = await state(page)
   assert.ok(now.box.bottom <= now.footer.top + 1, 'the table’s own bottom is in view above the footer')
-  // Back to the top: it comes back.
-  await page.evaluate(() => window.scrollTo(0, 0))
+  // Back up (the table's top 250 px below the window's top): it comes back.
+  await page.evaluate(() => window.scrollTo(0, Math.max(0, document.querySelector('.pir-table .data-table-scroll').getBoundingClientRect().top + window.scrollY - 250)))
   await until(page, barShown)
 
   // The window made narrower and lower: the bar follows the table's new width and stays right above the footer.
