@@ -2180,6 +2180,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-11 A lead sees suggested Struggles, Learnings and Move for a comment written without headings** — Req PIR-08, PIR-09, PIR-10, PIR-11 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-11: a newest comment without headings has its Struggles, Learnings and Move to Next PI suggested from keywords, marked, and exported with Split from": against the mocked Azure DevOps of TC-PIR-06 with a third Feature 204 whose newest comment has no heading (an older one has) — after ↻ Read all Discussions ("3 of 3 read.") 204 shows "(suggested) We were blocked by the vendor for two Sprints.", "(suggested) Next time we book the rig at PI planning." and "(suggested) Partly — the rig test." in italics with the tooltip "Suggested from keywords, not headings: …", the negated "No issues with the docs." not taken; 201 is split by its headings, unmarked; the Move to next PI filter Partly leaves 204; the CSV export has Split from: Headings, None and Keywords; the drawer's Latest comment says "Suggested from keywords" with the three texts); UAT: on the released build a lead writes a review comment without headings ("We were blocked by … Next time we … Carry over to next PI — partly, …") on a test Feature, runs Read all Discussions and checks the "(suggested)" cells, the drawer note and Split from in an Excel export.
 
+**TC-PIR-12 The team's two review formats, any PI number** — Req PIR-12 — L1 `pi-review.test.mjs` ("PIR-12: the team's two formats — Learnings : / Struggles : and … of the Feature, the Move question with any PI number (TC-PIR-12)") ; browser check: a PI 26.3 Feature whose newest comment uses either format shows its Learnings, Struggles and Move with "· to PI 26.4".
+
 **TC-PIR-09 A lead sees each Feature's latest review comment in five columns** — Req PIR-07, PIR-08, PIR-09, PIR-10 — **UAT** — E2E `pi-review.e2e.mjs` ("TC-PIR-09: after Read all Discussions the five columns show each Feature's newest comment, split by its headings, can be filtered by Move to next PI and are exported": against the mocked Azure DevOps of TC-PIR-06 — Feature 201's newest comment written with the headings, Feature 202's newest one, listed after an older one, without — the five cells show "—" with the hint before the read; after ↻ Read all Discussions ("2 of 2 read.") 201 shows the local date-time, the whole comment on one line with " · ", "test rig late", "book the rig early · share the calendar" and "Yes — waiting for vendor", 202 only its date and "Ready for review"; the date sorts newest first then oldest first; the Move to next PI filter Yes leaves 201 and Reset filters clears it; the CSV export has the five headings, the whole comment with its line breaks and Move as shown; the drawer's Latest comment block shows the author, date and the three sections); UAT: on the released build a lead writes a review comment with the three headings on a test Feature, opens PI Review, runs Read all Discussions and checks the five columns, the drawer and an Excel export.
 
 ## 7. Requirements coverage matrix
@@ -2962,6 +2964,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-09 | TC-PIR-09, TC-PIR-11 |
 | PIR-10 | TC-PIR-09, TC-PIR-11 |
 | PIR-11 | TC-PIR-10, TC-PIR-11 |
+| PIR-12 | TC-PIR-12 |
 | IF-05 | TC-KPT-02 |
 | NFR-02 | TC-STO-01 |
 | NFR-03…05 | TC-DSK-02, TC-INS-01 |
@@ -3015,7 +3018,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…98, TC-CHT-01…42, TC-CHT-50…59 |
 | UC-38 | TC-PGB-01…16, TC-DSH-01…16, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…11 |
+| UC-40 | TC-PIR-01…12 |
 
 ## 8. Result record
 

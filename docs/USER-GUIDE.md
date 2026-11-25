@@ -661,11 +661,21 @@ The Feature then shows **Struggles** "the test rig arrived two Sprints late", **
 
   | Column | Accepted headings |
   |---|---|
-  | **Struggles** | Struggles, Struggle, Challenges, Issues, Problems, Blockers, Impediments, Risks (each also singular), Pain points, What went wrong, What didn't go well |
-  | **Learnings** | Learnings, Learning, Lessons, Lesson, Lessons learnt, Lessons learned, Takeaways, What went well, Improvements, and at the start of a line Went well, Improve, Next time |
-  | **Move to Next PI** | Move to next PI, Moved to next PI, Move to the next PI, Moving to next PI, Continue in next PI, Spill over, Spillover, Spill-over, Carry over, Carryover, Carry-over, and at the start of a line Next PI |
+  | **Struggles** | Struggles, Struggle, Struggles of the Feature, Challenges, Issues, Problems, Blockers, Impediments, Risks (each also singular), Pain points, What went wrong, What didn't go well |
+  | **Learnings** | Learnings, Learning, Learnings of the Feature, Lessons, Lesson, Lessons learnt, Lessons learned, Takeaways, What went well, Improvements, and at the start of a line Went well, Improve, Next time |
+  | **Move to Next PI** | Whether the feature needs to be shifted to PI 26.4 (any PI number; also *moved* / *carried over*, and *Does the feature need to be …*), Move to next PI, Moved to next PI, Move to the next PI, Moving to next PI, Continue in next PI, Spill over, Spillover, Spill-over, Carry over, Carryover, Carry-over, and at the start of a line Next PI |
 
   Two headings of the same column (e.g. *Issues* and *Risks*) are joined.
+- **The team's two formats both work** (sub-points as bullets, numbers or one per line):
+  ```
+  Learnings :                                    Learnings of the Feature
+  - Start reviews earlier                        • Early alignment helped
+  Struggles :                                    Struggles of the Feature
+  1. Waiting for vendor documents                • Lab access delayed
+  Whether the feature needs to be shifted to PI 26.4
+  Yes - two stories left                         Whether the feature needs to be shifted to PI 26.4 : No
+  ```
+  The answer may follow on the next line, after a colon, a dash or a "?", or after a space when it starts with Yes / No / Partly. The PI named in the question is read from the comment (any number, so it works for every PI review) and shown after the answer, e.g. "Yes — two stories left · to PI 26.4".
 - A heading counts at the **start of a line** (a bullet, number, # or bold before it is fine) followed by a colon, a dash (- – —) and a space, or nothing; **inside a line** when a colon follows it ("… Lesson: share the calendar"), and for *Struggle*, *Learning* and *Lesson* also a dash and a space ("… a learning – book the rig early"). "We had struggles with the rig" or "there were issues" is not a heading.
 - Start the Move text with **Yes**, **No** or **Partly** (or Y / N) to use the filter; anything else (e.g. "N/A", "to be decided") is shown as written under Other text.
 - **No heading at all? Suggested values.** When the newest comment has none of the headings, the app looks for **keywords** sentence by sentence (a sentence ends at a line break or after ". ", "! ", "? "): *blocked, blocker, delay(ed), issue, problem, risk, escalated, dependency, waiting, rework, missed, slipped, could not, unable, late, impediment, struggle, challenge* go to **Struggles**; *learned, learnt, lesson, next time, improve, went well, worked well, better to, recommend, should have, takeaway, learning* to **Learnings**; *carry over, next PI, spill over, move to, moving to, continue in* to **Move to Next PI**. A sentence with words of two columns goes to both; "no blockers", "not blocked" or "wasn't late" are not taken. These texts are only a guess: the cell shows **(suggested)** before them in italics (pointing at it says "Suggested from keywords, not headings"), the drawer's Latest comment says **Suggested from keywords**, and Export has a column **Split from** (Headings, Keywords or None). A suggested Move gets Yes / No / Partly only when the sentence says so right after the phrase, e.g. "Carry over to next PI — partly, the docs" → "Partly — the docs". Write the headings to be sure.

@@ -269,3 +269,18 @@ test('PIR-08, PIR-11: headings take priority over keywords; Split from is Headin
   assert.equal(reviewSplit('Ready for review').from, 'None')
   assert.deepEqual(splitReviewComment('We were blocked by the vendor.'), {}, 'the heading split alone stays empty')
 })
+
+test("PIR-12: the team's two formats — Learnings : / Struggles : and … of the Feature, the Move question with any PI number (TC-PIR-12)", () => {
+  const first = splitReviewComment('Learnings :\n- Start reviews earlier\n- Keep the vendor in the loop\nStruggles :\n1. Waiting for vendor documents\n2. Test rig booked late\nWhether the feature needs to be be shifted to PI 26.4\nYes - two stories left')
+  assert.deepEqual([first.learnings, first.struggles, first.moveValue, first.movePi], ['Start reviews earlier\nKeep the vendor in the loop', 'Waiting for vendor documents\nTest rig booked late', 'Yes', 'PI 26.4'])
+  assert.equal(moveLabel(first), 'Yes — two stories left · to PI 26.4')
+  const second = splitReviewComment('Learnings of the Feature\n• Early alignment helped\nStruggles of the Feature\n• Lab access delayed\nWhether the feature needs to be shifted to PI 26.4 : No')
+  assert.deepEqual([second.learnings, second.struggles, second.moveValue, second.movePi], ['Early alignment helped', 'Lab access delayed', 'No', 'PI 26.4'])
+  // Any PI number; the answer after a "?" on the next line, after a dash, or after a space when it starts with Yes / No / Partly.
+  assert.deepEqual([splitReviewComment('Struggles :\n- B\nWhether the feature needs to be shifted to PI 27.1?\nNo').movePi, splitReviewComment('Struggles :\n- B\nWhether the feature needs to be shifted to PI 27.1?\nNo').moveValue], ['PI 27.1', 'No'])
+  assert.equal(splitReviewComment('Struggles of the Feature\n1) B\nWhether the feature needs to be shifted to PI 26.4 - Partly').moveValue, 'Partly')
+  const space = splitReviewComment('Learnings of the Feature\n- A\nWhether the feature needs to be shifted to PI 26.4 Yes, docs pending')
+  assert.deepEqual([space.learnings, space.moveValue, space.moveRest], ['A', 'Yes', 'docs pending'])
+  // In a sentence it is no heading.
+  assert.deepEqual(splitReviewComment('We discussed whether the feature needs to be shifted to PI 26.4 in the meeting.'), {})
+})

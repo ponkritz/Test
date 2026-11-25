@@ -129,22 +129,29 @@ export function latestComment(comments: WorkItemComment[]): WorkItemComment | un
 export type MoveValue = 'Yes' | 'No' | 'Partly'
 // PIR-11: where the columns come from — the headings, the keywords (suggested) or nothing.
 export type SplitFrom = 'Headings' | 'Keywords' | 'None'
-export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; from?: SplitFrom }
+export interface ReviewSplit { struggles?: string; learnings?: string; move?: string; moveValue?: MoveValue; moveRest?: string; movePi?: string; from?: SplitFrom }
 type Section = 'struggles' | 'learnings' | 'move'
 const gap = String.raw`[ \t]+`
+// PIR-12: "of the Feature" after a heading word ("Learnings of the Feature", "Struggles of this feature").
+const of = String.raw`(?:[ \t]+(?:of|for)[ \t]+(?:the|this)[ \t]+feature)?`
+// PIR-12: the PI named in a Move heading ("… shifted to PI 26.4"), any number, so every review's next PI is read.
+const piNumber = String.raw`pi(?:[ \t]*\d+(?:\.\d+)*)?`
 // The heading words of each section, as regular expressions (longer forms first). `inline`: also counts inside a line
 // with a colon; `dash`: also inside a line with a dash and a space.
 const headingWords: { section: Section; pattern: string; inline: boolean; dash?: boolean }[] = [
-  { section: 'struggles', pattern: 'struggles?', inline: true, dash: true },
+  { section: 'struggles', pattern: `struggles?${of}`, inline: true, dash: true },
   { section: 'struggles', pattern: `what${gap}(?:didn['’]?t|did${gap}not)${gap}go${gap}well`, inline: true },
   { section: 'struggles', pattern: `what${gap}went${gap}wrong`, inline: true },
   { section: 'struggles', pattern: 'challenges?|issues?|problems?|blockers?|impediments?|risks?', inline: true },
   { section: 'struggles', pattern: `pain${gap}points?`, inline: true },
-  { section: 'learnings', pattern: `lessons?${gap}learn(?:t|ed)|lessons?|learnings?`, inline: true, dash: true },
+  { section: 'learnings', pattern: `(?:lessons?${gap}learn(?:t|ed)|lessons?|learnings?)${of}`, inline: true, dash: true },
   { section: 'learnings', pattern: String.raw`take[ \t-]?aways?|what${gap}went${gap}well|improvements?`, inline: true },
   { section: 'learnings', pattern: `went${gap}well|improve|next${gap}time`, inline: false },
   { section: 'move', pattern: `move[sd]?${gap}to${gap}(?:the${gap})?next${gap}pi|moving${gap}to${gap}(?:the${gap})?next${gap}pi|continue[sd]?${gap}in${gap}(?:the${gap})?next${gap}pi`, inline: true },
   { section: 'move', pattern: String.raw`spill[ \t-]?overs?|carry[ \t-]?overs?`, inline: true },
+  // PIR-12: "Whether the feature needs to be (be) shifted to PI 26.4" (moved / carried over / pushed; "does the feature
+  // need to be …"), the PI any number.
+  { section: 'move', pattern: `(?:whether${gap}|does${gap})?(?:the${gap}|this${gap})?feature${gap}needs?${gap}to${gap}(?:be${gap})+(?:shifted|moved|carried(?:${gap}over)?|pushed|spilled(?:${gap}over)?)${gap}(?:to|into)${gap}(?:the${gap}next${gap})?${piNumber}`, inline: true },
   { section: 'move', pattern: `next${gap}pi`, inline: false },
 ]
 const names = (pick: (word: typeof headingWords[number]) => boolean | undefined) => `(${headingWords.filter(pick).map((word) => word.pattern).join('|')})`
@@ -152,29 +159,34 @@ const bold = String.raw`(?:\*\*|__)?`
 const lineHeading = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}${names(() => true)}[ \t]*\??[ \t]*${bold}[ \t]*(?:(?::|[\-–—](?=[ \t]|\r?\n|$))[ \t]*${bold}|(?=\r?\n|$))`, 'gimu')
 const inlineHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.inline)}[ \t]*\??[ \t]*${bold}[ \t]*:[ \t]*${bold}`, 'giu')
 const inlineDashHeading = new RegExp(String.raw`(?<![\p{L}\p{N}])${bold}${names((word) => word.dash)}[ \t]*\??[ \t]*${bold}[ \t]*[\-–—][ \t]+${bold}`, 'giu')
+// PIR-12: the Move question at the start of a line answered on the same line after a space ("… shifted to PI 26.4 Yes,
+// docs pending") — only when the answer starts with yes / no / partly / partially.
+const moveQuestion = headingWords.find((word) => word.pattern.includes('whether'))!.pattern
+const moveQuestionLine = new RegExp(String.raw`^[ \t]*(?:[-*•+]|\d{1,2}[.)]|#{1,6})?[ \t]*${bold}(${moveQuestion})[ \t]*\??[ \t]*${bold}[ \t]+(?=(?:yes|no|partly|partially)(?![\p{L}\p{N}]))`, 'gimu')
 const sectionTests = headingWords.map((word) => ({ section: word.section, test: new RegExp(`^(?:${word.pattern})$`, 'iu') }))
 const sectionOf = (name: string): Section => sectionTests.find((entry) => entry.test.test(name))?.section ?? 'struggles'
-const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().replace(/^[-*•]\s+/, '')).filter(Boolean).join('\n')
+const tidy = (text: string) => text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]|\d{1,2}[.)])\s+/, '')).filter(Boolean).join('\n')
 // The Move value: the text starts with yes / y, no / n or partly / partially / partial (any case), followed by the end,
 // a space or punctuation (so "N/A", "Not decided" and "Nothing" give no value).
 const moveStart = /^(yes|y|no|n|partly|partially|partial)(?=$|[\s.,;:!)—–-])[\s.,;:!)—–-]*/i
 const moveValueOf = (word: string): MoveValue => word.toLowerCase().startsWith('y') ? 'Yes' : word.toLowerCase().startsWith('p') ? 'Partly' : 'No'
 function byHeadings(text: string): { split: ReviewSplit; found: boolean } {
-  const found = new Map<number, { section: Section; start: number; end: number }>()
-  for (const pattern of [lineHeading, inlineHeading, inlineDashHeading]) {
+  const found = new Map<number, { section: Section; start: number; end: number; pi?: string }>()
+  for (const pattern of [lineHeading, moveQuestionLine, inlineHeading, inlineDashHeading]) {
     pattern.lastIndex = 0
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       const at = match.index + match[0].toLowerCase().indexOf(match[1].toLowerCase())
-      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length })
+      if (!found.has(at)) found.set(at, { section: sectionOf(match[1]), start: match.index, end: match.index + match[0].length, pi: /\bpi[ \t]*(\d+(?:\.\d+)*)/i.exec(match[1])?.[1] })
     }
   }
   // A heading inside another (e.g. "went well" in "What went well:") is dropped: the first, longest one counts.
-  const headings: { section: Section; start: number; end: number }[] = []
+  const headings: { section: Section; start: number; end: number; pi?: string }[] = []
   for (const heading of [...found.values()].sort((a, b) => a.start - b.start || b.end - a.end)) if (!headings.length || heading.start >= headings[headings.length - 1].end) headings.push(heading)
   const split: ReviewSplit = {}
   headings.forEach((heading, index) => {
     const body = tidy(text.slice(heading.end, headings[index + 1]?.start ?? text.length))
     if (body) split[heading.section] = split[heading.section] ? `${split[heading.section]}\n${body}` : body
+    if (heading.section === 'move' && heading.pi) split.movePi = `PI ${heading.pi}`
   })
   if (split.move) {
     const match = moveStart.exec(split.move)
@@ -246,6 +258,7 @@ export function reviewSplit(text: string | undefined): ReviewSplit & { from: Spl
   return { ...suggested, from: suggested.struggles || suggested.learnings || suggested.move ? 'Keywords' : 'None' }
 }
 // PIR-08: Move to next PI as shown — "Yes — waiting for vendor" with a value, otherwise the text as written.
-export const moveLabel = (split: ReviewSplit) => split.moveValue ? `${split.moveValue}${split.moveRest ? ` — ${split.moveRest}` : ''}` : split.move ?? ''
+// PIR-12: the PI the comment names ("… shifted to PI 26.4") follows as " · to PI 26.4".
+export const moveLabel = (split: ReviewSplit) => { const base = split.moveValue ? `${split.moveValue}${split.moveRest ? ` — ${split.moveRest}` : ''}` : split.move ?? ''; return base && split.movePi ? `${base} · to ${split.movePi}` : base }
 // PIR-09: one line for a table cell — the line breaks as " · ".
 export const oneLine = (text: string | undefined) => (text ?? '').split(/\n+/).map((line) => line.trim()).filter(Boolean).join(' · ')
