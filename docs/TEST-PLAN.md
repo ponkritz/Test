@@ -1020,6 +1020,10 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-69 Delete a shared view for everyone with its data in Git** — Req CON-110, CON-111 — L1 `views-remove.test.mjs` ("CON-109, CON-110, CON-112: Remove and Delete for everyone in Git — backup, marker, setup without it, data files deleted; Restore clears the marker (TC-CON-68, TC-CON-69)"); E2E `remove-views-for-everyone.e2e.mjs` ("TC-CON-69: Delete for everyone lists and deletes the view’s data file in Git; a browser that still has the view loses it"); browser check (Tool Owner, Git storage that can save): ⋯ → Delete for everyone… on an on-prem view with data in Git lists `azure-data/<id>.json`; after Delete for everyone the file is gone from the repository (its history stays in GitHub), `azure-views-removed.json` records it with mode "delete", and another browser that still had the view loses it at its next start and does not get it back from the on-prem data in Git.
 
+**TC-CON-72 No delete item on a shared view's page** — Req CON-116, SET-19 — L1 `view-page-actions.test.mjs` ("CON-116: a shared view’s page has no delete item for anyone, nor has a page that is not an Other view (TC-CON-72)"); E2E `delete-view-on-page.e2e.mjs` ("TC-CON-72: the Tool Owner has no delete item on a shared view’s page; Admin → Data & sharing keeps Remove / Delete for everyone"; "TC-SET-09: a person deletes a view of their own from its page — the pop-up names it, it leaves the menu, Home opens with a confirmation; the server PAT and the shared views stay" for a Team Member); browser check: as the Tool Owner and as a Team Member open a shared view under Other views in the menu — its ⋯ has Load from Git and Connection settings but no Delete / Remove item; a DP or Tool Validations page has none either; Admin → Data & sharing → Other views still offers the Tool Owner Remove / Delete for everyone… (TC-CON-68).
+
+**TC-CON-74 Delete a Windchill export from its page** — Req CON-118, QV-48 — L1 `view-page-actions.test.mjs` ("CON-118: Delete this export… for whoever may import Windchill exports, with the blocks; nobody else sees it (TC-CON-74)", "CON-118: the export’s files in Git are listed and deleted in ONE commit; other files stay; nothing to delete makes no commit (TC-CON-74)", "SET-19, CON-118: the page reuses the deletions — My views’ pop-up and code, the existing Windchill removal (no copy)"); E2E `delete-view-on-page.e2e.mjs` ("TC-CON-74: whoever may import Windchill exports deletes an export under Other views from its page — its files in Git in one commit, then Home; a Team Member has no such item"); browser check (a role with Import Windchill exports, Git storage that can save): open an export under Other views — ⋯ ends with Delete this export… (red), no Remove this export…; the pop-up names the export and its file and lists `windchill-data/<id>.json` and, when analysed, `windchill-analysis/<id>-locations.json`; Delete export makes one commit deleting them (history in GitHub), Home opens with "The Windchill export “…” was deleted here and in Git in one commit …", the export is gone from the menu and does not come back at the next start; another export's files stay. Disabled with the reason in View as, with the sample, without Git storage or with a read-only token; a Team Member's ⋯ has no item; an S&S IT or ECP stream export keeps Remove this export….
+
 **TC-CON-67 Upload latest export… on a Windchill export page** — Req CON-108 — E2E `documents-and-data.e2e.mjs` ("TC-QV-44: the result of an action on a Release page — a Windchill import, a file that is not an export — is listed in Background jobs, not as a notice on the page": ⋯ → Upload latest export… opens the file picker; the export is imported for the same page, listed in Background jobs) ; browser check: on an existing export page choose ⋯ → Upload latest export… and a newer CSV — the counts and Releases follow the new file, the page keeps its name.
 
 **TC-QV-24 CP releases from the asset Titles** — *(Retired — see TC-QV-25)* Req QV-40 — L1 `streams.test.mjs` ("CP: the release from the asset Title "[Release name] [Release No] [Asset name]", each release once; fuzzy QMS-0025 match (TC-QV-24)"); browser check with a CP query holding three assets of one release in both namings ("Care Pathways 3.1 Test Report", "Care Pathways 3.1.0 SRS", "Risk Analysis v3.1 (Care Pathways)") and one of another (3.2), and a QMS-0025 Feature "CP | Care Pathways | v3.1": Release Details → CP lists two releases (3 and 1 assets), 3.1 with its Feature and %, 3.2 with Create Feature opening the New Feature form titled "Care Pathways | v3.2" (release name and number only) under the CP Epic, and found after it is created; Pulse Check's Releases and Supported summary show "CP [2]"; no page errors. **UAT**
@@ -1315,6 +1319,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-SET-07 My views** — Req SET-17, CON-42 — L1 `my-views.test.mjs` ("My views: on a server with a PAT, never named after a stream, never a stream connection, never in Git, kept when the shared setup is reset (SET-17, TC-SET-07)"); E2E `shell.e2e.mjs` ("TC-SET-07: My views — a view of your own on a server you have a PAT for, under Other views in the menu, never a stream and never in the shared setup"); browser check: My settings → My views offers only servers with a PAT; a view named DP is refused; a view with a name, project and WIQL query is added, fetched and listed under Other views in the menu; it is not in Data & sharing → Other views, not in Shared setup in Git (Save stream mapping to Git leaves it out), not in a JSON backup; Back up and remove all keeps it.
 
 **TC-SET-08 Look & feel** — Req SET-18, UI-12 — L1 `my-views.test.mjs` ("Admin and My settings: the pages, and older links opening where they moved (SET-15, TC-SET-06)"); E2E `shell.e2e.mjs` ("TC-SET-08: Look & feel switches the theme with the top-bar button in step, and the start view"; "TC-NAV-50: every page fills the width beside the menu inside a border, with the margins of Look & feel, also when the menu is folded" — the four tabs); `documents-and-data.e2e.mjs` (Table and chart defaults opened from Look & feel).
+
+**TC-SET-09 Delete a view of your own from its page** — Req SET-19, SET-17, CON-116 — **UAT** — L1 `view-page-actions.test.mjs` ("SET-19: a view of your own offers Delete this view…, also without Git or a Tool Owner right; disabled only in View as (TC-SET-09)", "SET-19, CON-116: the page reuses the deletion and pop-ups of My views and of Remove / Delete for everyone (no copy)"); E2E `delete-view-on-page.e2e.mjs` ("TC-SET-09: a person deletes a view of their own from its page — the pop-up names it, it leaves the menu, Home opens with a confirmation; the server PAT and the shared views stay"); UAT: with a view of your own (My settings → My views) open it under Other views in the menu; ⋯ ends with **Delete this view…** (red) and has no "for everyone" item; the pop-up names the view, its server and project, says what is deleted and that the shared setup, other people's views, the PAT and Azure DevOps are not touched; Cancel keeps it; Delete view opens Home with "Your view “…” was deleted …" (Dismiss), the view is gone from the menu and from My views, the server's PAT is still in Servers and PATs; My settings → My views → Delete… shows the same pop-up. In View as the item is disabled with "Not while viewing as someone else …". A shared view's page shows a Team Member no delete item.
 
 **TC-SET-04 Master data, audit, reset** — Req SET-10…12, OI-06, OI-09
 - Expected:
@@ -2646,7 +2652,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | QV-45 | TC-QV-25 |
 | QV-46 | TC-QV-26 |
 | QV-47 | TC-QV-27 |
-| QV-48 | TC-QV-28 |
+| QV-48 | TC-QV-28, TC-CON-74 |
 | QV-49 | TC-QV-30 |
 | QV-50 | TC-QV-31 |
 | QV-51 | TC-QV-32 |
@@ -2755,8 +2761,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | SET-14 | TC-SET-06 |
 | SET-15 | TC-SET-06, TC-PIR-30 |
 | SET-16 | TC-SET-06 |
-| SET-17 | TC-SET-07, TC-CON-68 |
+| SET-17 | TC-SET-07, TC-CON-68, TC-SET-09 |
 | SET-18 | TC-SET-08 |
+| SET-19 | TC-SET-09, TC-CON-72 |
 | SET-10…12 | TC-SET-04 |
 | STO-01, STO-02 | TC-STO-01 |
 | STO-03 | TC-STO-02 |
@@ -3277,7 +3284,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-34 | TC-PIR-35, TC-PIR-36, TC-PIR-37 |
 | PIR-35 | TC-PIR-37 |
 | CON-115 | TC-LST-07, TC-LST-10 |
+| CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
+| CON-118 | TC-CON-74 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
 | LST-03 | TC-LST-01, TC-LST-09 |
@@ -3314,13 +3323,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
-| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…25
+| UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…25, TC-CON-72, TC-CON-74 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23 |
 | UC-13 | TC-SNP-01…03 |
-| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20
+| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
 | UC-16 | TC-UPD-01, TC-UPD-02 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |

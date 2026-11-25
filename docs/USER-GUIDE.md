@@ -1343,6 +1343,14 @@ The **Team tree** tab shows the reporting lines. **Capacity roles** sets which t
 
 Your own read-only views are in **My settings → My views**: they appear under **Other views** in your menu only, and never change a stream.
 
+**Delete one of your own views from its page.** Open it under **Other views** in the menu, choose **⋯** → **Delete this view…** (the last item, in red) and read the pop-up: it names the view and says what is deleted — the view and the data fetched for it on this computer — and that the shared setup, other people's views, your PAT and Azure DevOps are not touched. **Delete view** deletes it (the same as **Delete…** in My settings → My views); the app opens **Home** with "Your view “…” was deleted …". It cannot be undone: add the view again in My views. While viewing as someone else the item is greyed out.
+
+*SET-19*
+
+**Delete a Windchill export from its page.** An export listed under **Other views** in the menu has **⋯** → **Delete this export…** (the last item, in red) if your role may import Windchill exports. The pop-up names the export and lists its files in Git; **Delete export** deletes them in one commit — GitHub keeps their history — and the export here, then **Home** opens with "The Windchill export “…” was deleted …". Greyed out, with the reason, while viewing as someone else, with the sample data, without Git storage or with a read-only Git token. Other browsers that already have the export keep their copy until it is deleted there. To get it back, import the export file again.
+
+*CON-118*
+
 ### Capacity & time
 
 **Admin → Capacity & time** holds how capacity is worked out:
@@ -1365,6 +1373,10 @@ Your own read-only views are in **My settings → My views**: they appear under 
 3. Read the pop-up — it affects everyone who uses the shared setup in Git; the app cannot tell how many people that is — and confirm.
 
 A backup of the view (never a PAT) is saved to Git first. At their next start every browser and desktop app removes the view with its saved data and shows once: "The Tool Owner removed 1 shared view: …". Each person's own views (**My views**) and PATs stay. To bring it back for everyone, use **Admin → Streams → Removed connections** → **Look in Git history** → **Restore** (removed views are listed first, with who removed them). Without the Tool Owner role, while viewing as someone else, without Git storage, with a read-only Git token or with the sample data, the two items are greyed out and the line above the table says why. An app version from before this change keeps the view until it is updated.
+
+A shared view's own page (under **Other views** in the menu) has no delete item, also for the Tool Owner: remove it for everyone here.
+
+*CON-116*
 
 *CON-109…CON-112*
 

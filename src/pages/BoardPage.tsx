@@ -12,6 +12,7 @@ import type { PersonalViewsStore } from '../usePersonalViews'
 import { viewMetaKey } from '../personalViews'
 import { recordJob } from '../backgroundJobs'
 import { normalizeBacklogColumns } from '../backlogView'
+import { useOtherViewActions, type OtherViewEnv } from '../components/OtherViewActions'
 
 // BKL-47: the QMS-0025 column order a Tool Owner saves for everyone (in the shared views defaults in Git).
 const columnsDefaultKey = 'backlog-columns'
@@ -58,10 +59,10 @@ import { normalizeReleaseSourceSettings, streamPatterns } from '../releaseSource
 
 // One page for all configured Azure DevOps views (each its own entry in the sidebar): the Time Writing backlog
 // (QMS-0025) as an editable tree, and every other shown connection as a read-only query view.
-export function BoardPage({ azure, store, current, month, git, onOpenConnection, onOpenSettings, assign, featureSetup, views, canSetDefault = false }: { onOpenSettings?: (tab: SettingsTab, section?: string) => void; views?: PersonalViewsStore; canSetDefault?: boolean; azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null }) {
+export function BoardPage({ azure, store, current, month, git, onOpenConnection, onOpenSettings, assign, featureSetup, views, canSetDefault = false, otherView }: { otherView?: OtherViewEnv; onOpenSettings?: (tab: SettingsTab, section?: string) => void; views?: PersonalViewsStore; canSetDefault?: boolean; azure: AzureWorkspace; store: PageProps['store']; current: BacklogView; month: string; git?: GitStorage; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null }) {
   const { items, config, preview, pat, featureCreated, rememberPat } = azure
   const [filter, setFilter] = useState('')
-  if (current.readOnly) return <ReadOnlyView key={current.id} id={current.id} name={current.name} role={current.role} azure={azure} store={store} month={month} gitNote={git?.snapshotNotes[current.id]} onOpenConnection={onOpenConnection} onOpenSettings={onOpenSettings} assign={assign} featureSetup={featureSetup} />
+  if (current.readOnly) return <ReadOnlyView key={current.id} id={current.id} name={current.name} role={current.role} azure={azure} store={store} month={month} gitNote={git?.snapshotNotes[current.id]} otherView={otherView} onOpenConnection={onOpenConnection} onOpenSettings={onOpenSettings} assign={assign} featureSetup={featureSetup} />
   const activeItems = items.filter((item) => item.state.trim().toLowerCase() !== 'removed')
   const shown = activeItems.filter((item) => `${item.id} ${item.title} ${item.workItemType} ${item.state}`.toLowerCase().includes(filter.toLowerCase()))
   const counts = new Map<string, number>()
@@ -137,7 +138,7 @@ function useMissingParentTitles(documentsId: string | undefined, fetchedAt: stri
     void readAndKeepParentTitles(documentsId, missing, update)
   }, [documentsId, fetchedAt, report, titles, update])
 }
-function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConnection, onOpenSettings, assign, featureSetup }: { onOpenSettings?: (tab: SettingsTab, section?: string) => void; featureSetup?: FeatureSetups | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
+function ReadOnlyView({ id, name, role, azure, store, month, gitNote, otherView, onOpenConnection, onOpenSettings, assign, featureSetup }: { otherView?: OtherViewEnv; onOpenSettings?: (tab: SettingsTab, section?: string) => void; featureSetup?: FeatureSetups | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
   // QV-16: the header month, or every month (Show: {month} / All months).
   const [scope, setScope] = useState<ReleaseScope>('month')
   const allMonths = scope === 'all'
@@ -252,6 +253,8 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
   // a name not read shows as #ID with the reason. The tables never wait for it.
   const fetchAll = isToolTwo && toolTwo ? async () => { const tools = await azure.fetchConnection(id); const documents = await azure.fetchConnection(toolTwo.documents.id); await readAndKeepParentTitles(toolTwo.documents.id, parentIdsToRead(toolTwo.report), store.update); return tools && documents } : () => azure.fetchConnection(id)
   const refresh = <button type="button" className="primary" aria-label={refreshLabel} title={isToolTwo ? `${refreshLabel}: the Tools and the Signed documents queries` : refreshLabel} disabled={busy} onClick={() => inBackground(refreshLabel, fetchAll)}>↻{busy ? <small>{status?.message || 'Fetching…'}</small> : !source ? <small>Fetch</small> : null}</button>
+  // SET-19, CON-116: Delete this view… on a view of your own; a shared view's page has no delete item.
+  const viewActions = useOtherViewActions(id, azure, otherView)
   const menu = [...(azure.canLoadFromGit(id) ? [{ key: 'git', label: 'Load from Git', disabled: busy, onClick: () => inBackground('Load from Git', () => azure.loadFromGit(id)) }] : []), { key: 'settings', label: 'Connection settings', onClick: onOpenConnection }]
   // Information about the view sits behind ⋯ → About this source… (QV-70), not as banners; only errors and warnings stay on the page.
   const notes = [
@@ -353,7 +356,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     <ReleaseSourceBar name={name} source={`${config ? `${config.organization} / ${config.project}` : 'connection not found'}${profile?.query ? ' · query' : config?.team ? ` · team ${config.team}` : ''}`}
       fetched={source ? `fetched ${formatDateTime(source.fetchedAt)}${'fromGit' in source && source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}
       about={notes.length > 0 ? notes.map((note) => <p key={note}>{note}</p>) : undefined}
-      period={source && !toolPage && !isToolDocuments ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu}>
+      period={source && !toolPage && !isToolDocuments ? <PeriodSelect month={month} value={scope} onChange={setScope} /> : undefined} primary={refresh} menu={menu} last={viewActions.items}>
       {source && status?.state === 'error' && <Notice tone="warning">Not refreshed: {status.message} The data shown is from {formatDateTime(source.fetchedAt)}.</Notice>}
       {!azure.isSample && gitNote?.tone === 'error' && <Notice tone="error">{gitNote.text}</Notice>}
       {stale && !busy && <Notice tone="warning">The saved data was fetched with different columns than the connection's query now has. Refresh from Azure to load every column's values.</Notice>}
@@ -361,5 +364,6 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, onOpenConn
     {/* TVL-23: on Tool Validations the counts show on the Master list tab only. */}
     {toolPage ? null : counts}
     {body}
+    {viewActions.dialog}
   </Page>
 }

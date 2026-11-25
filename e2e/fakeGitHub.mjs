@@ -56,7 +56,8 @@ export function fakeGitHub({ owner = 'example', repo = 'storage', files = {}, br
   const mapOf = (ref) => heads[ref] ? commits.get(heads[ref]).map : commits.get(ref)?.map ?? null
   const write = (name, map, message, paths) => { setBranch(name, commit(name, map, message, heads[name]), paths); state.writes.push({ branch: name, message, paths }) }
 
-  function handle(method, url, bodyText) {
+  // accept: the request's Accept header — `application/vnd.github.raw+json` answers a file's text itself (readRawFile).
+  function handle(method, url, bodyText, accept = '') {
     const target = new URL(url)
     const body = bodyText ? JSON.parse(bodyText) : null
     const path = target.pathname
@@ -89,6 +90,7 @@ export function fakeGitHub({ owner = 'example', repo = 'storage', files = {}, br
       if (method === 'GET') {
         const map = mapOf(target.searchParams.get('ref') ?? branch)
         if (!map) return json(404, { message: 'No commit found for the ref' })
+        if (map[file] != null && /raw/.test(accept)) return { status: 200, body: map[file], raw: true }
         if (map[file] != null) return json(200, { type: 'file', name: file.split('/').pop(), path: file, encoding: 'base64', content: Buffer.from(map[file]).toString('base64'), sha: blobSha(map[file]) })
         const sha = treeOf(map, file)
         if (!sha) return json(404, { message: 'Not Found' })
@@ -156,10 +158,12 @@ export function fakeGitHub({ owner = 'example', repo = 'storage', files = {}, br
   // As a fetch (unit tests): a Response for every call, after `delay` ms.
   const fetchImpl = async (url, init = {}) => {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
-    const { status, body } = handle(init.method ?? 'GET', url, init.body ?? null)
+    const accept = init.headers?.Accept ?? init.headers?.accept ?? ''
+    const { status, body, raw } = handle(init.method ?? 'GET', url, init.body ?? null, accept)
+    if (raw) return new Response(body, { status, headers: { 'Content-Type': 'text/plain' } })
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   }
   // As a Playwright route handler (E2E): every call to api.github.com.
-  const route = (route) => { const request = route.request(); const { status, body } = handle(request.method(), request.url(), request.postData()); return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }) }
+  const route = (route) => { const request = route.request(); const { status, body, raw } = handle(request.method(), request.url(), request.postData(), request.headers().accept ?? ''); return route.fulfill({ status, contentType: raw ? 'text/plain' : 'application/json', body: raw ? body : JSON.stringify(body) }) }
   return { ...state, handle, fetch: fetchImpl, route, read: (path, name = branch) => state.files(name)?.[path] ?? null, put: (path, text, name = branch, message = `set ${path}`) => { const map = { ...state.files(name) }; if (text == null) delete map[path]; else map[path] = text; write(name, map, message, [path]) } }
 }
