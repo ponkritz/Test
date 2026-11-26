@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'r
 import { isRunning, runInBackground, recordJob } from './backgroundJobs'
 import { ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewForm, type ReviewViewer } from './piReviewPost'
 import { discussionOf, discussionsFrom, discussionsVersion, latestComment, piLabel, readDiscussions, reviewSplit, setDiscussion, subscribeDiscussions, type BulkReadResult } from './piReview'
-import { rateLimitWait, type AzureConfig } from './azureDevOps'
+import { rateLimitWait, shownDateOf, type AzureConfig } from './azureDevOps'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
 import { ReadOnlyContext, useCan } from './useCan'
 import type { WorkItemComment } from './azureDevOps'
@@ -86,7 +86,7 @@ export function useReviewWriter(pi: string, iterations: PiIterations = { list: n
   // PIR-34: Edit review… — the form prefilled from the viewer's own review comment; saving replaces that comment.
   function startEdit(item: AzureWorkItem, comment: WorkItemComment) {
     if (!env?.config) return
-    setWriting({ ...startForm(item, pi, env.items, formSetupOf(env), iterations, new Date(), comment), editing: { commentId: comment.id, date: comment.date } })
+    setWriting({ ...startForm(item, pi, env.items, formSetupOf(env), iterations, new Date(), comment), editing: { commentId: comment.id, date: shownDateOf(comment) } })
   }
   // PIR-34: save an edit — a Background jobs entry "Edit review · #id": update the comment, audit, read the Discussion
   // again; a failed edit opens the pop-up again with what was typed, the error and "Post as a new review instead".

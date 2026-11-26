@@ -14,7 +14,7 @@ import { listJobs, subscribeJobs } from '../backgroundJobs'
 import type { PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
 import { cutoffNote, reviewStartOf } from '../piReviewStart'
-import type { WorkItemComment } from '../azureDevOps'
+import { shownDateOf, type WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { MyWork } from '../useMyWork'
@@ -99,7 +99,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     { id: 'status', label: who ? 'Their review' : 'My review', hint: `Reviewed: ${who ? `${who} wrote` : 'you wrote'} a review comment (with the review headings) for the chosen PI — its headings name that PI (“Learnings of PI 26.4:”), or, without a PI in them, it is dated within the PI’s Azure DevOps dates (UTC) — or the Feature is Closed and the review is dated on or after its Closed Date. Not reviewed: none yet, or only a review for another PI (its date and PI shown)${who ? '; a review posted by someone else does not count' : ''}. Read from Azure DevOps when the page opens.`,
       value: (item) => statusText(status(item)), title: (item) => status(item).error,
       render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}{shown.state === 'reviewed' && shown.count?.why === 'closed' && <small className="muted">At close ({formatDate(shown.comment?.date)})</small>}</span> } },
-    { id: 'date', label: who ? 'Date of their review' : 'Date of my review', firstSortDesc: true, value: (item) => status(item).comment?.date ?? '', render: (item) => { const shown = status(item); return shown.comment ? formatDateTime(shown.comment.date) : <span className="muted">—</span> } },
+    { id: 'date', label: who ? 'Date of their review' : 'Date of my review', firstSortDesc: true, value: (item) => { const comment = status(item).comment; return comment ? shownDateOf(comment) : '' }, render: (item) => { const shown = status(item); return shown.comment ? <span title={shown.comment.updated ? `Written ${formatDateTime(shown.comment.date)}, updated ${formatDateTime(shown.comment.updated)}` : undefined}>{formatDateTime(shownDateOf(shown.comment))}</span> : <span className="muted">—</span> } },
     { id: 'move', label: 'Move to Next PI', value: (item) => { const split = status(item).split; return split ? moveLabel(split) : '' }, render: (item) => { const split = status(item).split; return split ? <span className="pir-clip">{oneLine(moveLabel(split))}</span> : <span className="muted">—</span> } },
     { id: 'review-mode', label: 'Review mode', value: (item) => { const split = status(item).split; return split ? reviewModeLabel(split) : '' } },
     { id: 'actions', label: 'Actions', export: false, sortable: false,

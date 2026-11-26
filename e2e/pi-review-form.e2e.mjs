@@ -518,6 +518,7 @@ test('TC-PIR-35: Edit review… changes my own review in place — prefilled, sa
   assert.equal(await page.getByRole('button', { name: 'Edit review of Feature 201' }).count(), 0)
   assert.equal(await page.getByRole('button', { name: 'Write review of Feature 205' }).count(), 0, 'one action per row')
   assert.equal(await page.getByRole('button', { name: 'Write review of Feature 201' }).count(), 1)
+  const writtenOn = await cell(page, '205', 'Date of my review')
   await edit.click()
   const dialog = page.getByRole('dialog', { name: 'Edit review of Feature #205' })
   await dialog.waitFor()
@@ -535,6 +536,9 @@ test('TC-PIR-35: Edit review… changes my own review in place — prefilled, sa
   assert.match(state.edits[0].body.text, /<li>book the rig early<\/li>/)
   assert.deepEqual(state.posts, [], 'no new comment')
   assert.match(await text(rowOf(page, '205').locator('td').nth(4)), /^Reviewed$/, 'its date stays: it still counts for PI 2026.4')
+  // TC-PIR-40 (PIR-38): Date of my review shows when the review was updated; the written date is in its tooltip.
+  await until(async () => await cell(page, '205', 'Date of my review') !== writtenOn, 'the updated date')
+  assert.match(await rowOf(page, '205').locator('td span[title^="Written "]').getAttribute('title'), /^Written .+, updated .+$/)
   if (shots) await page.screenshot({ path: `${shots}/my-pi-review-edit-review-button-1440-light.png` })
   // A failed edit: the form opens again with what was typed, the error and Post as a new review instead.
   state.failNextEdit = true

@@ -1,3 +1,4 @@
+import { shownDateOf } from '../azureDevOps'
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Info, Modal, Notice, WriteBlocked } from '../components/ui'
 import { formatDateTime } from '../format'
@@ -89,7 +90,7 @@ export const postingNote = 'Posting adds a new comment to the Feature’s Discus
 export function ReviewAction({ item, own, why, primary = false, onWrite, onEdit }: { item: Pick<Writing['item'], 'id'>; own?: { comment: { date: string } }; why: string; primary?: boolean; onWrite: () => void; onEdit: () => void }) {
   const className = primary ? 'primary' : 'ghost'
   return own
-    ? <button type="button" className={className} disabled={Boolean(why)} title={why || `Edit your review of Feature #${item.id} (${formatDateTime(own.comment.date)})`} aria-label={`Edit review of Feature ${item.id}`} onClick={onEdit}>Edit review…</button>
+    ? <button type="button" className={className} disabled={Boolean(why)} title={why || `Edit your review of Feature #${item.id} (${formatDateTime(shownDateOf(own.comment))})`} aria-label={`Edit review of Feature ${item.id}`} onClick={onEdit}>Edit review…</button>
     : <button type="button" className={className} disabled={Boolean(why)} title={why || `Write the PI review of Feature #${item.id}`} aria-label={`Write review of Feature ${item.id}`} onClick={onWrite}>Write review…</button>
 }
 

@@ -1,3 +1,4 @@
+import { shownDateOf } from './azureDevOps.ts'
 // PIR-36, PIR-37: one PI review for several Features at once (My PI Review) — which ticked Features can take it, what
 // happens to each (a new comment, or my own review of the chosen PI replaced, as Write review… and Edit review… do), and
 // the one background job that writes them one after another, a failure on one not stopping the others.
@@ -53,7 +54,7 @@ export function startBulkForm(targets: BulkTarget[], pi: string, items: AzureWor
 
 // PIR-36: the ticked Features as targets — each with my own review of the chosen PI to replace, if it has one.
 export function bulkTargets<T extends AzureWorkItem>(items: readonly T[], own: (item: T) => { comment: { id: number; date: string } } | undefined): BulkTarget[] {
-  return items.map((item) => { const mine = own(item); return mine ? { item, replace: { commentId: mine.comment.id, date: mine.comment.date } } : { item } })
+  return items.map((item) => { const mine = own(item); return mine ? { item, replace: { commentId: mine.comment.id, date: shownDateOf(mine.comment) } } : { item } })
 }
 
 // PIR-36: the reviewed PI of every target must be the same (one form, one comment): '' when it is, else the problem.

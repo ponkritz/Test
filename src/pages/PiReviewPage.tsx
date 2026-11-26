@@ -3,7 +3,7 @@ import { DataTable, type DataColumn } from '../components/DataTable'
 import { MultiSelect } from '../components/MultiSelect'
 import { Drawer, EmptyState, Notice, Page, Pill, TablePanel, WriteBlocked } from '../components/ui'
 import { listJobs, recordJob, runInBackground, subscribeJobs } from '../backgroundJobs'
-import { rateLimitWait, type AzureConfig } from '../azureDevOps'
+import { rateLimitWait, shownDateOf, type AzureConfig } from '../azureDevOps'
 import { capacityContext } from '../capacity'
 import { formatDate, formatDateTime } from '../format'
 import { discussionOf, discussionsVersion, epicOf, latestComment, moveLabel, oneLine, piFeatures, piLabel, readDiscussions, reviewModeLabel, reviewModes, reviewSplit, samePi, subscribeDiscussions, type ReviewSplit, type SplitFrom } from '../piReview'
@@ -132,8 +132,8 @@ export function PiReviewPage({ azure, store, self }: { azure: AzureWorkspace; st
       value: ({ item }) => commentsCell(item), render: ({ item }) => { const entry = discussionOf(item.key); return entry?.state === 'done' ? `${entry.comments.length.toLocaleString()}${entry.capped ? '+' : ''}` : entry?.state === 'loading' ? <span className="muted">…</span> : entry?.state === 'error' ? <span className="negative" title={entry.error}>Not read</span> : <span className="muted">—</span> } },
     // PIR-09: the latest comment and its split; "—" with the hint until the Discussion is read.
     { id: 'latest-date', label: 'Date and Time of Comment', firstSortDesc: true, hint: 'When the Feature’s newest comment was written (by its date and time, whoever wrote it), in your time zone. Filled once the Discussion is read: open the Feature, or ↻ Read all Discussions.',
-      value: ({ item }) => latestOf(item)?.comment?.date ?? '', title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : latest.comment ? `By ${latest.comment.author}` : 'No comments in the Discussion.' },
-      render: ({ item }) => { const latest = latestOf(item); return latest?.comment ? formatDateTime(latest.comment.date) : <span className="muted">—</span> } },
+      value: ({ item }) => { const comment = latestOf(item)?.comment; return comment ? shownDateOf(comment) : '' }, title: ({ item }) => { const latest = latestOf(item); return !latest ? unreadHint : latest.comment ? `By ${latest.comment.author}` : 'No comments in the Discussion.' },
+      render: ({ item }) => { const latest = latestOf(item); return latest?.comment ? formatDateTime(shownDateOf(latest.comment)) : <span className="muted">—</span> } },
     textColumn('latest-comment', 'Comment', 'The whole newest comment, as plain text; the full text is in the tooltip and in the Feature’s drawer.', (latest) => latest.comment?.text),
     textColumn('struggles', 'Struggles', `The text after the heading “Struggles:” (or Challenges, Issues, Problems, Blockers, Impediments, Risks, Pain points, What went wrong, What didn’t go well) in the newest comment. Without any heading in the comment, the sentences with words such as blocked, delayed, issue or risk, marked “(suggested)”. ${keywordNote}`, (latest) => latest.split.struggles),
     textColumn('learnings', 'Learnings', `The text after the heading “Learnings:” (or Lessons, Lessons learnt, Takeaways, What went well, Improvements, Next time) in the newest comment. Without any heading in the comment, the sentences with words such as learned, lesson, next time or went well, marked “(suggested)”. ${keywordNote}`, (latest) => latest.split.learnings),
@@ -264,7 +264,7 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, p
       {entry?.state === 'done' && entry.capped && <p className="muted">Showing the newest 1,000 comments; older ones are not read.</p>}
       {entry?.state === 'done' && entry.comments.length > 0 && <ol className="pir-comments">
         {entry.comments.map((comment) => <li key={comment.id}>
-          <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(comment.date)}</small></p>
+          <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(shownDateOf(comment))}{comment.updated ? ' (updated)' : ''}</small></p>
           <p className="pir-comment-text">{comment.text || <span className="muted">(no text)</span>}</p>
         </li>)}
       </ol>}
@@ -285,7 +285,7 @@ function LatestComment({ comments, setup }: { comments: WorkItemComment[]; setup
   const suggested = split.from === 'Keywords'
   return <section aria-label="Latest comment" className="pir-latest">
     <h3>Latest comment</h3>
-    <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(comment.date)}</small></p>
+    <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(shownDateOf(comment))}{comment.updated ? ' (updated)' : ''}</small></p>
     {suggested && <p className="muted pir-suggested-note" title={`${suggestedHint}: the comment has no Struggles, Learnings or Move to next PI heading, so its sentences with their keywords are shown.`}>Suggested from keywords — the comment has no heading: check them against the whole comment in the Discussion below.</p>}
     {any ? <dl className={`od-row-values pir-split${suggested ? ' pir-suggested' : ''}`}>
       <div><dt>Struggles</dt><dd>{split.struggles || '—'}</dd></div>

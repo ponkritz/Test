@@ -2438,6 +2438,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-39 The bulk review job: post or replace per Feature, failures kept apart** — Req PIR-37, PIR-34, PIR-13, PIR-14 — L1 `pi-review-bulk.test.mjs` ("PIR-37: per Feature a new comment, or my review replaced — the very comment the single form posts, one Feature after another": add-comment to 201 and 205, update-comment of comment 41 on 202, every body equal to `buildReviewComment` of the same answers, the Discussion read before and after each write, the progress lines "2 of 3: replacing your review of #202…", the summary "Posted 2 (#201, #205) · Replaced 1 (#202) · Failed 0."; "PIR-37: a failure on one Feature does not stop the others; a review changed since the pop-up opened is never overwritten nor posted twice": a refused post, my review now another comment, a review of mine posted meanwhile, my review gone, a Discussion that cannot be read and a single post running each fail with their reason and nothing sent for them, the Features after them still written, a post not read back named, the job marked failed).
 
+**TC-PIR-40 A changed review shows its updated date** — Req PIR-38, PIR-34 — L1 `pi-review-edit.test.mjs` ("PIR-38: a review shows when it was updated — the modifiedDate of an edited comment, else when it was written; which PI it counts for still goes by the written date (TC-PIR-40)"); E2E `pi-review-form.e2e.mjs` (the Edit review… scenario: after the edit, Date of my review changes to the updated date and its tooltip reads "Written …, updated …"); browser check: after a bulk replace (TC-PIR-38) the replaced Feature shows the new date in My PI Review and PI Review.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3337,6 +3339,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-35 | TC-PIR-37 |
 | PIR-36 | TC-PIR-38 |
 | PIR-37 | TC-PIR-38, TC-PIR-39 |
+| PIR-38 | TC-PIR-40 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3423,7 +3426,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…39, TC-UI-27 |
+| UC-40 | TC-PIR-01…40, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record
