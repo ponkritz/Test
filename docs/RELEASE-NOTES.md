@@ -2,6 +2,35 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v12.3.1 — 2026-11-26
+
+**Fixed**
+- **Other views no longer change the shared stream mapping without the Tool Owner right** — Use as Time Writing and Keep "…", remove the others are disabled with the reason for everyone but a Tool Owner, and Git storage itself refuses to write the shared setup or delete its data files without “Change the stream mapping” (CON-133; review AR-001, KB-120).
+- **Role rights no longer saves an old draft over a newer access.json** — the draft is written over the version it was made from; when someone else saved meanwhile the page says so, Save is refused with a clear message and your draft is kept (CON-132; AR-002, KB-121).
+- **One rule on every save of access.json** — the People drawer and the bulk Set access role… now refuse what Role rights refuses: only a Tool Owner changes who holds the stream mapping, one must remain, and you keep “Manage access” (CON-131; AR-003, KB-122).
+- **A Deny counts for the Tool Owner** — who holds the stream mapping is worked out from each person's effective rights, so a Deny can no longer leave nobody able to change it (CON-130; AR-004, KB-123).
+- **Bulk Set region… / Set role… / Set access role… start with nothing chosen** — Save waits for a value; clearing is its own choice that asks to confirm (CON-135; AR-010, KB-124).
+- **Access for emails not in Azure DevOps** — Role rights lists the app access of emails no one in Azure DevOps has, with Remove… (confirmed) and Give access by email… (CON-134; AR-011, KB-125, LIM-15).
+
+DF-420…DF-424, SM-250; TC-CON-90…TC-CON-95.
+
+PR #445.
+
+**Fixed**
+- **The PAT typed for Restore from Git goes to one server only** — Admin → Data & sharing → Shared setup in Git → Views in Git has **Server of this PAT** next to the PAT field; the PAT is used and saved only for that server, and restored connections on other servers stay without a PAT and are named (CON-141, CON-24; KB-131, review AR-005).
+- **Edit or Clone onto another server asks for that server's PAT** — the old connection's PAT is never stored for or sent to the new server (CON-142; KB-132, review AR-006).
+- **Release naming patterns no longer freeze the page** — patterns are matched in linear time with the same results; a pattern has at most 20 `*`, checked on save and when the shared settings are read (CON-140; KB-130, review AR-007).
+- **Shared files above 1 MB load and save** — `history-hours.json` and every other shared file above 1 MB are read raw by their version id, so Historical hours and their saves work again (GIT-40; KB-133, review AR-008).
+
+DF-430…DF-433, SM-255…SM-258 (SM-05, SM-69, SM-79, R-02 updated); TC-CON-100…TC-CON-103, TC-GIT-35…TC-GIT-37.
+
+PR #445.
+
+**Documentation**
+- **Day-to-day demo deck** — `Demand-Planning-Demo-Day-to-Day.html` (repository root): one standalone, offline HTML presentation (26 slides, screenshots of synthetic sample data) for a live hands-on session: setup on each computer, the pages used every week, what a new app version or a new setup in Git looks like, and a hands-on checklist. Open it in a browser; arrow keys to move, F full screen, O overview, N speaker notes.
+
+PR #445.
+
 ## v12.3.0 — 2026-11-26
 
 **Changed**
