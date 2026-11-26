@@ -1177,6 +1177,8 @@ TC-OVR-01 to TC-OVR-03 tested the earlier Overview and are **retired** with OVR-
 
 **TC-CAP-34 Team tree tab** — Req CAP-62, SET-13 — E2E `people.e2e.mjs` ("TC-CAP-33 / TC-CAP-34: …": the Team tree tab with the reporting lines, apart from the list); E2E `shell.e2e.mjs` ("TC-SET-05": the outside manager at the top of the Team tree tab); browser check: a role without "Edit people" sees no Team tree tab.
 
+**TC-CAP-35 Leave and holidays off the capacity when planned; Planned and Actual without them** — Req CAP-63, CAP-64, CAP-03 (retired), CAP-11, CAP-38 — L1 `leave-capacity.test.mjs` ("CAP-63, CAP-64, ACT-28: planned leave (Original Estimate only) comes off the capacity and stays out of Planned": November 2026, 168 h contractual, 88 h PTO as Original Estimate only, a 16 h India holiday, 40 h work → Capacity 64 h, Planned 40 h, 63 %, hint "168h contractual − 88h leave − 16h holiday" (before: Capacity 152 h, Planned 128 h, 84 %); "CAP-63: leave booked as Completed Work only deducts the same; with both fields Completed Work is used" (88 h completed → 64 h; 88 planned / 40 completed → 112 h; Completed Work 0 → plan); "CAP-63: a shared regional holiday deducts its actual if recorded, else its plan" (OE 16 / CW 8 → 8 h; OE 16 → 16 h; nothing → one day; by the name rule and by Hour classification); "CAP-63: a common activity keeps its plan first; CAP-64: trainings and common activities stay in Planned"; "CAP-63: a typed formula reads Absence as deducted; the Old Calculation does not deduct it; a locked month keeps its figures"), `azure-insights.test.mjs` ("utilization uses funded month hours …": Actual 80 h without the 16 h absence, allActual 96 h); E2E `leave-capacity.e2e.mjs` ("TC-CAP-35, TC-ACT-23: …"); browser check (UAT): a person with leave planned for next month (Original Estimate only) sees their Capacity lowered on Time Writing, My dashboard and Team overview before booking it, and Planned hours without the leave; booking fewer hours than planned on the leave Task raises the Capacity to match. **UAT**
+
 **TC-CAP-01 Capacity calculation** — Req CAP-01…09, OVR-09 — L1 `capacity.test.mjs`, `monthly-hours.test.mjs`, `azure-insights.test.mjs` (incl. "CAP-03, KB-94: absence is read under the Absence Epic of the capacity settings, not a fixed Epic 37778"). Plus L3 analysis (A) with one person in October 2026:
 - 22 working days × 8 = 176 h funded.
 - An India holiday of 8 h gives 168 h available.
@@ -1852,6 +1854,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-ACT-21 Time Writing story closed with its last Month Task; Feature never closed** — Req ACT-27 — L1 `month-task-states.test.mjs` ("ACT-26, ACT-27: the check closes own Month Tasks of a locked month or a finished Feature, then their own Time Writing story when all its Tasks are Closed"); E2E `month-task-states.e2e.mjs` (TC-ACT-20: stories #301 and #501 closed, Ben's story and the Features unchanged); browser check: a story with a later month's open Task stays Active.
 
 **TC-ACT-22 Close Tasks / Close Features stay the manual close** — Req ACT-26, ACT-18, BKL-42 — browser check: tick this month's Task in **Close Tasks** and close it — it becomes Closed · read-only; the next Month Task states job leaves it alone (already Closed) and does not reopen it when hours were entered before.
+
+**TC-ACT-23 Capacity tile names what was taken off** — Req ACT-28, ACT-11, CAP-64 — L1 `leave-capacity.test.mjs` (`capacityText`: "168h contractual − 88h leave − 16h holiday", only non-zero parts); E2E `leave-capacity.e2e.mjs` ("TC-CAP-35, TC-ACT-23: planned leave comes off the capacity at once and stays out of Planned hours on Time Writing and My dashboard": Capacity = working days × 8 h − 40 h, hint "… contractual − 40h leave · leave and holidays: actual if recorded, else planned", Planned hours 48 (work + training, no leave) with its share of the capacity; My dashboard Planned 48h, Capacity the same); browser check: My dashboard → My hours ⓘ shows the same line.
 
 **TC-ACT-05 Suggestions by state, Add all** — Req ACT-09, ACT-10 — E2E `shell.e2e.mjs` ("TC-ACT-05: suggestions filter by Active / New / Both and Add all moves them into Your activities"); browser check with the Time Writing connection: with a New and an Active Feature of yours without a task, Active / New / Both narrow the suggestions; Add all puts the shown ones in Your activities and Save creates their tasks; the Features keep their state (ATM-28: a New Feature becomes Active only through an Active User Story).
 
@@ -2883,6 +2887,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CAP-60 | TC-CAP-32, TC-UI-27 |
 | CAP-61 | TC-CAP-33 |
 | CAP-62 | TC-CAP-34 |
+| CAP-63 | TC-CAP-35 |
+| CAP-64 | TC-CAP-35, TC-ACT-23 |
 | BAS-01…04 | TC-BAS-01 |
 | BAS-05…07 | TC-BAS-02 |
 | BAS-08…10 | TC-BAS-03 |
@@ -3082,6 +3088,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | ACT-25 | TC-ACT-19, TC-ACT-20 |
 | ACT-26 | TC-ACT-20, TC-ACT-22 |
 | ACT-27 | TC-ACT-21 |
+| ACT-28 | TC-ACT-23 |
 | OVW-01 | TC-OVW-01, TC-OVW-02, TC-OVW-03 |
 | OVW-02 | TC-OVW-02 |
 | OVW-03 | TC-OVW-01 |
@@ -3549,12 +3556,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51, TC-NAV-52, TC-NAV-53, TC-NAV-54 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03, TC-CON-75, TC-CON-76, TC-CON-77, TC-CON-78, TC-CON-79, TC-CON-80, TC-CON-100, TC-CON-101, TC-CON-103 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
-| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-ACT-18…22, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
+| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-ACT-18…22, TC-ACT-23, TC-CAP-35, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-ATM-24, TC-ATM-25, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-37, TC-BKL-38, TC-BKL-39, TC-BKL-40, TC-BKL-41, TC-BKL-42, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…25, TC-CON-72, TC-CON-74 |
-| UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
+| UC-09 | TC-OV-11…15, TC-CAP-35, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30, TC-GIT-35, TC-GIT-36, TC-GIT-37, TC-GIT-31 |

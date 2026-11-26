@@ -12,7 +12,7 @@ import { FeatureEditor } from '../components/FeatureEditor'
 import { SearchSelect } from '../components/SearchSelect'
 import { EmptyState, Metric, Metrics, Modal, Page, WriteBlocked } from '../components/ui'
 import { useWriteBlock } from '../useCan'
-import { personMonths, totals } from '../dashboard'
+import { absenceRuleText, capacityParts, capacityText, personMonths, totals } from '../dashboard'
 import type { AzureWorkItem } from '../domain'
 import { setupHours, type FeatureSetups } from '../featureSetup'
 import { formatDate, formatHours, monthName } from '../format'
@@ -140,7 +140,8 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   // KPI cards (ACT-11): the figures of Monthly Time Writing for the person (their month Tasks), their capacity as on
   // My dashboard, and the monthly update.
   const kpiItems = my.known ? azure.items.filter((item) => item.workItemType !== 'Task' || isMine(item, my.me)) : []
-  const kpi = azureInsights(kpiItems, month, utcToday(), absenceEpicId)
+  // CAP-64: Planned and Actual leave out leave and holidays (taken off the capacity instead).
+  const kpi = azureInsights(kpiItems, month, utcToday(), locks)
   // CAP-56: found by every name the person goes by (their work email's Assigned To names too); when they are not in
   // the month's capacity, the tile says why instead of 0h.
   const names = my.known ? myNames(azure.items, my.me) : []
@@ -367,9 +368,9 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
     {/* One row of equal tiles (ACT-11, ACT-05): the hours, the tasks, the monthly update and the last day. */}
     <div className="act-top act-sticky">
     <Metrics>
-      <Metric label="Capacity" value={capacity == null ? '—' : `${formatHours(capacity)}h`} hint={capacity != null ? 'Working days less absence' : capacityWhy ?? 'Your name is not known yet'} />
-      <Metric label="Planned hours" value={<>{formatHours(kpi.plan.value)}{pctOf(kpi.plan.value, capacity)}</>} hint="Original Estimate · % of capacity" />
-      <Metric label="Actual hours" value={<>{formatHours(kpi.actual.value)}{pctOf(kpi.actual.value, capacity)}</>} hint={`Completed Work${kpi.plan.value ? ` · ${Math.round((kpi.actual.value ?? 0) / kpi.plan.value * 100)}% of plan` : ''}`} />
+      <Metric label="Capacity" value={capacity == null ? '—' : `${formatHours(capacity)}h`} hint={capacity != null ? `${capacityText(capacityParts(ownRows), formatHours)} · ${absenceRuleText}` : capacityWhy ?? 'Your name is not known yet'} />
+      <Metric label="Planned hours" value={<>{formatHours(kpi.plan.value)}{pctOf(kpi.plan.value, capacity)}</>} hint="Original Estimate without leave and holidays · % of capacity" />
+      <Metric label="Actual hours" value={<>{formatHours(kpi.actual.value)}{pctOf(kpi.actual.value, capacity)}</>} hint={`Completed Work without leave and holidays${kpi.plan.value ? ` · ${Math.round((kpi.actual.value ?? 0) / kpi.plan.value * 100)}% of plan` : ''}`} />
       <Metric label="Features Working on" value={featuresWorkingOn(azure.items, kpi.monthlyTasks)} hint={`Features with your ${label} Time Writing Task`} />
       <article className="act-summary act-tile-update" aria-labelledby="act-progress">
         <span id="act-progress">Monthly update</span>

@@ -313,7 +313,9 @@ export function capacityModel(source: AzureWorkItem[], month: string, settings: 
     const ownShare = rule && task.organization === 'history' && task.id < 0 ? rule : undefined
     if (rule && !ownShare) {
       const entry = shared.get(rule.id) ?? { ...rule, hours: 0, actual: 0, tasks: 0 }
-      entry.hours += hours(task.originalEstimate) || hours(task.completedWork) || settings.hoursPerDay; entry.actual += hours(task.completedWork); entry.tasks += 1
+      // CAP-60: a holiday is deducted by its actual if recorded, else planned (Completed Work, else Original Estimate,
+      // else one working day); a common activity keeps its plan first (its hours are the planned utilized hours).
+      entry.hours += rule.kind === 'holiday' ? hours(task.completedWork) || hours(task.originalEstimate) || settings.hoursPerDay : hours(task.originalEstimate) || hours(task.completedWork) || settings.hoursPerDay; entry.actual += hours(task.completedWork); entry.tasks += 1
       shared.set(rule.id, entry); continue
     }
     const name = task.assignedTo || feature?.assignedTo || 'Unassigned'
@@ -344,11 +346,14 @@ export function capacityModel(source: AzureWorkItem[], month: string, settings: 
     const training = epic?.id === settings.absenceEpicId && isTrainingWorkBy(rules, task, chain)
     if (epic?.id === settings.absenceEpicId && !training) {
       const kind = absenceKind([task.title, ...chain.filter(item => item.workItemType !== 'Epic').map(item => item.title)], rules)
-      person.absence += work; person.absenceByKind[kind] += work
+      // CAP-60: leave comes off the capacity by its actual if recorded, else planned (Completed Work when above 0,
+      // else Original Estimate), the same rule as holidays — planned leave lowers the capacity before it is booked.
+      const own = work || planned
+      person.absence += own; person.absenceByKind[kind] += own
       // CAP-40: absence with no Original Estimate counts its Completed Work as planned in the Old Calculation.
       if (!planned) person.allPlanned += work
-      addHours(calcOf(name).own.absence, ownTask(work, planned))
-      addHours(calcOf(name).absenceByKind[kind] ??= { estimate: 0, completed: 0, estimateElseCompleted: 0, deducted: 0, tasks: 0 }, ownTask(work, planned))
+      addHours(calcOf(name).own.absence, ownTask(work, planned, own))
+      addHours(calcOf(name).absenceByKind[kind] ??= { estimate: 0, completed: 0, estimateElseCompleted: 0, deducted: 0, tasks: 0 }, ownTask(work, planned, own))
       continue
     }
     if (training || isNpraTask(task, chain, rules)) {

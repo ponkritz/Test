@@ -7,7 +7,7 @@ import { allStreams, profileForStream, streamArea, windchillOptionsForView, wind
 import { viewSource } from '../viewSources'
 import type { WindchillWorkspace } from '../useWindchill'
 import { capacityContext, capacityGap, capacityModel, itemsForPerson, problemBreakdown, type CapacitySettings } from '../capacity'
-import { monthRange, narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, personMonths, streamTotals, totals, type Period } from '../dashboard'
+import { absenceRuleText, capacityParts, capacityText, monthRange, narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, personMonths, streamTotals, totals, type Period } from '../dashboard'
 import { isMine, isPending, myNames, stateChecks } from '../myWork'
 import { formatDate, formatHours, formatPercent, monthName } from '../format'
 import { utcToday } from '../businessTime'
@@ -179,7 +179,7 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
   }).filter((entry, index, all) => all.findIndex((other) => other.stream === entry.stream) === index) : []
   const open = (page: PageId, text: string) => <button type="button" className="text-button" onClick={() => navigate(page)}>{text} →</button>
   const sectionNode: Record<string, ReactNode> = {
-    hours: <TablePanel title={`My hours · ${label}`} info={<ul><li>Planned = Original Estimate and recorded = Completed Work of your month Time Writing Tasks; capacity = your working days less absence, as on the Dashboard.</li><li>Overrun = hours recorded above the estimate; ad-hoc = hours on Tasks tagged ad-hoc.</li></ul>} action={open('activities', 'Time Writing')}>
+    hours: <TablePanel title={`My hours · ${label}`} info={<ul><li>Planned = Original Estimate and recorded = Completed Work of your month Time Writing Tasks, without leave and holidays (they come off the capacity instead); capacity = your working days less absence, as on the Dashboard and Time Writing.</li>{rows.some((row) => row.month === month) && <li>Capacity {label}: {capacityText(capacityParts(rows.filter((row) => row.month === month)), formatHours)} = {formatHours(now.capacity)}h ({absenceRuleText}).</li>}<li>Overrun = hours recorded above the estimate; ad-hoc = hours on Tasks tagged ad-hoc.</li></ul>} action={open('activities', 'Time Writing')}>
       {notCounted && <Notice tone="info">Not counted in {label}: {notCounted}.</Notice>}
       <Metrics>
         <Metric label="Planned" value={`${formatHours(now.plan)}h`} hint={`Capacity ${formatHours(now.capacity)}h`} />
