@@ -1,5 +1,6 @@
 import { ChartSizeEnvContext } from './useChartSize'
-import { runInBackground, subscribeJobs } from './backgroundJobs'
+import { recordJob, runInBackground, subscribeJobs } from './backgroundJobs'
+import { applyStarters, parseStarters, startersBlocked } from './roleStarters'
 import { BrandMark } from './components/BrandMark'
 import { TableDefaultsContext } from './components/tableDesign'
 import { ReleaseSettingsContext } from './useStreamEpics'
@@ -224,6 +225,27 @@ export default function App() {
   const [viewAs, setViewAs] = useState<ViewAs | null>(null)
   const [viewAsOpen, setViewAsOpen] = useState(false)
   const access = useAccess(git, azure, viewAs)
+  // SET-23: the starter views of the person's own access roles (other-views/role-starters.json) copied once into their
+  // My views on this computer — at start once the setup and the roles are loaded, and with every load from Git. Never in
+  // View as, with the sample or without Git storage or a work email (startersBlocked); nothing is written to Git.
+  const startersRef = useRef<() => Promise<string>>(async () => '')
+  useEffect(() => { startersRef.current = async () => {
+    if (startersBlocked({ email: azure.creatorEmail, connected: git.connected, isSample: azure.isSample || git.isSample, viewingAs: Boolean(access.viewingAs) }) || !access.policy) return 'starter views: none for now'
+    const file = parseStarters((await git.readRoleStarters()).text)
+    const result = applyStarters(file, access.ownRights.roles, git.streamsRepository, azure.creatorEmail)
+    if (result.ids.length) {
+      azure.reloadConnectionProfiles()
+      recordJob('starter-views', 'Starter views for your role', { text: `Added to your My views: ${result.copied.join(', ')}. They are yours now: delete or keep them in My settings → My views.` })
+      for (const id of result.ids) void azure.fetchConnection(id)
+    }
+    return `starter views (${result.copied.length} added)`
+  } })
+  const startersApplied = useRef(false)
+  useEffect(() => {
+    if (startersApplied.current || !setupSynced || !access.policy || !git.connected) return
+    startersApplied.current = true
+    void startersRef.current().catch(() => undefined)
+  }, [setupSynced, access.policy, git.connected])
   // CAP-50: capacity counts people by their app access roles too; every render uses the loaded access.json.
   setAccessRoles(access.policy?.members)
   setAzureEmails(azure.items)
@@ -240,6 +262,7 @@ export default function App() {
     const loaded: string[] = [], failed: string[] = []
     const step = async (label: string, run: () => Promise<string>) => { progress(`Loading ${label.toLowerCase()}…`); try { loaded.push(await run()) } catch (failure) { failed.push(`${label}: ${failure instanceof Error ? failure.message : String(failure)}`) } }
     await step('Planning data', async () => { if (!confirmReplace(git.dirty, git.status === 'conflict')) return 'planning data skipped: your unsaved changes were kept'; await git.load(); return 'planning data (baselines, release scope, region / role mapping)' })
+    await step('Starter views', () => startersRef.current())
     await step('Connection setup', loadConnectionSetup)
     await step('Custom streams', loadCustomStreams)
     await step('On-prem view data', async () => { const result = await git.pullSnapshots(); return `${result.files} on-prem view data file${result.files === 1 ? '' : 's'} (${result.applied.length} newer than here)` })

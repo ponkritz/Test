@@ -1386,6 +1386,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-SET-10 Other views: yours, and the unassigned list for admins** — Req SET-20 — E2E `own-other-views.e2e.mjs` ("TC-CON-79: …": the note names the person's file; the Unassigned Other views panel for the admin only) ; browser check: Admin → Data & sharing → Other views says the views are yours and names your file; as an Admin the Unassigned Other views panel is below it with Assign to and ↻ Reload, and says "No unassigned Other views." when empty.
 
+**TC-SET-11 Starter views per role: set up by the admin, copied once into a person's My views** — Req SET-21, SET-22, SET-23, SET-25 — **UAT** — L1 `role-starters.test.mjs` ("SET-21, SET-22: the starter views file — checked like a My view, roles only from the access roles, never a PAT (TC-SET-11)", "SET-23: a starter view is copied once into My views — a deleted copy does not come back, a new starter arrives later, a role taken away keeps the copy (TC-SET-11)") ; E2E `role-starter-views.e2e.mjs` ("TC-SET-11: the admin sets up a starter view for Team Members — a Team Member finds it in My views, deletes it and it stays gone, and adds their own") ; browser check: as an Admin add a starter view for Team Member in Admin → Data & sharing → Other views → Starter views per role (the pop-up, Save to Git); `other-views/role-starters.json` holds it without a PAT; a Team Member's next start lists it in My settings → My views with "Starter view for your role" and an entry in Background jobs; Delete… removes it and it does not come back after a restart; Add my view still adds their own.
+
+**TC-SET-12 No starter views in View as, with the sample, without Git or a work email** — Req SET-24 — L1 `role-starters.test.mjs` ("SET-24: why no starter views are copied — View as, sample, no Git, no work email (TC-SET-12)") ; browser check: without a work email My settings → My views says the starter views need your work email; in View as and with the synthetic sample nothing is copied; a read-only Git token still copies them.
+
 **TC-SET-04 Master data, audit, reset** — Req SET-10…12, OI-06, OI-09
 - Expected:
   - An added value appears with "Active".
@@ -3411,6 +3415,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-37 | TC-GIT-29, TC-GIT-31 |
 | GIT-38 | TC-GIT-29, TC-GIT-31 |
 | SET-20 | TC-SET-10, TC-CON-79 |
+| SET-21 | TC-SET-11 |
+| SET-22 | TC-SET-11 |
+| SET-23 | TC-SET-11 |
+| SET-24 | TC-SET-12 |
+| SET-25 | TC-SET-11 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
 | LST-03 | TC-LST-01, TC-LST-09 |
@@ -3453,7 +3462,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30, TC-GIT-35, TC-GIT-36, TC-GIT-37, TC-GIT-31 |
 | UC-13 | TC-SNP-01…03 |
-| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10 |
+| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10, TC-SET-11, TC-SET-12 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
 | UC-16 | TC-UPD-01, TC-UPD-02, TC-UPD-03 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |

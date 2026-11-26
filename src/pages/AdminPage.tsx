@@ -15,6 +15,8 @@ import { StoryTemplatesPanel } from '../components/StoryTemplatesPanel'
 import type { EpicSetupStore } from '../useEpicSetup'
 import { ScopeChip } from '../components/ScopeChip'
 import { MyViewsPanel } from '../components/MyViewsPanel'
+import { RoleStarterViewsPanel } from '../components/RoleStarterViews'
+import { startersBlocked } from '../roleStarters'
 import { useNow } from '../useNow'
 import { actualsLockDate, actualsLocked, defaultActualsLockDay, defaultPlanLockDay, planLockDate, planningLocked } from '../planningLock'
 import { groupOf } from '../history'
@@ -263,7 +265,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
     {tab === 'my' && <SectionTabs page="my" sections={[
       { key: 'email', label: 'Your work email', scope: 'you', node: <AzureConnections section="email" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
       { key: 'servers', label: 'Servers and PATs', scope: 'you', node: <AzureConnections section="servers" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
-      { key: 'myviews', label: 'My views', scope: 'you', node: <MyViewsPanel azure={azure} /> },
+      { key: 'myviews', label: 'My views', scope: 'you', node: <MyViewsPanel azure={azure} startersBlocked={startersBlocked({ email: azure.creatorEmail, connected: git.connected, isSample: azure.isSample || git.isSample, viewingAs: Boolean(access.viewingAs) })} /> },
       { key: 'patterns', label: 'My naming patterns', scope: 'you', node: <NamingPatternsPanel store={store} canManage mode="mine" /> },
       { key: 'usage', label: 'My page usage', scope: 'you', node: <UsagePanel /> },
     ]} />}
@@ -284,7 +286,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
         {everything.loaded && <Notice tone={everything.failed?.length ? 'warning' : 'success'}>Loaded: {everything.loaded.join('; ') || 'nothing'}.{everything.failed?.length ? ` Not loaded — ${everything.failed.join(' · ')}` : ''}</Notice>}
       </Panel>}</> },
       ...(can('storage.shared') ? [{ key: 'shared', label: 'Shared setup in Git', scope: 'tool-owner' as const, node: <><RetiredFilesPanel git={git} viewingAs={Boolean(access.viewingAs)} toolOwner={access.rights.roles.includes('Tool Owner')} staleQeEpics={([['DP', dpBulk], ['IOCC', ioccBulk]] as const).flatMap(([stream, id]) => id && needsQePage(chooseSetup(featureSetup.setups, id, true).setup) ? [`Epic #${id} (${stream})`] : [])} /><AzureViewsGitPanel git={git} azure={azure} /></> }] : []),
-      { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} canRemoveForEveryone={access.canManageStreams} canAssignOtherViews={can('storage.shared')} people={Object.keys(access.policy?.members ?? {}).sort()} viewingAs={Boolean(access.viewingAs)} /> },
+      { key: 'views', label: 'Other views', scope: 'both', node: <><AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} canRemoveForEveryone={access.canManageStreams} canAssignOtherViews={can('storage.shared')} people={Object.keys(access.policy?.members ?? {}).sort()} viewingAs={Boolean(access.viewingAs)} /><RoleStarterViewsPanel git={git} azure={azure} admin={can('storage.shared')} viewingAs={Boolean(access.viewingAs)} /></> },
       ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> }] : []),
       { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
     ]} />}

@@ -1388,6 +1388,10 @@ Your own read-only views are in **My settings → My views**: they appear under 
 
 **Admin → Data & sharing** has **Git storage** (connect, change or disconnect; **Load latest**; and **Load everything from Git** below it), **Shared setup in Git**, **Other views** and **Synthetic sample**.
 
+**Starter views for your role.** Your admin can set up views that everyone with your access role starts with. At your next start they are copied into **My settings → My views**, marked *Starter view for your role*, and listed under **Other views** in the menu; Background jobs names them once. They are yours: delete one with **Delete…** and it does not come back; add your own with **Add my view** as before. A change your admin makes later does not change your copy. You need your work email set (My settings → Your work email); the panel says so otherwise.
+
+**Starter views per role (admins).** In **Admin → Data & sharing → Other views → Starter views per role** choose **＋ Add starter view**, enter a name, choose a server, enter the project and a WIQL query, tick the access roles and choose **Save to Git**. **Edit** changes it for people who get it for the first time; **Remove…** stops it reaching anyone new (copies already made stay). *SET-21…SET-25*
+
 **Your Other views.** The views listed under **Other views** are **yours**: custom queries, backlog views and background sources you added. They are saved in Git in a file of your own (`other-views/<your work email>.json`) and **nobody else sees them**; the Stream mapping (Admin → Streams) is the part shared with everyone. Adding, editing, cloning or removing one here saves your file right away, and your other computers follow it at their next start. **Remove** on a row opens a pop-up: the view goes here, from your file in Git and from your other computers; its saved data in Git is kept.
 
 **Unassigned Other views (admins).** The Other views of the older shared setup belong to nobody yet. The first start of this version with a Git token that can save moves them to **Unassigned Other views**, shown below the Other views panel to admins only (*Shared setup in Git*). To give one to the person who uses it:
