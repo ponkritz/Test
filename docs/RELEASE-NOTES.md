@@ -2,6 +2,18 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v14.8.0 — 2026-11-26
+
+**Changed**
+- **Update review for N… is a per-Feature grid** (My PI Review) — Learnings, Struggles and Additional Remarks are written once for all, each with **Keep each Feature's own** (the default when a Feature has a review) or **Use the shared text**; every ticked Feature has its own row with **Move to next PI**, **Moves to**, **Reason** (optional, as in the single form) and the **Review meeting** advice, started from **that Feature's review** (yours, else the latest one of the PI, else your old-format comment — which stays: use Convert… to replace it — else the form defaults). **All Features** applies a value to every row (Apply to all) or fills the active row's value down; Ctrl+D copies the row above. The Preview shows the active row's comment (PIR-82, PIR-83, PIR-36).
+- **Preview, then a faster run** — the **Result** column says per Feature what saving does: **Post**, **Replace** (your review), **Unchanged** (the same as your review: not written) or **Blocked** (with the reason). The job "PI review for N Features" writes **3 Features at a time** with the rate-limit handling of the Discussion reads ("2 of 4 done · …"), each Discussion still read again just before its write; the summary names the unchanged and blocked Features, and **Retry failed** in Background jobs writes only the failed Features again with the same comments (PIR-84, PIR-37).
+
+UI-STANDARDS §5 exception: the grid is a hand-built editable table in the full-size pop-up (`DataTable` has no editable cells; LIM-248).
+
+PIR-82, PIR-83, PIR-84; PIR-36, PIR-37 changed; TC-PIR-82…84 (TC-PIR-84 UAT); DF-560…564; LIM-245…248; SM-350, SM-351.
+
+PR #465.
+
 ## v14.7.1 — 2026-11-26
 
 **Fixed**
