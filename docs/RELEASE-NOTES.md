@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v12.9.0 — 2026-11-26
+
+**Added**
+- **Conduct PI Meeting** — on Data Insights → PI Review the PI Review leads and the PI Review Setup holders build the **PI Review Meeting** presentation of the chosen PI as one self-contained, offline HTML file: a static snapshot (its title names the PI, when it was built and by whom) of the reviews from "PI Review starts from" on, with the slides Title, Summary (and per Epic), one slide per Feature to discuss during the meeting, every other reviewed Feature grouped by Epic, the Features not reviewed, and the Themes — all Learnings, then all Struggles, with their Feature IDs; long lists over several slides; ← / →, Home / End, a slide overview and print at one slide a page. Every value is escaped, people by display name only, no request leaves the file. The build runs in Background jobs; the file is always downloaded, and a copy is saved in the Git data repository under `pi-review/meetings/PI-<pi>/` (not in View as, with sample data, without Git or with a read-only token — the page says why). The new **PI Review Meetings** panel lists the saved meetings with Open and Download (PIR-40…PIR-47).
+
+DF-470…DF-477, SM-270…SM-273, LIM-170…LIM-173; TC-PIR-42…TC-PIR-47.
+
+PR #451.
+
 ## v12.8.0 — 2026-11-26
 
 **Added**
