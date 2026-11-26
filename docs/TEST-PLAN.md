@@ -448,6 +448,14 @@ Cases marked **UAT** are also run in acceptance testing.
   - The column keeps its dragged width after the reload; Reset widths returns it to automatic.
 
 
+**TC-CON-100 A PAT typed for a restore goes only to its chosen server** — Req CON-141, CON-24 — L1 `view-definitions.test.mjs` ("AR-005: a PAT typed for a restore is used and saved only for the one server it was entered for (TC-CON-100)") ; browser check: with connections on two servers in `azure-views.json`, type a PAT, choose one server next to it and Restore from Git — only that server holds the PAT (My settings → Servers and PATs), the other connection is listed under "No PAT here for".
+
+**TC-CON-101 Edit or Clone to another server asks for its PAT** — Req CON-142 — L1 `view-definitions.test.mjs` ("AR-006: an edited or cloned connection keeps its PAT only on the same server (TC-CON-101)") ; browser check: Clone a connection that has a PAT, change the organisation to one without a PAT — the PAT field is required and says "The server changed: enter the PAT for this server"; Save without a PAT is refused; on the same server Save keeps the PAT.
+
+**TC-CON-102 Naming patterns match in linear time** — Req CON-140, QV-55, QV-60 — L1 `naming-patterns.test.mjs` ("AR-007: patterns match in linear time — 200 * on a 200-character Title under 50 ms; the same results as the former regex; at most 20 * (TC-CON-102)") ; browser check: in Release naming patterns type a pattern with 21 `*` — the row says "A pattern has at most 20 *."; Try a Title with `{*_RELEASE}*` still gives the release as before.
+
+**TC-CON-103 Restore from Git with a PAT for one server** — Req CON-141 — E2E `restore-pat-server.e2e.mjs` ("TC-CON-103: a PAT typed for Restore from Git is used only for the server chosen for it") ; browser check: as TC-CON-100, through Admin → Data & sharing → Shared setup in Git → Views in Git, also on a 4x slower CPU.
+
 ### 6.3 Fetch and auto-save
 
 **TC-FET-01 Query fetch with parents** — Req FET-02, FET-03
@@ -1044,6 +1052,18 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-CON-80 Remove one of my Other views** — Req CON-124, CON-112 — E2E `own-other-views.e2e.mjs` ("TC-CON-79: …": Ana removes Ana Local — the pop-up, her file without it, the removal marker) ; E2E `remove-views-for-everyone.e2e.mjs` ("TC-CON-68: …": the Tool Owner's Remove for everyone takes the view out of his file; Restore brings it back into his file) ; browser check: Remove on a row of Other views opens the pop-up `OTHER VIEWS · YOURS IN GIT`; after Remove the view is gone here and from the file, and a second computer with the same work email drops it at its next start.
 
+**TC-CON-90 A Deny counts for the Tool Owner** — Req CON-130, CON-93, CON-106 — L1 `admin-access-fixes.test.mjs` ("CON-130: a Deny of “Change the stream mapping” counts — holders come from effective rights (AR-004, TC-CON-90)") ; browser check with access.json in Git: as an Admin, Role rights → set Team Member: Change the stream mapping to Deny while the Tool Owner also has Team Member → Save is refused with "Only a Tool Owner …"; as the Tool Owner the same is refused with "Keep at least one Tool Owner".
+
+**TC-CON-91 One rule on every save of access.json** — Req CON-131, CON-93 — L1 `admin-access-fixes.test.mjs` ("CON-131: one rule on every save of access.json — the Tool Owner rule and Manage access kept (AR-003, TC-CON-91)") ; E2E `people.e2e.mjs` ("TC-CON-91 / TC-CON-94: an Admin (not the Tool Owner) is refused making themselves Tool Owner in People; a leaver's access is removed under Role rights") ; browser check: as an Admin who is not the Tool Owner, People → own drawer → Edit → tick Tool Owner → Save shows "App access roles not saved: Not saved: Only a Tool Owner …"; the bulk Set access role… with Tool Owner is refused the same way; access.json is unchanged.
+
+**TC-CON-92 A stale Role rights draft is not written over a newer access.json** — Req CON-132 — L1 `admin-access-fixes.test.mjs` ("CON-132: a Role rights draft is written over the version it was made from; a newer file is never lost (AR-002, TC-CON-92)") ; browser check with two browsers: A changes a cell in Role rights; B saves access.json; A's app loads B's file (Reload notice) and shows "Someone else saved access.json after you started these changes"; A's Save to Git shows "Not saved: someone else saved access.json …", the draft stays, B's change is in Git.
+
+**TC-CON-93 The stream mapping guarded in Git storage; Other views paths gated** — Req CON-133, CON-93 — L1 `admin-access-fixes.test.mjs` ("CON-133: the shared stream mapping is guarded inside Git storage and the Other views paths are gated (AR-001, TC-CON-93)") ; E2E `own-other-views.e2e.mjs`, `remove-views-for-everyone.e2e.mjs` (the Tool Owner's paths still save) ; browser check as an Admin (not Tool Owner) with a writable token and two Time Writing connections: Data & sharing → Other views shows "Keep …, remove the others" and Use as Time Writing disabled with the line "Use as Time Writing, remove duplicates: Only a Tool Owner …"; azure-views.json and azure-data/ are unchanged.
+
+**TC-CON-94 Access for emails not in Azure DevOps** — Req CON-134, CON-131 — L1 `admin-access-fixes.test.mjs` ("CON-134: app access of emails not in Azure DevOps is listed under Role rights, removed or given through the guarded save (AR-011, TC-CON-94)") ; E2E `people.e2e.mjs` ("TC-CON-91 / TC-CON-94: …": Remove… of left@example.com's Admin after the confirmation pop-up) ; browser check: Role rights → Access for emails not in Azure DevOps lists the email with Admin; Remove… → Remove access takes it out of access.json; Give access by email… with an email and Team Member adds it; both are disabled with the reason while Role rights has unsaved changes.
+
+**TC-CON-95 Bulk edit pop-ups start with nothing chosen** — Req CON-135, CAP-60 — L1 `admin-access-fixes.test.mjs` ("CON-135: the bulk Set region / role / access role pop-ups start with nothing chosen; clearing is its own choice (AR-010, TC-CON-95)") ; E2E `people.e2e.mjs` ("TC-CON-95: the bulk Set region… / Set role… / Set access role… pop-ups open with nothing chosen; Save waits for a value; clearing asks first") ; browser check: tick two people → Set region… shows "Choose…", Save disabled with "Choose a region, or (none) — clear."; (none) — clear → Clear region for 2 people asks once in the pop-up, then clears; the same for Set role… and Set access role….
+
 **TC-CON-67 Upload latest export… on a Windchill export page** — Req CON-108 — E2E `documents-and-data.e2e.mjs` ("TC-QV-44: the result of an action on a Release page — a Windchill import, a file that is not an export — is listed in Background jobs, not as a notice on the page": ⋯ → Upload latest export… opens the file picker; the export is imported for the same page, listed in Background jobs) ; browser check: on an existing export page choose ⋯ → Upload latest export… and a newer CSV — the counts and Releases follow the new file, the page keeps its name.
 
 **TC-QV-24 CP releases from the asset Titles** — *(Retired — see TC-QV-25)* Req QV-40 — L1 `streams.test.mjs` ("CP: the release from the asset Title "[Release name] [Release No] [Asset name]", each release once; fuzzy QMS-0025 match (TC-QV-24)"); browser check with a CP query holding three assets of one release in both namings ("Care Pathways 3.1 Test Report", "Care Pathways 3.1.0 SRS", "Risk Analysis v3.1 (Care Pathways)") and one of another (3.2), and a QMS-0025 Feature "CP | Care Pathways | v3.1": Release Details → CP lists two releases (3 and 1 assets), 3.1 with its Feature and %, 3.2 with Create Feature opening the New Feature form titled "Care Pathways | v3.2" (release name and number only) under the CP Epic, and found after it is created; Pulse Check's Releases and Supported summary show "CP [2]"; no page errors. **UAT**
@@ -1293,6 +1313,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 - Expected:
   - With TD-01 loaded, Save to Git is refused with the sample message.
   - Disconnect removes both localStorage keys, and the repository is unchanged.
+
+**TC-GIT-35 A shared file above 1 MB is read** — Req GIT-40 — L1 `git-storage.test.mjs` ("AR-008: a shared file above 1 MB (encoding "none") is read raw by its version id, and a queued save of it works (TC-GIT-35, TC-GIT-36)") ; browser check: with a `history-hours.json` above 1 MB in the data repository, Admin → Capacity & time → Historical hours lists its rows and the report pages count them.
+
+**TC-GIT-36 A queued save of a file above 1 MB** — Req GIT-40 — L1 `git-storage.test.mjs` ("AR-008: a shared file above 1 MB (encoding "none") is read raw by its version id, and a queued save of it works (TC-GIT-35, TC-GIT-36)") ; browser check: import more historical hours into a `history-hours.json` above 1 MB — the save commits and a reload shows the new rows.
+
+**TC-GIT-37 The planning data file above 1 MB is read** — Req GIT-40 — L1 `git-storage.test.mjs` ("AR-008: the planning data file above 1 MB is read too (TC-GIT-37)").
 
 ### 6.12 Snapshots (requires TD-04)
 
@@ -3362,6 +3388,15 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-122 | TC-CON-78, TC-CON-79 |
 | CON-123 | TC-CON-78, TC-CON-79 |
 | CON-124 | TC-CON-79, TC-CON-80 |
+| CON-130 | TC-CON-90 |
+| CON-131 | TC-CON-91 |
+| CON-132 | TC-CON-92 |
+| CON-133 | TC-CON-93 |
+| CON-134 | TC-CON-94 |
+| CON-135 | TC-CON-95 |
+| CON-140 | TC-CON-102 |
+| CON-141 | TC-CON-100, TC-CON-103 |
+| CON-142 | TC-CON-101 |
 | GIT-29 | TC-GIT-24 |
 | GIT-30 | TC-GIT-25, TC-CON-79 |
 | GIT-31 | TC-GIT-26 |
@@ -3369,6 +3404,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-33 | TC-GIT-28, TC-GIT-29 |
 | GIT-34 | TC-GIT-29 |
 | GIT-35 | TC-GIT-28, TC-GIT-30 |
+| GIT-40 | TC-GIT-35, TC-GIT-36, TC-GIT-37 |
 | SET-20 | TC-SET-10, TC-CON-79 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
@@ -3400,7 +3436,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | Use case | Test cases |
 |---|---|
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51, TC-NAV-52, TC-NAV-53, TC-NAV-54 |
-| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03, TC-CON-75, TC-CON-76, TC-CON-77, TC-CON-78, TC-CON-79, TC-CON-80 |
+| UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03, TC-CON-75, TC-CON-76, TC-CON-77, TC-CON-78, TC-CON-79, TC-CON-80, TC-CON-100, TC-CON-101, TC-CON-103 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
@@ -3410,7 +3446,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30, TC-GIT-35, TC-GIT-36, TC-GIT-37 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
@@ -3420,11 +3456,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |
 | UC-20 | TC-DOC-01, TC-DOC-02, TC-DOC-03, TC-DOC-04 |
 | UC-21 | TC-SCR-01, TC-NAV-53, TC-NAV-54, TC-NAV-55 |
-| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70, TC-CON-71, TC-LST-07, TC-CON-73 |
+| UC-22 | TC-ACC-01, TC-ACC-02, TC-CON-57, TC-CON-58, TC-CON-63, TC-CON-64, TC-CON-65, TC-CON-66, TC-PGB-06, TC-GIT-15, TC-MYD-07, TC-CON-70, TC-CON-71, TC-LST-07, TC-CON-73, TC-CON-90, TC-CON-91, TC-CON-92, TC-CON-93, TC-CON-94, TC-CON-95 |
 | UC-23 | *(Retired — QE Mapping removed, see TC-NAV-54)* TC-QEM-01…10 |
 | UC-24 | TC-PCK-01…10 |
 | UC-25 | TC-WSP-01…07 |
-| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09, TC-QV-49, TC-MYD-10, TC-MYD-11, TC-MYD-15 |
+| UC-26 | TC-MYD-01…05, TC-QV-31, TC-QV-47, TC-QV-48, TC-QV-32, TC-QV-33, TC-QV-34, TC-QV-35, TC-QV-36, TC-QV-37, TC-MYD-06, TC-UI-17, TC-MYD-07, TC-MYD-08, TC-MYD-09, TC-QV-49, TC-MYD-10, TC-MYD-11, TC-MYD-15, TC-CON-102 |
 | UC-27 | TC-HIS-01…11 |
 | UC-28 | TC-ACT-01…12, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-ATM-21 |
 | UC-29 | TC-OVW-01…03 |

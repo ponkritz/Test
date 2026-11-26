@@ -52,7 +52,7 @@ Live reading was confirmed by the user. No production PAT was available to the c
 
 ## Sharing connections and data through Git
 
-With Git storage connected (Settings → Storage), **Settings → Views in Git → Save N connections to Git** writes the connection setup (names, view names, queries, URLs, roles — never PATs) to `azure-views.json` in the data repository. Every app that connects to the same repository takes it as its default at start: missing connections are added, unchanged ones follow Git, ones changed locally are kept; **Restore from Git** brings a connection back to Git's version. A restored connection without a PAT shows the data saved to Git (view only) until a PAT is entered.
+With Git storage connected (Settings → Storage), **Settings → Views in Git → Save N connections to Git** writes the connection setup (names, view names, queries, URLs, roles — never PATs) to `azure-views.json` in the data repository. Every app that connects to the same repository takes it as its default at start: missing connections are added, unchanged ones follow Git, ones changed locally are kept; **Restore from Git** brings a connection back to Git's version. A restored connection without a PAT shows the data saved to Git (view only) until a PAT is entered. A PAT typed for the restore is for **one server**, chosen or confirmed in **Server of this PAT** next to it; connections on other servers stay without a PAT (CON-141).
 
 Since CON-119 `azure-views.json` (the Streams file) holds the **Stream mapping only** (Time Writing, the streams, DP's data sets). Each person's **Other views** are kept in their own file, `other-views/<work email>.json` (never a PAT), and only that person's app loads them; the Other views of an older shared setup wait in `other-views/unassigned.json` until an admin assigns them (Admin → Data & sharing → Other views → Unassigned Other views). When the Streams file changes, every app asks once to **Load everything from Git** (GIT-29).
 
@@ -75,7 +75,7 @@ A stream can have more than one connection named like it. CP reads its release-f
 
 ## One Time Writing connection
 
-Only the active Time Writing (QMS-0025) connection is used. If there is more than one, Settings → Connections names the duplicates and offers **Keep "…", remove the others**; with a Git token that can save, the connection setup in Git is updated in the same step so they do not come back. Removing a connection does not revoke its PAT in Azure DevOps.
+Only the active Time Writing (QMS-0025) connection is used. If there is more than one, Settings → Connections names the duplicates and offers **Keep "…", remove the others**; with a Git token that can save, the connection setup in Git is updated in the same step so they do not come back. Like **Use as Time Writing**, this changes the shared Stream mapping, so only a Tool Owner (“Change the stream mapping”) can do it; for everyone else both are disabled with the reason, and Git storage refuses the write too (CON-133). Removing a connection does not revoke its PAT in Azure DevOps.
 
 ## References
 

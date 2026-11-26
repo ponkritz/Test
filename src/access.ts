@@ -277,10 +277,13 @@ export function keepsManager(policy: AccessPolicy, email: string) {
 
 // CON-93: whether anyone holds the stream mapping (a listed member, or everyone through the default role, with
 // streams.manage). Until someone does, the people who manage access may change it, so nobody is locked out.
+// CON-130 (AR-004): a holder is worked out from each person's effective rights (rightsFor: a Deny wins), never from a
+// role's allows alone.
+const holdsStreams = (policy: AccessPolicy, email: string) => rightsFor(policy, email).actions.has('streams.manage')
+const defaultHoldsStreams = (policy: AccessPolicy) => Boolean(policy.defaultRole) && rightsFor({ ...policy, members: {} }, '').actions.has('streams.manage')
 export function toolOwnerExists(policy: AccessPolicy | null) {
   if (!policy) return false
-  const holds = (role: Role) => policy.roles[role]?.actions.includes('streams.manage')
-  return Object.values(policy.members).some((assigned) => assigned.some(holds)) || Boolean(policy.defaultRole && holds(policy.defaultRole))
+  return Object.keys(policy.members).some((email) => holdsStreams(policy, email)) || defaultHoldsStreams(policy)
 }
 // CON-106: pages and menu groups (PGB-08): the holders of "Manage pages and menu groups" — or, while no Tool Owner
 // exists (CON-93), the people who manage access, so nobody is locked out. Without a policy nobody (CON-101).
@@ -296,10 +299,20 @@ export function canManageStreams(policy: AccessPolicy | null, rights: Pick<Right
 // CON-93: who holds the stream mapping (members with streams.manage, and the default role's) and whether a change to
 // the policy touches it — only someone who may change the stream mapping may change who holds it, and a policy that
 // had a holder must keep one.
-const streamHolders = (policy: AccessPolicy) => JSON.stringify({ members: Object.entries(policy.members).filter(([, assigned]) => assigned.some((role) => policy.roles[role]?.actions.includes('streams.manage'))).map(([email]) => email).sort(), roles: roles.filter((role) => policy.roles[role]?.actions.includes('streams.manage')), defaultRole: policy.defaultRole && policy.roles[policy.defaultRole]?.actions.includes('streams.manage') ? policy.defaultRole : null })
+const streamHolders = (policy: AccessPolicy) => JSON.stringify({ members: Object.keys(policy.members).filter((email) => holdsStreams(policy, email)).sort(), roles: roles.filter((role) => policy.roles[role]?.actions.includes('streams.manage') && !policy.roles[role]?.deny?.includes('streams.manage')), defaultRole: defaultHoldsStreams(policy) ? policy.defaultRole : null })
 export function toolOwnerChange(before: AccessPolicy | null, after: AccessPolicy, email: string): string {
   if (before && streamHolders(before) === streamHolders(after)) return ''
   if (before && !canManageStreams(before, rightsFor(before, email))) return 'Only a Tool Owner can change who holds the stream mapping (the Tool Owner role and “Change the stream mapping”).'
   if (toolOwnerExists(before) && !toolOwnerExists(after)) return 'Keep at least one Tool Owner: the stream mapping would have no owner.'
+  return ''
+}
+
+// CON-131 (AR-003): the one rule every save of access.json passes (useAccess.save → saveAccessChecked): CON-93 (only a
+// Tool Owner changes who holds the stream mapping, and one must remain) and "a policy may not lock its editor out".
+// '' when the change may be saved, else why not ("Not saved: …").
+export function accessChangeProblem(before: AccessPolicy | null, after: AccessPolicy, email: string): string {
+  const owner = toolOwnerChange(before, after, email)
+  if (owner) return `Not saved: ${owner}`
+  if (!keepsManager(after, email)) return email ? `Not saved: ${email} would lose “Manage access”. Keep a role with it for yourself (e.g. Admin).` : 'Not saved: no email is set on your Time Writing connection, so the app cannot check that you keep “Manage access”.'
   return ''
 }

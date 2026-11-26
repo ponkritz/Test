@@ -40,7 +40,7 @@ import { AccessPanel } from '../components/AccessPanel'
 import { SharedTimePanel } from '../components/SharedTimePanel'
 import { CalculationProfilesPanel } from '../components/CalculationProfilesPanel'
 import { CapacityRolesPanel } from '../components/CapacityRolesPanel'
-import { defaultPolicy, keepsManager, toolOwnerExists, type Action, type Role } from '../access'
+import { defaultPolicy, toolOwnerExists, type Action, type Role } from '../access'
 import { PeoplePanel } from '../components/PeoplePanel'
 import { patchProfiles, personStatus, setRolesFor, type PersonEntry } from '../people'
 import { BucketRulesPanel } from '../components/BucketRulesPanel'
@@ -139,7 +139,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
     if (!accessEditable) throw new Error(accessReason)
     const result = setRolesFor(access.policy ?? defaultPolicy(access.email), chosenFor, chosen)
     if (!result.changed.length) return { changed: [], skipped: result.skipped, path: access.path }
-    if (!keepsManager(result.policy, access.email)) throw new Error(`Not saved: ${access.email || 'you'} would lose “Manage access”.`)
+    // CON-131: access.save checks the Tool Owner rule (CON-93) and that the saver keeps “Manage access”.
     await access.save(result.policy, `Access: ${result.changed.join(', ')} → ${chosen.join(', ') || 'no app access role'}`)
     return { changed: result.changed, skipped: result.skipped, path: access.path }
   }
@@ -261,7 +261,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
   return <Page>
     {tab === 'home' && <AdminOverview steps={setupSteps} facts={facts} git={git} audits={store.state.audits} onOpenTab={onOpenTab} onSearch={onSearch} />}
     {tab === 'my' && <SectionTabs page="my" sections={[
-      { key: 'email', label: 'Your work email', scope: 'you', node: <AzureConnections section="email" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
+      { key: 'email', label: 'Your work email', scope: 'you', node: <AzureConnections section="email" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
       { key: 'servers', label: 'Servers and PATs', scope: 'you', node: <AzureConnections section="servers" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
       { key: 'myviews', label: 'My views', scope: 'you', node: <MyViewsPanel azure={azure} /> },
       { key: 'patterns', label: 'My naming patterns', scope: 'you', node: <NamingPatternsPanel store={store} canManage mode="mine" /> },
@@ -271,9 +271,9 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
       { key: 'mapping', label: 'Stream mapping', scope: 'tool-owner', node: <AzureConnections section="mapping" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canEnterCounts={can('release.counts')} canManageStreams={access.canManageStreams} /> },
     ]} />}
     {tab === 'options' && <SectionTabs page="options" sections={[
-      { key: 'epics', label: 'Epics to match Features in', scope: 'everyone', node: <AzureConnections section="epics" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
-      { key: 'bulk', label: 'Bulk creation Epics', scope: 'both', node: <AzureConnections section="bulk" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
-      { key: 'counts', label: 'Release counts', scope: 'everyone', node: <AzureConnections section="counts" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canEnterCounts={can('release.counts')} /> },
+      { key: 'epics', label: 'Epics to match Features in', scope: 'everyone', node: <AzureConnections section="epics" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
+      { key: 'bulk', label: 'Bulk creation Epics', scope: 'both', node: <AzureConnections section="bulk" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
+      { key: 'counts', label: 'Release counts', scope: 'everyone', node: <AzureConnections section="counts" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} canEnterCounts={can('release.counts')} /> },
     ]} />}
     {tab === 'storage' && <SectionTabs page="storage" sections={[
       { key: 'git', label: 'Git storage', scope: 'computer', node: <GitStoragePanel git={git} /> },
@@ -284,9 +284,9 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
         {everything.loaded && <Notice tone={everything.failed?.length ? 'warning' : 'success'}>Loaded: {everything.loaded.join('; ') || 'nothing'}.{everything.failed?.length ? ` Not loaded — ${everything.failed.join(' · ')}` : ''}</Notice>}
       </Panel> }] : []),
       ...(can('storage.shared') ? [{ key: 'shared', label: 'Shared setup in Git', scope: 'tool-owner' as const, node: <><RetiredFilesPanel git={git} viewingAs={Boolean(access.viewingAs)} toolOwner={access.rights.roles.includes('Tool Owner')} staleQeEpics={([['DP', dpBulk], ['IOCC', ioccBulk]] as const).flatMap(([stream, id]) => id && needsQePage(chooseSetup(featureSetup.setups, id, true).setup) ? [`Epic #${id} (${stream})`] : [])} /><AzureViewsGitPanel git={git} azure={azure} /></> }] : []),
-      { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canRemoveForEveryone={access.canManageStreams} canAssignOtherViews={can('storage.shared')} people={Object.keys(access.policy?.members ?? {}).sort()} viewingAs={Boolean(access.viewingAs)} /> },
-      ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> }] : []),
-      { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} /> },
+      { key: 'views', label: 'Other views', scope: 'both', node: <AzureConnections section="views" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} canRemoveForEveryone={access.canManageStreams} canAssignOtherViews={can('storage.shared')} people={Object.keys(access.policy?.members ?? {}).sort()} viewingAs={Boolean(access.viewingAs)} /> },
+      ...((store.state.azureSources ?? []).length ? [{ key: 'sources', label: 'Read-only sources', scope: 'computer' as const, node: <AzureConnections section="sources" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> }] : []),
+      { key: 'sample', label: 'Synthetic sample', scope: 'computer', node: <AzureConnections section="sample" azure={azure} store={store} git={git} onOpenBoard={onOpenBoard} canManage={can('streams.options')} canManageStreams={access.canManageStreams} /> },
     ]} />}
     {tab === 'look' && <SectionTabs page="look" sections={[
       { key: 'layout', label: 'Page layout', scope: 'you', node: <PageLayoutPanel /> },
@@ -340,7 +340,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
       </Panel> },
       { key: 'history', label: 'Historical hours', node: <HistoryPanel history={history} git={git} items={azure.items} profileNames={Object.keys(capacityContext(store.state).profiles ?? {})} editable={git.connected && !git.readOnly && !git.isSample} importedBy={access.email} /> },
     ].filter((section) => can(capacityNeeds[section.key])).map((section) => ({ ...section, scope: 'everyone' as const }))} />}
-    {tab === 'resources' && !peopleShared && <AccessPanel access={access} git={git} people={people} membersInPeople />}
+    {tab === 'resources' && !peopleShared && <AccessPanel access={access} git={git} people={people} accessOnly={accessOnly} />}
     {tab === 'resources' && peopleShared && <SectionTabs page="resources" sections={[
       { key: 'people', label: 'People', node: <PeoplePanel entries={peopleEntries} names={names} outside={outside} defaultRole={access.policy?.defaultRole ?? null} defaultJoinedOn={capacity.defaultJoinedOn} accessReason={accessReason} accessOnly={accessOnly} git={git}
         teamError={team?.error} readTeam={{ disabled: azure.isSample || !azure.config || !azure.pat, onClick: () => setTeamRead((count) => count + 1) }}
@@ -357,7 +357,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
         {resources.some((person) => profiles[person.name]?.reportsTo) ? <TeamTree names={names} profiles={profiles} /> : <EmptyState title="No reporting lines yet." detail="Open a person in People, choose Edit and set Reports to." />}
       </Panel> },
       { key: 'capacity-roles', label: 'Capacity roles', node: <><div className="shared-time-panel"><GitSyncBar git={git} /></div><CapacityRolesPanel settings={capacity} canEdit={can('people.capacityRoles')} onSave={saveCapacityRoles} /></> },
-      { key: 'rights', label: 'Role rights', node: <AccessPanel access={access} git={git} people={people} membersInPeople /> },
+      { key: 'rights', label: 'Role rights', node: <AccessPanel access={access} git={git} people={people} accessOnly={accessOnly} /> },
     ].filter((section) => section.key === 'people' || section.key === 'tree' ? can('people.edit') : section.key === 'capacity-roles' ? can('people.capacityRoles') : true).map((section) => ({ ...section, scope: 'everyone' as const }))} />}
     {tab === 'audit' && <div className="scope-line"><ScopeChip scope="everyone" /></div>}
     {tab === 'epics' && <SectionTabs page="epics" sections={[

@@ -31,7 +31,7 @@ export function RemovedConnections({ git, azure, canShare }: { git: GitStorage; 
       // everyone at their next start; restored here only, it stays here (the marker counts as applied here).
       if (row.removal && share) await git.clearViewRemoval(row.view.id, name)
       else if (row.removal) git.keepRemovedHere(row.removal)
-      const restored = restoreViews([row.view], '')
+      const restored = restoreViews([row.view], null)
       azure.reloadConnectionProfiles()
       let text = `“${name}” is back here`
       // CON-120: an Other view comes back as the restorer's own (their file in Git), never into the shared setup.

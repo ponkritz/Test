@@ -1,3 +1,4 @@
+import { assertCanManageStreams } from './accessSave'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { useAppStore } from './store'
 import { canWrite, deleteFile, deleteFileAt, fileCommits, fileSha, lastCommit, readTextAt, forgetGitStorage, GitConflictError, historyUrl, listFolder, loadGitConfig, loadGitToken, planningData, readBinaryFile, readPlanningFile, readRawFile, readTextFile, saveGitConfig, saveGitToken, serializePlanning, siblingConfig, validateGitConfig, writePlanningFile, writeTextFile, type GitConfig } from './gitStorage'
@@ -350,6 +351,8 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   // view still in Git is left for the move to the unassigned list (never dropped here).
   async function shareViews(here: AzureConnectionProfileSummary[], commitMessage: string, removed: string[] = []) {
     if (!viewsConfig || !token) throw new Error('Connect Git storage first.')
+    // CON-133: CON-93 here too, not only in the page (every caller, also one that forgot the check).
+    assertCanManageStreams()
     const current = await trackRead(viewsConfig, token)
     const inGit = current.text ? parseViews(current.text) : []
     // CON-110: a view the Tool Owner removed for everyone never goes back into the setup from a computer that still has it.
@@ -999,6 +1002,8 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   async function removeSnapshots(ids: string[], commitMessage: string) {
     if (!config || !token) throw new Error('Connect Git storage first.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Saving to Git is disabled.')
+    // CON-133: the data of the stream mapping's connections goes only with a change of the stream mapping (CON-93).
+    assertCanManageStreams()
     let removed = 0
     for (const id of ids) if (await deleteFile(siblingConfig(config, `${snapshotFolder}/${snapshotFileName(id)}`), token, commitMessage)) removed += 1
     return removed

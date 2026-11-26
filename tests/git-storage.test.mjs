@@ -186,3 +186,36 @@ test('GIT-25: a 404 in a readable repository is a missing file; the repository i
   assert.deepEqual(await readTextFile({ ...seen, path: 'missing.json' }, 't', probeFetch(200, later)), { text: null, sha: null })
   assert.equal(later.filter((url) => url.includes('/branches/')).length, 0)
 })
+
+test('AR-008: a shared file above 1 MB (encoding "none") is read raw by its version id, and a queued save of it works (TC-GIT-35, TC-GIT-36)', async () => {
+  const { fakeGitHub } = await import('../e2e/fakeGitHub.mjs')
+  const { readTextFile, readTextAt } = await import('../src/gitStorage.ts')
+  const { writeQueuedText, mergeHistoryText } = await import('../src/gitSaveQueue.ts')
+  const rows = Array.from({ length: 9000 }, (_, index) => ({ id: `r${index}`, person: 'Synthetic Person', month: '2026-01', hours: index % 40, note: 'x'.repeat(80) }))
+  const big = `${JSON.stringify({ schema: 1, rows }, null, 2)}\n`
+  assert.ok(big.length > 1024 * 1024, 'above 1 MB')
+  const github = fakeGitHub({ owner: 'example', repo: 'storage', files: { 'team/history-hours.json': big, 'team/planning-data.json': serializePlanning(planningData(state)) } })
+  const target = { owner: 'example', repo: 'storage', branch: 'main', path: 'team/history-hours.json' }
+  const contents = await (await github.fetch('https://api.github.com/repos/example/storage/contents/team/history-hours.json?ref=main')).json()
+  assert.equal(contents.encoding, 'none', 'the fake answers as GitHub does above 1 MB'); assert.equal(contents.content, '')
+  const read = await readTextFile(target, 'token', github.fetch)
+  assert.equal(read.text, big, 'the whole text'); assert.equal(read.sha, contents.sha, 'with its version id')
+  assert.ok(github.calls.includes(`GET /repos/example/storage/git/blobs/${contents.sha}`), 'read as the blob of that version')
+  // A version read (History) and the planning file read the same way.
+  const head = github.heads.main
+  assert.equal(await readTextAt(target, 'token', head, github.fetch), big)
+  // The queued save (history import): reads the large file first, merges and commits it.
+  const change = JSON.parse(big); change.rows.push({ id: 'new', person: 'Synthetic Person', month: '2026-02', hours: 3, note: '' })
+  const text = `${JSON.stringify(change, null, 2)}\n`
+  const saved = await writeQueuedText(target, 'token', { text, base: big, at: '2026-11-26T10:00:00Z', message: 'Import history', merge: mergeHistoryText }, github.fetch)
+  assert.equal(saved.unchanged, false); assert.equal(github.read('team/history-hours.json'), text, 'saved in Git')
+  assert.equal((await readTextFile(target, 'token', github.fetch)).text, text, 'and read back above 1 MB')
+})
+
+test('AR-008: the planning data file above 1 MB is read too (TC-GIT-37)', async () => {
+  const { fakeGitHub } = await import('../e2e/fakeGitHub.mjs')
+  const github = fakeGitHub({ owner: 'example', repo: 'storage', files: { 'planning-data.json': serializePlanning(planningData(state)) }, largeAbove: 100 })
+  const read = await readPlanningFile({ owner: 'example', repo: 'storage', branch: 'main', path: 'planning-data.json' }, 'token', github.fetch)
+  assert.ok(read.sha && read.data, 'read raw by its version id when the JSON form has no content')
+  assert.deepEqual(read.data.resourceProfiles, planningData(state).resourceProfiles)
+})

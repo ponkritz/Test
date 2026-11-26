@@ -158,7 +158,7 @@ export function syncOwnOtherViews(own: OtherView[], notMine: Set<string>, reposi
     if (here && synced[view.id] && synced[view.id] !== fingerprint(here)) { result.save.push(here); continue }
     follow.push(cleanView(view))
   }
-  const restored = restoreViews(follow, '', storage)
+  const restored = restoreViews(follow, null, storage)
   for (const view of follow) {
     const name = view.viewName || view.reason
     if (restored.added.includes(name)) result.added.push(name)
