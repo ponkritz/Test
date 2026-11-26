@@ -768,6 +768,18 @@ Instead of typing the headings yourself, fill in the review form; the app writes
 
 **When you close a Feature** (Close in My Tasks [Board], Sprint check or Time Writing), the Close pop-up asks the same questions for that Feature (Learnings and Struggles optional, **Move to next PI = No** pre-selected — Moves to and Reason appear with Yes — the Review meeting advice required, the explanations behind ⓘ How to fill in) and **posts the review first, then closes**. If the review cannot be posted nothing is closed: choose **Close without the review** or **Cancel**. When several Features are closed at once, write their reviews in PI Review or My PI Review.
 
+#### Conduct the PI Review meeting (PI Review leads, Scrum Master, Tool Owner)
+
+**Conduct PI Meeting** at the top right of **PI Review** builds the presentation for the PI Review meeting from the reviews of the chosen PI. You see it if you may post the review of any Feature or set up the review form.
+
+1. **Choose the PI** and press **Conduct PI Meeting**. The build runs under **Background jobs** ("PI Review Meeting · PI 26.4"): it reads the Discussions not read yet, builds the slides and downloads the file **PI-Review-Meeting-PI-26.4-<date>-<time>.html**.
+2. **A copy is kept in Git** — in the data repository, `pi-review/meetings/PI-26.4/`. In View as, with the synthetic sample, without Git storage or with a read-only Git token the copy is not saved: the **PI Review Meetings** panel says why before you build, and the file is still downloaded. If saving fails, the panel says so; your download is not affected.
+3. **Present it.** Open the downloaded file in any browser (no app, login or network needed). → or Space for the next slide, ← back, Home / End for the first and last, **O** (or **Overview**) for a list of all slides — click one to go there, Escape to close. **Print** (or Ctrl+P) gives one slide a page, for a PDF.
+
+The slides, in this order: the **title** (the PI, when it was built and by whom), the **Summary** (Features in the PI, reviewed and not, Move to next PI Yes — with the next PI — and No, Discuss during Meeting and Offline Review; then the same per Epic), one slide per Feature marked **Discuss during Meeting**, every **other reviewed Feature** grouped by Epic, one list of the Features **not reviewed** (and why), then the **Themes**: all Learnings, then all Struggles, each with its Feature ID. Each Feature slide shows its Epic, Assigned to, State, Learnings, Struggles, Move to next PI with the reason, the Review meeting advice, Additional Remarks, the fields added in PI Review Setup and who wrote the review when.
+
+The file is a **snapshot**: reviews written after you built it are not in it — build it again just before the meeting. Only comments from the PI Review start date on count. The **PI Review Meetings** panel lists the saved meetings of the PI, newest first: **Download** saves one to your computer; **Open** shows it in a new tab with every slide one after another (to read or print — to present, Download it).
+
 #### Change the review form (Scrum Master, Tool Owner)
 
 The fields of the review form are a shared setup: when the review changes, the Scrum Master or the Tool Owner changes the form in the app, and everyone's next review uses it.

@@ -2498,6 +2498,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-41 The review action reads Review…** — Req PIR-39, PIR-13 — E2E `pi-review.e2e.mjs`, `pi-review-form.e2e.mjs`, `pi-review-start.e2e.mjs`, `pi-review-form-setup.e2e.mjs` (every scenario opens the form with the button "Review Feature {id}", and the PI Review row text ends with "Review…"); browser check: a Feature without my review shows Review…, one with my review Edit review….
 
+**TC-PIR-42 The meeting's snapshot and Summary counts** — Req PIR-42, PIR-45, PIR-40, PIR-33 — L1 `pi-meeting.test.mjs` ("PIR-42: the snapshot — each Feature reviewed or not by its latest comment on or after the start date; the counts of the Summary (TC-PIR-42)": reviewed, no review since the start date, a Discussion not read and one that failed; Discuss during Meeting, Move Yes with its reason and next PI, Additional Remarks, a keyword split; the counts; another start date changes the result; "PIR-40, PIR-47: who sees Conduct PI Meeting, and why the Git copy is not saved — the download never blocked (TC-PIR-42)": `pireview.post` or `pireview.setup`, the five reasons word for word); browser check: with a PI whose Features are partly reviewed, the Summary's tiles match the PI Review table's Review mode and Move to next PI columns.
+
+**TC-PIR-43 The slides in one fixed order** — Req PIR-41, PIR-44, PIR-45 — L1 `pi-meeting.test.mjs` ("PIR-41: the slides come in one fixed order — …(TC-PIR-43)": the order list and one function per slide type; Title, Summary, Summary by Epic, Discuss during Meeting one per Feature, the other reviewed Features grouped by Epic with the eyebrow naming the Epic, the Not reviewed list with why (No Epic last), Learnings, Struggles; a Feature slide's facts, texts, Move with its reason, the advice, Additional Remarks and byline; the Themes with Feature IDs, "None" left out, a keyword guess marked; without any review the same order without Feature slides; "PIR-45: long lists run over several slides": 30 Learnings over 4 slides, 30 Features not reviewed over 3); browser check: a PI with a field added in PI Review Setup shows it on the Feature slides.
+
+**TC-PIR-44 Every value of the meeting file is escaped, no request leaves it** — Req PIR-43 — L1 `pi-meeting.test.mjs` ("PIR-43: every value is escaped — a comment with <script> and "</script>" stays text; no e-mail, identity id or external address in the file; the policy blocks every request (TC-PIR-44)": a comment, title, Epic, State and PI with `<script>`, `"</script>"`, `<img onerror>`, quotes and `&` — exactly one script element, no tag from the data, the text escaped; no e-mail or identity id, names as display names; no `http(s):`, `src`, `href`, `url(` or `@import`; the policy with the hashes of the inline script and style; the title with the PI and the build time; a changed file not recognised as one of this version; "PIR-43: names and text are cleaned of e-mail addresses and identity ids"); E2E `pi-meeting.e2e.mjs` (TC-PIR-46: the downloaded file opened from file:// with every request refused and recorded — none, no console error, the hostile comment shown as written and never run).
+
+**TC-PIR-45 The meeting's file path in Git** — Req PIR-47 — L1 `pi-meeting.test.mjs` ("PIR-47: the file path in the Git data repository, and only such paths (TC-PIR-45)": `pi-review/meetings/PI-26.4/PI-Review-Meeting-PI-26.4-2026-11-26-0905.html`, "-2" when the name is taken, the built time read back, a PI name without a number; "..", another PI's name in the folder, another file type or folder refused; the 5 MB limit); E2E `pi-meeting.e2e.mjs` (TC-PIR-46: the copy written at that path, byte for byte the downloaded file, with the commit message signed by the builder).
+
+**TC-PIR-46 Conduct the PI meeting** — Req PIR-40, PIR-42, PIR-46, PIR-47, PIR-41, PIR-44 — **UAT** — E2E `pi-meeting.e2e.mjs` ("TC-PIR-46: the Scrum Master conducts the PI meeting — …": against a mocked GitHub and a fake dev.azure.com, the Scrum Master on PI Review sees Conduct PI Meeting and "No saved PI Review Meeting of PI 2026.4 yet."; a click reads the three Discussions not read yet, downloads `PI-Review-Meeting-PI-2026.4-<date-time>.html` and saves the same file to `pi-review/meetings/PI-2026.4/` with the notice "Saved to Git as …"; the file opened offline: the title slide with the builder, → through all seven slides in order (Title, Summary, the Discuss during Meeting Feature, the other reviewed Feature, Features not reviewed — the Feature whose review is before the start date —, Learnings, Struggles), Home, End, ←, the overview with O and Escape and a click, the Feature slide's facts and review, print showing every slide one a page; Open in the list shows the file in a new tab (every slide, the app's policy applies), Download gives the same file); UAT: the Scrum Master builds the meeting of the current PI on the released build, presents it from the downloaded file with the keyboard, prints it to PDF, and finds the copy in the data repository and in the PI Review Meetings list.
+
+**TC-PIR-47 Who builds a meeting, and the download when Git cannot be used** — Req PIR-40, PIR-47 — E2E `pi-meeting.e2e.mjs` ("TC-PIR-47: a Team Member does not see Conduct PI Meeting; with the synthetic sample the meeting is downloaded and the page says why it is not saved to Git": no button for a Team Member, the PI Review Meetings panel still shown; with the sample, the reason before the build, the download and the result "Downloaded … Synthetic sample data is loaded: …"); browser check: in View as and with a read-only Git token the panel says why and the file is still downloaded; with Git storage disconnected the panel says so.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3411,6 +3423,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-37 | TC-PIR-38, TC-PIR-39 |
 | PIR-38 | TC-PIR-40 |
 | PIR-39 | TC-PIR-41 |
+| PIR-40 | TC-PIR-42, TC-PIR-46, TC-PIR-47 |
+| PIR-41 | TC-PIR-43, TC-PIR-46 |
+| PIR-42 | TC-PIR-42, TC-PIR-46 |
+| PIR-43 | TC-PIR-44 |
+| PIR-44 | TC-PIR-43, TC-PIR-46 |
+| PIR-45 | TC-PIR-42, TC-PIR-43 |
+| PIR-46 | TC-PIR-46 |
+| PIR-47 | TC-PIR-45, TC-PIR-46, TC-PIR-47 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3515,7 +3535,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…41, TC-UI-27 |
+| UC-40 | TC-PIR-01…47, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record

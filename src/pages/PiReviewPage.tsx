@@ -13,7 +13,9 @@ import { PiSetupGear } from '../components/PiFormSetupPanel'
 import { formSetupOf, useDiscussionsRead, useOwnReview, useReviewViewer, useReviewWriter } from '../piReviewWriter'
 import { customFields, type PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
-import { cutoffNote, reviewStartLabel, reviewStartOf } from '../piReviewStart'
+import { cutoffNote, reviewStartLabel, reviewStartOf, shownFrom } from '../piReviewStart'
+import { MeetingButton, SavedMeetings } from './PiMeeting'
+import { usePiMeeting, type MeetingGit } from '../usePiMeeting'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
@@ -25,7 +27,8 @@ import type { Me } from '../myWork'
 // Discussion fills the columns, split by its Struggles / Learnings / Move to next PI / Review meeting / Additional
 // Remarks headings (or their synonyms), or — without any heading — suggested from keywords. The one write: **Write
 // review…** (PIR-13) posts a Feature's review as a new comment in its Discussion (the Feature's assignee or a lead,
-// CON-113). Nothing is written to Git or this browser's database; the Discussions stay in memory for this page load.
+// CON-113). The Discussions stay in memory for this page load. PIR-40…PIR-47: Conduct PI Meeting builds the PI Review
+// Meeting presentation (./PiMeeting) — downloaded, and a copy kept in the Git data repository (git).
 const piKey = 'demand-planning-pi-review-pi-v1'
 const jobKey = 'pireview:read-all'
 const plural = (count: number, word: string, many = `${word}s`) => `${count.toLocaleString()} ${count === 1 ? word : many}`
@@ -63,7 +66,7 @@ const keywordNote = 'Suggested texts are a guess: check them against the whole C
 const Suggested = ({ text }: { text: string }) => <span className="pir-clip pir-suggested"><span className="pir-suggested-mark">(suggested)</span> {oneLine(text)}</span>
 
 // PIR-35: self — who I am (my work email, else my name: My PI Review's "me"), for reading my own Features' Discussions.
-export function PiReviewPage({ azure, store, self }: { azure: AzureWorkspace; store: PageProps['store']; self?: { me: Me; known: boolean } }) {
+export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspace; store: PageProps['store']; self?: { me: Me; known: boolean }; git?: MeetingGit }) {
   const { config, pat, items, isSample } = azure
   const poster = useReviewViewer()
   // PIR-19, PIR-20: the form setup in use — its headings split the comments, its added fields are columns of their own.
@@ -198,10 +201,12 @@ export function PiReviewPage({ azure, store, self }: { azure: AzureWorkspace; st
   const pageBlock = reviewPageBlock(poster)
   const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
 
+  // PIR-40…PIR-47: Conduct PI Meeting — the Features of the PI (all of them, whatever the filters), the start date in use.
+  const meeting = usePiMeeting({ pi, rows, setup, start, inRange: !pi || shownFrom(pi, cutoff), config, pat, readBlocked, viewer: poster, git })
   const notice = !iterations.done ? null : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
 
   return <Page intro="The Features of a PI and their Discussions, read from Azure DevOps with your PAT, kept for this page load only. Review… posts a Feature’s review to its Discussion as a new comment; Edit review… changes your own review in place."
-    actions={<><button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}{/* PIR-30: ⚙ PI Review Setup, last (UI-STANDARDS §6), when the page is in the viewer's menu. */}<PiSetupGear /></>}>
+    actions={<><MeetingButton meeting={meeting} /><button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}{/* PIR-30: ⚙ PI Review Setup, last (UI-STANDARDS §6), when the page is in the viewer's menu. */}<PiSetupGear /></>}>
     {!items.length && <EmptyState title="No QMS-0025 data yet." detail="Fetch the Time Writing connection (↻ in the top bar) or load the synthetic sample; the PIs and Features come from that data." />}
     {notice && <Notice tone="warning">{notice}</Notice>}
     {items.length > 0 && <TablePanel title="Features" info={`The Features whose Iteration Path is in the chosen PI (with the toggle also those with a User Story in the PI), without Removed Features and those under the absence Epic. The PIs come from the Time Writing connection’s iterations and the fetched data; the current PI (by the Sprint dates, UTC) is chosen first, and your last choice is remembered in this browser. ${cutoffNote(cutoff)} Click a Feature to read its Discussion; Review… posts the Feature’s review as a new comment in its Discussion.`}>
@@ -211,6 +216,7 @@ export function PiReviewPage({ azure, store, self }: { azure: AzureWorkspace; st
         onRowOpen={(row, order) => setOpen({ key: row.item.key, order: order.map((entry) => entry.item.key) })} rowLabel={(row) => `Feature ${row.item.id}: open`}
         empty={<EmptyState title={!pi ? 'Choose a PI.' : rows.length ? 'No Feature matches the filters.' : `No Features in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI to review in the PI list.' : rows.length ? 'Change the filters, or Reset filters.' : 'Tick “Also Features with User Stories in this PI”, choose another PI, or fetch the data again.'} />} />
     </TablePanel>}
+    {items.length > 0 && pi && <SavedMeetings meeting={meeting} git={git} />}
     {open && openRow && <FeatureDrawer key={openRow.item.key} row={openRow} setup={setup} position={{ at: open.order.indexOf(open.key), of: open.order.length }} onStep={step} onClose={() => setOpen(null)} config={config} pat={pat} blocked={readBlocked} postBlocked={reviewPostBlock(poster, openRow.item)} own={ownReview(openRow.item)} onWrite={() => void writer.start(openRow.item)} onEdit={(comment) => writer.startEdit(openRow.item, comment)} />}
     {writer.writing && byKey.get(writer.writing.item.key) && <ReviewDialog key={`review:${writer.writing.item.key}`} writing={writer.writing} blocked={reviewPostBlock(poster, writer.writing.item)} onPost={writer.post} onPostNew={writer.postNew} onClose={writer.cancel} />}
   </Page>
