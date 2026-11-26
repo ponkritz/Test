@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v12.4.0 — 2026-11-26
+
+**Changed**
+- **Load latest Release Details** — the forced pop-up when the shared Stream mapping in Git changed is now "Load latest Release Details" and loads only the Stream mapping: the custom streams and the connection setup (azure-views.json with its markers and your own Other views), as a background job of that name in Jobs done; the Release Details pages then fetch their data as before. It no longer loads the planning data, roles, Feature setup, on-prem view data or Windchill exports (GIT-36; GIT-29, GIT-30, GIT-31, GIT-33, GIT-35 reworded).
+- **Load everything from Git on the Git storage tab** — Admin → Data & sharing has no Load from Git section any more; Load everything from Git is a panel of Git storage and runs as its own background job. The two loads never run at once (GIT-37, GIT-38).
+
+DF-440, DF-441; TC-GIT-28, TC-GIT-29, TC-GIT-31.
+
+PR #446.
+
 ## v12.3.1 — 2026-11-26
 
 **Fixed**
