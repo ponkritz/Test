@@ -126,7 +126,7 @@ test('TC-PIR-34: PI Review starts from a date — the PI picker starts at PI 202
   assert.equal(await text(row('202').locator('td').nth(4)), 'Not reviewed')
   assert.match(await text(page.locator('.data-table-status')), /^1 of 2 reviewed$/)
   // Write review… on 202: not prefilled from the review before the date.
-  await page.getByRole('button', { name: 'Write review of Feature 202' }).click()
+  await page.getByRole('button', { name: 'Review Feature 202' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review of Feature #202' })
   assert.equal(await dialog.getByRole('textbox', { name: /^Learnings/ }).inputValue(), '')
   await dialog.getByRole('button', { name: 'Cancel' }).click()

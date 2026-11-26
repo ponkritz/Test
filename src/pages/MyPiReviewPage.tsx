@@ -121,7 +121,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     <WriteBlocked reason={personBlock} />
   </span>
   // PIR-30: ⚙ PI Review Setup in the page actions, when the page is in the viewer's menu (UI-STANDARDS §6).
-  return <Page intro="The Features assigned to you (a lead can choose another person) in a PI and whether their PI review is written. Write review… posts it as a new comment in the Feature’s Discussion in Azure DevOps; Edit review… changes your own review of the chosen PI in place. Tick several Features to write one review for them all." actions={<PiSetupGear />}>
+  return <Page intro="The Features assigned to you (a lead can choose another person) in a PI and whether their PI review is written. Review… posts it as a new comment in the Feature’s Discussion in Azure DevOps; Edit review… changes your own review of the chosen PI in place. Tick several Features to write one review for them all." actions={<PiSetupGear />}>
     {notice && <Notice tone="warning">{notice}</Notice>}
     {periodNote && <Notice tone="warning">{periodNote}</Notice>}
     {!shownMe ? <EmptyState title="Who are you in Azure DevOps?" detail="Enter your work email on the Time Writing connection, or choose your name in My Tasks [Board]." />
@@ -129,7 +129,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
         <WriteBlocked reason={readBlocked || pageBlock} />
         {picked.length > 0 && <div className="bulk-bar" role="region" aria-label="Selected Features">
           <strong>{picked.length} selected</strong>
-          <button type="button" className="ghost" onClick={() => bulk.start(bulkTargets(picked, editTarget))}>Write review for {picked.length}…</button>
+          <button type="button" className="ghost" onClick={() => bulk.start(bulkTargets(picked, editTarget))}>Update review for {picked.length}…</button>
           <button type="button" className="text-button" onClick={() => setSelected([])}>Clear selection</button>
         </div>}
         <DataTable id="mypireview:features" className="pir-table" columns={columns} rows={rows} rowKey={(item) => item.key}

@@ -86,12 +86,12 @@ export function ReviewPreview({ blocks }: { blocks: readonly ReviewBlock[] }) {
 export const postingNote = 'Posting adds a new comment to the Feature’s Discussion; PI Review reads the newest, so a correction is posted as a new review.'
 
 // PIR-13, PIR-34: the review action of a Feature (a table row, the drawer's footer) — **Edit review…** when the viewer's
-// own review counts for the chosen PI (own), else **Write review…**; one button, disabled with the reason.
+// own review counts for the chosen PI (own), else **Review…** (PIR-39: "Instead of Write Review, Just 'Review' is enough"); one button, disabled with the reason.
 export function ReviewAction({ item, own, why, primary = false, onWrite, onEdit }: { item: Pick<Writing['item'], 'id'>; own?: { comment: { date: string } }; why: string; primary?: boolean; onWrite: () => void; onEdit: () => void }) {
   const className = primary ? 'primary' : 'ghost'
   return own
     ? <button type="button" className={className} disabled={Boolean(why)} title={why || `Edit your review of Feature #${item.id} (${formatDateTime(shownDateOf(own.comment))})`} aria-label={`Edit review of Feature ${item.id}`} onClick={onEdit}>Edit review…</button>
-    : <button type="button" className={className} disabled={Boolean(why)} title={why || `Write the PI review of Feature #${item.id}`} aria-label={`Write review of Feature ${item.id}`} onClick={onWrite}>Write review…</button>
+    : <button type="button" className={className} disabled={Boolean(why)} title={why || `Review Feature #${item.id}: write its PI review`} aria-label={`Review Feature ${item.id}`} onClick={onWrite}>Review…</button>
 }
 
 // PIR-34: what saving an edit does — in the form's ⓘ.
@@ -135,7 +135,7 @@ export function ReviewDialog({ writing, blocked, onPost, onPostNew, onClose }: {
   </Modal>
 }
 
-// PIR-36: the review written once for several Features (My PI Review, "Write review for {n}…"): a full-size pop-up
+// PIR-36: the review written once for several Features (My PI Review, "Update review for {n}…"): a full-size pop-up
 // (UI-STANDARDS §4, a bulk action) naming each Feature and what the post does to it — a new comment, or my review of the
 // chosen PI (its date) replaced — and saying how many are replaced; the same fields, form setup, Moves to and Preview as
 // the single form (ReviewFields), the comment the same for every Feature. Post opens the confirmation naming the
