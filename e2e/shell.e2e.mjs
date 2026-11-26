@@ -1101,10 +1101,10 @@ test('TC-ACT-02: Time Writing shows the person\'s KPI cards, month tasks, hours 
   assert.deepEqual((await content.locator('.act-table').first().locator('thead th').allInnerTexts()).map((cell) => cell.trim().toLowerCase()).filter(Boolean), ['epic', 'activity', 'planned', 'actual'])
   // KPI cards on top in this order, Unsaved changes only while editing; the monthly update (ring and last day) beside them.
   const kpis = await text(content.locator('.act-top .metric-grid'))
-  assert.match(kpis, /Capacity.*Planned hours.*Actual hours.*Tasks/s)
+  assert.match(kpis, /Capacity.*Planned hours.*Actual hours.*Features Working on/s)
   assert.doesNotMatch(kpis, /Unsaved changes/)
   // One row of equal tiles: the monthly update ring and the last day are tiles too.
-  assert.match(kpis, /Tasks.*Monthly update.*activities updated.*last day/s)
+  assert.match(kpis, /Features Working on.*Monthly update.*activities updated.*last day/s)
   const heights = await content.locator('.act-top .metric-grid > article').evaluateAll((tiles) => tiles.map((tile) => Math.round(tile.getBoundingClientRect().height)))
   assert.equal(new Set(heights).size, 1, `tiles of one height: ${heights}`)
   assert.equal(await content.locator('.act-ring').count(), 1, 'the ring is back')

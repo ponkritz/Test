@@ -156,7 +156,7 @@ export function WorkItemEditor({ item: opened, items, config, savedPat = '', me,
         // ATM-28: a User Story set to Active makes its New Feature Active.
         let activated: AzureWorkItem | null = null
         if (edit.state) { try { activated = await activateFeatureOf(config, token, items, updated) } catch (failure) { failed.push(`Feature not set to Active: ${failure instanceof Error ? failure.message : 'failed'}`) } }
-        // BKL-41: hours typed on a month Task make it and its Time Writing story Active (a Closed one is reopened and named),
+        // ACT-24, ACT-25: hours typed on a month Task make it, its Time Writing story and a New Feature Active — only from New;
         // unless the State was chosen in this form.
         const hours = !edit.state && (edit.originalEstimate != null || edit.completedWork != null) ? await activateAfterHours(config, token, items, updated) : { activated: [], notes: [], failed: [] }
         failed.push(...hours.failed)

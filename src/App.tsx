@@ -99,6 +99,7 @@ import { hasServerPat, loadServerPat, serverKey } from './azureCredentials'
 import { ListCatalogContext, useSharedLists } from './useSharedLists'
 import { listCatalog, listsBlock, listUsage, ownsAPage, removeListBlock, serverPatKey } from './sharedLists'
 import { collectionUrl } from './azureClient'
+import { useMonthTaskStates } from './useMonthTaskStates'
 import { valuesOf } from './onDemand'
 import type { SharedListsEnv } from './components/SharedListsPanel'
 
@@ -402,6 +403,10 @@ export default function App() {
   usePublishScheduler({ store: onDemand, views: personalViews, publishedBy: publisherName, kindOf: (id) => kindOf(menu.layout, id), dashboardOf, allowed: (id) => viewer.manager || pageRights(viewer, menu.layout, id).owner ? '' : 'You are no longer the Tool Owner or a co-owner of the page: the scheduled publish did not run.' })
   // Who creates new work items (the email on the Time Writing connection) and whether they may assign them to others.
   const assign = { me: azure.creatorEmail.trim().toLowerCase(), canChoose: access.can('azure.createForOthers') }
+  // ACT-26, ACT-27: after the Time Writing fetch (and when the items change), the signed-in person's own Month Tasks
+  // are brought to their State — Active with hours, Closed once the month's Actuals are locked or the Feature is
+  // finished — as a background job in Jobs done. Never in View as, with the sample, without the right or on-premises.
+  useMonthTaskStates({ config: azure.config, pat: azure.pat, items: azure.items, email: azure.creatorEmail, locks: dashboardHoursSettings, fetched: azure.lastRefreshed, busy: azure.busy, isSample: azure.isSample || git.isSample, viewingAs: Boolean(access.viewingAs), canWrite: !access.readOnly && access.can('work.state'), locksLoaded: !git.connected || ['synced', 'saving', 'empty'].includes(git.status), onChanged: (changed) => azure.applyWorkItems(changed, 'Month Task states', `Month Task states checked: ${changed.map((item) => `#${item.id} ${item.state}`).join(', ')}.`.slice(0, 300)) })
   // NAV-42, NAV-46: the start page — Home (the tiles) in the tile view, My dashboard in the classic view.
   const [startView, setStartView] = useState<StartView>(() => loadStartView())
   // NAV-50: the page margins and border of My settings → Look & feel, applied once at start (and at once when changed there).

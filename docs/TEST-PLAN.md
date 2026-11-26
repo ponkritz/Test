@@ -812,7 +812,7 @@ Cases marked **UAT** are also run in acceptance testing.
 
 **TC-BKL-29 Edit form keeps the PAT field while typing** — Req BKL-40 — E2E `backlog.e2e.mjs` ("TC-BKL-29: Edit without a saved PAT keeps the PAT field while it is typed in; nothing is read until Load"); browser check: Edit on a row without a saved PAT, type a token — the field stays, no "Reading #…" until Load.
 
-**TC-BKL-30 Hours make the Time Writing Task and story Active** — Req BKL-41 — L1 `hours-active.test.mjs` ("BKL-41: hours on a month Task make the Task and its Time Writing story Active, and say so"; "BKL-41: a Closed Task or story is reopened to Active and named; Active ones are left alone; Removed stays Removed"; "BKL-41: nothing changes without hours, for a Task that is not a month Task, or under a story that is not Time Writing"; "BKL-41: a failed write is reported, not thrown"); browser check with a Time Writing connection: enter hours on a New month Task and Save — the message names the Task and the story set to Active; close the story, enter hours again — the story is reopened and named.
+**TC-BKL-30 Hours make the Time Writing Task and story Active** — Req BKL-41 *(retired — see TC-ACT-19)* — L1 `hours-active.test.mjs` ("BKL-41: hours on a month Task make the Task and its Time Writing story Active, and say so"; "ACT-24: a Closed Task or story is not reopened and is named; Active ones are left alone; Removed stays Removed"; "BKL-41: nothing changes without hours, for a Task that is not a month Task, or under a story that is not Time Writing"; "BKL-41: a failed write is reported, not thrown"); browser check with a Time Writing connection: enter hours on a New month Task and Save — the message names the Task and the story set to Active; close the story, enter hours again — the story stays Closed and the message says it is not reopened.
 
 **TC-BKL-31 Close Task on Time Writing and My Tasks [Board]** — Req BKL-42 — L1 `close-list.test.mjs` ("BKL-42: Close Tasks lists the ticked Task alone, with the hours question; a User Story close removes later months only when it closes the Feature"); E2E `shell.e2e.mjs` ("TC-ACT-02: Time Writing shows the person's KPI cards, month tasks, hours and deadline", Close Tasks steps); browser check: My Tasks [Board] → Close on a month Task opens the pop-up with the hours question.
 
@@ -1825,6 +1825,16 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-ACT-17 Time Writing cards stay at the top; Add a new activity in the list** — Req ACT-22, ACT-20 — E2E `shell.e2e.mjs` ("TC-ACT-17: the top-bar Person list opens over the sticky Time Writing cards, nothing of it hidden"; "TC-ACT-02: Time Writing shows the person's KPI cards, month tasks, hours and deadline": scrolled to the end, the cards sit under the top bar; ＋ Add a new activity is in the list's heading row and there is no “Add activities” heading); browser check: scroll a long month — the cards stay at the top.
 
+**TC-ACT-18 Features Working on** — Req ACT-23, ACT-22 — L1 `month-task-states.test.mjs` ("ACT-23: Features Working on counts the distinct Features holding the person's Month Tasks of the month (TC-ACT-18)"); E2E `month-task-states.e2e.mjs` ("TC-ACT-20: … TC-ACT-18: Features Working on counts the Features with my Month Task"); browser check: on Time Writing the card reads **Features Working on** with the number of Features holding your Task of the month (two Tasks under one Feature count once); no card is called Tasks.
+
+**TC-ACT-19 Hours set the Month Task, its Time Writing story and its Feature Active — only from New** — Req ACT-24, ACT-25, BKL-41 — L1 `month-task-states.test.mjs` ("ACT-24, ACT-25: hours on a New Month Task make the Task, its Time Writing story and its Feature Active, in that order"; "ACT-24: only New moves forward — Closed or Resolved items are never reopened, Removed stays Removed, no hours or no Month Task changes nothing"; "ACT-24: a plan runs in order, each state written, and a failure is reported, not thrown"), `hours-active.test.mjs`; E2E `month-task-states.e2e.mjs` ("TC-ACT-19: saving hours on a New Month Task sets the Task, its Time Writing story and its New Feature to Active (PATCH bodies checked)"); browser check with a Time Writing connection: enter hours on a New Month Task and Save — the message names the Task, the story and the New Feature set to Active; on a Closed Task (Edit form) hours do not reopen it and the message says so.
+
+**TC-ACT-20 Month Task states at start: own Tasks closed after the Actuals lock or a finished Feature** — Req ACT-26, ACT-25 — L1 `month-task-states.test.mjs` ("ACT-26: the Actuals lock ends at midnight UTC after the lock day …"; "ACT-26: only the person's own Month Tasks (by work email) …"; "ACT-26: the job reads the States again …"; "ACT-26: the check never runs with the sample, in View as, without the right, PAT or work email, on an on-premises server, or before the fetch and the lock settings"); E2E `month-task-states.e2e.mjs` ("TC-ACT-20: at start the background job Month Task states closes my Month Tasks of a locked month and under a Closed Feature …"; "TC-ACT-20: with the synthetic sample, and with an on-premises Time Writing connection, nothing is written") — **UAT**: open the app with your Time Writing connection: Jobs done lists **Month Task states**, naming your Month Tasks of months whose Actuals are locked (and under Features that are finished) set to Closed, and your Time Writing story closed when all its Tasks are; a colleague's Task under the same Feature is unchanged in Azure DevOps; in View as, with the sample, on an on-premises connection or without the right, no such job runs.
+
+**TC-ACT-21 Time Writing story closed with its last Month Task; Feature never closed** — Req ACT-27 — L1 `month-task-states.test.mjs` ("ACT-26, ACT-27: the check closes own Month Tasks of a locked month or a finished Feature, then their own Time Writing story when all its Tasks are Closed"); E2E `month-task-states.e2e.mjs` (TC-ACT-20: stories #301 and #501 closed, Ben's story and the Features unchanged); browser check: a story with a later month's open Task stays Active.
+
+**TC-ACT-22 Close Tasks / Close Features stay the manual close** — Req ACT-26, ACT-18, BKL-42 — browser check: tick this month's Task in **Close Tasks** and close it — it becomes Closed · read-only; the next Month Task states job leaves it alone (already Closed) and does not reopen it when hours were entered before.
+
 **TC-ACT-05 Suggestions by state, Add all** — Req ACT-09, ACT-10 — E2E `shell.e2e.mjs` ("TC-ACT-05: suggestions filter by Active / New / Both and Add all moves them into Your activities"); browser check with the Time Writing connection: with a New and an Active Feature of yours without a task, Active / New / Both narrow the suggestions; Add all puts the shown ones in Your activities and Save creates their tasks; the Features keep their state (ATM-28: a New Feature becomes Active only through an Active User Story).
 
 ### 6.26 Planning Overview
@@ -2714,7 +2724,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | BKL-38 | TC-BKL-27 |
 | BKL-39 | TC-BKL-28, TC-PIR-18 |
 | BKL-40 | TC-BKL-29 |
-| BKL-41 | TC-BKL-30 |
+| BKL-41 | TC-BKL-30, TC-ACT-19 |
 | BKL-42 | TC-BKL-31 |
 | BKL-43 | TC-BKL-32 |
 | BKL-44 | TC-BKL-33 |
@@ -3021,7 +3031,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | ACT-19 | TC-ACT-15 |
 | ACT-20 | TC-ACT-15 |
 | ACT-21 | TC-ACT-16 |
-| ACT-22 | TC-ACT-17 |
+| ACT-22 | TC-ACT-17, TC-ACT-18 |
+| ACT-23 | TC-ACT-18 |
+| ACT-24 | TC-ACT-19 |
+| ACT-25 | TC-ACT-19, TC-ACT-20 |
+| ACT-26 | TC-ACT-20, TC-ACT-22 |
+| ACT-27 | TC-ACT-21 |
 | OVW-01 | TC-OVW-01, TC-OVW-02, TC-OVW-03 |
 | OVW-02 | TC-OVW-02 |
 | OVW-03 | TC-OVW-01 |
@@ -3464,7 +3479,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-01 | TC-NAV-01…06, TC-NAV-33, TC-NAV-37, TC-UI-01, TC-UI-02, TC-UI-03, TC-CON-36, TC-CON-38, TC-NAV-38, TC-NAV-39, TC-NAV-40, TC-NAV-41, TC-NAV-42, TC-NAV-45, TC-NAV-46, TC-NAV-47, TC-NAV-48, TC-UI-09, TC-UI-10, TC-UI-11, TC-UI-12, TC-NAV-50, TC-SET-08, TC-NAV-51, TC-NAV-52, TC-NAV-53, TC-NAV-54 |
 | UC-02 | TC-CON-01…07, TC-CON-17…19, TC-CON-44, TC-CON-28, TC-NAV-02, TC-NAV-34, TC-QV-14, TC-QV-16, TC-QV-23, TC-QV-24, TC-CON-46, TC-QV-25, TC-CON-47, TC-QV-38, TC-QV-39, TC-QV-40, TC-FET-11, TC-STR-02, TC-STR-03, TC-CON-75, TC-CON-76, TC-CON-77, TC-CON-78, TC-CON-79, TC-CON-80, TC-CON-100, TC-CON-101, TC-CON-103 |
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
-| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
+| UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-ACT-18…22, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
 | UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-ATM-24, TC-ATM-25, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-37, TC-BKL-38, TC-BKL-39, TC-BKL-40, TC-BKL-41, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |

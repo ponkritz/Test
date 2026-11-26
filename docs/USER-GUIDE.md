@@ -517,9 +517,10 @@ View as is read only: nothing is saved to Azure DevOps or Git while it is on. Re
 4. Press **Save**. The save runs in the background; the top bar shows its result.
 
 - **＋ Add a new activity** adds your month Task under a Feature (choose an Active Epic, then one of its Features), a **User Story**, a work **Task**, or opens **New Feature**.
-- The cards at the top show your Capacity, Planned and Actual hours with their share of capacity, your Tasks, and the **last day** to update the month. When you are not counted for capacity, the Capacity card says why.
+- The cards at the top show your Capacity, Planned and Actual hours with their share of capacity, **Features Working on** (the Features you have a Task under this month), and the **last day** to update the month. When you are not counted for capacity, the Capacity card says why.
 - **Close Features** and **Close Tasks** (next to Save) let you tick items and close your own open work after one confirmation.
 - Each month has a last day for the plan and one for the actuals (by default the 5th of the month and the 4th of the next month). After the plan's last day the Planned hours are greyed out and only Actual can be changed; after the actuals' last day the month is locked.
+- **Month Task states are kept for you.** Saving hours on a New Task sets it, its Time Writing story and a New Feature to Active (a Closed item is never reopened). After each fetch, the background job **Month Task states** (Jobs done) closes your own Tasks of a month whose actuals are locked, or whose Feature is finished, and your Time Writing story once all its Tasks are Closed. Other people's Tasks are never changed.
 
 ### My Tasks [Board]
 

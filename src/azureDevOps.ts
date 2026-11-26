@@ -569,6 +569,17 @@ export async function createFeatureWithMonthTasks(config: AzureConfig, pat: stri
   }
 }
 
+// ACT-26: the current version of some work items (in batches of 200), e.g. to check their State again before writing.
+export async function readAzureWorkItems(config: AzureConfig, pat: string, ids: number[], transport: AzureTransport = requestAzure): Promise<AzureWorkItem[]> {
+  const items: AzureWorkItem[] = []
+  const wanted = [...new Set(ids)].filter((id) => Number.isSafeInteger(id) && id > 0)
+  for (let index = 0; index < wanted.length; index += 200) {
+    const batch = await transport({ ...config, pat, operation: 'items', ids: wanted.slice(index, index + 200) }) as { value?: RawItem[] }
+    items.push(...(batch.value ?? []).map((item) => mapAzureWorkItem(item, config)))
+  }
+  return items
+}
+
 // Changes a work item's state and/or iteration path, then reads it back and checks the change landed.
 export async function updateAzureWorkItem(config: AzureConfig, pat: string, workItemId: number, update: { state?: string; iterationPath?: string }, transport: AzureTransport = requestAzure): Promise<AzureWorkItem> {
   if (!pat.trim()) throw new Error('Enter a Work Items (Read & Write) PAT.')

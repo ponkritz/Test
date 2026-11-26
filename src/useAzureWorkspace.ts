@@ -204,7 +204,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
     const updated = await updateAzureTimeWritingEffort(config, pat, workItemId, planHours, actualHours, markAdhoc)
     // BKL-36: a month Task saved: its Feature's Time Writing titles follow the Feature name (silently).
     const titles = await syncTitlesAfterSave(config, pat, items, updated)
-    // BKL-41: hours make the Task and its Time Writing story Active (a Closed one is reopened; the person is told).
+    // ACT-24, ACT-25: hours make the Task, its Time Writing story and a New Feature Active (only from New; never reopened).
     const hours = await activateAfterHours(config, pat, items, updated)
     const saved = hours.activated.find((entry) => entry.id === updated.id) ?? updated
     const changed = [saved, ...hours.activated.filter((entry) => entry.id !== updated.id), ...titles.renamed]

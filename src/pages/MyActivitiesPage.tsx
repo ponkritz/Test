@@ -6,6 +6,7 @@ import { capacityContext, capacityGap, capacityModel } from '../capacity'
 import { closeChosen, closeTree, type CloseRow, type closeSelection } from '../closeList'
 import { CloseItemsDialog } from '../components/CloseItemsDialog'
 import { activateAfterHours } from '../closeChain'
+import { featuresWorkingOn } from '../monthTaskStates'
 type CloseSelection = ReturnType<typeof closeSelection>
 import { FeatureEditor } from '../components/FeatureEditor'
 import { SearchSelect } from '../components/SearchSelect'
@@ -366,7 +367,7 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
       <Metric label="Capacity" value={capacity == null ? '—' : `${formatHours(capacity)}h`} hint={capacity != null ? 'Working days less absence' : capacityWhy ?? 'Your name is not known yet'} />
       <Metric label="Planned hours" value={<>{formatHours(kpi.plan.value)}{pctOf(kpi.plan.value, capacity)}</>} hint="Original Estimate · % of capacity" />
       <Metric label="Actual hours" value={<>{formatHours(kpi.actual.value)}{pctOf(kpi.actual.value, capacity)}</>} hint={`Completed Work${kpi.plan.value ? ` · ${Math.round((kpi.actual.value ?? 0) / kpi.plan.value * 100)}% of plan` : ''}`} />
-      <Metric label="Tasks" value={kpi.monthlyTasks.length} hint={`Your ${label} Time Writing Tasks`} />
+      <Metric label="Features Working on" value={featuresWorkingOn(azure.items, kpi.monthlyTasks)} hint={`Features with your ${label} Time Writing Task`} />
       <article className="act-summary act-tile-update" aria-labelledby="act-progress">
         <span id="act-progress">Monthly update</span>
         <div className="act-ring-row">
