@@ -217,7 +217,7 @@ test('desktop bridge constrains credentials to Azure DevOps and rejects writes a
   assert.throws(() => azureReadRequest({ ...config, pat, operation: 'query', query: "SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] > 0 ASOF '2026-01-01' MODE (Recursive)" }), /Invalid read query/)
 })
 
-const feature = { parentId: 10, title: 'Example | Service | v1.0', description: 'Feature DoD: Example <text>\nNext line', acceptanceCriteria: 'Meets example criteria', assignedTo: 'example@example.invalid', targetDate: '2026-10-30' }
+const feature = { parentId: 10, title: 'Example | Service | v1.0', description: 'Feature DoD: Example <text>\nNext line', acceptanceCriteria: '', assignedTo: 'example@example.invalid', targetDate: '2026-10-30' }
 
 test('Feature creation validates first, links to Epic, then verifies persisted parent', async () => {
   const operations = []
@@ -476,6 +476,24 @@ test('partial hierarchy retains known IDs and completion creates only missing ch
   assert.equal(server.writes.length, 7)
 })
 
+test('BKL-53: a new Feature has one acceptance field, its DoD in the Description; the Acceptance Criteria field is refused on a Feature create by both transports, kept on a new User Story (TC-BKL-42)', async () => {
+  const input = { ...config, pat, operation: 'create-feature', validateOnly: true, feature: { ...feature, areaPath: 'Quality\\Team A' } }
+  const body = JSON.parse(azureFeatureRequest(input).options.body)
+  assert.equal(body.some((field) => /AcceptanceCriteria/.test(field.path)), false, 'no Acceptance Criteria field on a Feature create')
+  assert.match(body.find((field) => field.path === '/fields/System.Description').value, /^Feature DoD: /)
+  const withCriteria = { ...input, feature: { ...input.feature, acceptanceCriteria: 'Meets example criteria' } }
+  assert.throws(() => azureFeatureRequest(withCriteria), /keeps its Acceptance Criteria \(Feature DoD\) in the Description/)
+  const sent = []
+  globalThis.window = {}; const original = globalThis.fetch
+  globalThis.fetch = async (url) => { sent.push(url); return new Response('{}', { status: 200 }) }
+  guardAzureWrites(() => true)
+  try { await assert.rejects(requestAzure(withCriteria), /keeps its Acceptance Criteria \(Feature DoD\) in the Description/) }
+  finally { delete globalThis.window; globalThis.fetch = original; guardAzureWrites(() => false) }
+  assert.equal(sent.length, 0, 'nothing is sent')
+  const story = JSON.parse(azureFeatureRequest({ ...withCriteria, operation: 'create-child', workItemType: 'User Story' }).options.body)
+  assert.equal(story.find((field) => field.path === '/fields/Microsoft.VSTS.Common.AcceptanceCriteria').value, 'Meets example criteria', 'a new User Story keeps its Acceptance criteria')
+})
+
 test('desktop child requests permit only User Story/Task and retain hierarchy relation', () => {
   for (const type of ['User Story', 'Task']) {
     const request = azureFeatureRequest({ ...config, pat, operation: 'create-child', workItemType: type, validateOnly: true, feature: { ...feature, areaPath: 'Quality Project', iterationPath: 'Quality Project' } })
@@ -671,7 +689,7 @@ test('the Time Writing story without set paths: the project root iteration (no P
   assert.equal(server.writes.length, writes, 'nothing new was written')
 })
 
-import { assertWritableBase } from '../src/azureDevOps.ts'
+import { assertWritableBase, requestAzure, guardAzureWrites } from '../src/azureDevOps.ts'
 test('writes go to dev.azure.com only: on-premises servers are read-only in the web app and in the desktop proxy', async () => {
   const onPrem = { organization: 'DHPCollection', project: 'DHP', team: 'Team', baseUrl: 'https://tfs.example.invalid/tfs/DHPCollection' }
   for (const operation of ['create-feature', 'create-child', 'update-time-writing-effort', 'update-work-item']) {

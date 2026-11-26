@@ -177,7 +177,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
     const token = pat; setError(''); submitting.current = true; setCreating(true)
     const parseHours = (value: string, label: string) => { if (!value.trim()) return undefined; const hours = Number(value); if (!Number.isFinite(hours) || hours < 0 || hours > 1000000) throw new Error(`${label} must be a number from 0 to 1,000,000.`); return hours }
     let feature: FeatureInput
-    try { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(assignee)) throw new Error(me ? 'Choose who the Feature and its children are assigned to.' : 'Configure the Feature creator email in Azure DevOps settings before creating a Feature.'); feature = { parentId: parent?.id ?? 0, title: title.trim(), description: needsDoD ? withFeatureDoD(dod, String(data.get('description') ?? ''), undefined, (fromFields ? fromFields.lines : fieldLines(titleFields, fieldValues))) : '', acceptanceCriteria: String(data.get('acceptance') ?? ''), areaPath: String(data.get('areaPath') ?? ''), iterationPath, assignedTo: assignee, storyIterationPath: sprintPath, ...(isNew && startDate ? { startDate } : {}), targetDate, ...(isNew ? { priority } : {}), taskOriginalEstimate: parseHours(taskOriginalEstimate, 'Original Estimate'), taskCompletedWork: parseHours(taskCompletedWork, 'Completed Work') } }
+    try { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(assignee)) throw new Error(me ? 'Choose who the Feature and its children are assigned to.' : 'Configure the Feature creator email in Azure DevOps settings before creating a Feature.'); feature = { parentId: parent?.id ?? 0, title: title.trim(), description: needsDoD ? withFeatureDoD(dod, String(data.get('description') ?? ''), undefined, (fromFields ? fromFields.lines : fieldLines(titleFields, fieldValues))) : '', acceptanceCriteria: '', areaPath: String(data.get('areaPath') ?? ''), iterationPath, assignedTo: assignee, storyIterationPath: sprintPath, ...(isNew && startDate ? { startDate } : {}), targetDate, ...(isNew ? { priority } : {}), taskOriginalEstimate: parseHours(taskOriginalEstimate, 'Original Estimate'), taskCompletedWork: parseHours(taskCompletedWork, 'Completed Work') } }
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Invalid Task effort.'); submitting.current = false; setCreating(false); return }
     // The months after the first one, with the hours typed for each (none for a future month's Completed Work).
     let later: { month: string; originalEstimate?: number; completedWork?: number }[]
@@ -343,9 +343,9 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
         {heading(1)}
         <p className="muted nf-hint">What has to be true for “{title.trim() || 'this Feature'}” to be done.</p>
         <label>Acceptance Criteria (Feature DoD) — required<textarea required maxLength={100000} rows={6} value={dod} onChange={(event) => setDodText(event.target.value)} disabled={creating} placeholder="What has to be true for this Feature to be done" /><small>{dodText == null && epicSetup?.featureDoD.trim() ? `From the ${setupSource === 'personal' ? 'your own' : 'shared'} setup of Epic #${epicSetup.epicId}${classSet ? ` for ${classValue}` : ''}. ` : dodText == null ? 'This Epic has no Acceptance Criteria (Feature DoD) set up: type it. ' : ''}Saved at the top of the Description as “Feature DoD: …”.</small></label>
-        <details className="nf-more"><summary>Description and acceptance criteria (optional)</summary>
+        {/* BKL-53: the one acceptance field of a new Feature is the DoD above; the fold holds the optional Description only. */}
+        <details className="nf-more"><summary>Description (optional)</summary>
           <label>Description<textarea name="description" maxLength={100000} value={description} onChange={(event) => setDescription(event.target.value)} disabled={creating} /></label>
-          <label>Acceptance criteria<textarea name="acceptance" maxLength={100000} disabled={creating} /></label>
         </details>
         {missingNote(1)}
       </section>}

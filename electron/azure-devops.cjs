@@ -65,6 +65,9 @@ function azureFeatureRequest(input) {
   const feature = input.feature
   if (!feature || !Number.isSafeInteger(feature.parentId) || feature.parentId < 1 || typeof feature.title !== 'string' || !feature.title.trim() || feature.title.length > 255 || typeof feature.areaPath !== 'string' || !feature.areaPath.trim()) throw new Error('A parent Epic, title and area path are required.')
   for (const field of ['description', 'acceptanceCriteria']) if (typeof feature[field] !== 'string' || feature[field].length > 100000) throw new Error('Invalid Feature text.')
+  // BKL-53 (SM-295): a new Feature keeps its Acceptance Criteria (Feature DoD) in the Description; the Azure DevOps
+  // Acceptance Criteria field is written on a new User Story only, never on a Feature create.
+  if (type === 'Feature' && feature.acceptanceCriteria.trim()) throw new Error('A new Feature keeps its Acceptance Criteria (Feature DoD) in the Description: the Acceptance Criteria field is not written. Nothing was created.')
   // Every created work item is assigned to someone (an email); never blank.
   if (typeof feature.assignedTo !== 'string' || feature.assignedTo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(feature.assignedTo.trim())) throw new Error('A new work item must be assigned to someone (an email). Nothing was created.')
   if (feature.targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(feature.targetDate)) throw new Error('Invalid target date.')

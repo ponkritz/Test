@@ -63,6 +63,7 @@ export interface AzureRequest extends AzureConfig {
 }
 export interface FeatureInput { parentId: number; title: string; description: string; acceptanceCriteria: string; areaPath?: string; iterationPath?: string; assignedTo?: string; startDate?: string; targetDate?: string; assignToCreator?: boolean; storyIterationPath?: string; taskOriginalEstimate?: number; taskCompletedWork?: number; priority?: number }
 
+export const featureAcceptanceMessage = 'A new Feature keeps its Acceptance Criteria (Feature DoD) in the Description: the Acceptance Criteria field is not written. Nothing was created.'
 export const validStoryPoints = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1000
 // The Azure DevOps User Story fields under Planning and Classification (Agile process): Story Points, Priority 1–4
 // (Azure's default 2), Risk and Value area (default Business). Only these values can be written.
@@ -239,6 +240,9 @@ export async function requestAzure(request: AzureRequest): Promise<unknown> {
   if (changesAzure(request.operation) && !(review && request.reviewOf != null ? reviewPostAllowed(request.reviewOf) : writePermissions(request).every((permission) => writesAllowed(permission)))) throw new Error(request.reviewOf != null && writesAllowed('work.comment') ? 'Only the Feature’s assignee or a lead with “PI Review: post the review of a Feature” can post its review. Nothing was posted.' : refusedBecause)
   assertWritableBase(request, request.operation)
   if ((request.operation === 'create-feature' || request.operation === 'create-child') && !isAssignee(request.feature?.assignedTo)) throw new Error('A new work item must be assigned to someone (an email). Nothing was created.')
+  // BKL-53 (SM-295): a new Feature has one acceptance field, the Acceptance Criteria (Feature DoD) at the top of its
+  // Description; the Azure DevOps Acceptance Criteria field is never written on a Feature create (User Stories keep it).
+  if (request.operation === 'create-feature' && request.feature?.acceptanceCriteria?.trim()) throw new Error(featureAcceptanceMessage)
   const storyProblem = request.operation === 'create-feature' ? featureFieldsProblem(request.feature) : storyFieldsProblem(request.feature, request.operation === 'create-child' && request.workItemType === 'User Story')
   if (storyProblem) throw new Error(`${storyProblem} Nothing was created.`)
   if (request.feature?.adhoc != null && (request.feature.adhoc !== true || request.operation !== 'create-child' || request.workItemType !== 'Task')) throw new Error('Only a new Task can be tagged ad-hoc. Nothing was created.')
