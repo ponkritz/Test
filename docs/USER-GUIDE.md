@@ -543,6 +543,16 @@ View as is read only: nothing is saved to Azure DevOps or Git while it is on. Re
 - **Source details** lists every fetched work item with its fields.
 - On a row: **Edit**, **Close**, **＋ Feature**, **＋ User Story**, **＋ Task** and **＋ Time Writing Task**, as your role allows.
 
+### Your own User Story templates
+
+For User Stories you write often, keep templates of your own — any role can, also one that may only read the team's shared templates.
+
+1. Open **Admin → Feature & PI setup → User Story templates**. The team's shared templates are at the top (read only unless your role may edit them); **My templates** is under them.
+2. **＋ New template…**: a title (placeholders such as {feature} allowed), a description (optional) and, if you like, the Epics and Release Classification values it is for. **Save**. **Edit…** changes one; **Remove…** asks first.
+3. In **New User Story** (＋ User Story on a Feature) or **Your own User Story** on New Feature, choose **Start from a template**: the shared templates come first, yours under **Mine**. The title ({feature} becomes the Feature's title) and description are filled in; change them as you need, then Save.
+
+Your templates are kept in **this browser** under your work email (My settings): only you see them, they are not in Git, a backup or SharePoint, and another browser or computer does not have them. A PAT or token typed into a template is refused. While viewing as someone else no personal templates are shown.
+
 ### Create a Feature
 
 Every page creates a Feature with the same **New Feature** form: QMS-0025, My Tasks [Board], Time Writing and Create Feature on a Release page.

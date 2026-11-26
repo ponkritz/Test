@@ -12,6 +12,7 @@ import { NamingPatternsPanel } from '../components/NamingPatternsPanel'
 import { EpicSetupPanel } from '../components/EpicSetupPanel'
 import { SharedListsPanel, type SharedListsEnv } from '../components/SharedListsPanel'
 import { StoryTemplatesPanel } from '../components/StoryTemplatesPanel'
+import { MyStoryTemplatesPanel } from '../components/MyStoryTemplatesPanel'
 import type { EpicSetupStore } from '../useEpicSetup'
 import { MyViewsPanel } from '../components/MyViewsPanel'
 import { RoleStarterViewsPanel } from '../components/RoleStarterViews'
@@ -384,7 +385,7 @@ export function AdminPage({ store, month, azure, git, access, featureSetup, epic
       // LST-03…LST-07: Lists — the Value lists and, below them, the team lists from Azure DevOps (two files in Git) —
       // both usable as built-in lists of the On-Demand columns (LST-08).
       lists: <><EpicSetupPanel section="lists" setup={epicSetup} git={git} items={azure.items} canEdit={can('setup.epic')} canEditLists={can('setup.values')} />{sharedLists && <SharedListsPanel env={sharedLists} />}</>,
-      templates: <StoryTemplatesPanel setup={epicSetup} featureSetup={featureSetup} git={git} items={azure.items} canEdit={can('setup.values')} />,
+      templates: <><StoryTemplatesPanel setup={epicSetup} featureSetup={featureSetup} git={git} items={azure.items} canEdit={can('setup.values')} /><MyStoryTemplatesPanel email={azure.creatorEmail} viewingAs={Boolean(access.viewingAs)} items={azure.items} epicFile={epicSetup.file} /></>,
       // PIR-29, PIR-33: the PI Review form (formerly the page PI Review Setup).
       pireview: piReview,
     })} />}

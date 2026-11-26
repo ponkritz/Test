@@ -10,6 +10,7 @@ import { QePageFields } from './QePageFields'
 import { useBulkEpic } from '../useStreamEpics'
 import { dpDateColumns, dpDateLabel } from '../dpBulkDates'
 import { Notice } from './ui'
+import { useMyStoryTemplates } from '../useMyStoryTemplates'
 
 // CON-97 Admin → Feature & PI setup → Setup per Epic: one screen per Epic. The Epic list (All Epics first) on the
 // left; on the right a preview of a new Feature and four sections in the order it is built — Fields & title, Definition
@@ -133,6 +134,9 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
   const allTemplates = epicFile.storyTemplates ?? []
   const offered = isAll ? allTemplates.filter((item) => !item.epics.length && !item.classes.length) : templatesFor(epicFile, epicId, value)
   const canTemplates = writable && can('setup.values')
+  // STT-07: in my own version, my own templates too ("Mine"), added as a copy: they are on this browser only, so a
+  // link to one would not hold on another computer.
+  const myTemplates = useMyStoryTemplates(setup.email ?? '')
   const saveAsTemplate = (index: number) => {
     const story = stories[index], id = newStoryTemplateId(epicFile, story.title)
     epicSetup.setDraft(upsertStoryTemplate(epicFile, { id, title: story.title.trim(), description: story.description, epics: isAll ? [] : [epicId], classes: value ? [value] : [] }))
@@ -233,7 +237,7 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
         <header><span className="efe-n">{isAll ? 2 : 3}</span><div><h3>User Stories{value && ` — ${value}`}</h3><small>Created under the Feature, ticked by default</small></div>{!value && switchView('stories', 'User Stories')}</header>
         {value && !own ? <div className="efe-inherited"><small>FROM THE EPIC’S DEFAULT</small><span>{stories.map((story) => story.title).join('\n') || 'None'}</span></div>
         : !value && !isAll && !custom.stories ? fromDefaults((defaults.stories ?? []).map((story) => story.title).join('\n') || 'None set: only the Review of Deliverables story and your own') : <>
-          <StoriesEditor stories={stories} disabled={!editable} onChange={setStories} dateColumns={dateColumns} templates={allTemplates} offered={offered} canSaveTemplate={canTemplates} onSaveTemplate={saveAsTemplate} />
+          <StoriesEditor stories={stories} disabled={!editable} onChange={setStories} dateColumns={dateColumns} templates={allTemplates} offered={offered} mine={useMine ? myTemplates.templates : []} canSaveTemplate={canTemplates} onSaveTemplate={saveAsTemplate} />
         </>}
         {hasSets && !value && <QePageFields entry={entry} disabled={!editable} onChange={(next) => changeEntry((item) => { item.qePage = next })} />}
       </section>
@@ -259,11 +263,15 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
   </div>
 }
 
-function StoriesEditor({ stories, disabled, onChange, templates, offered, canSaveTemplate, onSaveTemplate, dateColumns }: { stories: StoryTemplate[]; disabled: boolean; dateColumns: { field: string; label: string }[]; onChange: (next: StoryTemplate[]) => void; templates: StoryTemplateItem[]; offered: StoryTemplateItem[]; canSaveTemplate: boolean; onSaveTemplate: (index: number) => void }) {
+function StoriesEditor({ stories, disabled, onChange, templates, offered, mine = [], canSaveTemplate, onSaveTemplate, dateColumns }: { stories: StoryTemplate[]; disabled: boolean; dateColumns: { field: string; label: string }[]; onChange: (next: StoryTemplate[]) => void; templates: StoryTemplateItem[]; offered: StoryTemplateItem[]; mine?: StoryTemplateItem[]; canSaveTemplate: boolean; onSaveTemplate: (index: number) => void }) {
   const set = (index: number, update: Partial<StoryTemplate>) => onChange(stories.map((story, at) => at === index ? { ...story, ...update } : story))
   const used = new Set(stories.map((story) => story.templateId).filter(Boolean))
   const others = templates.filter((item) => !offered.some((entry) => entry.id === item.id) && !used.has(item.id))
-  const add = (id: string) => { const item = templates.find((entry) => entry.id === id); if (item) onChange([...stories, { title: item.title, description: item.description, templateId: item.id }]) }
+  const add = (id: string) => {
+    const own = id.startsWith('mine:') ? mine.find((entry) => `mine:${entry.id}` === id) : undefined
+    if (own) { onChange([...stories, { title: own.title, description: own.description }]); return }
+    const item = templates.find((entry) => entry.id === id); if (item) onChange([...stories, { title: item.title, description: item.description, templateId: item.id }])
+  }
   return <div className="efe-list">
     {stories.map((story, index) => {
       const linked = story.templateId ? templates.find((item) => item.id === story.templateId) : undefined
@@ -285,9 +293,10 @@ function StoriesEditor({ stories, disabled, onChange, templates, offered, canSav
     })}
     {!stories.length && <p className="muted">No User Stories: only the Time Writing story and Task are created.</p>}
     {!disabled && <div className="button-row"><button type="button" className="ghost efe-add" onClick={() => onChange([...stories, { title: '', description: '' }])}>＋ Add User Story</button>
-      {(offered.length > 0 || others.length > 0) && <select aria-label="Add from templates" className="efe-add" value="" onChange={(event) => { if (event.target.value) add(event.target.value) }}><option value="">＋ Add from templates…</option>
+      {(offered.length > 0 || others.length > 0 || mine.length > 0) && <select aria-label="Add from templates" className="efe-add" value="" onChange={(event) => { if (event.target.value) add(event.target.value) }}><option value="">＋ Add from templates…</option>
         {offered.filter((item) => !used.has(item.id)).length > 0 && <optgroup label="For this Epic and value">{offered.filter((item) => !used.has(item.id)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</optgroup>}
         {others.length > 0 && <optgroup label="Other templates">{others.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</optgroup>}
+        {mine.length > 0 && <optgroup label="Mine (added as a copy)">{[...mine].sort((a, b) => a.title.localeCompare(b.title)).map((item) => <option key={item.id} value={`mine:${item.id}`}>{item.title}</option>)}</optgroup>}
       </select>}</div>}
   </div>
 }

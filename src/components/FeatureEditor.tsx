@@ -10,6 +10,8 @@ import { featureMonths, isFutureMonth } from '../featureMonths'
 import { dpTaskMonths } from '../dpBulkDates'
 import { dpMilestoneOf, dpStorySprints, withStorySprints, type DpPrefill } from '../dpCreatePlan'
 import { useEpicSetupFile } from '../useEpicSetup'
+import { useMyStoryTemplates } from '../useMyStoryTemplates'
+import { StoryTemplatePick } from './StoryTemplatePick'
 import { onPremValues, useOnPremSources } from '../onPremValues'
 import { asTitleFields, epicFieldsFor, featureFromFields, listOf, offList } from '../epicSetup'
 import { chooseSetup, setForClass, withLinkedStories, emptySetup, fieldKey, fieldLines, fieldPlaceholders, fieldTitle, fieldsFromItems, fieldsFromTitle, fillTitle, missingValues, reviewStoryTitle, setupFor, titleValues, type FeatureSetups } from '../featureSetup'
@@ -101,6 +103,8 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   // EPS-02: the Epic setup's fields (Admin → Feature & PI setup) apply to every new Feature under the Epic and take the place
   // of the Feature setup's title fields.
   const epicFile = useEpicSetupFile()
+  // STT-07: Your own User Story can start from a shared template or one of my own ("Mine").
+  const myTemplates = useMyStoryTemplates(me)
   // STT-02: stories linked to a User Story template take its current title and description.
   const baseSetup = withLinkedStories(unlinkedSetup, epicFile?.storyTemplates)
   const onPremSources = useOnPremSources()
@@ -362,6 +366,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
         {/* BKL-49: collapsed until opened; the summary names the story once a title is typed. */}
         <details className="nf-more nf-own-story-fold"><summary>Your own User Story <small className="muted">(optional){ownStory.title.trim() ? ` · ${ownStory.title.trim()}` : ''}</small></summary>
         <fieldset className="milestone-choices nf-own-story" disabled={creating} aria-label="Your own User Story">
+          <StoryTemplatePick shared={epicFile} mine={myTemplates.templates} epicId={epicId} featureTitle={title} onPick={(story) => setOwnStory((current) => ({ ...current, ...story }))} />
           <label>User Story title<input value={ownStory.title} maxLength={255} placeholder="Leave empty for none" onChange={(event) => setOwnStory((current) => ({ ...current, title: event.target.value }))} /></label>
           <label>User Story description<textarea value={ownStory.description} rows={2} placeholder="What needs to be done, and why" onChange={(event) => setOwnStory((current) => ({ ...current, description: event.target.value }))} /></label>
           <label>Comment <small className="muted">(optional, added to its Discussion)</small><textarea value={ownStory.comment} rows={2} onChange={(event) => setOwnStory((current) => ({ ...current, comment: event.target.value }))} /></label>

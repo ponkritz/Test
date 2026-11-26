@@ -1937,6 +1937,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-STT-02 Linked stories follow the template** — Req STT-02 — L1 `story-templates.test.mjs` ("STT-02: a linked story takes the template’s current title and description everywhere; a removed one keeps its copy (TC-STT-02)"); browser check: in Setup per Epic with Git storage that can save, Save as template marks the story Template; ＋ Add from templates adds a linked one; Unlink turns it back into an editable copy.
 
 **TC-STT-03 User Story templates as a list** — Req STT-03, STT-01 — E2E `backlog.e2e.mjs` ("TC-STT-01: a User Story template, linked in an Epic’s setup, gives New Feature its current title, ticked; Admin lists it with its tags": one table row with title, description, Epic, Release Classification and "1 place"; no cards); browser check with Git storage and the right to edit: Edit opens the template in a pop-up; a blank title cannot be saved; Save puts the change in the unsaved bar and Save to Git commits it; ＋ New template adds a row; Remove of a linked template asks first; search, sort and Export work.
+
+**TC-STT-04 My templates: a Team Member's own User Story template, used to create a User Story** — Req STT-04, STT-05, STT-07 — **UAT** — L1 `my-story-templates.test.mjs` ("STT-04…STT-07: My templates in the User Story templates section, offered in the New User Story form and Your own User Story, never in Git (TC-STT-04)"); E2E `my-story-templates.e2e.mjs` ("TC-STT-04: a Team Member sees the shared templates read only, adds her own under My templates and creates a User Story from it (“Mine”); another person does not see it": the shared table read only with the reason and no ＋ New template; My templates → ＋ New template… → a PAT in the description is refused with the reason, then Save adds the row, stored under her work email in local storage, nothing written to Git; New User Story on Feature #200 offers "Shared templates" then "Mine"; the pick fills "Check the test plan of Viewer 4.2" and the description; the create body sent to the mocked dev.azure.com carries that title, description, parent #200, assignee and Sprint; another work email on the same browser sees no template of its own and no "Mine", the shared one stays); UAT: as a Team Member, add a template of your own, edit it, use it in New User Story and in Your own User Story on New Feature, remove it after the confirmation pop-up; a colleague on their own computer does not see it.
+
+**TC-STT-05 My templates are personal and checked** — Req STT-05, STT-06 — L1 `my-story-templates.test.mjs` ("STT-06: my templates are read strictly — schema, people by work email, ids, sizes; anything else gives none (TC-STT-05)", "STT-06: text that looks like a PAT or token is never kept or saved (TC-STT-05)", "STT-05, STT-06: saving my list changes mine only; limits and the owner are checked; stored under the versioned key (TC-STT-05)"); browser check: a hand-edited `demand-planning-my-story-templates-v1` with bad JSON shows no templates and no error; a JSON backup (Admin → Data & history) does not contain the key.
+
+**TC-STT-06 Mine after the shared templates; View as shows none** — Req STT-07 — L1 `my-story-templates.test.mjs` ("STT-07: View as and a missing work email block my templates, with the reason (TC-STT-06)", "STT-07: the picker offers the shared templates unchanged (for the Epic first), then mine labelled Mine; a pick fills {feature} (TC-STT-06)"); E2E `my-story-templates.e2e.mjs` (TC-STT-04, the picker's groups); browser check: as an Admin with a template of your own, View as a Team Member — My templates shows the reason and ＋ New template… is disabled, New User Story offers no "Mine"; in Setup per Epic with "Use my own version" ＋ Add from templates lists "Mine (added as a copy)" and the story added is not marked Template.
 ### 6.28 On-Demand pages
 
 **TC-OND-01 On-Demand → CoNQ: columns, a row, Save to Git** — Req OND-01, OND-02, OND-03, OND-04, OND-05, OND-09, OND-28, OND-29, OND-30, OND-120 — **UAT** — L1 `on-demand.test.mjs` ("OND-04: rows — required fields, numbers and dates checked; values cleaned; search, sort values and CSV (TC-OND-03)"); E2E `on-demand.e2e.mjs` ("TC-OND-01: On-Demand → CoNQ — add a Dropdown and a Multi-select column with options, add a row, Save to Git writes on-demand/CoNQ--conq.json, and a reload shows it from Git"); UAT: with Git storage that can save and a role allowed both On-Demand permissions, open On-Demand → CoNQ (its title says Cost of Non-Quality and that it is not in Git yet); Set up columns… → add **Category** (Dropdown: Scrap, Rework) and **Sites** (Multi-select: Berlin, Leeds, Lyon), Save — saved to Git at once, no unsaved-changes bar; ＋ Add row → the row drawer opens → Category Rework, Sites Berlin and Lyon, Save to Git — the drawer shows CONQ-0001; the table shows "Rework" and "Berlin, Lyon" and "1 of 1 row"; Background jobs says "Saved to Git." and the data repository has `on-demand/conq.json` with both columns, their options and the row; on a second computer (or after a reload) CoNQ shows the row; Export gives the row in Excel and CSV.
@@ -3117,6 +3123,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | STT-01 | TC-STT-01 |
 | STT-02 | TC-STT-01, TC-STT-02 |
 | STT-03 | TC-STT-03 |
+| STT-04 | TC-STT-04 |
+| STT-05 | TC-STT-04, TC-STT-05 |
+| STT-06 | TC-STT-05 |
+| STT-07 | TC-STT-04, TC-STT-06 |
 | OND-01 | TC-OND-01, TC-OND-08 |
 | OND-02 | TC-OND-01, TC-OND-08 |
 | OND-03 | TC-OND-01, TC-OND-03 |
@@ -3548,7 +3558,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-33 | TC-CNB-01, TC-CNB-02 |
 | UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07, TC-EPS-08, TC-EPS-09 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
-| UC-36 | TC-STT-01, TC-STT-02, TC-STT-03 |
+| UC-36 | TC-STT-01, TC-STT-02, TC-STT-03, TC-STT-04, TC-STT-05, TC-STT-06 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
