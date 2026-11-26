@@ -2,6 +2,19 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v12.0.0 — 2026-11-26
+
+**Changed**
+- **Other views are each person's own** — the shared Streams file in Git (`azure-views.json`) now holds the Stream mapping only; every other connection (custom queries, backlog views, background sources) is saved in a file of its creator's own, `other-views/<work email>.json`, with who added it and never a PAT, and only that person sees, edits and fetches it; adding, editing or removing one saves the file at once and the person's other computers follow it (CON-119, CON-120, CON-124).
+- **Older shared Other views wait for an admin** — the first start with a Git token that can save moves the Other views of the shared setup to `other-views/unassigned.json` (list first, then the setup; safe when two computers do it at once; an older app writing them back changes nothing); admins see **Unassigned Other views** under Admin → Data & sharing → Other views and **Assign…** each one to a person (CON-121, CON-122, CON-123, SET-20).
+
+**Added**
+- **Load everything from Git when the Streams file changed** — a blocking pop-up (no ×, no Escape) whose only action is Load everything from Git, once per change of `azure-views.json` per repository and once for everyone after this release; never in View as, with the sample, without Git or for this computer's own save; it can never be skipped: after a failed load it names what failed and shows the Git storage connection setup (the same form as Admin → Data & sharing → Git storage) inside the pop-up with Retry; during a GitHub outage (every failure a server error or no network) it also offers Continue without loading, until the next start (GIT-29, GIT-30, GIT-31, GIT-32; LIM-155).
+
+DF-392, DF-393, DF-394, DF-395, DF-396; SM-240, SM-241; LIM-153…LIM-157; TC-CON-75…TC-CON-80, TC-GIT-24…TC-GIT-27, TC-SET-10.
+
+PR #437.
+
 ## v11.4.0 — 2026-11-25
 
 **Changed**
