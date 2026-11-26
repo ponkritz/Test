@@ -27,6 +27,7 @@ import { defaultInsightThresholds, thresholdsOf } from '../insightThresholds'
 const T = (bands: Bands) => bands.thresholds ?? defaultInsightThresholds
 import { activeFigureLock, defaultProfile, groupUtilization, defaultTerms, lockedPeople, profileFormula, termsOf, withViewedProfile, type TermKey } from '../calculationProfiles'
 import { ProfilePicker } from '../components/CalculationProfilesPanel'
+import { usePageSettingsGear } from '../usePageSettingsGear'
 
 // Dashboard: demand (planned hours), recorded hours and capacity per person and month, over a period, with one
 // utilization model everywhere — the bands from Admin → Capacity & time (overloaded strictly above overloadedAt %, spare
@@ -89,6 +90,8 @@ function MoreTable<T>({ items, limit = 8, render, head }: { items: T[]; limit?: 
 }
 
 export function DashboardPage({ month, azure, store, my, views, navigate, canSetDefault = false, canLock = false }: { month: string; azure: AzureWorkspace; navigate: (page: PageId) => void; store: PageProps['store']; setMonth?: (month: string) => void; my: MyWork; views?: PersonalViewsStore; canSetDefault?: boolean; canLock?: boolean }) {
+  // SET-32: ⚙ Settings for this page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
   const shared = capacityContext(store.state)
   // CAP-44: an Admin can view this page with another calculation profile (this page, this person only; not saved).
   const [viewProfile, setViewProfile] = useState('')
@@ -170,7 +173,7 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
   const chartItems = filtered ? azure.items.filter((item) => item.workItemType !== 'Task' || !item.assignedTo || chartPeople.has(item.assignedTo)) : azure.items
   const filterNote = filtered ? `Filters: ${[saved.filter.regions.length && 'region', saved.filter.roles.length && 'role', saved.filter.people.length && 'team member', saved.filter.streams.length && 'stream'].filter(Boolean).join(', ')}` : 'No filters'
 
-  return <Page>
+  return <Page actions={settingsGear ?? undefined}>
     <div className="dash-filters" role="group" aria-label="Dashboard filters">
       <MultiSelect label="Year" options={years.map((year) => [String(year), String(year)])} value={saved.period.years.map(String)} onChange={setYears} />
       <MultiSelect label="Quarter" options={quarterOptions.map((quarter) => [quarter, several ? `Q${quarter.slice(6)} ${quarter.slice(0, 4)}` : `Q${quarter.slice(6)}`])} value={saved.period.quarters} onChange={setQuarters} />

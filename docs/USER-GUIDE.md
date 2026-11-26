@@ -1325,6 +1325,17 @@ The **Admin** group holds the shared setup in seven pages, in this order: **Over
 
 **Where the former pages went.** Stream options is part of **Streams** (Epics to match is a column of the Stream mapping; your own bulk creation Epics are in **My settings → My bulk creation Epics**); Epic & Feature setup and PI Review Setup are **Feature & PI setup**; People & roles is **People & access** (its Capacity roles are under **Capacity & time → Capacity**); Reports and Pages & menu are **Pages & reports** (with **Table & chart defaults**, formerly in Look & feel); Data & sharing and History are **Data & history**. Search settings finds a setting by its former name too, and a page or section you had open before opens in its new place. *SET-26…SET-29*
 
+**Settings on the page.** Several pages have a **⚙** at the top right, named *Settings for <page>*, when your role may change at least one of their settings. It opens that page's settings in a pop-up, as tabs — the same panels as in Admin, saved the same way (Save to Git, the same rights) — and each tab has **Open in Admin →** to go to the full Admin section. Escape, × or Close closes it.
+
+| Page | Settings in its ⚙ |
+|---|---|
+| Time Writing, My Tasks [Board] | Month locks, Hour classification, Capacity, Setup per Epic, User Story templates (the shared ones; My templates stay in Admin) |
+| Team overview, My dashboard | Capacity, Thresholds, Calculation profiles, Table & chart defaults |
+| Pulse Check | Monthly pack, Table & chart defaults |
+| A Release Details page (DP, CP, IOCC, Content, …) | That stream's row of Stream mapping, its Release counts (CP, DP, IOCC) and its Release Classification — Setup per Epic of the stream's bulk creation Epic (DP, IOCC, Content), where the Release Classification field and its rules are under Fields & title |
+
+You see only the tabs you may change; a Team Member sees no ⚙. In View as the ⚙ follows the viewed person's or role's rights and the settings are read only.
+
 ### Overview and Search settings
 
 **Admin → Overview** lists what is left to set up (with a link to each setting), the shared changes not yet saved to Git (with **Save to Git**) and, for those allowed *Shared setup in Git*, the latest changes. **Search settings** (**Ctrl K**) finds any setting by name.

@@ -74,7 +74,7 @@ import { knownPeople, teamPeopleOnce, type KnownPerson } from './ownerPeople'
 import { duplicatePageNames, menuLabel, type MenuPageName } from './pageNames'
 import { useMonthlyPack } from './useMonthlyPack'
 import { previousMonth } from './pulseCheck'
-import { accessChangedText, canManagePages, rightsChanges, rightsFor, type Area } from './access'
+import { accessChangedText, canManagePages, rightsChanges, rightsFor, type Action, type Area } from './access'
 import { useMyWork } from './useMyWork'
 import { setLockSettings } from './planningLock'
 import { DesktopDownload } from './components/DesktopDownload'
@@ -92,6 +92,9 @@ import { toolDatasets } from './dashboardSources'
 import { HeaderSlot } from './headerSlot'
 import { SetupGuide } from './components/SetupGuide'
 import { GitSyncBar } from './components/GitStorage'
+import { PageSettingsButton, PageSettingsDialog } from './components/PageSettings'
+import { PageSettingsContext } from './usePageSettingsGear'
+import { pageSettingsFor, settingsPageOf } from './pageSettings'
 import { confirmReplace, defaultGitRepository, isRepositoryUnreadable, movedRepositoryTarget, normalizeSetupLinks, setCommitSaver, type SetupLinks } from './gitStorage'
 import { guideKey, requiredOpen, setupSteps } from './setupGuide'
 import { capacityContext, setAccessRoles, setAzureEmails } from './capacity'
@@ -224,6 +227,8 @@ export default function App() {
   }, [store.ready, azure, git.connected, setupSynced, gitWaitOver])
   // View as (CON-89…CON-92): an Admin sees the app as a person or a role, read-only, for this page load only.
   const [viewAs, setViewAs] = useState<ViewAs | null>(null)
+  // SET-32: the page whose ⚙ settings pop-up is open (its page key and name), else null.
+  const [pageSettingsAt, setPageSettingsAt] = useState<string | null>(null)
   const [viewAsOpen, setViewAsOpen] = useState(false)
   const access = useAccess(git, azure, viewAs)
   // SET-23: the starter views of the person's own access roles (other-views/role-starters.json) copied once into their
@@ -628,6 +633,15 @@ export default function App() {
   // or 'ondemand:<page id>' for an added page.
   const pageKey = page === 'ondemand' && onDemandPage ? `ondemand:${onDemandPage.id}` : page === 'admin' ? `admin:${settingsTab}` : page
   const pageName = page === 'board' ? view.name : page === 'windchill' && windchillView ? windchillView.name : page === 'admin' ? settingsLabel(settingsTab) : page === 'ondemand' && onDemandPage ? onDemandPage.name : meta.label
+  // SET-32…SET-35: the page's ⚙ settings — the sections of this page the person may change (in View as: the viewed
+  // rights, as the menu); a Release Details page is a stream's read-only view or its Windchill export.
+  const releaseStream = page === 'board' && view.readOnly ? allStreams().find((stream) => profileForStream(stream, azure.connectionProfiles)?.id === view.id)?.name
+    : page === 'windchill' && windchillView ? windchillStreamExports(windchillViews).find((entry) => entry.view?.id === windchillView.id)?.stream.name : undefined
+  const settingsPage = settingsPageOf(page, releaseStream)
+  const canChangeSetting = (action: Action) => action === 'streams.manage' ? access.canManageStreams : access.can(action)
+  const pageSettings = settingsPage ? pageSettingsFor(settingsPage, canChangeSetting, releaseStream) : []
+  const pageSettingsKey = `${pageKey}|${pageName}`
+  const pageSettingsGear = pageSettings.length ? <PageSettingsButton pageName={pageName} onOpen={() => setPageSettingsAt(pageSettingsKey)} /> : null
   // The dashboards whose blocks or filters read an On-Demand page (from the definitions last read in this browser).
   const dashboardsReading = (pageId: string) => Object.entries(menu.layout.pages).filter(([, entry]) => entry.type === 'dashboard').map(([id]) => id).filter((id) => { const dashboard = cachedDashboard(id); return Boolean(dashboard && [...dashboard.blocks, ...dashboard.filters].some((entry) => pageOfSource(entry.source) === pageId)) })
   const targetOf = (path: string): FilePages => pagesOfFile(path, git.config?.path ?? '', dashboardsReading)
@@ -784,6 +798,7 @@ export default function App() {
       {guideOpen && <SetupGuide steps={steps} busy={azure.busy} problem={azure.fetchProblem} links={setupLinks} linkDefaults={linkDefaults} editLinks={access.can('layout.defaults') && git.connected && !git.readOnly && !azure.isSample ? { links: store.state.setupLinks ?? {}, onChange: (links) => store.update((draft) => { draft.setupLinks = links; return draft }), saveBar: <GitSyncBar git={git} /> } : undefined} inputs={{ connectGit: (token) => git.connect({ ...defaultGitRepository, ...git.config }, token, true), saveEmail: (email) => { azure.setCreatorEmail(email) }, savePat: (token) => { azure.rememberPat(token); azure.reloadConnectionProfiles() }, detectEmail: () => azure.config ? detectWorkEmail(azure.config, azure.pat) : Promise.reject(new Error('Set up the Time Writing connection first.')), gitMessage: git.status === 'error' ? git.message : undefined }} onClose={() => setGuideOpen(false)} onDismiss={dismissGuide} onOpenTab={(tab, section) => { openSettings(tab, section); setGuideOpen(false) }} onFetch={() => void azure.refresh()} />}
       {store.cache.status === 'error' && <Notice tone="error"><p>{store.cache.message}</p><div className="button-row"><button className="ghost" onClick={() => exportStateJson(store.state)}>Export JSON backup now</button><button className="primary" onClick={store.retrySave}>Retry browser save</button></div></Notice>}
       <div className="data-notices"><PageGitNotice key={pageKey} page={pageName} changes={pageChanges} unsaved={unsavedHere} fullReload={fullReload} onLoad={loadNewer} />{git.viewsRemoved && <Notice tone="warning" className="views-removed-note">{git.viewsRemoved}{' '}<button type="button" className="text-button" onClick={git.dismissViewsRemoved}>Dismiss</button></Notice>}{goneNote?.page === pageKey && <Notice tone="success" className="view-gone-note">{goneNote.text}{' '}<button type="button" className="text-button" onClick={() => setGoneNote(null)}>Dismiss</button></Notice>}{accessNote?.page === pageKey && <Notice tone="info" className="access-changed-note">{accessNote.text}{' '}<button type="button" className="text-button" onClick={() => setAccessNote(null)}>Dismiss</button></Notice>}</div>
+      <PageSettingsContext.Provider value={pageSettingsGear}>
       <Suspense fallback={<p className="muted page-loading" role="status">Loading the page…</p>}><Fragment key={pageReads}>
       {page === 'home' && <HomePage tiles={homeTiles} name={my.me.name} />}
       {/* MYD-15: My dashboard's blocks read what the app has loaded, each source as the viewer's areas allow; View as: read only, the default layout. */}
@@ -811,6 +826,12 @@ export default function App() {
       {page === 'admin' && <AdminPage listsOwner={ownsAPage(menu.layout, viewedEmail)} pagesMenu={<PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />} piReview={<PiReviewSetupSection store={piForm} block={piFormBlock} by={my.self.me.name?.trim() || azure.creatorEmail.trim()} />} look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} setupSteps={steps} onSearch={() => setSearchOpen(true)} monthlyPack={monthlyPack} history={history} loadEverything={() => startJob('everything')} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage key={docsVisit} />}
       </Fragment></Suspense>
+      </PageSettingsContext.Provider>
+      {/* SET-32…SET-35: the page's settings in a pop-up — the Admin panels of its sections (AdminPage only), saved the same way. */}
+      {pageSettingsAt === pageSettingsKey && pageSettings.length > 0 && <PageSettingsDialog pageName={pageName} onClose={() => setPageSettingsAt(null)}>
+        <AdminPage tab="home" onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} monthlyPack={monthlyPack} history={history} loadEverything={() => startJob('everything')} onOpenBoard={() => setPage('board')}
+          only={{ sections: pageSettings, stream: releaseStream, onOpenAdmin: (tab, section) => { setPageSettingsAt(null); openSettings(tab, section) } }} />
+      </PageSettingsDialog>}
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}
       <footer className="app-footer" aria-label="Version" ref={footerRef}><ZoomControl /><DesktopDownload />{buildStatus}</footer>
     </main>

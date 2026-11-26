@@ -1408,6 +1408,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-SET-16 Moved sections keep their behaviour** — Req SET-29, QV-57, QV-59 — L1 `bulk-epics.test.mjs` ("QV-59: without a mapped bulk creation Epic, Create Features says why and where to map it (TC-QV-40)"); E2E `admin-seven-pages.e2e.mjs` ("TC-SET-13: …" — Choose… on DP's Stream mapping row opens its Epics to match; My settings → My bulk creation Epics), `shell.e2e.mjs` ("TC-QV-38: …", "TC-QV-40: …"), `documents-and-data.e2e.mjs` (Open Bulk creation Epics) ; browser check: Streams → Stream mapping shows Epics to match per stream with Choose…; Bulk creation has the Shared column only and My settings → My bulk creation Epics the Mine column; Data & history → Other views shows By type in a read-only view's row and there is no Read-only sources section; Demo data has Load synthetic sample dataset and Reset synthetic MVP data.
 
+**TC-SET-17 Page settings: the sections of each page and who sees them** — Req SET-33, SET-34, SET-35 — L1 `page-settings.test.mjs` ("SET-33: the sections of each page, in order, all Admin sections (TC-SET-17)", "SET-32, SET-34: a Tool Owner gets every section of every page; a Team Member none (no ⚙) (TC-SET-17)", "SET-34: a Scrum Master, an Admin and a Product Owner see only the sections their role may change; View as follows the viewed role (TC-SET-17)", "SET-32: which app pages have settings (TC-SET-17)").
+
+**TC-SET-18 ⚙ Settings for Time Writing, saved like Admin** — Req SET-32, SET-33 — **UAT** — E2E `page-settings.e2e.mjs` ("TC-SET-18: a Tool Owner opens ⚙ Settings for Time Writing, changes a Month lock day there and Admin shows the same change; Open in Admin → opens the section") ; UAT: as a Tool Owner on Time Writing, ⚙ (top right) opens "Settings for Time Writing" with Month locks, Hour classification, Capacity, Setup per Epic and User Story templates; change the last day to update the plan, Save to Git, and Admin → Capacity & time → Month locks shows the same day (a second person gets it from Git); Open in Admin → on Hour classification opens that section; Team overview and Pulse Check show their own settings; Escape closes the pop-up.
+
+**TC-SET-19 No ⚙ settings without a right to change them** — Req SET-35 — E2E `page-settings.e2e.mjs` ("TC-SET-19: a Team Member sees no ⚙ settings on Time Writing, My Tasks [Board] or a Release Details page") ; browser check: a Tool Owner in View as a Team Member sees no ⚙.
+
+**TC-SET-20 A Release Details page's settings are its stream's** — Req SET-34, SET-32 — E2E `page-settings.e2e.mjs` ("TC-SET-20: on Release Details → DP the ⚙ opens DP’s row of Stream mapping, its Release counts and its Release Classification").
+
 **TC-SET-04 Master data, audit, reset** — Req SET-10…12, OI-06, OI-09
 - Expected:
   - An added value appears with "Active".
@@ -3504,6 +3512,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | SET-31 | TC-SET-14, TC-LST-10 |
 | SET-28 | TC-SET-13, TC-SET-15 |
 | SET-29 | TC-SET-16 |
+| SET-32 | TC-SET-18, TC-SET-20 |
+| SET-33 | TC-SET-17, TC-SET-18 |
+| SET-34 | TC-SET-17, TC-SET-20 |
+| SET-35 | TC-SET-17, TC-SET-19 |
 | SET-30 | TC-SET-08 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
@@ -3547,7 +3559,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-11 | TC-BAS-01…04 |
 | UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30, TC-GIT-35, TC-GIT-36, TC-GIT-37, TC-GIT-31 |
 | UC-13 | TC-SNP-01…03 |
-| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10, TC-SET-11, TC-SET-12, TC-SET-13, TC-SET-14, TC-SET-15, TC-SET-16 |
+| UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10, TC-SET-11, TC-SET-12, TC-SET-13, TC-SET-14, TC-SET-15, TC-SET-16, TC-SET-17…20 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
 | UC-16 | TC-UPD-01, TC-UPD-02, TC-UPD-03 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |

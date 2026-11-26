@@ -56,6 +56,7 @@ import type { GitStorage } from '../useGitStorage'
 import { columnName, queryLayout, type QueryColumn, type QueryOrder } from '../queryView'
 import { dataSetOfProfile, defaultMatchThreshold, streamArea, streamOfProfile } from '../streams'
 import { normalizeReleaseSourceSettings, streamPatterns } from '../releaseSource'
+import { usePageSettingsGear } from '../usePageSettingsGear'
 
 // One page for all configured Azure DevOps views (each its own entry in the sidebar): the Time Writing backlog
 // (QMS-0025) as an editable tree, and every other shown connection as a read-only query view.
@@ -139,6 +140,8 @@ function useMissingParentTitles(documentsId: string | undefined, fetchedAt: stri
   }, [documentsId, fetchedAt, report, titles, update])
 }
 function ReadOnlyView({ id, name, role, azure, store, month, gitNote, otherView, onOpenConnection, onOpenSettings, assign, featureSetup }: { otherView?: OtherViewEnv; onOpenSettings?: (tab: SettingsTab, section?: string) => void; featureSetup?: FeatureSetups | null; id: string; name: string; role: BacklogView['role']; azure: AzureWorkspace; store: PageProps['store']; month: string; gitNote?: { tone: string; text: string }; onOpenConnection: () => void; assign?: { me: string; canChoose: boolean } }) {
+  // SET-32: ⚙ Settings for this Release Details page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
   // QV-16: the header month, or every month (Show: {month} / All months).
   const [scope, setScope] = useState<ReleaseScope>('month')
   const allMonths = scope === 'all'
@@ -352,7 +355,7 @@ function ReadOnlyView({ id, name, role, azure, store, month, gitNote, otherView,
     : isCp && cp ? <ResultTabs id={`azure:${id}`} rawCount={source.items.length} main={<CpReportView report={(cpShown ?? cp).report} azure={azure} assign={assign} featureSetup={featureSetup} threshold={threshold} enrichment={cp.enrichmentName} />} raw={raw(source.items)} />
     : role === 'release-source' || stream ? <ReleaseView name={name} items={items} backlog={azure.items} azure={azure} assign={assign} featureSetup={featureSetup} rule={stream?.rule} patterns={namingPatterns} area={area} fuzzy={stream?.fuzzy} onOpenBulkEpics={openBulkEpics} threshold={threshold} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} />
     : <TablePanel><QueryView name={name} items={items} columns={viewColumns} orderBy={orderBy} unresolved={unresolved} /></TablePanel>
-  return <Page className="release-page">
+  return <Page className="release-page" actions={settingsGear ?? undefined}>
     {/* (1) QV-48, QV-70: the source bar; Show (on CP too since QV-72: All months lists every release container signed in any month; its counts stay the header month's), ↻ and ⋯. */}
     <ReleaseSourceBar name={name} source={`${config ? `${config.organization} / ${config.project}` : 'connection not found'}${profile?.query ? ' · query' : config?.team ? ` · team ${config.team}` : ''}`}
       fetched={source ? `fetched ${formatDateTime(source.fetchedAt)}${'fromGit' in source && source.fromGit ? ' (desktop app, via Git)' : ''}` : undefined}

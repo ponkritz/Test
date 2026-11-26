@@ -20,12 +20,15 @@ import { FeatureEditor, type FeatureEditorMode } from '../components/FeatureEdit
 import { StoryEditor } from '../components/StoryEditor'
 import { WorkItemEditor } from '../components/WorkItemEditor'
 import { completeChildrenOn, type FeatureSetups } from '../featureSetup'
+import { usePageSettingsGear } from '../usePageSettingsGear'
 
 type Log = { tone: 'success' | 'error' | 'info'; text: string }
 const stateTone = (state: string): Tone => /new|proposed|to do/i.test(state) ? 'info' : /active|in progress|committed|doing/i.test(state) ? 'open' : 'neutral'
 const shortPath = (path: string) => path.split('\\').slice(1).join(' › ') || path
 
 export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivities, assign, featureSetup }: { azure: AzureWorkspace; store: PageProps['store']; my: MyWork; month?: string; onOpenActivities: () => void; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null }) {
+  // SET-32: ⚙ Settings for this page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
   const [busy, setBusy] = useState('')
   // CON-102: every button that changes Azure DevOps is disabled when the viewer lacks its permission (one line says why).
   const write = useWriteBlock()
@@ -111,7 +114,7 @@ export function MyWorkPage({ azure, store, my, month: headerMonth, onOpenActivit
     finally { setBusy('') }
   }
 
-  return <Page>
+  return <Page actions={settingsGear ?? undefined}>
     <section className="me-bar">
       <div><span className="eyebrow">WORK ASSIGNED TO</span><strong>{my.me.name ?? my.me.email ?? 'Not set'}</strong>{my.me.email && <small>{my.me.email}</small>}</div>
     </section>

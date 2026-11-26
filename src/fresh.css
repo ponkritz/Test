@@ -1258,6 +1258,10 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .pir-setup-extra{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px;align-items:start}.pir-setup-extra label{display:grid}.pir-setup-extra small{font-size:11px;color:var(--muted)}
 @media(max-width:760px){.pir-setup-editor,.pir-setup-extra{grid-template-columns:1fr}}
 .pir-setup-gear{padding:6px 10px;font-size:14px;line-height:1;border-radius:8px}
+/* SET-32…SET-35: a page's ⚙ settings pop-up — the Admin panels of its sections as tabs, each with Open in Admin →. */
+.page-settings-intro{margin:0 0 10px}
+.page-settings-admin{display:flex;justify-content:flex-end;margin:6px 0}
+.page-settings-body .panel{box-shadow:none}
 /* UI-24: a wide table's sticky horizontal scroll bar — fixed at the bottom of the screen above the sticky footer (its
    place and width set by StickyScrollbar.tsx from the table's box and the footer's real top edge), in the theme's
    colours; the native scroll bar follows color-scheme (dark theme) and the system colours (high contrast). */

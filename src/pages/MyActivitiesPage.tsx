@@ -23,6 +23,7 @@ import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { MyWork } from '../useMyWork'
 import { useNow } from '../useNow'
 import type { PageProps } from './types'
+import { usePageSettingsGear } from '../usePageSettingsGear'
 
 // Time Writing (ACT-02…ACT-07): one page for a person's month — this month's activities with their planned and actual
 // hours (the ones still to add ticked, like copying last month's), a new activity under a stream and Feature, and the
@@ -47,6 +48,8 @@ const closedTask = (row: { task?: AzureWorkItem }) => Boolean(row.task && !isPen
 const adhocTask = (task: AzureWorkItem) => task.tags.split(';').some((tag) => tag.trim().toLowerCase() === 'ad-hoc')
 
 export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup, onOpen }: { azure: AzureWorkspace; store: PageProps['store']; my: MyWork; month: string; assign?: { me: string; canChoose: boolean }; featureSetup?: FeatureSetups | null; onOpen: (page: 'mywork' | 'bulk') => void }) {
+  // SET-32: ⚙ Settings for this page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
   const now = useNow(60000)
   const [ticked, setTicked] = useState<Record<string, boolean>>({})
   const [hours, setHours] = useState<Record<string, Hours>>({})
@@ -357,7 +360,7 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   const idLink = (item?: AzureWorkItem) => item && item.id > 0 ? <a className="act-id" href={item.url} target="_blank" rel="noreferrer" title={`Open #${item.id} in Azure DevOps`}>#{item.id}</a> : null
   const chosenEpic = epics.find((epic) => epic.id === Number(stream))
 
-  return <Page className="activities-page">
+  return <Page className="activities-page" actions={settingsGear ?? undefined}>
     {!self && my.known && <div className="act-message act-info" role="status">Showing {my.me.name}'s activities. {assignee ? `What you save here is written for ${my.me.name} (assigned to them).` : 'Saving is not available for another person here.'} Choose “Me” to go back.</div>}
     {message && <div className={`act-message act-${message.tone}`} role="status">{message.text}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setMessage(null)}>×</button></div>}
     {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set your work email in Admin → Streams, or choose your name with Person at the top right, to see your activities." /> : <>

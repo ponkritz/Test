@@ -36,6 +36,7 @@ import { arrangeMyItems, isSection, maxMyBlocks, myBlankBlock, myDashboardKey, m
 import { cleanOptions, insightKindOf as kindOf, withoutHidden } from '../onDemand'
 import { parseTracker, type KpiTracker } from '../kpiTracker'
 import { runInBackground } from '../backgroundJobs'
+import { usePageSettingsGear } from '../usePageSettingsGear'
 
 // What My dashboard's blocks read (MYD-15): the data the app has loaded, the viewer's areas and the loads they may start.
 export interface MyDashboardSources {
@@ -60,6 +61,8 @@ const emptyPeriod = (): Period => ({ years: [], quarters: [], months: [] })
 // moves and resizes blocks of their own over every data source of the registry, kept with their personal views. Each
 // count opens the page with the detail.
 export function MyDashboardPage({ month, azure, store, my, navigate, views, canSetDefault = false, windchill, sources }: { month: string; azure: AzureWorkspace; store: PageProps['store']; my: MyWork; navigate: (page: PageId) => void; views: PersonalViewsStore; canSetDefault?: boolean; windchill?: Pick<WindchillWorkspace, 'views' | 'sources'>; sources?: MyDashboardSources }) {
+  // SET-32: ⚙ Settings for this page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
   const [editing, setEditing] = useState(false)
   const [blockEdit, setBlockEdit] = useState<{ block: DashboardBlock; isNew: boolean } | null>(null)
   const [removing, setRemoving] = useState<DashboardBlock | null>(null)
@@ -228,9 +231,10 @@ export function MyDashboardPage({ month, azure, store, my, navigate, views, canS
   const filtered = JSON.stringify(period) !== JSON.stringify(emptyPeriod())
 
   // UI-STANDARDS §1: who and which month as the intro, ＋ Add block… and Customize as the page actions.
-  return <Page intro={`${name || my.me.email} · ${label}${arranged.hidden.length ? ` · ${arranged.hidden.length} hidden` : ''}`} actions={readOnly ? undefined : <>
+  return <Page intro={`${name || my.me.email} · ${label}${arranged.hidden.length ? ` · ${arranged.hidden.length} hidden` : ''}`} actions={readOnly ? settingsGear ?? undefined : <>
     <button type="button" className="primary" disabled={Boolean(addReason)} title={addReason || undefined} onClick={addBlock}>＋ Add block…</button>
     <button type="button" className="ghost" aria-expanded={editing} onClick={() => setEditing(!editing)}>{editing ? 'Done' : 'Customize'}</button>
+    {settingsGear}
   </>}>
     {readOnly && <Notice tone="info">View as shows the default My dashboard of the viewed role. A person’s own blocks and layout are private: nobody else sees them.</Notice>}
     {parsed.dropped.length > 0 && <Notice tone="warning">{parsed.dropped.join(' ')}</Notice>}
