@@ -649,7 +649,7 @@ Cases marked **UAT** are also run in acceptance testing.
 - Expected:
   - Closed, Resolved and Done items, Epics and absence items are absent.
   - The list opens on the Feature chip and is always in ascending ID order, on every chip.
-  - The type chips filter the list and show counts.
+  - The type chips filter the list and show counts; Auto Time Writing US sits after User Story (TC-ATM-24).
   - The bulk panels are not on this page. "Bulk actions →" on the month-tasks metric opens the Bulk actions page, whose lists are also in ascending ID order.
 
 **TC-ATM-07 Search all assigned work and Info** — Req ATM-15, ATM-16
@@ -689,6 +689,10 @@ Cases marked **UAT** are also run in acceptance testing.
 **TC-ATM-22 Sprint check: full-width Sprint panel and the State checks tree** — Req ATM-29 — L1 `my-work.test.mjs` ("ATM-29: State checks expand to the User Stories of a Feature or the Tasks of a User Story; only my New User Stories can be set Active there (TC-ATM-22)"); E2E `shell.e2e.mjs` ("TC-ATM-20: Sprint check offers the move to the current PI + Sprint and the state checks, without month tasks": the Sprint panel spans the page; Nothing to fix for the sample); browser check with the Time Writing connection and an Active Feature of yours whose User Stories are New: State checks shows it as a tree row; Choose a User Story (or ›) lists its User Stories; Set User Story to Active on yours sets it Active after OK and the check goes away; someone else's New story has no button.
 
 **TC-ATM-23 Sprint check: a Feature left in an older PI** — Req ATM-30 — L1 `my-work.test.mjs` ("ATM-30: an Active Feature left in an older PI than its Active User Stories is flagged with the PI to move to (TC-ATM-23)"); browser check with the Time Writing connection and an Active Feature of yours in an older PI whose Active User Story is in the current Sprint: State checks lists it with both PIs; Move Feature to <PI> moves it after OK and the check goes away; a Feature already in the stories' PI is not listed.
+
+**TC-ATM-24 Auto Time Writing US bucket** — Req ATM-31, ATM-05 — L1 `my-work.test.mjs` ("TC-ATM-24: the Time Writing User Story has its own bucket "Auto Time Writing US"; the buckets add up (ATM-31)"); E2E `board-time-writing-bucket.e2e.mjs` ("TC-ATM-25: My Tasks [Board] lists the Time Writing User Stories in "Auto Time Writing US" and highlights one when expanded"); browser check on the synthetic sample as Chen Wei: the chips read All, Feature, User Story, Auto Time Writing US, Bug, Task, Other; the chip counts add up to Pending work; User Story lists no "… - Time Writing" story; the Features tile names the Auto Time Writing US count; a search for "Time Writing" still finds them.
+
+**TC-ATM-25 Expand an Auto Time Writing US: Month Tasks and highlight** — Req ATM-32 — L1 `my-work.test.mjs` ("TC-ATM-25: a Time Writing User Story opens to its Month Tasks, any assignee, Removed and other projects left out (ATM-32)"); E2E `board-time-writing-bucket.e2e.mjs` ("TC-ATM-25: My Tasks [Board] lists the Time Writing User Stories in "Auto Time Writing US" and highlights one when expanded"); browser check in light and dark theme: + opens the story's Month Tasks, the story and its Tasks get the accent background and left bar, the label reads "Auto Time Writing US · expanded" and the button Collapse … (aria-expanded true); − removes the highlight; a Time Writing story opened under its Feature (All, ＋ on the Feature) is highlighted the same way.
 
 **TC-ATM-03 Close an item** — Req ATM-06 — **UAT**
 - Steps:
@@ -2653,7 +2657,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | MON-23 | TC-MON-09 |
 | MON-24 | TC-MON-10 |
 | ATM-01…03 | TC-ATM-01 |
-| ATM-04, ATM-05 | TC-ATM-02 |
+| ATM-04, ATM-05 | TC-ATM-02, TC-ATM-24 |
 | ATM-06 | TC-ATM-03, TC-ATM-08 |
 | ATM-07…09 | TC-ATM-04, TC-ATM-20 |
 | ATM-10…12 | TC-ATM-05 |
@@ -2673,6 +2677,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | ATM-28 | TC-ATM-21 |
 | ATM-29 | TC-ATM-22 |
 | ATM-30 | TC-ATM-23, TC-PIR-32 |
+| ATM-31 | TC-ATM-24 |
+| ATM-32 | TC-ATM-25 |
 | BKL-01…03, BKL-12 | TC-BKL-01, TC-BKL-34 |
 | BKL-04…09, BKL-11 | TC-BKL-02 |
 | BKL-10 | TC-BKL-03, TC-ATM-11 |
@@ -3454,7 +3460,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-03 | TC-CON-03, TC-FET-01…06, TC-FET-09 |
 | UC-04 | TC-TWN-01, TC-TWN-02, TC-MON-01…06, TC-MON-09, TC-MON-10, TC-ATM-19, TC-BKL-18, TC-ACT-14, TC-ACT-15, TC-ACT-16, TC-ACT-17, TC-BKL-29, TC-BKL-30, TC-BKL-31, TC-BKL-33, TC-NAV-51 |
 | UC-05 | TC-MON-07, TC-FET-11 |
-| UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
+| UC-06 | TC-ATM-01…11, TC-ATM-21, TC-ATM-22, TC-ATM-23, TC-ATM-24, TC-ATM-25, TC-TWN-03, TC-CON-20, TC-CON-33, TC-CON-34, TC-CON-43, TC-BKL-30, TC-BKL-31, TC-BKL-32 |
 | UC-07 | TC-BKL-01…09, TC-BKL-34, TC-BKL-35, TC-BKL-36, TC-BKL-37, TC-BKL-38, TC-BKL-39, TC-BKL-15, TC-BKL-16, TC-BKL-17, TC-BKL-18, TC-BKL-19, TC-BKL-20, TC-BKL-21, TC-BKL-22, TC-BKL-23, TC-BKL-24, TC-BKL-25, TC-BKL-26, TC-BKL-27, TC-BKL-28, TC-DPF-06, TC-NAV-36, TC-CON-23, TC-CON-25…27, TC-CON-29…32, TC-CON-35 |
 | UC-08 | TC-QV-01…05, TC-FET-07, TC-CON-08, TC-CON-11…16, TC-QV-08, TC-QV-09, TC-QV-10, TC-QV-11, TC-QV-12, TC-QV-13, TC-QV-14, TC-QV-15, TC-QV-16, TC-CON-37, TC-CON-38, TC-CON-39, TC-CON-40, TC-CON-41, TC-QV-18, TC-QV-19, TC-QV-20, TC-QV-21, TC-QV-22, TC-CON-42, TC-QV-41, TC-QV-42, TC-CON-61, TC-NAV-51, TC-QV-43, TC-QV-44, TC-QV-45, TC-QV-46, TC-STR-01…07, TC-UI-13…16, TC-TVL-14…18, TC-CON-68, TC-CON-69, TC-UI-18, TC-UI-19 |, TC-UI-20…25, TC-CON-72, TC-CON-74 |
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
