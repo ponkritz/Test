@@ -56,6 +56,9 @@ test('TC-CAP-35, TC-ACT-23: planned leave comes off the capacity at once and sta
   await page.reload()
   await page.locator('.sidebar nav').waitFor()
   await navigate(page, 'Time Writing')
+  // SET-36: with the tiles shown, Time Writing's ⚙ (Month locks) sits in the "last day" tile, not at the top right.
+  await page.locator('.act-tile-deadline').getByRole('button', { name: 'Settings for Time Writing', exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Settings for Time Writing', exact: true }).count(), 1, 'one ⚙, in the tile')
   const capacityTile = tile(page, 'Capacity')
   await capacityTile.getByText(`${capacity}h`, { exact: true }).waitFor()
   assert.equal(await text(capacityTile), `Capacity ${capacity}h ${contractual}h contractual − 40h leave · leave and holidays: actual if recorded, else planned`, 'the leave counts as planned: no Completed Work yet')

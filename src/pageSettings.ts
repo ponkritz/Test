@@ -39,7 +39,8 @@ const timeWork = () => [of('capacity', 'locks'), of('capacity', 'classification'
 const insights = () => [of('capacity', 'capacity'), of('capacity', 'thresholds'), of('capacity', 'profiles'), of('pages', 'tables')]
 export const releaseClassLabel = 'Release Classification'
 export const pageSettingsTable: Record<SettingsPage, PageSetting[]> = {
-  activities: timeWork(),
+  // SET-36: Time Writing's ⚙ (inside its "last day" tile) opens only the Month locks — the period locks of its month.
+  activities: [of('capacity', 'locks')],
   mywork: timeWork(),
   // A Release Details page: its stream's row of Stream mapping, its Release counts (CP, DP, IOCC) and the Release
   // Classification of its bulk creation Epic (Setup per Epic opened on that Epic; DP, IOCC, Content).

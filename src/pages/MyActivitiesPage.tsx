@@ -361,7 +361,7 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
   const idLink = (item?: AzureWorkItem) => item && item.id > 0 ? <a className="act-id" href={item.url} target="_blank" rel="noreferrer" title={`Open #${item.id} in Azure DevOps`}>#{item.id}</a> : null
   const chosenEpic = epics.find((epic) => epic.id === Number(stream))
 
-  return <Page className="activities-page" actions={settingsGear ?? undefined}>
+  return <Page className="activities-page" actions={!my.known ? settingsGear ?? undefined : undefined}>
     {!self && my.known && <div className="act-message act-info" role="status">Showing {my.me.name}'s activities. {assignee ? `What you save here is written for ${my.me.name} (assigned to them).` : 'Saving is not available for another person here.'} Choose “Me” to go back.</div>}
     {message && <div className={`act-message act-${message.tone}`} role="status">{message.text}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setMessage(null)}>×</button></div>}
     {!my.known ? <EmptyState title="Who are you in Azure DevOps?" detail="Set your work email in Admin → Streams, or choose your name with Person at the top right, to see your activities." /> : <>
@@ -380,7 +380,8 @@ export function MyActivitiesPage({ azure, store, my, month, assign, featureSetup
         </div>
       </article>
       <article className={`act-tile-deadline${daysLeft <= 3 ? ' act-urgent' : ''}`}>
-        <span>{planLocked ? 'Actuals' : 'Plan'}: last day</span>
+        {/* SET-36: the ⚙ of the Month locks sits with the last day it sets. */}
+        <span className="act-deadline-head">{planLocked ? 'Actuals' : 'Plan'}: last day{settingsGear}</span>
         <strong>{formatDate(deadline)}</strong>
         <small>{daysLeft > 1 ? `${daysLeft} days left` : daysLeft === 1 ? 'Last day tomorrow' : daysLeft === 0 ? 'Today is the last day' : 'Locked'}{!planLocked ? ` · actuals until ${formatDate(actualsDay)}` : ''}</small>
       </article>

@@ -11,8 +11,8 @@ const labels = (list) => list.map((entry) => entry.label)
 const toolOwner = roleCan('Tool Owner'), scrumMaster = roleCan('Scrum Master'), teamMember = roleCan('Team Member'), admin = roleCan('Admin'), productOwner = roleCan('Product Owner')
 
 test('SET-33: the sections of each page, in order, all Admin sections (TC-SET-17)', () => {
-  assert.deepEqual(labels(pageSettingsTable.activities), ['Month locks', 'Hour classification', 'Capacity', 'Setup per Epic', 'User Story templates'])
-  assert.deepEqual(labels(pageSettingsTable.mywork), labels(pageSettingsTable.activities), 'My Tasks [Board] as Time Writing')
+  assert.deepEqual(labels(pageSettingsTable.activities), ['Month locks'], 'SET-36: Time Writing — the period locks only')
+  assert.deepEqual(labels(pageSettingsTable.mywork), ['Month locks', 'Hour classification', 'Capacity', 'Setup per Epic', 'User Story templates'])
   assert.deepEqual(labels(pageSettingsTable.release), ['Stream mapping', 'Release counts', 'Release Classification'])
   assert.deepEqual(labels(pageSettingsTable.overview), ['Capacity', 'Thresholds', 'Calculation profiles', 'Table & chart defaults'])
   assert.deepEqual(labels(pageSettingsTable.mydash), labels(pageSettingsTable.overview), 'My dashboard as Team overview')
@@ -47,7 +47,7 @@ test('SET-32, SET-34: a Tool Owner gets every section of every page; a Team Memb
 
 test('SET-34: a Scrum Master, an Admin and a Product Owner see only the sections their role may change; View as follows the viewed role (TC-SET-17)', () => {
   // Scrum Master (starting matrix): Edit the shared Feature setup and the Epic setup — Setup per Epic, nothing else.
-  assert.deepEqual(labels(pageSettingsFor('activities', scrumMaster)), ['Setup per Epic'])
+  assert.deepEqual(pageSettingsFor('activities', scrumMaster), [], 'Time Writing: the Month locks only (SET-36), not a Scrum Master\'s')
   assert.deepEqual(labels(pageSettingsFor('mywork', scrumMaster)), ['Setup per Epic'])
   assert.deepEqual(labels(pageSettingsFor('release', scrumMaster, 'DP')), ['Release Classification'])
   assert.deepEqual(pageSettingsFor('release', scrumMaster, 'CP'), [], 'CP: nothing a Scrum Master may change')

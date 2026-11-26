@@ -36,14 +36,15 @@ async function open(roles, { streams = false } = {}) {
   return opened
 }
 
-test('TC-SET-18: a Tool Owner opens ⚙ Settings for Time Writing, changes a Month lock day there and Admin shows the same change; Open in Admin → opens the section', async () => {
+test('TC-SET-18: a Tool Owner opens ⚙ Settings for Time Writing (the Month locks, in its last-day tile), changes a Month lock day there and Admin shows the same change; Open in Admin → opens the section', async () => {
   const { page, context, errors } = await open(true)
   await navigate(page, 'Time Writing')
+  // SET-36: Time Writing's ⚙ opens the Month locks only — in its "last day" tile, or at the top right while the tiles are
+  // not shown (who you are in Azure DevOps not known yet, as here).
+  assert.equal(await gear(page, 'Time Writing').count(), 1, 'one ⚙ on Time Writing')
   await gear(page, 'Time Writing').click()
   const dialog = page.getByRole('dialog', { name: 'Settings for Time Writing' })
   await dialog.waitFor()
-  assert.deepEqual(await tabsOf(dialog), ['Month locks', 'Hour classification', 'Capacity', 'Setup per Epic', 'User Story templates'], 'the settings of Time Writing, in order')
-  await dialog.getByRole('tab', { name: 'Month locks', selected: true }).waitFor()
   // The Month locks panel of Admin, with its Git bar and Reason for change.
   const planDay = dialog.getByLabel('Last day to update the plan')
   await planDay.waitFor()
@@ -53,12 +54,7 @@ test('TC-SET-18: a Tool Owner opens ⚙ Settings for Time Writing, changes a Mon
   await planDay.blur()
   assert.equal(await planDay.inputValue(), '9')
   await shot(page, 'page-settings-time-writing')
-  // The other tabs are the Admin panels too.
-  await dialog.getByRole('tab', { name: 'Capacity', exact: true }).click()
-  await dialog.getByRole('heading', { name: 'Capacity roles' }).waitFor()
-  await dialog.getByRole('tab', { name: 'User Story templates' }).click()
-  await dialog.getByRole('heading', { name: 'User Story templates' }).first().waitFor()
-  assert.equal(await dialog.getByRole('heading', { name: 'My templates' }).count(), 0, 'My templates stay in Admin (personal)')
+  assert.equal(await dialog.getByRole('tab', { name: 'Hour classification' }).count(), 0, 'only the Month locks on Time Writing')
   // Escape closes the pop-up; the ⚙ gets the focus back.
   await page.keyboard.press('Escape')
   await dialog.waitFor({ state: 'detached' })
@@ -70,6 +66,13 @@ test('TC-SET-18: a Tool Owner opens ⚙ Settings for Time Writing, changes a Mon
   await navigate(page, 'My Tasks [Board]')
   await gear(page, 'My Tasks [Board]').click()
   const tasks = page.getByRole('dialog', { name: 'Settings for My Tasks [Board]' })
+  assert.deepEqual(await tabsOf(tasks), ['Month locks', 'Hour classification', 'Capacity', 'Setup per Epic', 'User Story templates'], 'the settings of My Tasks [Board], in order')
+  // The other tabs are the Admin panels too.
+  await tasks.getByRole('tab', { name: 'Capacity', exact: true }).click()
+  await tasks.getByRole('heading', { name: 'Capacity roles' }).waitFor()
+  await tasks.getByRole('tab', { name: 'User Story templates' }).click()
+  await tasks.getByRole('heading', { name: 'User Story templates' }).first().waitFor()
+  assert.equal(await tasks.getByRole('heading', { name: 'My templates' }).count(), 0, 'My templates stay in Admin (personal)')
   await tasks.getByRole('tab', { name: 'Hour classification' }).click()
   await tasks.getByRole('button', { name: 'Open in Admin →' }).click()
   await tasks.waitFor({ state: 'detached' })
