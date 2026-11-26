@@ -106,7 +106,7 @@ export function applyStarters(file: StartersFile, mine: readonly Role[], reposit
 export function startersBlocked({ email, connected, isSample, viewingAs }: { email: string; connected: boolean; isSample: boolean; viewingAs: boolean }) {
   if (viewingAs) return 'Not while viewing as someone else.'
   if (isSample) return 'Not while the synthetic sample data is loaded.'
-  if (!connected) return 'Your admin’s starter views come from Git: connect Git storage (Admin → Data & sharing).'
+  if (!connected) return 'Your admin’s starter views come from Git: connect Git storage (Admin → Data & history).'
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Your admin’s starter views for your role need your work email: set it under My settings → Your work email.'
   return ''
 }

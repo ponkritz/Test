@@ -8,7 +8,7 @@ import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { GitStorage } from '../useGitStorage'
 import { EmptyState, Modal, Notice, Panel, Pill, WriteBlocked } from './ui'
 
-// SET-21, SET-22: Admin → Data & sharing → Other views → Starter views per role. Admins ("Shared setup in Git",
+// SET-21, SET-22: Admin → Data & history → Other views → Starter views per role. Admins ("Shared setup in Git",
 // storage.shared — Tool Owner and Admin by default) define read-only views for access roles; everyone whose roles include
 // one gets a copy among their own My views (SET-23). Saved to Git (other-views/role-starters.json), never a PAT.
 type Draft = { id?: string; name: string; server: string; project: string; query: string; roles: Role[] }

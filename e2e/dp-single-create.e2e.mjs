@@ -145,7 +145,7 @@ test('TC-DPF-18: Create Feature on a DP release row starts like DP Create Featur
   let page = first.page
 
   // (1) Setup per Epic: story 2 gets "Sprint from" PRD, saved to Git; story 1 keeps SFV.
-  await navigate(page, 'Epic & Feature setup')
+  await navigate(page, 'Feature & PI setup')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Setup per Epic' }).click()
   await page.locator('.efe-epics button', { hasText: '#100' }).click()
   const sfvPick = page.getByLabel('User Story 1 Sprint from')

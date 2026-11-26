@@ -187,7 +187,7 @@ export function nextPiOf(reviewed: string, iterations: readonly AzureIteration[]
 // PIR-24: who may show another person's Features in My PI Review — a lead with "PI Review: post the review of a
 // Feature" (CON-113), who may also post their reviews; everyone else sees their own ('' when they may choose).
 export function otherPersonBlock(viewer: Pick<ReviewViewer, 'can'>): string {
-  return isReviewLead(viewer) ? '' : 'You see your own Features: showing another person’s needs “PI Review: post the review of a Feature” (a lead). An Admin can change this in Admin → People & roles → Role rights.'
+  return isReviewLead(viewer) ? '' : 'You see your own Features: showing another person’s needs “PI Review: post the review of a Feature” (a lead). An Admin can change this in Admin → People & access → Role rights.'
 }
 // PIR-24: a person chosen by name (a Feature's Assigned To) — with their work email when a fetched item assigned to
 // them carries one, so their Features are matched by email where it is known (isMine, as CON-113's assignee rule).
@@ -220,7 +220,7 @@ export function reviewPostBlock(viewer: ReviewViewer, feature: Pick<AzureWorkIte
   const page = reviewPageBlock(viewer)
   if (page) return page
   if (isReviewLead(viewer)) return ''
-  if (!isFeatureAssignee(viewer, feature)) return `Only the Feature’s assignee (${feature.assignedTo.trim() || 'nobody'}) or a lead with “PI Review: post the review of a Feature” can post its review${viewer.email ? '' : ' (enter your work email on the Time Writing connection: the assignee is matched by it)'}. An Admin can change this in Admin → People & roles → Role rights.`
+  if (!isFeatureAssignee(viewer, feature)) return `Only the Feature’s assignee (${feature.assignedTo.trim() || 'nobody'}) or a lead with “PI Review: post the review of a Feature” can post its review${viewer.email ? '' : ' (enter your work email on the Time Writing connection: the assignee is matched by it)'}. An Admin can change this in Admin → People & access → Role rights.`
   return viewer.can('work.comment') ? '' : writeBlockedReason(false, ['work.comment'])
 }
 

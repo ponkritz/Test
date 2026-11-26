@@ -178,7 +178,7 @@ The rights are the same as for **＋ Add tab…**.
 
 **The list's co-owners edit the tab pages** (v10.21.0)
 
-The co-owners of the list (**Setup → Team settings**) are now written as co-owners of each tab's page. They can set up and edit the page also when it is opened from **Admin → Pages & menu**. Co-owners added to a page by hand stay. Nothing to do: it happens when a tab is added and whenever the list's co-owners are saved. If a page is out of line, **Setup → Tabs** says so with **Write the co-owners to the tab pages**; choose it to fix it.
+The co-owners of the list (**Setup → Team settings**) are now written as co-owners of each tab's page. They can set up and edit the page also when it is opened from **Admin → Pages & reports → Menu groups & pages**. Co-owners added to a page by hand stay. Nothing to do: it happens when a tab is added and whenever the list's co-owners are saved. If a page is out of line, **Setup → Tabs** says so with **Write the co-owners to the tab pages**; choose it to fix it.
 
 *v10.21.0 · TVL-25*
 
@@ -222,7 +222,7 @@ Point at **Selected month** to see which month it is. Tool Validations no longer
 
 **Save to Git** on a shared Epic now commits it to Git at once; there is no separate save step.
 
-1. Open **Admin → Stream options → Bulk creation Epics**.
+1. Open **Admin → Streams → Bulk creation**.
 2. In the **Shared** column of the stream (DP, IOCC or Content), enter the Epic ID, for example 1234.
 3. Choose **Save to Git**. A message below the table says it is saved, or why it failed.
 
@@ -240,9 +240,9 @@ Without a writable Git connection (not connected, a read-only token, or the synt
 
 DP **Create Features** now sets each Feature's **Start date** and **Target date** from the DP query: the **DRPE Date** (RPE, the Release Planning Event) and the **DDT Date** (DT, Design Transfer) unless the Tool Owner maps other date columns.
 
-To change the columns (roles with *Stream options*, Git connected):
+To change the columns (roles with *Streams: Epics to match Features in, shared bulk creation Epics*, Git connected):
 
-1. Open **Admin → Stream options → Bulk creation Epics**. Under **DP bulk creation dates** you see the two columns in use, with *— default* when they are the defaults.
+1. Open **Admin → Streams → Bulk creation**. Under **DP bulk creation dates** you see the two columns in use, with *— default* when they are the defaults.
 2. Choose **Edit dates…**, pick **Start date from** and **Target date from** — any column of the DP query whose name ends in "Date" (a prefix such as Custom.DRPEDate is fine).
 3. Choose **Save to Git**. It is saved for everyone at once.
 
@@ -270,7 +270,7 @@ You can change every value. If the Start date is after the Target date, the form
 
 **Sprint from: a User Story in the Sprint of a DP milestone**
 
-In **Admin → Epic & Feature setup → Setup per Epic → User Stories**, each story has **Sprint from**: **None — the Sprint chosen** (the default), **DRPE Date (RPE)**, **DRPC Date (PRD)**, **DRfH Date (SFV)**, **DDT Date (DT)** or another date column of the DP query. Save to Git as usual.
+In **Admin → Feature & PI setup → Setup per Epic → User Stories**, each story has **Sprint from**: **None — the Sprint chosen** (the default), **DRPE Date (RPE)**, **DRPC Date (PRD)**, **DRfH Date (SFV)**, **DDT Date (DT)** or another date column of the DP query. Save to Git as usual.
 
 When a DP release's Feature is made (Create Features or Create Feature), a story with Sprint from goes in the **current or future Sprint whose dates hold that date** of the release. Create Features shows it on each row (*"SFV → Sprint 3 · PRD → default Sprint"*), New Feature next to each story. A story whose date is missing, in a past Sprint or in no Sprint keeps the default Sprint, and the note says why, for example *"PRD 12 Mar 2026 is in a past Sprint — default Sprint"*. The Feature stays in its PI; the Time Writing story and Tasks do not change. Other streams ignore Sprint from.
 
@@ -360,16 +360,16 @@ Your Azure DevOps personal access token (PAT) is entered once per **server** and
 
 What the team shares lives in a private GitHub repository: the planning data, the connection setup, roles, On-Demand pages, dashboards and the menu.
 
-1. Open **Admin → Data & sharing → Git storage** (or use step 1 of Get started).
+1. Open **Admin → Data & history → Git storage** (or use step 1 of Get started).
 2. The form starts with the team's repository and branch. Add your **GitHub token** and connect.
 
-![Admin → Data & sharing → Git storage](user-guide/images/git-storage.png)
+![Admin → Data & history → Git storage](user-guide/images/git-storage.png)
 
 - Use a **fine-grained GitHub token** for that one repository: **Contents: Read-only** if you only read, **Read and write** if you save (for example rows, charts, baselines or people).
 - With a read-only token the app shows the shared data, but saving buttons are greyed out with the reason.
 - The token stays in your browser, like the PAT.
 - **The team's data moved** to `philips-internal/InD_DemandPlanningStorage`. If you connected before the move, a notice at the top of every page says so: press **Switch to philips-internal/InD_DemandPlanningStorage**. Your token must be allowed on the new repository; if it is not, ask for a new fine-grained token for it.
-- **"… was not found, or the token cannot access it."** means your token cannot read the repository (or the branch is wrong). The app then keeps everything you had — your streams, connections and PATs — and changes nothing until the token works; ask for access to the repository. After you change the repository, your connections are kept: the first start only adds the new repository's connections and Admin → Data & sharing (Git storage, and Shared setup in Git) tells you what differs.
+- **"… was not found, or the token cannot access it."** means your token cannot read the repository (or the branch is wrong). The app then keeps everything you had — your streams, connections and PATs — and changes nothing until the token works; ask for access to the repository. After you change the repository, your connections are kept: the first start only adds the new repository's connections and Admin → Data & history (Git storage, and Shared setup in Git) tells you what differs.
 
 ### Your work email
 
@@ -384,7 +384,7 @@ The email stays on your computer: it is not part of the shared setup, so updates
 
 You can look around before anything is connected.
 
-1. Press **Load synthetic sample** (on a page with no data, or in **Admin → Data & sharing → Synthetic sample**).
+1. Press **Load synthetic sample** (on a page with no data, or in **Admin → Data & history → Demo data**).
 2. The banner "Showing a synthetic sample dataset, not Azure DevOps data" stays on every page while the sample is loaded.
 
 - Nothing is written to Azure DevOps while the sample is loaded: every write is refused with "Synthetic sample data is loaded: nothing is written to Azure DevOps. Fetch your data first."
@@ -454,18 +454,18 @@ When someone else saves data that the page you are on uses, a notice appears on 
 
 ### What each role can do
 
-Your app roles are set in **Admin → People & roles**. Someone with several roles gets everything any of them allows — unless one of their roles **denies** it: a denial always wins. Everyone without a role gets the **Everyone else** role.
+Your app roles are set in **Admin → People & access**. Someone with several roles gets everything any of them allows — unless one of their roles **denies** it: a denial always wins. Everyone without a role gets the **Everyone else** role.
 
 | Role | Sees | May |
 |---|---|---|
-| Tool Owner | everything | everything, including the stream mapping, Pages & menu and building On-Demand Dashboards |
-| Admin | everything, plus the Testing pages | everything except the stream mapping, Pages & menu and building dashboards |
+| Tool Owner | everything | everything, including the stream mapping, the menu groups (Pages & reports) and building On-Demand Dashboards |
+| Admin | everything, plus the Testing pages | everything except the stream mapping, the menu groups and building dashboards |
 | Product Owner | Dashboard, I&D Board, Backlog Health, Release Details, Baselines, Documentation, On-Demand | work items (also bulk create and for others), baselines, export, Monthly pack text |
 | People Manager | Dashboard, team insights, My Work, I&D Board, Release Details, Baselines, Snapshots, Documentation, On-Demand | the same as Product Owner |
 | Scrum Master | Dashboard, My Work, I&D Board, Backlog Health, Release Details, Documentation, On-Demand | work items (also for others), export, the shared Feature setup |
 | Team Member | Dashboard, My Work, I&D Board, Release Details, Documentation, On-Demand | their own work items, export |
 
-These are the starting rights. Your team may have changed them in **Role rights** (see [People & roles](#people--roles)).
+These are the starting rights. Your team may have changed them in **Role rights** (see [People & access](#people--access)).
 
 The roles decide what the app shows and does. What you can actually read or change is still decided by your own Azure DevOps PAT and GitHub token.
 
@@ -678,7 +678,7 @@ The Tool Owner (and the Admin) can **Save view for everyone** beside the filter:
 3. Press **Save to Git** so the team sees the same text. Nothing is saved until you do.
 4. **Copy** a box or a slide into the PowerPoint template, or **Download .pptx** (both slides, 16:9).
 
-What feeds each line and KPI row is set in **Admin → Reports → Monthly pack**.
+What feeds each line and KPI row is set in **Admin → Pages & reports → Monthly pack**.
 
 ### PI Review
 
@@ -730,7 +730,7 @@ The Feature then shows **Struggles** "the test rig arrived two Sprints late", **
 
 The Discussions are read with your own PAT (Work Items, Read) and kept only until you reload the page. Tagging struggles and learnings in the app, saving them to Git and recording the Move to next PI decision come in later releases.
 
-**PI Review starts from 21 September 2026.** PI Review and My PI Review offer only the PIs that had not ended by that date (PI 26.4 is the first), and they ignore comments written before it: the Discussion drawer shows only the later comments and says how many older ones were left out, and the columns, **Reviewed** in My PI Review and the review form's prefill use only the later ones. If a PI you chose before is older, the page opens on the current PI. The Scrum Master or the Tool Owner can move the date on **Admin → PI Review Setup** (see below).
+**PI Review starts from 21 September 2026.** PI Review and My PI Review offer only the PIs that had not ended by that date (PI 26.4 is the first), and they ignore comments written before it: the Discussion drawer shows only the later comments and says how many older ones were left out, and the columns, **Reviewed** in My PI Review and the review form's prefill use only the later ones. If a PI you chose before is older, the page opens on the current PI. The Scrum Master or the Tool Owner can move the date on **Admin → Feature & PI setup → PI Review form** (see below).
 
 #### Write the PI review in the app (from PI 26.4)
 
@@ -784,7 +784,7 @@ The file is a **snapshot**: reviews written after you built it are not in it —
 
 The fields of the review form are a shared setup: when the review changes, the Scrum Master or the Tool Owner changes the form in the app, and everyone's next review uses it.
 
-1. **Open it.** **Admin → PI Review Setup** in the menu, or the **⚙** button (PI Review Setup) at the top right of **My PI Review** or **PI Review**. Both are shown only to people with the right "PI Review: set up the review form" (Scrum Master and Tool Owner by default; an Admin can change who has it in Role rights); everyone else's reviews simply follow the form. You see the form in use: each field with the heading it writes in the comment, its type, options, whether it is required and its default. Without a setup in Git it says *The built-in form*.
+1. **Open it.** **Admin → Feature & PI setup → PI Review form** in the menu, or the **⚙** button (PI Review Setup) at the top right of **My PI Review** or **PI Review**. Both are shown only to people with the right "PI Review: set up the review form" (Scrum Master and Tool Owner by default; an Admin can change who has it in Role rights); everyone else's reviews simply follow the form. You see the form in use: each field with the heading it writes in the comment, its type, options, whether it is required and its default. Without a setup in Git it says *The built-in form*.
 2. **Edit form…** opens the editor — the same column editor as **Set up columns…** on the On-Demand pages. For each field: **Name** (the label in the form), **Type** (**Long text** for a paragraph, **Dropdown (one value)** for a choice), **Required**, ↑ ↓ to reorder, ✕ to remove, the **Heading in the comment**, the **Default** of a Dropdown, a **Help text**, and the **options** of a Dropdown. **＋ Add field** adds one (at most 15); **Use the built-in form** starts again from the built-in fields. The **Comment preview** shows what a review written with the form looks like.
 3. **Move to next PI** keeps its behaviour — Yes / No, the PI it moves to and the reason — so its name, type, options and Required are locked and it cannot be removed; its heading (with **{PI}** where the next PI is written), its default (No unless you change it) and its help can be changed. The other built-in fields keep their type. **{REVIEWED PI}** in any heading (at most once) is where the reviewed PI is written — the built-in Learnings and Struggles headings are "Learnings of {REVIEWED PI}" and "Struggles of {REVIEWED PI}"; a form saved before keeps its headings as saved.
 4. **Save to Git.** The form is checked first: a heading that is empty, used twice, or already read as another field (for example "Issues" or "What went wrong" is read as Struggles, so older reviews would land in the wrong column) is refused, and a review written with every field must read back exactly. The result is in **Background jobs** ("PI Review form · Save to Git").
@@ -835,9 +835,9 @@ Every Release page looks the same, top to bottom:
 
 **Create Feature** on a release without a match opens the New Feature form, titled for that release. Load the QMS-0025 board first.
 
-**Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. The DP and IOCC pop-ups fill the window; DP also sets each Feature's Start and Target dates (DRPE Date and DDT Date by default, set in Admin → Stream options → Bulk creation Epics → DP bulk creation dates) and, with an optional tick box (not ticked by default), creates a Time Writing Task for every month from the Start date's month to the Target date's month instead of the current month only. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Stream options → Bulk creation Epics."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
+**Create Features** (DP, IOCC and Content) ticks several releases and creates a Feature for each under the stream's **bulk creation Epic**. The DP and IOCC pop-ups fill the window; DP also sets each Feature's Start and Target dates (DRPE Date and DDT Date by default, set in Admin → Streams → Bulk creation → DP bulk creation dates) and, with an optional tick box (not ticked by default), creates a Time Writing Task for every month from the Start date's month to the Target date's month instead of the current month only. No Epic is built in: until one is mapped, the button is disabled and says *"No DP bulk creation Epic is set: map it in Admin → Streams → Bulk creation."* **Open Bulk creation Epics** next to it takes you there. The Tool Owner enters the Epic ID under **Shared** and saves it to Git for everyone; anyone can enter their own under **Mine**, which is kept in this browser and used for them instead.
 
-**The QE of each release: the QE page** (DP and IOCC). The DP table's **QE** column and the QE pre-filled on each row of Create Features come from an **On-Demand Table page** — the team's **Resource Mapping** page, or any other. Set it once per bulk Epic (roles allowed to edit the shared Feature setup): **Admin → Epic & Feature setup → Setup per Epic → the DP or IOCC bulk Epic**, under User Stories:
+**The QE of each release: the QE page** (DP and IOCC). The DP table's **QE** column and the QE pre-filled on each row of Create Features come from an **On-Demand Table page** — the team's **Resource Mapping** page, or any other. Set it once per bulk Epic (roles allowed to edit the shared Feature setup): **Admin → Feature & PI setup → Setup per Epic → the DP or IOCC bulk Epic**, under User Stories:
 
 1. **QE from page** — the page named *Resource Mapping* is already chosen ("Default: …"); pick another page if needed.
 2. **Column with the Platform / Product** — the column that names the product (DP: the release's PsName, else its Program; IOCC: the release name).
@@ -848,7 +848,7 @@ The columns are remembered by their id, so renaming a column on the page keeps t
 
 *DPF-02, EPS-09*
 
-**Release Classification from the release number** (DP and IOCC). The Releases table of DP and IOCC starts with **Release name**, **Version** and **Release Classification (detected)** — the value of the bulk Epic's Release Classification list that its rules give for the version (— without a bulk Epic or a value). The Create Features pop-up shows the same three columns first and pre-fills each row's Release Classification, with *"detected from 5.2.1"* under it; change any row before creating. To set the rules (roles allowed *Edit the Epic setup*): **Admin → Epic & Feature setup → Setup per Epic**, choose the bulk Epic, and under its **Release Classification** field tick, for each value, the part of the release number that changes for it — **x.0** (first number only: 5.0, 5.0.0), **x.y** (second number: 5.2), **x.y.z** (third: 5.2.1), **x.y.z.w** (fourth: 5.2.1.3); the deepest non-zero part decides. For example Release ← x.0 and x.y, MLD ← x.y.z, PU ← x.y.z.w. A part can belong to one value only (the screen names a part ticked twice and does not save). **Fill with the usual rules** proposes Major, Minor, MLD and Platform Update (or PU) where your values are named so. Save to Git. Until rules are saved, the value named like the release type (Major, Minor, MLD, Platform Update) is pre-filled, as before. The fields of an Epic are listed Release name, Version, Release Classification first.
+**Release Classification from the release number** (DP and IOCC). The Releases table of DP and IOCC starts with **Release name**, **Version** and **Release Classification (detected)** — the value of the bulk Epic's Release Classification list that its rules give for the version (— without a bulk Epic or a value). The Create Features pop-up shows the same three columns first and pre-fills each row's Release Classification, with *"detected from 5.2.1"* under it; change any row before creating. To set the rules (roles allowed *Edit the Epic setup*): **Admin → Feature & PI setup → Setup per Epic**, choose the bulk Epic, and under its **Release Classification** field tick, for each value, the part of the release number that changes for it — **x.0** (first number only: 5.0, 5.0.0), **x.y** (second number: 5.2), **x.y.z** (third: 5.2.1), **x.y.z.w** (fourth: 5.2.1.3); the deepest non-zero part decides. For example Release ← x.0 and x.y, MLD ← x.y.z, PU ← x.y.z.w. A part can belong to one value only (the screen names a part ticked twice and does not save). **Fill with the usual rules** proposes Major, Minor, MLD and Platform Update (or PU) where your values are named so. Save to Git. Until rules are saved, the value named like the release type (Major, Minor, MLD, Platform Update) is pre-filled, as before. The fields of an Epic are listed Release name, Version, Release Classification first.
 
 ### Windchill exports
 
@@ -915,11 +915,11 @@ The **Master list** and the **Expiry list** tint each tool's row by how soon it 
 4. Under **Setup → Tabs**, **←** and **→** move a tab, **Rename…** renames it, and **Remove…** asks first: the page is **kept in Git, hidden** — or, for a Tool Owner, **deleted with its data**.
 5. To bring back a page that is hidden — one kept when its tab was removed, or one left behind when an older app version dropped the tabs — choose **＋ Add existing page as tab…** under **Setup → Tabs**, pick the page, keep or change its name and choose **Add tab**. Its rows or blocks are there again.
 
-**Who may edit the tab pages.** The list's co-owners (Setup → Team settings) are written as **co-owners of each tab's page**, so they can set up and edit the page also when it is opened from Admin → Pages & menu. Co-owners someone added to a page by hand stay; the ones that came from the list are taken off again when they leave the list or when the tab is removed. The **Tabs** panel shows per tab how many co-owners came from the list and how many were added by hand; if a page is not in line with the list, it says so with **Write the co-owners to the tab pages**.
+**Who may edit the tab pages.** The list's co-owners (Setup → Team settings) are written as **co-owners of each tab's page**, so they can set up and edit the page also when it is opened from Admin → Pages & reports → Menu groups & pages. Co-owners someone added to a page by hand stay; the ones that came from the list are taken off again when they leave the list or when the tab is removed. The **Tabs** panel shows per tab how many co-owners came from the list and how many were added by hand; if a page is not in line with the list, it says so with **Write the co-owners to the tab pages**.
 
 **Status on a dashboard.** Status (Overdue, Due soon, No due date, OK) and Days left on a dashboard use the **team default window**, the same for everyone. To leave them out of a block, untick **Show expiry status** in the block's pop-up (under the data source); the block then counts the same tools without them.
 
-These tabs are pages of their own in Git, but they are not in the menu, on Home or in search: they live on the Tool Validations page only (Admin → Pages & menu lists them as hidden, **Tab of Tool Validations**). Everyone else reads them.
+These tabs are pages of their own in Git, but they are not in the menu, on Home or in search: they live on the Tool Validations page only (Admin → Pages & reports → Menu groups & pages lists them as hidden, **Tab of Tool Validations**). Everyone else reads them.
 
 Everyone else sees every tab read only; the buttons say why they are greyed out. The month's cards on the Master list tab, Pulse Check (its Tool Validations quadrant lists the tools with ID and status), the Monthly pack and the cumulative chart count the master list's tools by their Current Month Status. **ID**, **Used by**, **Validated** and **Type** are read with the source's field mapping: check them in **Setup → Edit mapping…** of the Tool Validations query (the app guesses System.Id and the columns named Source, State and Type; choose None to leave one out).
 
@@ -936,7 +936,7 @@ Pulse Check, the Monthly pack and the cumulative chart show the same numbers, co
 
 ## On-Demand pages
 
-On-Demand pages are tables the team sets up itself, without a new release of the app. **CoNQ** (Cost of Non-Quality) is there from the start; the Tool Owner and the pages' co-owners add more (see [Pages & menu](#pages--menu)). Each page has a **Data** tab (the table) and, for *Table + Insights* pages, an **Insights** tab (charts).
+On-Demand pages are tables the team sets up itself, without a new release of the app. **CoNQ** (Cost of Non-Quality) is there from the start; the Tool Owner and the pages' co-owners add more (see [Pages & reports](#pages--reports)). Each page has a **Data** tab (the table) and, for *Table + Insights* pages, an **Insights** tab (charts).
 
 ![CoNQ with made-up rows](user-guide/images/conq-table.png)
 
@@ -985,7 +985,7 @@ A column can pick from a list the team shares instead of options of its own — 
 
 ![Set up columns with a built-in list](user-guide/images/builtin-list-column-editor.png)
 
-1. In **Admin → Epic & Feature setup → Value lists**, under the Value lists, the panel **Team lists from Azure DevOps** lists the team lists. **＋ New list…**: give the list a name (e.g. *QE team*), check the server and project (your Time Writing connection's to start with), type the team and press **↻ Read the team**. The members are listed (with their emails as a hint); **Save to Git** saves the list for everyone — names and Azure DevOps ids only, no emails.
+1. In **Admin → Feature & PI setup → Lists**, under the Value lists, the panel **Team lists from Azure DevOps** lists the team lists. **＋ New list…**: give the list a name (e.g. *QE team*), check the server and project (your Time Writing connection's to start with), type the team and press **↻ Read the team**. The members are listed (with their emails as a hint); **Save to Git** saves the list for everyone — names and Azure DevOps ids only, no emails.
 2. In **Set up columns…** choose the type **Dropdown (built-in list)** (one person) or **Multi-select (built-in list)** (several), then the list in **Built-in list**. The Epic setup's Value lists can be chosen here too.
 3. The row form offers the list's names. The row keeps the name and, for a person, their Azure DevOps id. Two people with the same name are offered as, for example, *Sam Lee (#3f2a)* and *Sam Lee (#9c1b)* — the name and the start of their id.
 4. When people join or leave the team, open the list and press **↻ Refresh…**. You see who is **added**, **removed** and **renamed** (the same person in Azure DevOps, a new name), and how many rows use a removed person, before you **Save to Git**. **Log** shows every change of the list.
@@ -1076,7 +1076,7 @@ A page you add is kept in the data repository under its name: `on-demand/Supplie
 
 CoNQ and the pages that existed before keep their file (`on-demand/conq.json`) for good: renaming them changes only the title inside. Older app versions do not list the pages added under a name: make sure everyone (web and desktop) updates. A Dashboard page you add keeps its blocks in `dashboards/<name>--<id>.json` and moves them with the page when you rename it; existing dashboards keep `dashboards/<id>.json`.
 
-If a page (or a dashboard's blocks) has two copies in Git — for example after someone used an older app version — the page and Admin → Pages & menu say so and show the newer one. The Tool Owner chooses **Delete older copy…**: the pop-up lists exactly what is deleted and what stays (the newer copy), and **Delete older copy** removes it in one commit; its history stays in GitHub.
+If a page (or a dashboard's blocks) has two copies in Git — for example after someone used an older app version — the page and Admin → Pages & reports → Menu groups & pages say so and show the newer one. The Tool Owner chooses **Delete older copy…**: the pop-up lists exactly what is deleted and what stays (the newer copy), and **Delete older copy** removes it in one commit; its history stays in GitHub.
 
 ### Live and Sample
 
@@ -1307,19 +1307,21 @@ Every column of the query is a field: people by display name (never an email), *
 
 ## Admin
 
-The **Admin** group holds the shared setup, one page per area. You see the pages your roles may change; each section has a chip saying whom a change affects: *Only you · This computer*, *Everyone · Shared in Git*, *Everyone · Tool Owner only* and so on.
+The **Admin** group holds the shared setup in seven pages, in this order: **Overview**, **Streams**, **Feature & PI setup**, **People & access**, **Capacity & time**, **Pages & reports** and **Data & history**. You see a page when your roles hold a right for at least one of its sections, and only those sections; each section has a chip saying whom a change affects: *Only you · This computer*, *Everyone · Shared in Git*, *Everyone · Tool Owner only* and so on. Admin opens on the Overview.
+
+**Where the former pages went.** Stream options is part of **Streams** (Epics to match is a column of the Stream mapping; your own bulk creation Epics are in **My settings → My bulk creation Epics**); Epic & Feature setup and PI Review Setup are **Feature & PI setup**; People & roles is **People & access** (its Capacity roles are under **Capacity & time → Capacity**); Reports and Pages & menu are **Pages & reports** (with **Table & chart defaults**, formerly in Look & feel); Data & sharing and History are **Data & history**. Search settings finds a setting by its former name too, and a page or section you had open before opens in its new place. *SET-26…SET-29*
 
 ### Overview and Search settings
 
-**Admin → Overview** lists what is left to set up (with a link to each setting), the shared changes not yet saved to Git (with **Save to Git**) and the latest changes. **Search settings** (**Ctrl K**) finds any setting by name.
+**Admin → Overview** lists what is left to set up (with a link to each setting), the shared changes not yet saved to Git (with **Save to Git**) and, for those allowed *Shared setup in Git*, the latest changes. **Search settings** (**Ctrl K**) finds any setting by name.
 
 ![Admin → Overview](user-guide/images/admin-overview.png)
 
-### Pages & menu
+### Pages & reports
 
-**Admin → Pages & menu** (Tool Owner) lists every menu group and every added page.
+**Admin → Pages & reports → Menu groups & pages** (Tool Owner) lists every menu group and every added page.
 
-![Admin → Pages & menu](user-guide/images/pages-menu.png)
+![Admin → Pages & reports → Menu groups & pages](user-guide/images/pages-menu.png)
 
 - **＋ Add page…** — choose the type (**Table**, **Table + Insights** or **On-Demand Dashboard**), a name, an optional description, an icon, the **menu group** (or **＋ New group…**) and optional **co-owners**. The page is created in Git at once and opens.
 - **Menu groups** — the built-in groups keep their place; set whether a group **accepts added pages** and its **co-owners**. Your own groups can be renamed, reordered and removed once empty.
@@ -1329,9 +1331,9 @@ The **Admin** group holds the shared setup, one page per area. You see the pages
 
 ![＋ Add page…](user-guide/images/add-page.png)
 
-### People & roles
+### People & access
 
-**Admin → People & roles → People** lists the people from Azure DevOps: the Time Writing team and everyone assigned to work. To add someone, add them to the team in Azure DevOps and refresh.
+**Admin → People & access → People** lists the people from Azure DevOps: the Time Writing team and everyone assigned to work. To add someone, add them to the team in Azure DevOps and refresh.
 
 ![People](user-guide/images/people.png)
 
@@ -1359,7 +1361,7 @@ The **Team tree** tab shows the reporting lines. **Capacity roles** sets which t
 
 ### Role rights
 
-**People & roles → Role rights** is a matrix: every menu area and action is a row, and each role's cell is **Allow**, **Deny** or **Not set**.
+**People & access → Role rights** is a matrix: every menu area and action is a row, and each role's cell is **Allow**, **Deny** or **Not set**.
 
 ![Role rights](user-guide/images/role-rights.png)
 
@@ -1374,7 +1376,7 @@ The **Team tree** tab shows the reporting lines. **Capacity roles** sets which t
 
 ![Admin → Streams (here read only, with server names replaced by made-up ones)](user-guide/images/streams.png)
 
-**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream options** sets the Epics Features are matched in, the bulk creation Epics (the Epic each of DP, IOCC and Content creates its Features under — none built in, so map each one the team uses; **Save to Git** on a shared one commits it straight to Git, and Admin → Overview shows a stream without one under Attention) and the release counts.
+**＋ Add stream…** adds a **custom stream** with its own Release page. **Stream mapping** shows each stream's **Epics to match** (Features are matched in them; **Choose…** on the row), **Bulk creation** the shared bulk creation Epics (the Epic each of DP, IOCC and Content creates its Features under — none built in, so map each one the team uses; **Save to Git** commits it straight to Git, and Admin → Overview shows a stream without one under Attention; your own choice is in **My settings → My bulk creation Epics**) and **Release counts** the release counts.
 
 Your own read-only views are in **My settings → My views**: they appear under **Other views** in your menu only, and never change a stream.
 
@@ -1390,20 +1392,22 @@ Your own read-only views are in **My settings → My views**: they appear under 
 
 **Admin → Capacity & time** holds how capacity is worked out:
 
-- **Capacity and absence** — who counts in the month's capacity, and why not.
+- **Capacity** — Capacity and absence (who counts in the month's capacity, and why not) and the **Capacity roles** (which team roles count).
 - **Calculation profiles** — what counts as utilized and what comes off the capacity, as a sentence you change by ticking terms.
-- **Bucket rules** — the words and tags that make an hour Absence, Training or Other NPRA.
-- **Insight thresholds**, **Holidays and common activities**, **Period control** (the last day to update each month, and locking a month early) and **Historical hours** (hours from before Time Writing, from Excel).
+- **Hour classification** — the **Bucket rules** (the words and tags that make an hour Absence, Training or Other NPRA) and the **Holidays and common activities**.
+- **Thresholds** (the Insight thresholds) and **Month locks** (formerly Period control: the last day to update each month, and locking a month early).
+
+The **Historical hours** (hours from before Time Writing, from Excel) are in **Admin → Data & history**.
 
 ![Admin → Capacity & time](user-guide/images/capacity-time.png)
 
-### Data & sharing
+### Data & history
 
-**Admin → Data & sharing** has **Git storage** (connect, change or disconnect; **Load latest**; and **Load everything from Git** below it), **Shared setup in Git**, **Other views** and **Synthetic sample**.
+**Admin → Data & history** has **Git storage** (connect, change or disconnect; **Load latest**; and **Load everything from Git** below it), **Other views** (each read-only view's work items *By type* in its row), **Connections in Git** (formerly Shared setup in Git), **Historical hours**, **Changes** (formerly History) and **Demo data** (Load synthetic sample dataset, and Reset synthetic MVP data for those allowed *Shared setup in Git*).
 
 **Starter views for your role.** Your admin can set up views that everyone with your access role starts with. At your next start they are copied into **My settings → My views**, marked *Starter view for your role*, and listed under **Other views** in the menu; Background jobs names them once. They are yours: delete one with **Delete…** and it does not come back; add your own with **Add my view** as before. A change your admin makes later does not change your copy. You need your work email set (My settings → Your work email); the panel says so otherwise.
 
-**Starter views per role (admins).** In **Admin → Data & sharing → Other views → Starter views per role** choose **＋ Add starter view**, enter a name, choose a server, enter the project and a WIQL query, tick the access roles and choose **Save to Git**. **Edit** changes it for people who get it for the first time; **Remove…** stops it reaching anyone new (copies already made stay). *SET-21…SET-25*
+**Starter views per role (admins).** In **Admin → Data & history → Other views → Starter views per role** choose **＋ Add starter view**, enter a name, choose a server, enter the project and a WIQL query, tick the access roles and choose **Save to Git**. **Edit** changes it for people who get it for the first time; **Remove…** stops it reaching anyone new (copies already made stay). *SET-21…SET-25*
 
 **Your Other views.** The views listed under **Other views** are **yours**: custom queries, backlog views and background sources you added. They are saved in Git in a file of your own (`other-views/<your work email>.json`) and **nobody else sees them**; the Stream mapping (Admin → Streams) is the part shared with everyone. Adding, editing, cloning or removing one here saves your file right away, and your other computers follow it at their next start. **Remove** on a row opens a pop-up: the view goes here, from your file in Git and from your other computers; its saved data in Git is kept.
 
@@ -1414,15 +1418,15 @@ Your own read-only views are in **My settings → My views**: they appear under 
 
 From their next start only that person sees the view under **Other views**.
 
-**When the Stream mapping changed: Load latest Release Details.** When the shared Stream mapping in Git has changed since this computer last loaded it, a pop-up asks you to **Load latest Release Details**. It loads only the Stream mapping (the streams, their queries, the custom streams and your own Other views); the Release Details pages then fetch their data as usual. It cannot be closed with × or Escape: choose **Load latest Release Details**. It cannot be skipped. If something cannot be loaded, the pop-up names what failed (for example *Connection setup: GitHub could not read azure-views-reset.json (HTTP 500)*) and shows your **Git storage connection** right there — owner, repository, branch, data file and GitHub token, as in Admin → Data & sharing → Git storage. Correct it if needed and choose **Update & load** (the token stays in this browser or desktop app), then **Retry**. If GitHub itself is not answering (a server error or no network), the pop-up says so and also offers **Continue without loading**: you work with what this computer loaded last, and the pop-up comes back at the next start. A wrong token or repository has no skip: correct it and Retry. It never shows while viewing as someone else, with the synthetic sample, without Git storage or after your own save.
+**When the Stream mapping changed: Load latest Release Details.** When the shared Stream mapping in Git has changed since this computer last loaded it, a pop-up asks you to **Load latest Release Details**. It loads only the Stream mapping (the streams, their queries, the custom streams and your own Other views); the Release Details pages then fetch their data as usual. It cannot be closed with × or Escape: choose **Load latest Release Details**. It cannot be skipped. If something cannot be loaded, the pop-up names what failed (for example *Connection setup: GitHub could not read azure-views-reset.json (HTTP 500)*) and shows your **Git storage connection** right there — owner, repository, branch, data file and GitHub token, as in Admin → Data & history → Git storage. Correct it if needed and choose **Update & load** (the token stays in this browser or desktop app), then **Retry**. If GitHub itself is not answering (a server error or no network), the pop-up says so and also offers **Continue without loading**: you work with what this computer loaded last, and the pop-up comes back at the next start. A wrong token or repository has no skip: correct it and Retry. It never shows while viewing as someone else, with the synthetic sample, without Git storage or after your own save.
 
-**The load runs in the background.** When you press **Load latest Release Details** (or **Retry**) the pop-up closes at once and the load runs as a background job: the top bar shows **1 running**, and **Background jobs** lists **Load latest Release Details** with the part being loaded. You can go on working. When it ends the job says **Done** with what was loaded; if a part failed it says **Needs a look**, names the part, and the pop-up comes back with the Git storage setup and **Retry**. Only one load runs at a time: while it runs, **Load everything from Git** on **Admin → Data & sharing → Git storage** shows *Loading in the background…*. That button loads everything shared in Git (planning data, connections, on-prem view data, Windchill exports, roles, Feature setup) as its own background job and shows the result in the panel. *GIT-33…GIT-38*
+**The load runs in the background.** When you press **Load latest Release Details** (or **Retry**) the pop-up closes at once and the load runs as a background job: the top bar shows **1 running**, and **Background jobs** lists **Load latest Release Details** with the part being loaded. You can go on working. When it ends the job says **Done** with what was loaded; if a part failed it says **Needs a look**, names the part, and the pop-up comes back with the Git storage setup and **Retry**. Only one load runs at a time: while it runs, **Load everything from Git** on **Admin → Data & history → Git storage** shows *Loading in the background…*. That button loads everything shared in Git (planning data, connections, on-prem view data, Windchill exports, roles, Feature setup) as its own background job and shows the result in the panel. *GIT-33…GIT-38*
 
 *CON-119…CON-124, GIT-29…GIT-32, SET-20*
 
 **Remove a view for everyone (Tool Owner).** **Remove** on a row of **Other views** removes one of your own views (above). To take a view away from every computer that still has it, and delete its data:
 
-1. Open **Admin → Data & sharing → Other views** and choose **⋯** on the view's row.
+1. Open **Admin → Data & history → Other views** and choose **⋯** on the view's row.
 2. Choose **Remove for everyone…** to drop it from the shared setup, or **Delete for everyone…** to also delete its saved data in Git (the pop-up lists the files, e.g. `azure-data/<view>.json`).
 3. Read the pop-up — it affects everyone who uses the shared setup in Git; the app cannot tell how many people that is — and confirm.
 
@@ -1434,7 +1438,7 @@ A shared view's own page (under **Other views** in the menu) has no delete item,
 
 *CON-109…CON-112*
 
-**Delete qe-mapping.json from Git (Tool Owner, once).** QE Mapping was removed from the app, but its file `qe-mapping.json` stays in the Git data repository until someone with **Shared setup in Git** deletes it. While it is there, **Admin → Data & sharing → Shared setup in Git** shows **Data no longer used**: "qe-mapping.json is no longer used by the app — Delete it from Git".
+**Delete qe-mapping.json from Git (Tool Owner, once).** QE Mapping was removed from the app, but its file `qe-mapping.json` stays in the Git data repository until someone with **Shared setup in Git** deletes it. While it is there, **Admin → Data & history → Connections in Git** shows **Data no longer used**: "qe-mapping.json is no longer used by the app — Delete it from Git".
 
 Before you delete it, set the **QE page** of each bulk Epic (see Create Features); the pop-up names any bulk Epic still on the old QE Mapping columns.
 
@@ -1448,15 +1452,15 @@ The notice is then gone. Someone still on an older app version that shows QE Map
 
 ### Look & feel
 
-**Look & feel** (profile menu) has a tab each for **Page layout** (margins and border), **Theme and zoom**, **Start view and menu** and **Table and chart defaults** (the shared table and chart design, for the roles allowed to change it). The first three are yours, on this computer.
+**Look & feel** (profile menu) has a tab each for **Page layout** (margins and border), **Theme and zoom** and **Start view and menu** — all yours, on this computer. The shared table and chart design is in **Admin → Pages & reports → Table & chart defaults**.
 
 ![Look & feel](user-guide/images/look-and-feel.png)
 
-### History
+### Changes
 
-**Admin → History** lists the changes to the shared setup; filter by area and text.
+**Admin → Data & history → Changes** lists the changes to the shared setup; filter by area and text.
 
-![Admin → History](user-guide/images/history.png)
+![Admin → Data & history → Changes](user-guide/images/history.png)
 
 ### Save view for everyone (tables)
 
@@ -1466,7 +1470,7 @@ Tool Owners and Admins set how tables and page filters look the first time for e
 
 **"Could not fetch from Azure DevOps" or a 401 / 403 error.** Your PAT is missing, wrong, expired or lacks a scope. Get started opens by itself with the reason: paste a new PAT for that server in **My settings → Servers and PATs** and press **Fetch now**. The Time Writing PAT needs Work Items (Read & Write) and Project and Team (Read).
 
-**Every button is greyed out and a notice says the app is read only.** The roles have not been loaded. Connect Git storage (**Admin → Data & sharing**) with your GitHub token. If the repository has no roles yet, **Set up roles**.
+**Every button is greyed out and a notice says the app is read only.** The roles have not been loaded. Connect Git storage (**Admin → Data & history**) with your GitHub token. If the repository has no roles yet, **Set up roles**.
 
 **A button is greyed out.** Read the line next to it: it names the missing right, the missing Git storage, a read-only token or the sample data. Ask an Admin to change your role if needed.
 

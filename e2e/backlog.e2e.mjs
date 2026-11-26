@@ -284,8 +284,8 @@ test('TC-DPF-06: a DoD and User Stories per Release Classification value — set
   await form.getByRole('button', { name: 'Continue' }).click()
   assert.match(await text(form.locator('fieldset.milestone-choices').first()), /Epic story/)
   await form.getByRole('button', { name: 'Cancel' }).click()
-  // Admin → Epic & Feature setup → Setup per Epic: a tab per value of the Epic's list, the Hotfix set marked and shown.
-  await navigate(page, 'Epic & Feature setup')
+  // Admin → Feature & PI setup → Setup per Epic: a tab per value of the Epic's list, the Hotfix set marked and shown.
+  await navigate(page, 'Feature & PI setup')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Setup per Epic' }).click()
   await page.locator('.efe-epics button', { hasText: `#${epicId}` }).click()
   const tabs = page.getByRole('tablist', { name: 'Release Classification' })
@@ -335,7 +335,7 @@ test('TC-STT-01: a User Story template, linked in an Epic’s setup, gives New F
   assert.doesNotMatch(await text(form.locator('fieldset.milestone-choices').first()), /Old copy/)
   await form.getByRole('button', { name: 'Cancel' }).click()
   // Setup per Epic shows the story as a template; the templates tab lists it with its tags and where it is used.
-  await navigate(page, 'Epic & Feature setup')
+  await navigate(page, 'Feature & PI setup')
   const sections = page.getByRole('tablist', { name: 'Sections' })
   await sections.getByRole('tab', { name: 'Setup per Epic' }).click()
   await page.locator('.efe-epics button', { hasText: `#${epicId}` }).click()
@@ -427,8 +427,8 @@ test('TC-EPS-01: Epic setup — its fields appear in New Feature (a value list, 
   assert.equal(await form.getByLabel('Feature title').inputValue(), 'Platform 2.0', 'the title follows the pattern (an empty {feature} is dropped)')
   await form.getByRole('button', { name: 'Cancel' }).click()
   // Admin → Epic setup: the fields and the list, read-only without Git storage.
-  await navigate(page, 'Epic & Feature setup')
-  assert.equal(await text(page.locator('header.topbar h1')), 'Epic & Feature setup')
+  await navigate(page, 'Feature & PI setup')
+  assert.equal(await text(page.locator('header.topbar h1')), 'Feature & PI setup')
   // CON-97: Setup per Epic — the Epic in the list, its fields read-only without Git storage, the preview.
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Setup per Epic' }).click()
   const listed = page.locator('.efe-epics button', { hasText: `#${epicId}` })
@@ -444,7 +444,7 @@ test('TC-EPS-01: Epic setup — its fields appear in New Feature (a value list, 
   assert.equal(await offer.isChecked(), true, 'on by default')
   assert.equal(await offer.isDisabled(), true, 'a team setting: read-only without Git storage')
   assert.match(await text(complete), /none ticked, so the person decides which to add/)
-  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Value lists' }).click()
+  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Lists' }).click()
   assert.equal(await page.getByLabel('Values of Platform').inputValue(), 'Platform 1.0\nPlatform 2.0')
   assert.deepEqual(errors, [])
   await context.close()

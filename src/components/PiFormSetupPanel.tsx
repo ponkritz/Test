@@ -11,7 +11,7 @@ import { ColumnListEditor } from './ColumnListEditor'
 import type { PiFormStore } from '../usePiFormSetup'
 import { useReviewViewer } from '../piReviewWriter'
 
-// PIR-19…PIR-22, PIR-29, PIR-31: the panel of Admin → PI Review Setup (PiReviewSetupPage), shown to the holders of "PI Review: set
+// PIR-19…PIR-22, PIR-29, PIR-31: the panel of Admin → Feature & PI setup → PI Review form (PiReviewSetupPage), shown to the holders of "PI Review: set
 // up the review form" (Scrum Master and Tool Owner by default, CON-114). It shows the fields of the form in use — the
 // order, labels, the headings written in the comment, types, options, required and defaults — as a summary
 // (UI-STANDARDS §3); **Edit form…** opens the editor in a pop-up, disabled with the reason in View as, with the sample,
@@ -49,7 +49,7 @@ export function PiFormSetupPanel({ store, block, by }: { store: PiFormStore; blo
   </Panel>
 }
 
-// PIR-30: ⚙ in the page header of My PI Review and PI Review — opens Admin → PI Review Setup; shown when that page is in
+// PIR-30: ⚙ in the page header of My PI Review and PI Review — opens Admin → Feature & PI setup → PI Review form; shown when that page is in
 // the viewer's menu, i.e. to the holders of "PI Review: set up the review form" (showsSetupGear; in View as those of the
 // viewed role). The icon of "open the setup of this page" (UI-STANDARDS §6): aria-label and title name the page.
 export function PiSetupGear() {

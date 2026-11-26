@@ -234,7 +234,7 @@ test('GIT-33…GIT-38: Load everything and Load latest Release Details as backgr
   await new Promise((resolve) => setTimeout(resolve, 0))
   assert.equal(loadedStreamsVersion(repo, storage), 'sha-map', 'the mapping load records the Streams file too')
   assert.equal(loadEverythingRunning(), false)
-  // The pop-up's job is the mapping load; the full load is Admin → Data & sharing → Git storage only.
+  // The pop-up's job is the mapping load; the full load is Admin → Data & history → Git storage only.
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   assert.match(app, /onRun=\{\(\) => \{ void startJob\('mapping'\) \}\}/)
   const release2 = app.slice(app.indexOf('async function loadReleaseDetails'), app.indexOf('return { loaded, failed }', app.indexOf('async function loadReleaseDetails')))

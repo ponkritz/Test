@@ -153,7 +153,7 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     // PIR-28: the reviewed PI the newest comment's headings name ("Learnings of PI 26.4:"), also in the export.
     textColumn('reviewed-pi', 'Reviewed PI', 'The PI the newest comment’s headings name as reviewed, e.g. “Learnings of PI 26.4:” or “Struggles for PI 26.4:” — empty when its headings name none (older reviews).', (latest) => latest.split.reviewedPi),
     // PIR-20: a column for each field added in the PI Review form setup, by its label.
-    ...customFields(setup).map((field) => textColumn(`field-${field.id}`, field.label, `The text after the heading “${field.heading}:” in the newest comment (a field added in the PI Review form setup, Admin → Epic & Feature setup → PI Review form).`, (latest) => latest.split.extra?.[field.id])),
+    ...customFields(setup).map((field) => textColumn(`field-${field.id}`, field.label, `The text after the heading “${field.heading}:” in the newest comment (a field added in the PI Review form setup, Admin → Feature & PI setup → PI Review form).`, (latest) => latest.split.extra?.[field.id])),
     { id: 'split-from', label: 'Split from', defaultHidden: true, export: 'always', hint: 'How Struggles, Learnings and Move to Next PI were filled from the newest comment: Headings, Keywords (suggested: the comment has no heading) or None. Exported even while hidden.',
       value: ({ item }) => latestOf(item)?.split.from ?? '', title: ({ item }) => latestOf(item) ? undefined : unreadHint,
       render: ({ item }) => latestOf(item)?.split.from ?? <span className="muted">—</span> },

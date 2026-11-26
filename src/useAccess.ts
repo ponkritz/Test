@@ -52,7 +52,7 @@ export function useAccess(git: GitStorage, azure: AzureWorkspace, viewAs: ViewAs
   const active = viewAs && canViewAs(ownRights) ? viewAs : null
   const rights = active ? viewAsRights(current.policy, active) : ownRights
   const readOnly = !current.policy
-  useEffect(() => { guardAzureWrites((permission) => rights.actions.has(permission), readOnly ? 'The app is read-only until the access roles (access.json) are loaded: connect Git storage in Admin → Data & sharing. Nothing was changed.' : undefined, active ? '' : email) })
+  useEffect(() => { guardAzureWrites((permission) => rights.actions.has(permission), readOnly ? 'The app is read-only until the access roles (access.json) are loaded: connect Git storage in Admin → Data & history. Nothing was changed.' : undefined, active ? '' : email) })
   useEffect(() => { setViewAsGuard(active ? viewAsLabel(active) : ''); return () => setViewAsGuard('') }, [active])
   // CON-133: Git storage writes the shared stream mapping only for those who may change it (CON-93).
   const streamsAllowed = canManageStreams(current.policy, rights)

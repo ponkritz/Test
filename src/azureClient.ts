@@ -200,7 +200,7 @@ let writesAllowed: (permission: AzureWritePermission) => boolean = () => false
 let refusedBecause = 'The access roles are not loaded yet, so the app is read-only. Nothing was changed.'
 // CON-113: the writer's work email (the Time Writing connection's), for a PI Review post on their own Feature.
 let writerEmail = ''
-export function guardAzureWrites(check: (permission: AzureWritePermission) => boolean, refused = 'Your role does not allow this change in Azure DevOps. An Admin can change this in Admin → People & roles → Role rights.', email = '') { writesAllowed = check; refusedBecause = refused; writerEmail = email.trim().toLowerCase() }
+export function guardAzureWrites(check: (permission: AzureWritePermission) => boolean, refused = 'Your role does not allow this change in Azure DevOps. An Admin can change this in Admin → People & access → Role rights.', email = '') { writesAllowed = check; refusedBecause = refused; writerEmail = email.trim().toLowerCase() }
 // CON-113, PIR-13: a PI Review post is allowed with "PI Review: post the review of a Feature" (the leads), or with "Add a
 // comment" for the Feature's own assignee (the writer's work email is the Feature's Assigned To email).
 export function reviewPostAllowed(reviewOf: string, allowed: (permission: AzureWritePermission) => boolean = writesAllowed, email = writerEmail) {

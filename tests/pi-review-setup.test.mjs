@@ -7,7 +7,7 @@ import { builtInFormSetup, fieldDrafts, fieldsOf, formSetupBlock, maxFormFields,
 import { columnsError } from '../src/onDemand.ts'
 import { defaultPolicy, parseAccess, rightsFor, serializeAccess } from '../src/access.ts'
 import { fileLabel, pagesOfFile } from '../src/gitWatch.ts'
-import { resolveSettings, settingsLabel, settingsPagesFor, shownSettingsTab } from '../src/settingsTabs.ts'
+import { resolveSettings, sectionAllowed, sectionsFor, settingsLabel, settingsPagesFor, shownSettingsTab } from '../src/settingsTabs.ts'
 import { searchSettings } from '../src/adminOverview.ts'
 
 // PI Review form setup (PIR-19…PIR-24, CON-114). Synthetic data only.
@@ -154,8 +154,8 @@ test('CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)', 
   assert.match(formSetupBlock(viewer, git, { loaded: false, error: '' }), /still being read/)
 })
 
-test('PIR-19, PIR-29: a newer form setup in Git is loaded quietly, except on Admin → PI Review Setup (TC-PIR-22)', () => {
-  assert.deepEqual(pagesOfFile('data/pi-review-form.json', 'data/planning-data.json'), { pages: ['admin:pireview'], quiet: 'piForm', loader: 'piForm' })
+test('PIR-19, PIR-29: a newer form setup in Git is loaded quietly, except on Admin → Feature & PI setup → PI Review form (TC-PIR-22)', () => {
+  assert.deepEqual(pagesOfFile('data/pi-review-form.json', 'data/planning-data.json'), { pages: ['admin:epics'], quiet: 'piForm', loader: 'piForm' })
   assert.equal(fileLabel('data/pi-review-form.json', 'data/planning-data.json'), 'PI Review form')
 })
 
@@ -184,40 +184,42 @@ test('PIR-28: {REVIEWED PI} in the headings — written with the reviewed PI (or
   assert.match(formSetupProblems(clash).join(' '), /would not be read back as written: .*Learnings/)
 })
 
-test('PIR-29: PI Review Setup is an Admin page of its own, only for the holders of “PI Review: set up the review form” (a Scrum Master, a Tool Owner); anyone else asking for it gets Streams; Search settings and the old section link (TC-PIR-30)', () => {
-  const keys = (can) => settingsPagesFor(can).map((page) => page.key)
+test('PIR-29, SET-26, SET-27: the PI Review form is a section of Feature & PI setup, only for the holders of “PI Review: set up the review form” (a Scrum Master, a Tool Owner); the old page key opens it, anyone else gets Feature & PI setup without it; Search settings (TC-PIR-30)', () => {
+  const keys = (can) => settingsPagesFor(can).filter((page) => page.key === 'epics').length ? sectionsFor('epics', can).filter((section) => section.key === 'pireview').map(() => 'pireview') : []
   assert.ok(!keys(() => false).includes('pireview'), 'hidden without the permission (and before the roles file is loaded)')
-  assert.deepEqual(keys(() => true).slice(3, 5), ['epics', 'pireview'], 'next to Epic & Feature setup')
+  assert.deepEqual(sectionsFor('epics', () => true).map((section) => section.key), ['setup', 'lists', 'templates', 'pireview'], 'the last section of Feature & PI setup')
+  assert.deepEqual(sectionsFor('epics', (action) => action === 'pireview.setup').map((section) => section.label), ['Lists', 'User Story templates', 'PI Review form'], 'the PI Review form and, read only, Lists and templates (SET-31) for a role with only that right')
   const policy = defaultPolicy(); policy.members = { 'sm@example.com': ['Scrum Master'], 'to@example.com': ['Tool Owner'], 'tm@example.com': ['Team Member'], 'ad@example.com': ['Admin'], 'pm@example.com': ['People Manager'] }
   const sees = (p, email) => { const rights = rightsFor(p, email); return keys((key) => rights.actions.has(key)).includes('pireview') }
   assert.deepEqual(['sm', 'to', 'tm', 'ad', 'pm'].filter((who) => sees(policy, `${who}@example.com`)), ['sm', 'to'])
   const changed = parseAccess(serializeAccess(policy)); changed.roles['Team Member'].actions.push('pireview.setup')
   assert.equal(sees(changed, 'tm@example.com'), true, 'Role rights decide')
-  assert.equal(settingsLabel('pireview'), 'PI Review Setup')
-  // A remembered tab or an old link: the page for those who may see it, Streams for everyone else (as every hidden Admin page).
+  assert.equal(settingsLabel('pireview'), 'Feature & PI setup')
+  // A remembered tab or an old link: the page for those who may see it, the Overview for everyone else (SET-26).
   const can = (...allowed) => (action) => allowed.includes(action)
-  assert.equal(shownSettingsTab('pireview', can('pireview.setup')), 'pireview')
-  assert.equal(shownSettingsTab('pireview', can()), 'connections')
-  assert.equal(shownSettingsTab('audit', can()), 'connections')
+  assert.deepEqual(resolveSettings('pireview'), { tab: 'epics', section: 'pireview' }, 'SET-28: the former page opens the section')
+  assert.equal(shownSettingsTab('pireview', can('pireview.setup')), 'epics')
+  assert.equal(shownSettingsTab('pireview', can()), 'epics', 'Feature & PI setup is everyone’s (SET-31); the PI Review form itself stays hidden')
+  assert.equal(shownSettingsTab('audit', can()), 'storage', 'the former History opens Data & history …')
+  assert.equal(sectionAllowed('storage', 'changes', can()), false, '… whose Changes need “Shared setup in Git” (SET-27)')
   assert.equal(shownSettingsTab('my', can()), 'my')
-  assert.deepEqual(resolveSettings('epics', 'pireview'), { tab: 'pireview' }, 'the former section opens the page')
-  assert.equal(shownSettingsTab(resolveSettings('epics', 'pireview').tab, can()), 'connections')
+  assert.deepEqual(resolveSettings('epics', 'pireview'), { tab: 'epics', section: 'pireview' })
   assert.deepEqual(resolveSettings('epics', 'lists'), { tab: 'epics', section: 'lists' })
-  // Search settings lists only the pages the viewer may open (App filters it by settingsPagesFor).
+  // Search settings lists only the sections the viewer may open (App filters it by settingsPagesFor and sectionAllowed).
   const found = searchSettings('pi review form')
-  assert.equal(found[0]?.tab, 'pireview'); assert.equal(found[0]?.page, 'PI Review Setup'); assert.equal(found[0]?.section, undefined)
-  assert.ok(!searchSettings('pi review').some((entry) => entry.tab === 'epics'), 'no longer a section of Epic & Feature setup')
-  assert.ok(!found.some((entry) => keys(can()).includes(entry.tab)), 'nothing found without the permission')
+  assert.equal(found[0]?.tab, 'epics'); assert.equal(found[0]?.page, 'Feature & PI setup'); assert.equal(found[0]?.section, 'pireview')
+  assert.equal(sectionAllowed('epics', 'pireview', can()), false, 'nothing found without the permission')
+  assert.equal(sectionAllowed('epics', 'pireview', can('pireview.setup')), true)
 })
 
-test('PIR-30: the ⚙ PI Review Setup button — shown exactly when the page is in the menu: by the permission, not the role; in View as by the viewed role (TC-PIR-31)', () => {
+test('PIR-30: the ⚙ PI Review Setup button — shown exactly when the PI Review form is among the viewer’s sections: by the permission, not the role; in View as by the viewed role (TC-PIR-31)', () => {
   const can = (...allowed) => (action) => allowed.includes(action)
   assert.equal(setupGearLabel, 'PI Review Setup')
   assert.equal(showsSetupGear({ can: can('pireview.setup') }), true)
   assert.equal(showsSetupGear({ can: can() }), false, 'without the permission')
   // The starting matrix: Scrum Master and Tool Owner; Role rights changes count (a Team Member allowed, a Scrum Master denied).
   const policy = defaultPolicy(); policy.members = { 'sm@example.com': ['Scrum Master'], 'to@example.com': ['Tool Owner'], 'tm@example.com': ['Team Member'], 'ad@example.com': ['Admin'], 'pm@example.com': ['People Manager'] }
-  const shows = (p, email) => { const rights = rightsFor(p, email); const has = (key) => rights.actions.has(key); assert.equal(showsSetupGear({ can: has }), settingsPagesFor(has).some((page) => page.key === 'pireview'), 'the gear and the menu agree'); return showsSetupGear({ can: has }) }
+  const shows = (p, email) => { const rights = rightsFor(p, email); const has = (key) => rights.actions.has(key); assert.equal(showsSetupGear({ can: has }), settingsPagesFor(has).some((page) => page.key === 'epics') && sectionAllowed('epics', 'pireview', has), 'the gear and the menu agree'); return showsSetupGear({ can: has }) }
   assert.deepEqual(['sm', 'to', 'tm', 'ad', 'pm'].filter((who) => shows(policy, `${who}@example.com`)), ['sm', 'to'])
   const changed = parseAccess(serializeAccess(policy))
   changed.roles['Team Member'].actions.push('pireview.setup')

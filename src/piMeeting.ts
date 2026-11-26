@@ -350,7 +350,7 @@ export function meetingSaveBlock(state: MeetingSaveState): string {
   if (state.viewingAs) return `Viewing as ${state.viewingAs}: the meeting is downloaded only, not saved to Git.`
   if (state.rolesMissing) return 'The roles file is not loaded yet: the meeting is downloaded only, not saved to Git.'
   if (state.isSample) return 'Synthetic sample data is loaded: the meeting is downloaded only, not saved to Git.'
-  if (!state.connected) return 'Git storage is not connected (Admin → Data & sharing): the meeting is downloaded only.'
+  if (!state.connected) return 'Git storage is not connected (Admin → Data & history): the meeting is downloaded only.'
   if (state.readOnly) return 'Your Git token can read but not save: the meeting is downloaded only.'
   return ''
 }

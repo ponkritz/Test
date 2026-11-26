@@ -80,7 +80,7 @@ async function loadAll(page) {
   await loadJobEnds(page)
 }
 async function otherViewsTab(page) {
-  await navigate(page, 'Data & sharing')
+  await navigate(page, 'Data & history')
   await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Other views' }).click()
   await page.locator('.own-views-note').waitFor()
 }
@@ -180,7 +180,7 @@ test('TC-GIT-26: a failed load names what failed and shows the Git storage setup
   await failed.waitFor()
   assert.match(await text(person.page.locator('.jobs-button')), /to check/)
   assert.match(await text(failed), /What failed: Stream mapping: /)
-  // The Git storage connection setup is inside the pop-up (the same form as Admin → Data & sharing → Git storage).
+  // The Git storage connection setup is inside the pop-up (the same form as Admin → Data & history → Git storage).
   const setup = prompt(person.page).getByRole('region', { name: 'Git storage connection' })
   for (const label of ['Owner (user or organisation)', 'Repository', 'Branch', 'Data file', 'GitHub token']) await setup.getByLabel(label, { exact: label !== 'GitHub token' }).first().waitFor()
   assert.equal(await setup.getByLabel('Repository', { exact: true }).inputValue(), 'storage')
@@ -251,7 +251,7 @@ test('TC-GIT-28: Load latest Release Details runs as a background job reading th
   await closeJobs(person.page)
   assert.equal(await prompt(person.page).count(), 0, 'loaded: the pop-up does not come back')
   // GIT-37: Load everything from Git is on the Git storage tab (no Load from Git tab any more), as the same kind of job.
-  await navigate(person.page, 'Data & sharing')
+  await navigate(person.page, 'Data & history')
   const tabs = person.page.getByRole('tablist', { name: 'Sections' })
   assert.equal(await tabs.getByRole('tab', { name: 'Load from Git' }).count(), 0)
   await tabs.getByRole('tab', { name: 'Git storage' }).click()

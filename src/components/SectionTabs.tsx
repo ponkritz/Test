@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { ScopeChip, type Scope } from './ScopeChip'
-import { pickSection, readSettingsSections, saveSettingsSection, type SettingsTab } from '../settingsTabs'
+import { pickSection, rememberedSection, saveSettingsSection, type SettingsTab } from '../settingsTabs'
 
 // A Settings page's sections, one at a time (SET-14): a row of section buttons and the chosen section. A page with one
-// section shows it without the row. The section shown last on each page is remembered in this browser.
+// section shows it without the row. The section shown last on each page is remembered in this browser (a remembered
+// section that has moved opens where it lives now, SET-28).
 export type Section = { key: string; label: string; node: ReactNode; scope?: Scope }
 export function SectionTabs({ page, sections, chosen, onChoose }: { page: SettingsTab; sections: Section[]; chosen?: string; onChoose?: (key: string) => void }) {
-  const [own, setOwn] = useState(() => readSettingsSections()[page])
+  const [own, setOwn] = useState(() => rememberedSection(page))
   const current = pickSection(sections.map((section) => section.key), chosen ?? own)
   const choose = (key: string) => { setOwn(key); saveSettingsSection(page, key); onChoose?.(key) }
   const shown = sections.find((section) => section.key === current)

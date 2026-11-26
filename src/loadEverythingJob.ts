@@ -8,7 +8,7 @@ import { beginStreamsLoad, endStreamsLoad, markStreamsLoaded } from './streamsUp
 //   companions: the connection setup (azure-views.json with its clean-up and removal markers and the person's Other
 //   views, CON-120) and the custom streams (custom-streams.json). Not the planning data, roles, Feature setup, on-prem
 //   view data or Windchill exports: the Release Details pages fetch their data as they always do.
-// - "Load everything from Git" (everything): Admin → Data & sharing → Git storage (GIT-37) — everything shared in Git.
+// - "Load everything from Git" (everything): Admin → Data & history → Git storage (GIT-37) — everything shared in Git.
 // One load at a time, of either kind (GIT-34, GIT-38): while one runs, neither starts (null). Both read the Streams file,
 // so either records its version when every part loaded (markStreamsLoaded), and a write of this computer to the file
 // during either counts as loaded (beginStreamsLoad, GIT-29).

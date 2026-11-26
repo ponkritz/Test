@@ -6,7 +6,7 @@ import type { GitStorage } from '../useGitStorage'
 import { MultiSelect } from './MultiSelect'
 import { Modal, Notice, Panel, Pill, WriteBlocked } from './ui'
 
-// Admin → People & roles → Role rights: the default role and what each role sees and may do, and the app access of
+// Admin → People & access → Role rights: the default role and what each role sees and may do, and the app access of
 // emails that are not a person in Azure DevOps. Shown to everyone; changed and saved to Git (access.json) only by a
 // role that may manage access, with a Git token that can write.
 // CAP-49: each person's app access role is set in the People section with the rest of their mapping. CON-134
@@ -61,7 +61,7 @@ export function AccessPanel({ access, git, people, accessOnly }: { access: Acces
   return <Panel className="admin-section" eyebrow="ACCESS" title="Roles and access" info={<>Which menu areas each role sees and what it may do, and who has which role (by the email on their Time Writing connection). Stored in Git as {access.path || 'access.json'}, so only people who can write to the data repository can change it. Roles decide what this app shows and does; what each person can read or change in Azure DevOps and GitHub is still decided by their own tokens and project permissions.{access.history && <> <a href={access.history} target="_blank" rel="noreferrer">History</a></>}</>}
     action={access.policy && editable ? <button type="button" className="ghost" onClick={() => { discard(); void access.reload() }}>Reload from Git</button> : undefined}>
     <Notice tone={access.email ? 'info' : 'warning'}>{you}</Notice>
-    {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data & sharing) to use access roles. {access.policy ? 'The roles last loaded in this browser still apply.' : 'Until they are loaded, the app is read-only: everyone sees every page, nobody can make changes.'}</Notice>}
+    {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data & history) to use access roles. {access.policy ? 'The roles last loaded in this browser still apply.' : 'Until they are loaded, the app is read-only: everyone sees every page, nobody can make changes.'}</Notice>}
     {access.error && <Notice tone="error">{access.path}: {access.error}</Notice>}
     {/* CON-101: no roles file yet: the app is read-only; the viewer may set up the first one (bootstrap). */}
     {git.connected && access.bootstrap && !shown && <Notice tone="warning">No access roles yet: the app is read-only — everyone sees every page, nobody can make changes. {editable ? <button type="button" className="text-button" onClick={() => setDraft(defaultPolicy(access.email))}>Set up roles →</button> : 'Someone who can write to the data repository can set them up here.'}</Notice>}

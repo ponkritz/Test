@@ -51,7 +51,7 @@ export const actions = [
   { key: 'baselines.edit', group: 'Release data', label: 'Edit baselines (rules and release scope)', legacy: 'baselines.edit' },
   { key: 'data.export', group: 'Release data', label: 'Export tables (Excel, CSV)', legacy: '*' },
   { key: 'streams.manage', group: 'Streams', label: 'Change the stream mapping and its query logic: servers, projects and queries of the streams, their data sets, release naming (Tool Owner)', legacy: 'streams.manage' },
-  { key: 'streams.options', group: 'Streams', label: 'Stream options: Epics to match Features in, shared bulk creation Epics', legacy: 'settings.manage' },
+  { key: 'streams.options', group: 'Streams', label: 'Streams: Epics to match Features in, shared bulk creation Epics', legacy: 'settings.manage' },
   { key: 'setup.feature', group: 'Setup', label: 'Edit the shared Feature setup', legacy: '*' },
   // EPS-04 (permissions 3): the Epic setup's fields and its value lists.
   { key: 'setup.epic', group: 'Setup', label: 'Edit the Epic setup (Feature fields per Epic, title pattern, Copy to Epics)', legacy: 'settings.manage', since: 3 },
@@ -68,7 +68,7 @@ export const actions = [
   { key: 'capacity.settings', group: 'Capacity and time', label: 'Capacity and absence, calculation profiles', legacy: 'settings.manage' },
   { key: 'capacity.rules', group: 'Capacity and time', label: 'Bucket rules and insight thresholds', legacy: 'settings.manage' },
   { key: 'capacity.time', group: 'Capacity and time', label: 'Holidays and common activities', legacy: 'settings.manage' },
-  { key: 'capacity.periods', group: 'Capacity and time', label: 'Period control and locking a month’s figures', legacy: 'settings.manage' },
+  { key: 'capacity.periods', group: 'Capacity and time', label: 'Month locks and locking a month’s figures', legacy: 'settings.manage' },
   { key: 'capacity.history', group: 'Capacity and time', label: 'Import historical hours', legacy: 'settings.manage' },
   { key: 'people.edit', group: 'People and access', label: 'Edit people (region, team role, reports to, dates), remove and restore', legacy: 'settings.manage' },
   { key: 'people.capacityRoles', group: 'People and access', label: 'Capacity roles', legacy: 'settings.manage' },
@@ -110,7 +110,7 @@ export const accessFile = 'access.json'
 export const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 export const normalEmail = (value: string) => value.trim().toLowerCase()
 
-// The starting matrix (editable in Admin → People & roles → Role rights): Backlog Health only for Scrum Masters, Product Owners and Admins.
+// The starting matrix (editable in Admin → People & access → Role rights): Backlog Health only for Scrum Masters, Product Owners and Admins.
 const workActions: Action[] = ['azure.write', 'work.edit', 'work.state', 'work.move', 'work.hours', 'work.comment']
 export function defaultPolicy(adminEmail = ''): AccessPolicy {
   return inOrder({
@@ -233,7 +233,7 @@ export function writeBlockedReason(readOnly: boolean, missing: Action[], where =
   if (!missing.length) return ''
   if (readOnly) return where === 'in Azure DevOps' ? readOnlyReason : `Read only: the access roles are not loaded yet, so nothing can be changed ${where}.`
   const labels = [...new Set(missing)].map((key) => `“${actions.find((entry) => entry.key === key)?.label ?? key}”`)
-  return `Your role does not allow ${labels.join(', ')}. An Admin can change this in Admin → People & roles → Role rights.`
+  return `Your role does not allow ${labels.join(', ')}. An Admin can change this in Admin → People & access → Role rights.`
 }
 
 // CON-94: one cell of the matrix — Allow, Deny or Not set — and changing it (an allow and a deny never coexist).

@@ -409,7 +409,7 @@ export function applyViewRemovals(removals: ViewRemoval[], repository: string, s
 export function removalBlocked({ allowed, viewingAs, git, isSample }: { allowed: boolean; viewingAs: boolean; git?: { connected: boolean; readOnly: boolean; isSample?: boolean }; isSample: boolean }) {
   if (viewingAs) return 'Not while viewing as someone else: View as is read-only.'
   if (!allowed) return 'Only the Tool Owner (“Change the stream mapping”) can remove a shared view for everyone.'
-  if (!git?.connected) return 'Connect Git storage (Admin → Data & sharing) first: the shared setup is in Git.'
+  if (!git?.connected) return 'Connect Git storage (Admin → Data & history) first: the shared setup is in Git.'
   if (git.readOnly) return 'Your Git token is read-only, so the shared setup in Git cannot be changed.'
   if (isSample || git.isSample) return 'Not while the synthetic sample data is loaded.'
   return ''

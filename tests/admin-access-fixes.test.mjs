@@ -119,7 +119,7 @@ test('CON-133: the shared stream mapping is guarded inside Git storage and the O
   assert.match(connections, /Boolean\(streamsBlocked\)\} title=\{streamsBlocked \|\| undefined\} onClick=\{\(\) => void switchTimeWriting\(profile\)\}>Use as Time Writing/)
   const admin = read('src/pages/AdminPage.tsx')
   const sections = admin.match(/<AzureConnections [^>]*\/>/g)
-  assert.ok(sections.length >= 9 && sections.every((tag) => tag.includes('canManageStreams={access.canManageStreams}')), 'every section is passed the right')
+  assert.ok(sections.length >= 3 && sections.every((tag) => tag.includes('canManageStreams={access.canManageStreams}')), 'every section is passed the right (SET-26: the Admin sections through one helper)')
 })
 
 test('CON-134: app access of emails not in Azure DevOps is listed under Role rights, removed or given through the guarded save (AR-011, TC-CON-94)', async () => {

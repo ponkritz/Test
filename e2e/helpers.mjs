@@ -71,6 +71,8 @@ export async function openPage(app, { width = 1300, height = 1000, guide = false
 
 // Pages load on demand: wait for the page's code too (the "Loading the page…" placeholder gone).
 export const navigate = async (page, label) => { await page.locator('.sidebar nav button', { hasText: label }).first().click(); await page.locator('header.topbar h1').waitFor(); await page.locator('.page-loading').waitFor({ state: 'detached' }) }
+// SET-26: an Admin page and one of its sections (the row of sections is there only when the person sees more than one).
+export const openSection = async (page, label, section) => { await navigate(page, label); const tab = page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: section, exact: true }); if (await tab.count()) await tab.click() }
 
 export async function loadSample(page) {
   await page.getByRole('button', { name: 'Load synthetic sample' }).first().click()
@@ -114,7 +116,7 @@ export async function profileItem(page, name) {
   await page.getByRole('menu', { name: 'Profile' }).getByRole('menuitem', { name }).click()
 }
 
-// CAP-58, CAP-59: Admin → People & roles → People — open a person's drawer by a click on their row (the name cell, not
+// CAP-58, CAP-59: Admin → People & access → People — open a person's drawer by a click on their row (the name cell, not
 // the tick box), and the text behind the source line's ⓘ (where the people come from, the team read).
 export async function openPerson(page, name) {
   await page.locator(`.people-table tr[data-row-key="${name}"] td`).nth(1).click()

@@ -11,7 +11,7 @@ import { useBulkEpic } from '../useStreamEpics'
 import { dpDateColumns, dpDateLabel } from '../dpBulkDates'
 import { Notice } from './ui'
 
-// CON-97 Admin → Epic & Feature setup → Setup per Epic: one screen per Epic. The Epic list (All Epics first) on the
+// CON-97 Admin → Feature & PI setup → Setup per Epic: one screen per Epic. The Epic list (All Epics first) on the
 // left; on the right a preview of a new Feature and four sections in the order it is built — Fields & title, Definition
 // of Done, User Stories, Month Task — each with one "Customize for this Epic" switch (off: All Epics applies). "Use my
 // own version" edits the person's own copy; one Save writes the Epic setup and the Feature setup together.
@@ -193,7 +193,7 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
         <h2>{title}</h2>
         {!isAll && <button type="button" role="switch" aria-checked={useMine} className="efe-switch" disabled={!setup.email} title={setup.email ? undefined : 'Set your work email (My settings) to keep your own version'} onClick={() => setMine(!mine)}><span className="efe-track" data-on={useMine}><span /></span>Use my own version (only me)</button>}
       </div>
-      {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data &amp; sharing) to change the setup; the one last loaded here is shown.</Notice>}
+      {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data &amp; history) to change the setup; the one last loaded here is shown.</Notice>}
       {git.connected && !editable && <Notice tone="info">{git.readOnly ? 'View only: your Git token can read but not save.' : useMine ? 'Set your work email to keep your own version.' : 'View only: your role is not allowed “Edit the shared Feature setup”.'}</Notice>}
       {useMine && <Notice tone="warning">Your own version of {title}: only you see it when you create Features. What you don’t customize comes from the shared setup.</Notice>}
 

@@ -371,7 +371,7 @@ export function useAzureWorkspace(store: PageProps['store'], onFetched?: { curre
   // Load from Git: the view's data saved to Git by the desktop app. Also the fallback when a fetch cannot run.
   async function loadFromGit(id: string, reason = '') {
     const source = gitData?.current
-    if (!source?.available(id)) { statusFor(id, { state: 'error', message: 'Load from Git needs Git storage connected (Admin → Data & sharing) and an on-prem view.' }); return false }
+    if (!source?.available(id)) { statusFor(id, { state: 'error', message: 'Load from Git needs Git storage connected (Admin → Data & history) and an on-prem view.' }); return false }
     statusFor(id, { state: 'busy', message: 'Loading from Git…' })
     try {
       const done = await source.load(id)

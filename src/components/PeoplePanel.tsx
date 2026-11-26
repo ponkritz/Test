@@ -15,7 +15,7 @@ import { roles as accessRoles, type Role } from '../access'
 import { emptyFilters, filterPeople, peopleFiltersKey, readPeopleFilters, filtersChanged, formError, formOf, missingOf, patchText, profilePatch, sameRoles, statusOptions, statusText, type PeopleFilters, type PersonEntry, type PersonForm } from '../people'
 import type { GitStorage } from '../useGitStorage'
 
-// Admin → People & roles → People (CAP-58…CAP-61, UI-STANDARDS §4a, §5, §7, §8). A read-only list in the shared
+// Admin → People & access → People (CAP-58…CAP-61, UI-STANDARDS §4a, §5, §7, §8). A read-only list in the shared
 // DataTable (search, sort, columns, Export) with Region, Role, Access role and Status filters; a click on a row (or
 // Enter) opens the person in a drawer — view first, Edit turns the values into fields, Save saves the profile with the
 // planning data and the app access roles to access.json (two saves, each a Background jobs entry); tick rows for the
@@ -117,7 +117,7 @@ export function PeoplePanel({ entries, names, outside, defaultRole, defaultJoine
   </span>
 
   return <Panel className="admin-section people-panel" eyebrow="PEOPLE & ACCESS" title="People"
-    info="Everyone whose region, role and dates can be set: the people with Time Writing Tasks (with their figures), everyone else Assigned To fetched work, the Azure DevOps team members, and people with settings who are not in Azure DevOps (Status filter). Click a person to see or change them. Region, role and reporting line are saved with the planning data in Git; the app access roles in access.json. Region decides which regional holidays apply. Time tracking started / Left on (both days worked) limit a person's funded hours to the working days they are employed: a month they join or leave in is prorated, and in a month before joining or after leaving they have no capacity and are not counted. The capacity of the month and the regional holidays are on Capacity & time → Capacity and absence."
+    info="Everyone whose region, role and dates can be set: the people with Time Writing Tasks (with their figures), everyone else Assigned To fetched work, the Azure DevOps team members, and people with settings who are not in Azure DevOps (Status filter). Click a person to see or change them. Region, role and reporting line are saved with the planning data in Git; the app access roles in access.json. Region decides which regional holidays apply. Time tracking started / Left on (both days worked) limit a person's funded hours to the working days they are employed: a month they join or leave in is prorated, and in a month before joining or after leaving they have no capacity and are not counted. The capacity of the month and the regional holidays are on Capacity & time → Capacity."
     action={<div className="button-row"><Pill tone={entries.length ? 'open' : 'neutral'}>{plural(entries.length, 'person', 'people')}</Pill><ViewActions label="People" items={[{ key: 'default-joined', label: 'Default Time tracking started…', onClick: () => setDefaultOpen(true) }]} /></div>}>
     {entries.length > 0 && <GitSyncBar git={git} />}
     <p className="people-source muted">Names and work emails come from Azure DevOps. <Info iconOnly label="Where the people come from">{source}</Info>{readTeam && <button type="button" className="ghost" disabled={readTeam.disabled} onClick={readTeam.onClick}>↻ Read the team again</button>}</p>

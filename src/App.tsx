@@ -25,7 +25,7 @@ import { MyDashboardPage } from './pages/MyDashboardPage'
 import { HomePage } from './pages/HomePage'
 import { resourceMappingPage } from './qePage'
 import { loadStartView, saveStartView, startPageOf, visibleTiles, type HomeLink, type HomeTile, type StartView } from './homeTiles'
-import { lookLabel, mySettingsLabel, readSettingsTab, settingsPages, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, shownSettingsTab, type SettingsTab } from './settingsTabs'
+import { lookLabel, mySettingsLabel, readSettingsTab, sectionAllowed, settingsPages, resolveSettings, saveSettingsSection, saveSettingsTab, settingsLabel, settingsPagesFor, shownSettingsTab, type SettingsTab } from './settingsTabs'
 import { normalizeReleaseSourceSettings, streamPatterns } from './releaseSource'
 import { viewSource } from './viewSources'
 import { cleanDays, ownersReason as toolOwnersReason } from './toolValidations'
@@ -122,7 +122,7 @@ const BritePage = lazy(() => import('./pages/BritePage').then((module) => ({ def
 const KpiTrackerPage = lazy(() => import('./pages/KpiTrackerPage').then((module) => ({ default: module.KpiTrackerPage })))
 const OnDemandPage = lazy(() => import('./pages/OnDemandPage').then((module) => ({ default: module.OnDemandPage })))
 const CustomDashboardPage = lazy(() => import('./pages/CustomDashboardPage').then((module) => ({ default: module.CustomDashboardPage })))
-const PiReviewSetupPage = lazy(() => import('./pages/PiReviewSetupPage').then((module) => ({ default: module.PiReviewSetupPage })))
+const PiReviewSetupSection = lazy(() => import('./pages/PiReviewSetupPage').then((module) => ({ default: module.PiReviewSetupSection })))
 const PagesMenuPage = lazy(() => import('./pages/PagesMenuPage').then((module) => ({ default: module.PagesMenuPage })))
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((module) => ({ default: module.MyWorkPage })))
 const WindchillPage = lazy(() => import('./components/WindchillViews').then((module) => ({ default: module.WindchillPage })))
@@ -256,7 +256,7 @@ export default function App() {
   // and the work email itself (none while viewing as someone else: nothing is saved then).
   const saverName = my.self.me.email ? my.self.me.name ?? '' : '', saverEmail = azure.isSample ? '' : azure.creatorEmail
   useEffect(() => { setCommitSaver(access.viewingAs ? {} : { name: saverName, email: saverEmail }) }, [access.viewingAs, saverName, saverEmail])
-  // Admin → Data & sharing: everything shared through Git, loaded now (as at start, plus the planning data, roles and
+  // Admin → Data & history: everything shared through Git, loaded now (as at start, plus the planning data, roles and
   // Feature setup); each part reports separately so one failure does not hide the rest.
   // GIT-33: the work of the background job (loadEverythingJob.ts); progress names the part being loaded.
   async function loadEverything(progress: (text: string) => void = () => undefined) {
@@ -293,7 +293,7 @@ export default function App() {
   // Streams file) —; one job at a time; a failed job brings the pop-up back in its failed state.
   const [streamsRun, setStreamsRun] = useState<{ failed?: string[] }>({})
   const loadRunning = useSyncExternalStore(subscribeJobs, loadJobRunning)
-  // GIT-36…GIT-38: the pop-up starts Load latest Release Details; Admin → Data & sharing → Git storage starts Load
+  // GIT-36…GIT-38: the pop-up starts Load latest Release Details; Admin → Data & history → Git storage starts Load
   // everything. One at a time: while either runs, neither starts. A failure of either brings the pop-up back failed
   // while the Streams file is not loaded here.
   const startJob = (kind: LoadKind) => {
@@ -501,7 +501,7 @@ export default function App() {
   // Settings pages (SET-14): one menu entry each; opening one on a given section (e.g. Stream mapping) shows that
   // section. The page is remounted so it picks up the section asked for.
   const [settingsAsked, setSettingsTab] = useState<SettingsTab>(readSettingsTab)
-  // CON-94, PIR-29: a page the viewer may not see (PI Review Setup without its right) opens Streams, header included.
+  // CON-94, SET-27: a page the viewer may not see (Capacity & time without any of its rights) opens the Overview, header included.
   const settingsTab = shownSettingsTab(settingsAsked, access.can)
   const [settingsVisit, setSettingsVisit] = useState(0)
   // SET-15: an older page or section opens where it lives now.
@@ -547,7 +547,7 @@ export default function App() {
     usage: (ref) => listUsage(onDemand.pages, ref),
     rowsWith: (ref, names) => onDemand.pages.reduce((sum, page) => sum + page.rows.filter((row) => page.columns.some((column) => column.list === ref && valuesOf(row.cells[column.id]).some((value) => names.includes(value)))).length, 0),
   }
-  const reviewEnv: ReviewEnv = { email: access.email, name: my.self.me.name ?? '', viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit, formSetup: piForm.setup, openFormSetup: () => openSettings('pireview') }
+  const reviewEnv: ReviewEnv = { email: access.email, name: my.self.me.name ?? '', viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit, formSetup: piForm.setup, openFormSetup: () => openSettings('epics', 'pireview') }
   const storageLabel = store.cache.status === 'error' ? '⚠ Not saved locally' : store.cache.status === 'saving' ? '◌ Saving locally' : '○ Local IndexedDB'
   const buildStatus = <BuildStatus pending={store.hasPendingSave} failed={store.ready && store.cache.status === 'error'} busy={azure.busy} preview={Boolean(azure.preview)} details={<p className="storage-line" title="Where app data is saved"><strong>Data saved:</strong> {storageLabel}</p>} onBackup={store.ready ? () => exportStateJson({ ...store.state, azureWorkItems: mergeAzureWorkItems(store.state.azureWorkItems ?? [], azure.preview?.items ?? []), ...(azure.preview ? { azureBacklogScope: azure.preview.scope } : {}) }) : undefined} />
 
@@ -585,8 +585,8 @@ export default function App() {
     ...customGroups.map((group) => tileOf({ key: `group:${group.id}`, title: group.name, detail: `Pages added to ${group.name}.`, tone: 'lilac', links: addedLinks(group.id) })),
     // NAV-53: Backlog Health is linked here, after Snapshots and before Documentation (its menu group is Data & governance).
     tileOf({ key: 'records', title: 'Snapshots & Documents', detail: 'Point-in-time snapshots, Backlog Health and the project documents of this build.', tone: 'sand', links: [...pageLink('snapshots'), ...pageLink('health'), ...pageLink('docs'), ...addedLinks('data-governance')] }),
-    tileOf({ key: 'admin', title: 'Admin', detail: 'Streams, Epic & Feature setup, people and roles, capacity, reports and sharing.', tone: 'sky', open: () => openSettings('home'), links: settingsLinks }),
-    tileOf({ key: 'my', title: mySettingsLabel, detail: 'Your work email, servers and tokens, your views and naming patterns.', tone: 'mint', open: () => openSettings('my'), links: [] }),
+    tileOf({ key: 'admin', title: 'Admin', detail: 'Streams, Feature & PI setup, people and roles, capacity, pages and reports, data and history.', tone: 'sky', open: () => openSettings('home'), links: settingsLinks }),
+    tileOf({ key: 'my', title: mySettingsLabel, detail: 'Your work email, servers and tokens, your views, bulk creation Epics and naming patterns.', tone: 'mint', open: () => openSettings('my'), links: [] }),
   ])
 
   // ACT-22: the top bar's real height, so sticky page headers (the Time Writing cards) sit right under it.
@@ -616,7 +616,7 @@ export default function App() {
   // NAV-48: the profile menu (top right).
   const profileActions: ProfileAction[] = [
     { key: 'my', label: mySettingsLabel, icon: '⚙', onClick: () => openSettings('my') },
-    { key: 'look', label: lookLabel, icon: '◧', detail: 'Page margins and border, theme, start view and menu, table and chart defaults', onClick: () => openSettings('look') },
+    { key: 'look', label: lookLabel, icon: '◧', detail: 'Page margins and border, theme, start view and menu', onClick: () => openSettings('look') },
     { key: 'view', label: startView === 'tiles' ? 'Classic view' : 'Tile view', icon: startView === 'tiles' ? '☰' : '⌂', detail: startView === 'tiles' ? 'Open on My dashboard, without Home (the classic view)' : 'Open on Home, the tiles of every area', onClick: () => switchView(startView === 'tiles' ? 'classic' : 'tiles') },
     ...(access.canViewAs ? [{ key: 'viewas', label: 'View as…', icon: '👁', onClick: () => setViewAsOpen(true) }] : []),
     { key: 'search', label: 'Search settings', icon: '⌕', detail: 'Ctrl K', onClick: () => setSearchOpen(true) },
@@ -631,11 +631,11 @@ export default function App() {
   // The dashboards whose blocks or filters read an On-Demand page (from the definitions last read in this browser).
   const dashboardsReading = (pageId: string) => Object.entries(menu.layout.pages).filter(([, entry]) => entry.type === 'dashboard').map(([id]) => id).filter((id) => { const dashboard = cachedDashboard(id); return Boolean(dashboard && [...dashboard.blocks, ...dashboard.filters].some((entry) => pageOfSource(entry.source) === pageId)) })
   const targetOf = (path: string): FilePages => pagesOfFile(path, git.config?.path ?? '', dashboardsReading)
-  // GIT-23: the access roles are loaded quietly too, except on Admin → People & roles (someone may be editing them there).
+  // GIT-23: the access roles are loaded quietly too, except on Admin → People & access (someone may be editing them there).
   const rolesPage = pageKey === 'admin:resources'
-  // PIR-19, PIR-29: the PI Review form too, except on Admin → PI Review Setup (someone may be editing it there).
-  // LST-02: the built-in lists too, except on Admin → Epic & Feature setup (someone may be refreshing one there).
-  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage) || (target.quiet === 'piForm' && pageKey !== 'admin:pireview') || (target.quiet === 'lists' && pageKey !== 'admin:epics')
+  // PIR-19, PIR-29: the PI Review form and (LST-02) the built-in lists too, except on Admin → Feature & PI setup (someone
+  // may be editing the form or refreshing a list there).
+  const quietTarget = (target: FilePages) => target.quiet === 'menu' || target.quiet === 'views' || (target.quiet === 'access' && !rolesPage) || (target.quiet === 'piForm' && pageKey !== 'admin:epics') || (target.quiet === 'lists' && pageKey !== 'admin:epics')
   // An added page's file is named by the page's name ("CoNQ"; its blocks for a dashboard).
   const pageChanges = changesForPage(git.remoteChanges, pageKey, targetOf, quietTarget).map((change) => {
     // OND-122: a page's file is found by its id in either form ("<id>" or "<name>--<id>").
@@ -769,7 +769,8 @@ export default function App() {
         </div>
       })}</nav>
     </aside>
-    {searchOpen && <SettingsSearch allowed={(entry) => entry.tab === 'my' || settingsPagesFor(access.can).some((item) => item.key === entry.tab)} onOpen={openSettings} onClose={() => setSearchOpen(false)} />}
+    {/* SET-27, SET-28: only the pages and sections the viewer may open; My settings and Look & feel for everyone. */}
+    {searchOpen && <SettingsSearch allowed={(entry) => (entry.tab === 'my' || entry.tab === 'look' || settingsPagesFor(access.can).some((item) => item.key === entry.tab)) && sectionAllowed(entry.tab, entry.section, (action) => access.can(action) || (action === 'lists.manage' && ownsAPage(menu.layout, viewedEmail)))} onOpen={openSettings} onClose={() => setSearchOpen(false)} />}
     {menuEditor && <MenuCustomizer pages={[...pages.filter((item) => !item.hidden && item.id !== 'admin' && allowed(item.id)).map(({ id, label, group }) => ({ id, label, group: group as string })), ...(allowed('ondemand') ? onDemand.pages.filter((entry) => !isHidden(menu.layout, entry.id)).map((entry) => ({ id: `ondemand:${entry.id}`, label: entry.name, group: groupNameOf(placementOf(menu.layout, entry.id).group) })) : [])]} menu={personalViews.menu} onChange={personalViews.setMenu} onClose={() => setMenuEditor(false)} />}
     <main>
       <header className="topbar" ref={topbarRef}><button type="button" className="menu-button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="primary-navigation" onClick={() => setNavOpen((open) => !open)}>{navOpen ? '✕' : '☰'}</button><h1 title={page === 'ondemand' && onDemandPage ? onDemandPage.description || `${onDemandPage.name}, in ${groupNameOf(placementOf(menu.layout, onDemandPage.id).group)}` : meta.detail}>{page === 'board' ? view.name : page === 'windchill' && windchillView ? windchillView.name : page === 'admin' ? settingsLabel(settingsTab) : page === 'ondemand' && onDemandPage ? onDemandPage.name : meta.label}</h1><div className="topbar-slot" ref={setHeaderSlot} /><div className="topbar-actions">{openSteps > 0 && <button type="button" className="ghost setup-button" title="What to configure and how" onClick={() => setGuideOpen(true)}>Setup · {steps.filter((step) => step.required && step.state === 'done').length}/{steps.filter((step) => step.required).length}</button>}<JobsIndicator /><DataStatus azure={azure} />{(meta.usesMonth || (page === 'board' && view.readOnly)) && <label className="month-picker"><span className="sr-only">Month</span><input type="month" aria-label="Month" value={month} onChange={(event) => /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value) && setMonth(event.target.value)} /></label>}{personPage && <label className="topbar-person">Person<PersonPicker label="Person" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={azure.creatorEmail.trim() ? 'Me' : 'Choose a person…'} /></label>}<ThemeToggle /><ProfileMenu name={my.self.me.name ?? ''} email={azure.creatorEmail.trim()} actions={profileActions} /></div></header>
@@ -799,17 +800,15 @@ export default function App() {
       {page === 'bulk' && <SprintCheckPage azure={azure} store={store} my={my} />}
       {page === 'mypireview' && <MyPiReviewPage azure={azure} my={my} />}
       {page === 'capactual' && <CapacityActualPage azure={reportAzure} store={store} month={month} />}
-      {page === 'planover' && <PlanningOverviewPage azure={reportAzure} store={store} month={month} onOpenPack={() => openSettings('pack', 'pack')} />}
+      {page === 'planover' && <PlanningOverviewPage azure={reportAzure} store={store} month={month} onOpenPack={() => openSettings('pages', 'pack')} />}
       {page === 'activities' && <MyActivitiesPage azure={azure} store={store} my={my} month={month} assign={assign} featureSetup={featureSetup.setups} onOpen={setPage} />}
       {page === 'baselines' && <BaselinesPage azure={azure} month={month} store={store} git={git} onOpenSettings={() => openSettings('storage', 'git')} canEdit={access.can('baselines.edit')} />}
-      {page === 'windchill' && (windchillView ? <WindchillPage otherView={otherView} view={windchillView} windchill={windchill} git={git} gitNote={git.snapshotNotes[`wc:${windchillView.id}`]} month={month} board={{ azure, stream: windchillStreamExports(windchillViews).find((entry) => entry.view?.id === windchillView.id)?.stream.name ?? windchillView.name, threshold: normalizeReleaseSourceSettings(store.state.releaseSourceSettings).matchThreshold ?? defaultMatchThreshold, assign, featureSetup: featureSetup.setups }} /> : access.can('windchill.import') ? <WindchillExportImport key={windchillFor} stream={windchillFor} windchill={windchill} git={git} onImported={(id) => openWindchill(id)} /> : <Notice tone="info">Your role does not include importing Windchill exports. Open an export from the menu; an Admin can change this in Admin → People & roles → Role rights.</Notice>)}
+      {page === 'windchill' && (windchillView ? <WindchillPage otherView={otherView} view={windchillView} windchill={windchill} git={git} gitNote={git.snapshotNotes[`wc:${windchillView.id}`]} month={month} board={{ azure, stream: windchillStreamExports(windchillViews).find((entry) => entry.view?.id === windchillView.id)?.stream.name ?? windchillView.name, threshold: normalizeReleaseSourceSettings(store.state.releaseSourceSettings).matchThreshold ?? defaultMatchThreshold, assign, featureSetup: featureSetup.setups }} /> : access.can('windchill.import') ? <WindchillExportImport key={windchillFor} stream={windchillFor} windchill={windchill} git={git} onImported={(id) => openWindchill(id)} /> : <Notice tone="info">Your role does not include importing Windchill exports. Open an export from the menu; an Admin can change this in Admin → People & access → Role rights.</Notice>)}
       {page === 'health' && <BacklogHealthPage azure={azure} store={store} />}
       {page === 'board' && <BoardPage otherView={otherView} views={personalViews} canSetDefault={access.can('layout.defaults') && git.connected && !git.readOnly && !git.isSample} azure={azure} store={store} current={view} month={month} git={git} onOpenConnection={openConnection} onOpenSettings={openSettings} assign={assign} featureSetup={featureSetup.setups} />}
       {page === 'snapshots' && <SnapshotsPage {...pageProps} git={git} who={my.me.email || my.me.name || 'unknown'} />}
-      {page === 'admin' && settingsTab === 'pages' && <PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />}
-      {/* PIR-29: Admin → PI Review Setup, the PI Review form setup on a page of its own. */}
-      {page === 'admin' && settingsTab === 'pireview' && <PiReviewSetupPage store={piForm} block={piFormBlock} by={my.self.me.name?.trim() || azure.creatorEmail.trim()} />}
-      {page === 'admin' && settingsTab !== 'pages' && settingsTab !== 'pireview' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} setupSteps={steps} onSearch={() => setSearchOpen(true)} monthlyPack={monthlyPack} history={history} loadEverything={() => startJob('everything')} onOpenBoard={() => setPage('board')} />}
+      {/* SET-26: Pages & reports → Menu groups & pages (PGB-12) and Feature & PI setup → PI Review form (PIR-29) are sections of the Admin pages. */}
+      {page === 'admin' && <AdminPage listsOwner={ownsAPage(menu.layout, viewedEmail)} pagesMenu={<PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />} piReview={<PiReviewSetupSection store={piForm} block={piFormBlock} by={my.self.me.name?.trim() || azure.creatorEmail.trim()} />} look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} setupSteps={steps} onSearch={() => setSearchOpen(true)} monthlyPack={monthlyPack} history={history} loadEverything={() => startJob('everything')} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage key={docsVisit} />}
       </Fragment></Suspense>
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}

@@ -8,7 +8,7 @@ import { isGitOutage } from '../streamsUpdate'
 // beside it) whose only action loads the Stream mapping (azure-views.json with the person's Other views, custom-streams.json).
 // It cannot be skipped (product owner, 2026-11-26) — except during a GitHub outage (GIT-32: every failure a server
 // error or no answer), when Continue without loading closes it for this session; it comes back at the next start. After a failed load it names each part that failed and shows the
-// Git storage connection setup inside the pop-up — the same form as Admin → Data & sharing → Git storage
+// Git storage connection setup inside the pop-up — the same form as Admin → Data & history → Git storage
 // (GitConnectionForm; the token stays in this browser or desktop app) — with Retry, which loads with the connection
 // saved. GIT-33…GIT-35: Load latest Release Details (and Retry) starts the load as a background job (Jobs done) and the
 // pop-up closes at once; the app hides it while the job runs and brings it back in this failed state when the job fails.

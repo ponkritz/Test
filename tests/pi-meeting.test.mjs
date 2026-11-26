@@ -155,7 +155,7 @@ test('PIR-40, PIR-47: who sees Conduct PI Meeting, and why the Git copy is not s
   assert.equal(meetingSaveBlock(ok), '')
   assert.equal(meetingSaveBlock({ ...ok, viewingAs: 'Ken Ito' }), 'Viewing as Ken Ito: the meeting is downloaded only, not saved to Git.')
   assert.equal(meetingSaveBlock({ ...ok, isSample: true }), 'Synthetic sample data is loaded: the meeting is downloaded only, not saved to Git.')
-  assert.equal(meetingSaveBlock({ ...ok, connected: false }), 'Git storage is not connected (Admin → Data & sharing): the meeting is downloaded only.')
+  assert.equal(meetingSaveBlock({ ...ok, connected: false }), 'Git storage is not connected (Admin → Data & history): the meeting is downloaded only.')
   assert.equal(meetingSaveBlock({ ...ok, readOnly: true }), 'Your Git token can read but not save: the meeting is downloaded only.')
   assert.equal(meetingSaveBlock({ ...ok, rolesMissing: true }), 'The roles file is not loaded yet: the meeting is downloaded only, not saved to Git.')
 })

@@ -182,15 +182,15 @@ export function formSetupBlock(viewer: FormSetupViewer, git: FormSetupGit, state
   if (viewer.readOnly) return writeBlockedReason(true, ['pireview.setup'], 'in the PI Review form')
   if (!viewer.can('pireview.setup')) return `${writeBlockedReason(false, ['pireview.setup'])} Scrum Masters and Tool Owners set up the form.`
   if (git.isSample) return 'Synthetic sample data is loaded: the PI Review form is not saved to Git. Fetch your data first.'
-  if (!git.connected) return 'Connect Git storage (Admin → Data & sharing) to change the PI Review form; it is shared through Git.'
+  if (!git.connected) return 'Connect Git storage (Admin → Data & history) to change the PI Review form; it is shared through Git.'
   if (git.readOnly) return 'View only: your Git token can read but not save.'
   if (state.error) return `${piFormFile} could not be read from Git, so the form cannot be changed here: ${state.error}`
   if (!state.loaded) return 'The PI Review form is still being read from Git.'
   return ''
 }
 
-// PIR-30: the ⚙ PI Review Setup button in the headers of My PI Review and PI Review — shown exactly when Admin → PI
-// Review Setup is in the viewer's menu (PIR-29): to a holder of "PI Review: set up the review form" (decided by the
+// PIR-30: the ⚙ PI Review Setup button in the headers of My PI Review and PI Review — shown exactly when Admin → Feature & PI setup → PI
+// Review form is among the viewer's sections (PIR-29, SET-27): to a holder of "PI Review: set up the review form" (decided by the
 // permission, so Role rights changes count; Scrum Master and Tool Owner by default). In View as it follows the viewed
 // role, as the menu does, and with the synthetic sample it stays, as the menu entries do; the page then opens read only
 // with the reason (PIR-31). Nobody without the right, and nobody before the roles file is loaded (CON-101), sees it.

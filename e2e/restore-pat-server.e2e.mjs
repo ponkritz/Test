@@ -30,8 +30,8 @@ test('TC-CON-103: a PAT typed for Restore from Git is used only for the server c
   await page.reload()
   await page.locator('.sidebar nav').waitFor()
 
-  await navigate(page, 'Data & sharing')
-  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Shared setup in Git' }).click()
+  await navigate(page, 'Data & history')
+  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Connections in Git' }).click()
   const panel = page.locator('.panel', { has: page.locator('h2', { hasText: /^Views in Git/ }) })
   await panel.waitFor()
   await panel.getByLabel('PAT for restored connections (optional)').fill('alpha-only-pat')

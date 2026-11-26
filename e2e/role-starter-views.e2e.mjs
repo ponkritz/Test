@@ -6,7 +6,7 @@ import { fakeGitHub } from './fakeGitHub.mjs'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 
 // TC-SET-11 (UAT): starter views per access role (SET-21…SET-25), against one mocked GitHub shared by two browsers. The
-// admin adds a starter view for the Team Member role in Admin → Data & sharing → Other views; a Team Member opens the app
+// admin adds a starter view for the Team Member role in Admin → Data & history → Other views; a Team Member opens the app
 // and finds a copy among their own My views; they delete it, start again and it stays gone; they add a view of their own.
 // Synthetic data only; every step waits for what it needs, never for a time.
 let app
@@ -60,7 +60,7 @@ test('TC-SET-11: the admin sets up a starter view for Team Members — a Team Me
   const gh = fakeGitHub({ files: { 'access.json': serializeAccess(policy) } })
   // The admin adds the starter view for the Team Member role.
   const admin = await open(gh, 'admin@example.com')
-  await navigate(admin.page, 'Data & sharing')
+  await navigate(admin.page, 'Data & history')
   await admin.page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Other views' }).click()
   const panel = admin.page.locator('.role-starter-views')
   await panel.getByText('No starter views yet.').waitFor()

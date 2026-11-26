@@ -1,10 +1,10 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { loadSample, menuOf, navigate, openPage, openPerson, startApp, text, toggleFilter } from './helpers.mjs'
+import { loadSample, menuOf, navigate, openPage, openPerson, openSection, startApp, text, toggleFilter } from './helpers.mjs'
 import { fakeGitHub } from './fakeGitHub.mjs'
 import { defaultPolicy, serializeAccess } from '../src/access.ts'
 
-// Admin → People & roles → People (CAP-58…CAP-62; TC-CAP-30…TC-CAP-34, TC-CAP-31 UAT): a read-only list with filters,
+// Admin → People & access → People (CAP-58…CAP-62; TC-CAP-30…TC-CAP-34, TC-CAP-31 UAT): a read-only list with filters,
 // a drawer to edit a person (profile with the planning data, app access roles in access.json), the bulk edit, the
 // warnings in one line, Default Time tracking started in the ⋯ menu, the Team tree tab, and the month's capacity on
 // Capacity & time. Every step waits for what it needs, never for a time.
@@ -18,7 +18,7 @@ const jobs = async (page) => { await page.locator('.jobs-button').click(); const
 test('TC-CAP-30: the People list is read-only, filtered by Region, Role, Access role and Status (Active and Left by default), with search and Reset filters', async () => {
   const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
-  await navigate(page, 'People & roles')
+  await navigate(page, 'People & access')
   const table = page.locator('.people-table')
   await table.waitFor()
   assert.equal(await table.locator('tbody').locator('select, input:not([type=checkbox]), textarea').count(), 0, 'no field in the rows: the list is read-only')
@@ -73,7 +73,7 @@ test('TC-CAP-31: a person is edited in the drawer — region and app access role
   const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
   await page.addLocatorHandler(guide, () => guide.getByRole('button', { name: 'Close', exact: true }).last().click())
   await page.reload()
-  await navigate(page, 'People & roles')
+  await navigate(page, 'People & access')
   await page.locator('.people-table tr[data-row-key="Rita Gomez"]').waitFor()
   // View first: the person's facts and sections; Edit turns them into fields.
   const drawer = await openPerson(page, 'Rita Gomez')
@@ -127,7 +127,7 @@ test('TC-CAP-31: a person is edited in the drawer — region and app access role
 test('TC-CAP-32: bulk edit — tick two people, Set region… saves both in one change; Set access role… is disabled with the reason without Git storage', async () => {
   const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
-  await navigate(page, 'People & roles')
+  await navigate(page, 'People & access')
   await page.locator('.people-table').waitFor()
   for (const name of ['Chen Wei', 'Diya Sharma']) await page.getByRole('checkbox', { name: `Select ${name}` }).check()
   const bar = page.getByRole('region', { name: 'Selected people' })
@@ -150,7 +150,7 @@ test('TC-CAP-32: bulk edit — tick two people, Set region… saves both in one 
   await page.getByRole('checkbox', { name: 'Select every row shown' }).check()
   assert.match(await text(page.getByRole('region', { name: 'Selected people' })), new RegExp(`^${(await rowNames(page)).length} selected`))
   // One History entry for the bulk change.
-  await navigate(page, 'History')
+  await openSection(page, 'Data & history', 'Changes')
   assert.equal(await page.locator('.audit-row', { hasText: /2 people \(Chen Wei, Diya Sharma\): region = US/ }).count(), 1)
   assert.deepEqual(errors, [])
   await context.close()
@@ -159,7 +159,7 @@ test('TC-CAP-32: bulk edit — tick two people, Set region… saves both in one 
 test('TC-CAP-33 / TC-CAP-34: fewer boxes — one warning line, Default Time tracking started in the ⋯ menu, the month\'s capacity on Capacity & time, the Team tree tab', async () => {
   const { page, context, errors } = await openPage(app, { roles: true })
   await loadSample(page)
-  await navigate(page, 'People & roles')
+  await navigate(page, 'People & access')
   const panel = page.locator('.people-panel')
   await panel.waitFor()
   assert.equal(await panel.locator('.notice', { hasText: /^Capacity in / }).count(), 0, 'the capacity of the month is not on People')
@@ -182,9 +182,9 @@ test('TC-CAP-33 / TC-CAP-34: fewer boxes — one warning line, Default Time trac
   await tree.waitFor()
   assert.match(await text(tree.locator(':scope > ul > li').first()), /\S/, 'the reporting lines')
   assert.equal(await page.locator('.people-table').count(), 0, 'the tree is its own tab')
-  // CAP-61: the capacity of the month and the regional holidays are on Capacity & time → Capacity and absence.
+  // CAP-61: the capacity of the month and the regional holidays are on Capacity & time → Capacity.
   await navigate(page, 'Capacity & time')
-  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Capacity and absence' }).click()
+  await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Capacity', exact: true }).click()
   assert.match(await text(page.locator('.notice', { hasText: /^Capacity in / })), /^Capacity in .+: \d+ (?:people|person), .*h available = .*h contractual − .*h absence/)
   assert.match(await text(page.locator('.notice', { hasText: /Regional holidays in|No regional holidays in/ })), /egional holidays in /)
   assert.deepEqual(errors, [])
@@ -212,7 +212,7 @@ async function adminScenario() {
   const guide = page.getByRole('dialog').filter({ hasText: 'Could not fetch from Azure DevOps' })
   await page.addLocatorHandler(guide, () => guide.getByRole('button', { name: 'Close', exact: true }).last().click())
   await page.reload()
-  await navigate(page, 'People & roles')
+  await navigate(page, 'People & access')
   await page.locator('.people-table tr[data-row-key="Lea Lead"]').waitFor()
   return { page, context, errors, members: () => JSON.parse(gh.read('access.json')).members }
 }

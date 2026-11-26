@@ -8,7 +8,7 @@ import type { GitStorage } from '../useGitStorage'
 import { DataTable, type DataColumn } from './DataTable'
 import { EmptyState, Modal, Notice, Panel } from './ui'
 
-// STT-01 Admin → Epic & Feature setup → User Story templates: the shared library of User Stories (title and description)
+// STT-01 Admin → Feature & PI setup → User Story templates: the shared library of User Stories (title and description)
 // tagged with the Epics and Release Classification values they are offered for. Setup per Epic picks them; a picked
 // story stays linked (STT-02), so editing a template here changes every Epic that uses it. Saved with the Epic setup.
 export function StoryTemplatesPanel({ setup, featureSetup, git, items, canEdit }: { setup: EpicSetupStore; featureSetup: FeatureSetup; git: GitStorage; items: AzureWorkItem[]; canEdit: boolean }) {
@@ -56,7 +56,7 @@ export function StoryTemplatesPanel({ setup, featureSetup, git, items, canEdit }
   }
 
   return <Panel className="admin-section story-templates" eyebrow="EPIC SETUP" title="User Story templates" info="User Stories to reuse: a title (placeholders such as {service} {version} or {feature} allowed) and a description, tagged with the Epics and Release Classification values they are offered for (no tag = any). In Setup per Epic, “＋ Add from templates” picks them; a picked story stays linked, so a change here applies to every Epic that uses it. New Feature ticks them by default.">
-    {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data &amp; sharing) to change the templates; the ones last loaded here are shown.</Notice>}
+    {!git.connected && <Notice tone="info">Connect Git storage (Admin → Data &amp; history) to change the templates; the ones last loaded here are shown.</Notice>}
     {git.connected && !editable && <Notice tone="info">{git.readOnly ? 'View only: your Git token can read but not save.' : 'View only: your role is not allowed “Edit Epic setup value lists and User Story templates”.'}</Notice>}
     {(file.storyTemplates ?? []).length ? <DataTable id="story-templates" columns={columns} rows={templates} rowKey={(item) => item.id} exportName="User Story templates" defaultSort={{ id: 'title' }}
       toolbar={<><input className="search" type="search" aria-label="Search templates" placeholder="Search templates" value={find} onChange={(event) => setFind(event.target.value)} />{editable && <button type="button" className="ghost" onClick={() => setEditing({ id: newStoryTemplateId(file, 'story'), title: '', description: '', epics: [], classes: [] })}>＋ New template</button>}</>}

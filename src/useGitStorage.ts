@@ -890,7 +890,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   // SNP-04…08: LTE / PI Review snapshots as new files in lte-snapshots/ of the Git data repository (SharePoint is in the
   // backlog). Only with a token that can write, never with the synthetic sample; nothing is kept in the browser.
   async function saveSnapshot(type: Snapshot['type'], month: string, createdBy: string) {
-    if (!config || !token) throw new Error('Connect Git storage first (Admin → Data & sharing → Git storage). Snapshots are not kept in the browser.')
+    if (!config || !token) throw new Error('Connect Git storage first (Admin → Data & history → Git storage). Snapshots are not kept in the browser.')
     if (isSample) throw new Error('Synthetic sample data is loaded. Snapshots are not saved to Git.')
     if ((await writeCheck.current) === false) throw new Error('Your Git token can read but not save, so the snapshot was not saved.')
     return uploadSnapshot(config, token, freezeSnapshot(store.state, type, month, createdBy, appBuild))
@@ -965,7 +965,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
     return writeTextFile(siblingConfig(config, path), token, html, null, commitMessage)
   }
   // The Monthly pack's PowerPoint template (monthly-pack-template.pptx): kept only in this private data repository,
-  // never in the app's source; read when the pack is exported, replaced or removed from Admin → Reports → Monthly pack.
+  // never in the app's source; read when the pack is exported, replaced or removed from Admin → Pages & reports → Monthly pack.
   const readPackTemplate = useCallback(async () => {
     if (!config || !token) throw new Error('Connect Git storage first.')
     return readBinaryFile(siblingConfig(config, packTemplateFile), token)
@@ -1154,7 +1154,7 @@ export function useGitStorage(store: ReturnType<typeof useAppStore>, isSample: b
   // replaced only by newer ones, and an export not set up here is added.
   // The Location analysis of an export (windchillLocationsFile) to windchill-analysis/<export>-locations.json.
   async function pushWindchillAnalysis(viewId: string, text: string, message: string): Promise<string> {
-    if (!config || !token) throw new Error('Connect Git storage (Admin → Data & sharing) first.')
+    if (!config || !token) throw new Error('Connect Git storage (Admin → Data & history) first.')
     if (isSample) throw new Error('Not saved while the sample data is shown.')
     const target = siblingConfig(config, `${windchillAnalysisFolder}/${viewId}-locations.json`)
     const sha = await fileSha(target, token)

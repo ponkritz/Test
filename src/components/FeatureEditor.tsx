@@ -90,15 +90,15 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
   const hoursOf = (label: string) => monthHours[label] ?? { plan: '', done: '' }
   const setHours = (label: string, change: Partial<{ plan: string; done: string }>) => setMonthHours((now) => ({ ...now, [label]: { ...(now[label] ?? { plan: '', done: '' }), ...change } }))
   const taskOriginalEstimate = hoursOf(monthLabel).plan, taskCompletedWork = isFutureMonth(monthLabel, todayMonth) ? '' : hoursOf(monthLabel).done
-  // Planning of the month has locked (Admin → Capacity & time → Period control): the new Time Writing Task is tagged ad-hoc.
+  // Planning of the month has locked (Admin → Capacity & time → Month locks): the new Time Writing Task is tagged ad-hoc.
   const lateTask = adhocAfterLock(monthLabel)
-  // The Epic's own setup (Admin → Epic & Feature setup → Feature setup), if any: its optional User Stories replace the PU / Full Release
+  // The Epic's own setup (Admin → Feature & PI setup → Setup per Epic), if any: its optional User Stories replace the PU / Full Release
   // milestones (all ticked by default) and its Task defaults apply.
   // My own setup of the Epic first, else the shared one; the switch below picks the shared one instead.
   const [preferShared, setPreferShared] = useState(Boolean(dp))
   const epicId = parent?.id ?? resumeFeature?.parentId
   const { setup: unlinkedSetup, source: setupSource } = chooseSetup(featureSetup, epicId, preferShared)
-  // EPS-02: the Epic setup's fields (Admin → Epic & Feature setup) apply to every new Feature under the Epic and take the place
+  // EPS-02: the Epic setup's fields (Admin → Feature & PI setup) apply to every new Feature under the Epic and take the place
   // of the Feature setup's title fields.
   const epicFile = useEpicSetupFile()
   // STT-02: stories linked to a User Story template take its current title and description.
@@ -172,7 +172,7 @@ export function FeatureEditor({ mode, items, config, savedPat = '', me, canChoos
     if (submitting.current) return
     if (isNew && !parent) { setError('Choose the parent Epic.'); return }
     if (monthsError) { setError(monthsError); return }
-    if (fromFields?.blocked.length) { setError(`Fill ${fromFields.blocked.join(', ')}: the Epic setup of #${epicId} needs ${fromFields.blocked.length === 1 ? 'it' : 'them'} (Admin → Epic & Feature setup).`); return }
+    if (fromFields?.blocked.length) { setError(`Fill ${fromFields.blocked.join(', ')}: the Epic setup of #${epicId} needs ${fromFields.blocked.length === 1 ? 'it' : 'them'} (Admin → Feature & PI setup).`); return }
     const data = new FormData(event.currentTarget)
     const token = pat; setError(''); submitting.current = true; setCreating(true)
     const parseHours = (value: string, label: string) => { if (!value.trim()) return undefined; const hours = Number(value); if (!Number.isFinite(hours) || hours < 0 || hours > 1000000) throw new Error(`${label} must be a number from 0 to 1,000,000.`); return hours }
