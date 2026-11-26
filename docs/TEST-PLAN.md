@@ -2590,6 +2590,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-PIR-78 Search Discussions…** — Req PIR-78 — L1 `pi-review-old-format.test.mjs` ("PIR-78: Search finds the comments holding every word typed …": newest first with the Old format flag, every word, by the author, empty search, the limit with "more"); E2E `pi-review-old-format.e2e.mjs` (TC-PIR-79) ; browser check: with Discussions not read, the pop-up says how many are not searched.
 
 **TC-PIR-79 A Feature owner converts their old-format review** — Req PIR-75, PIR-76, PIR-77, PIR-78, PIR-34, PIR-49 — **UAT** — E2E `pi-review-old-format.e2e.mjs` ("TC-PIR-79: my old-format comment is flagged on My PI Review, Convert… prefills the form and Save updates the same comment …": against a fake dev.azure.com, Rita's old-format comment (Azure DevOps HTML) on 201 and Ben's on her 205 are flagged "Old format — convert" while Not reviewed, Show: Old format (2); Convert… of 205 is disabled with "Only Ben Okafor can convert their comment"; Convert… of 201 opens the form prefilled (Struggles, Learnings, No, the reason in Additional Remarks, Reviewed PI 2026.4, the heading in the Preview); Save sends a PATCH of comment 51 whose body starts with "Feature Review for PI 2026.4", nothing posted; 201 then shows Reviewed without the flag, Old format (1), the filter keeps 205 only; on PI Review after Read all Discussions the Old format filter keeps 205 with Ben Okafor named, its drawer lists the comment with the author-only reason; Search Discussions… finds "struggle" in both comments, only 205's flagged, and "template updated" in 202's; a row opens the Feature's drawer; also at E2E_CPU_SLOWDOWN=4; "TC-PIR-79: Convert… also works in My Epics (as Product Owner), still author-only": Rita, Product Owner of the Epic, converts her own old-format comment on Ben's Feature 202 from My Epics — a PATCH of comment 54 headed for PI 2026.4, then Reviewed — while Ben's comment on 205 keeps the author-only reason); UAT: a Feature owner who wrote a review in the old format finds it on My PI Review, converts it and sees the same comment changed in Azure DevOps; a lead filters PI Review by Old format and searches the Discussions for "Struggles".
+**TC-PIR-80 Update review for N… with comments already in place** — Req PIR-80, PIR-36, PIR-37, PIR-49, PIR-34 — L1 `pi-review-bulk.test.mjs` ("PIR-80: my review of the PI in a Discussion — headed for it in either label form, mine by email else by name; not an old-format comment, another PI or another person’s; none unread or for others (TC-PIR-80)"; "PIR-37: a failure on one Feature does not stop the others; …": each remaining reason says what happened and what to do, word for word) ; E2E `pi-review-form.e2e.mjs` ("TC-PIR-80: Update review for (n) where comments are in place already — …": six Features — my headed review of PI 2026.4, mine headed "PI 26.4", my old-format comment without the heading, Ben's review, a Feature in a Sprint of the PI, and two Discussions changed in the fake Azure DevOps after the page read them (my review written on #209, mine deleted on #208); the pop-up lists replace, replace, New comment, New comment, New comment, replace; the job ends "Posted 3 (#206, #207, #208) · Replaced 3 (#201, #205, #209) · Failed 0." with update-comment of 61, 62, 66; ticked again in the same page load all six are replaced and nothing is posted) ; browser check: tick Features with and without your review, change one in Azure DevOps, then Update review for N…: "Reading N Discussions…", then the pop-up shows what Azure DevOps holds now.
 
 **TC-PIR-81 Old format: a move sentence is the Move answer** — Req PIR-81, PIR-75, PIR-76 — L1 `pi-review-old-format.test.mjs` ("PIR-81: a sentence that says the Feature moves is the Move answer — \"Feature needs to be shifted to PI.27.1\" (TC-PIR-81)") — the product owner's example (Struggles: No struggles, / Learnings: N/A / Feature needs to be shifted to PI.27.1) parses as Struggles, Learnings and Move = Yes with that reason; other Yes and No phrasings; mere mentions ignored; Struggles plus a move sentence is flagged; a headed review is not.
 
@@ -3511,8 +3512,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-33 | TC-PIR-34, TC-PIR-50, TC-PIR-62 |
 | PIR-34 | TC-PIR-35, TC-PIR-36, TC-PIR-37, TC-PIR-38, TC-PIR-39, TC-PIR-48, TC-PIR-50 |
 | PIR-35 | TC-PIR-37, TC-PIR-62 |
-| PIR-36 | TC-PIR-38, TC-PIR-48, TC-PIR-50 |
-| PIR-37 | TC-PIR-38, TC-PIR-39 |
+| PIR-36 | TC-PIR-38, TC-PIR-48, TC-PIR-50, TC-PIR-80 |
+| PIR-37 | TC-PIR-38, TC-PIR-39, TC-PIR-80 |
 | PIR-38 | TC-PIR-40 |
 | PIR-39 | TC-PIR-41 |
 | PIR-40 | TC-PIR-42, TC-PIR-46, TC-PIR-47 |
@@ -3552,6 +3553,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-77 | TC-PIR-77, TC-PIR-79 |
 | PIR-78 | TC-PIR-78, TC-PIR-79 |
 | PIR-81 | TC-PIR-81 |
+| PIR-80 | TC-PIR-80 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |

@@ -9,7 +9,7 @@ import { discussionReadBlock, readDiscussionInto, myReviewOf, otherPersonBlock, 
 import { BulkReviewDialog, ReviewAction, ReviewDialog } from './PiReviewForm'
 import { PiSetupGear } from '../components/PiFormSetupPanel'
 import { formSetupOf, useBulkReview, useDiscussionsReadState, useOwnReview, useReviewViewer, useReviewWriter } from '../piReviewWriter'
-import { bulkBlock, bulkTargets, inBulkJob } from '../piReviewBulk'
+import { bulkBlock, inBulkJob } from '../piReviewBulk'
 import { listJobs, subscribeJobs } from '../backgroundJobs'
 import type { PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
@@ -174,10 +174,11 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     {!shownMe ? <EmptyState title="Who are you in Azure DevOps?" detail="Enter your work email on the Time Writing connection, or choose your name in My Tasks [Board]." />
       : <TablePanel title={asOwner ? who ? `Features of the Epics of ${who} (Product Owner)` : 'Features of my Epics (as Product Owner)' : who ? `Features of ${who}` : 'My Features'} info={`The Features of the chosen PI assigned to you — or, for a lead, to the person chosen (Assigned To, matched by work email where known) — not Removed, not under the absence Epic. Their Discussions are read from Azure DevOps when the page opens and kept for this page load; the review column says whether that person wrote a review comment for the chosen PI, and when. A review counts for the chosen PI only when it is headed “Feature Review for” that PI (e.g. “Feature Review for PI 26.4” counts for PI 26.4, not for PI 26.5) — whatever its date. A review for another PI shows as Not reviewed with its date and PI; choosing another PI recomputes the column. ${reviewHeadingNote} ${cutoffNote(cutoff)}`}>
         <WriteBlocked reason={readBlocked || pageBlock} />
-        {picked.length > 0 && <div className="bulk-bar" role="region" aria-label="Selected Features">
-          <strong>{picked.length} selected</strong>
-          <button type="button" className="ghost" onClick={() => bulk.start(bulkTargets(picked, editTarget))}>Update review for {picked.length}…</button>
-          <button type="button" className="text-button" onClick={() => setSelected([])}>Clear selection</button>
+        {/* KB-155, PIR-80: Update review for N… reads the ticked Features' Discussions again before the pop-up opens. */}
+        {(picked.length > 0 || bulk.opening) && <div className="bulk-bar" role="region" aria-label="Selected Features">
+          <strong>{(bulk.opening ?? picked).length} selected</strong>
+          <button type="button" className="ghost" disabled={Boolean(bulk.opening)} onClick={() => void bulk.start(picked)}>{bulk.opening ? `Reading ${bulk.opening.length} Discussion${bulk.opening.length === 1 ? '' : 's'}…` : `Update review for ${picked.length}…`}</button>
+          <button type="button" className="text-button" disabled={Boolean(bulk.opening)} onClick={() => setSelected([])}>Clear selection</button>
         </div>}
         <DataTable id="mypireview:features" className="pir-table" columns={columns} rows={shownRows} rowKey={(item) => item.key}
           selection={{ selected, onChange: setSelected, label: (item) => `Feature ${item.id}`, blocked: tickBlock }} exportName={`My PI Review ${pi ? piLabel(pi) : ''}${who ? ` ${who}` : ''}${asOwner ? ' Product Owner' : ''}`.trim()} toolbar={toolbar}

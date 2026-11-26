@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { bulkBlock, bulkSummary, bulkTargets, nextPiFor, runBulkReview, samePiProblem, startBulkForm } from '../src/piReviewBulk.ts'
+import { bulkBlock, bulkSummary, bulkTargets, nextPiFor, ownReviewIn, runBulkReview, samePiProblem, startBulkForm } from '../src/piReviewBulk.ts'
 import { buildReviewComment, emptyReviewForm, postReview, updateReview } from '../src/piReviewPost.ts'
 import { builtInFormSetup } from '../src/piReviewSetup.ts'
 
@@ -95,13 +95,37 @@ test('PIR-37: a failure on one Feature does not stop the others; a review change
   assert.deepEqual(sent.map((entry) => [entry.id, entry.operation]), [[201, 'add-comment'], [202, 'add-comment'], [207, 'add-comment']], 'nothing sent for 203…206 and 208')
   const why = Object.fromEntries(outcomes.map((entry) => [entry.item.id, entry.reason ?? entry.note]))
   assert.match(why[201], /^Azure DevOps did not add the comment \(500\)/)
-  assert.match(why[203], /another comment now .* Nothing was changed/)
-  assert.match(why[204], /has your review of this PI now .* Nothing was posted/)
-  assert.match(why[205], /no longer in its Discussion\. Nothing was posted/)
+  // KB-155: each reason says what happened and what to do.
+  assert.equal(why[203], 'Your review of this PI was changed in Azure DevOps after the pop-up opened (it is another comment now). Nothing was changed: tick #203 again and use Update review… to replace it.')
+  assert.equal(why[204], 'Your review of this PI was posted in Azure DevOps after the pop-up opened (it has your review of this PI now). Nothing was posted: tick #204 again and use Update review… to replace it.')
+  assert.equal(why[205], 'Your review of this PI was deleted in Azure DevOps after the pop-up opened (it is no longer in its Discussion). Nothing was posted: tick #205 again and use Update review… to post it as a new comment.')
   assert.match(why[206], /^Its Discussion could not be read: Network error\. Nothing was posted\.$/)
   assert.match(why[207], /could not be read again/)
   assert.match(why[208], /being written already/)
   const summary = bulkSummary(outcomes)
   assert.equal(summary.failed, true)
   assert.match(summary.text, /^Posted 2 \(#202, #207\) · Replaced 0 · Failed 6 \(#201, #203, #204, #205, #206, #208\)\. #201: Azure DevOps did not add the comment/)
+})
+
+// KB-155, PIR-80: the one comparison of the pop-up and of the job's check — my newest comment headed for the reviewed PI.
+test('PIR-80: my review of the PI in a Discussion — headed for it in either label form, mine by email else by name; not an old-format comment, another PI or another person’s; none unread or for others (TC-PIR-80)', () => {
+  const rita = { email: 'rita.gomez@example.com', name: 'Rita Gomez' }
+  const review = (id, pi, date, author = { author: 'Rita Gomez', authorEmail: 'rita.gomez@example.com' }) => ({ id, text: buildReviewComment({ ...emptyReviewForm(), learnings: 'L', struggles: 'S', move: 'No', mode: 'Offline Review', reviewedPi: pi }), date, ...author })
+  const read = (comments) => ({ ...done, comments })
+  const headed = review(61, 'PI 2026.4', '2026-11-20T10:00:00Z'), short = review(62, 'PI 26.4', '2026-11-19T10:00:00Z')
+  assert.equal(ownReviewIn(read([headed]), 'Q\\PI 26.4', rita)?.comment.id, 61)
+  assert.equal(ownReviewIn(read([short]), 'Q\\PI 2026.4', rita)?.comment.id, 62, 'PI 26.4 is PI 2026.4')
+  assert.equal(ownReviewIn(read([short, headed]), 'Q\\PI 26.4', rita)?.comment.id, 61, 'the newest of mine')
+  // Not mine for the PI: an old-format comment without the heading, a review of another PI, someone else's review.
+  assert.equal(ownReviewIn(read([{ id: 63, text: 'Struggles: parts late\nLearnings: calibrate first', date: '2026-11-21T10:00:00Z', author: 'Rita Gomez', authorEmail: 'rita.gomez@example.com' }]), 'Q\\PI 26.4', rita), undefined)
+  assert.equal(ownReviewIn(read([review(64, 'PI 26.3', '2026-11-21T10:00:00Z')]), 'Q\\PI 26.4', rita), undefined)
+  assert.equal(ownReviewIn(read([review(65, 'PI 26.4', '2026-11-21T10:00:00Z', { author: 'Ben Okafor', authorEmail: 'ben.okafor@example.com' })]), 'Q\\PI 26.4', rita), undefined)
+  // By email where both are known (a different display name is still mine); by name without an email.
+  assert.equal(ownReviewIn(read([review(66, 'PI 26.4', '2026-11-21T10:00:00Z', { author: 'Gomez, Rita', authorEmail: 'Rita.Gomez@example.com' })]), 'Q\\PI 26.4', rita)?.comment.id, 66)
+  assert.equal(ownReviewIn(read([review(67, 'PI 26.4', '2026-11-21T10:00:00Z', { author: 'rita  gomez' })]), 'Q\\PI 26.4', { name: 'Rita Gomez' })?.comment.id, 67)
+  // Nothing when the Discussion is not read (still reading, failed) or for a lead showing another person.
+  assert.equal(ownReviewIn({ state: 'loading' }, 'Q\\PI 26.4', rita), undefined)
+  assert.equal(ownReviewIn({ state: 'error', error: 'x' }, 'Q\\PI 26.4', rita), undefined)
+  assert.equal(ownReviewIn(undefined, 'Q\\PI 26.4', rita), undefined)
+  assert.equal(ownReviewIn(read([headed]), 'Q\\PI 26.4', rita, undefined, true), undefined)
 })

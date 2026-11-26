@@ -79,6 +79,8 @@ function fakeAzure(state) {
       state.reads.push(id)
       // PIR-36: a Discussion that cannot be read (failRead lists the Features).
       if (state.failRead?.includes(id)) return json({ message: 'Service unavailable' }, 503)
+      // KB-155: hold — the reads wait for it (the screenshots of "Reading N Discussions…").
+      if (state.hold) return state.hold.then(() => json({ comments: list, count: list.length }))
       return json({ comments: list, count: list.length })
     }
     return json({ value: [] })
@@ -744,5 +746,71 @@ test('TC-PIR-38: Write review for several Features — tick three (one with my r
     await bulkShot(page, 'my-pi-review-bulk-job-done')
   }
   assert.deepEqual(errors.filter((line) => !/503/.test(line)), [])
+  await context.close()
+})
+
+// KB-155, PIR-80 (product owner, production: "in bulk update, if there is a comment already in place, it is not able to
+// update"): Update review for (n) with every kind of comment already in place — my headed review of the PI (replaced),
+// my review headed with the other label form "PI 26.4" (still mine for PI 2026.4: replaced), my older comment without
+// the heading (not a review of the PI: a new comment), someone else's review (a new comment), a Feature in a Sprint
+// below the PI — and the Discussion changed in Azure DevOps after the page read it (my review written there on #209,
+// mine deleted on #208): the pop-up reads the ticked Features' Discussions again when it opens, so it replaces and
+// posts by what Azure DevOps holds then, and nothing fails.
+const bulkOwnReview = (id, reviewedPi, date) => ({ id, text: buildReviewComment({ learnings: 'Calibrate first', struggles: 'Parts late', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi }), createdBy: rita, createdDate: date })
+const postingOf = async (list) => (await list.locator('tbody tr td:last-child').allInnerTexts()).map((value) => value.startsWith('Replaces') ? 'replace' : value)
+async function bulkUpdate(page, ids, learnings, state) {
+  for (const id of ids) await page.getByRole('checkbox', { name: `Select Feature ${id}`, exact: true }).check()
+  const bar = page.getByRole('region', { name: 'Selected Features' })
+  // Shots only: the reads held so the bar shows them under way.
+  let release
+  if (bulkShots && state) state.hold = new Promise((resolve) => { release = resolve })
+  await bar.getByRole('button', { name: `Update review for ${ids.length}…` }).click()
+  if (release) {
+    await bar.getByRole('button', { name: `Reading ${ids.length} Discussions…` }).waitFor()
+    await bulkShot(page, 'my-pi-review-bulk-reading')
+    state.hold = undefined
+    release()
+  }
+  const dialog = page.getByRole('dialog', { name: `Review of ${ids.length} Features` })
+  await dialog.waitFor()
+  const list = dialog.getByRole('table', { name: 'Features to review' })
+  const posting = await postingOf(list)
+  if (release) await bulkShot(page, 'my-pi-review-bulk-reread')
+  await dialog.getByRole('textbox', { name: /^Learnings/ }).fill(learnings)
+  await dialog.getByRole('textbox', { name: /^Struggles/ }).fill('Parts late')
+  await dialog.getByRole('radio', { name: 'Offline Review' }).check()
+  await dialog.getByRole('button', { name: `Post to ${ids.length} Features` }).click()
+  await page.getByRole('dialog', { name: `Post the review to ${ids.length} Features?` }).getByRole('button', { name: `Post review to ${ids.length} Features` }).click()
+  await dialog.waitFor({ state: 'detached' })
+  return posting
+}
+test('TC-PIR-80: Update review for (n) where comments are in place already — my headed review (either PI label form) replaced, my old-format comment and another person’s review get a new comment, a Discussion changed in Azure DevOps since the page read it is read again; none fails', async () => {
+  const items = [...world(), raw(206, 'Feature', 'Audit pack refresh', 'Project\\PI 2026.4', 100), raw(207, 'Feature', 'Sensor bench move', 'Project\\PI 2026.4', 100), raw(208, 'Feature', 'Rig spares', 'Project\\PI 2026.4\\Sprint 2', 100), raw(209, 'Feature', 'Bench lights', 'Project\\PI 2026.4', 100)]
+  const comments = {
+    201: [bulkOwnReview(61, 'PI 2026.4', '2026-11-20T10:00:00Z')],
+    205: [bulkOwnReview(62, 'PI 26.4', '2026-11-20T10:05:00Z')],
+    206: [{ id: 63, text: '<div>Struggles: parts late</div><div>Learnings: calibrate first</div><div>Move to next PI: No</div>', createdBy: rita, createdDate: '2026-11-19T09:00:00Z' }],
+    207: [{ ...bulkOwnReview(64, 'PI 2026.4', '2026-11-20T11:00:00Z'), createdBy: ben }],
+    208: [bulkOwnReview(65, 'PI 2026.4', '2026-11-20T12:00:00Z')],
+    209: [],
+  }
+  const ids = ['201', '205', '206', '207', '208', '209']
+  const { page, context, errors, state } = await open({ world: items, comments, ...(bulkShots ? { width: shotWidth, height: 900, scale: 2 } : {}) })
+  await navigate(page, 'My PI Review')
+  for (const id of ['201', '205', '208']) await rowOf(page, id).locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  for (const id of ['206', '207', '209']) await rowOf(page, id).locator('.pill', { hasText: 'Not reviewed' }).waitFor()
+  // In Azure DevOps meanwhile (another tab, Azure DevOps itself): my review written on #209, mine deleted on #208.
+  state.comments[209].push(bulkOwnReview(66, 'PI 2026.4', '2026-11-25T08:00:00Z'))
+  state.comments[208].length = 0
+  assert.deepEqual(await bulkUpdate(page, ids, 'Book the rig early', state), ['replace', 'replace', 'New comment', 'New comment', 'New comment', 'replace'])
+  await jobDone(page, 'PI review for 6 Features', 'Posted 3 (#206, #207, #208) · Replaced 3 (#201, #205, #209) · Failed 0.')
+  assert.deepEqual(state.edits.map((entry) => [entry.id, entry.commentId]), [[201, 61], [205, 62], [209, 66]])
+  assert.deepEqual(state.posts.map((post) => post.id), [206, 207, 208])
+  for (const id of ids) await rowOf(page, id).locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  // Again, in the same page load: every one now has my review of the PI — all six are replaced.
+  assert.deepEqual(await bulkUpdate(page, ids, 'Book the rig earlier'), ids.map(() => 'replace'))
+  await jobDone(page, 'PI review for 6 Features', 'Posted 0 · Replaced 6 (#201, #205, #206, #207, #208, #209) · Failed 0.')
+  assert.equal(state.posts.length, 3)
+  assert.deepEqual(errors, [])
   await context.close()
 })

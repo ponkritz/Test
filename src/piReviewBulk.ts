@@ -4,7 +4,7 @@ import { shownDateOf } from './azureDevOps.ts'
 // the one background job that writes them one after another, a failure on one not stopping the others.
 import type { AzureWorkItem } from './domain'
 import { piLabel, piOptions, type Discussion } from './piReview.ts'
-import { featurePi, nextPiOf, piText, reviewFormFrom, type NextPi, type ReviewForm } from './piReviewPost.ts'
+import { featurePi, nextPiOf, ownReviewOf, piText, reviewFormFrom, reviewPeriodOf, type NextPi, type ReviewForm } from './piReviewPost.ts'
 import { builtInFormSetup, type PiFormSetup } from './piReviewSetup.ts'
 import { notBeforeStart, piCutoff, reviewStartOf } from './piReviewStart.ts'
 import type { AzureIteration } from './azureRead.ts'
@@ -52,6 +52,15 @@ export function startBulkForm(targets: BulkTarget[], pi: string, items: AzureWor
   return { targets, pi: shared, initial: { ...reviewFormFrom(undefined, next.pi, setup), reviewedPi: piText(piLabel(shared)) }, setup, next, moveNote: next.note, moveShort: next.short, moveWarn: next.missing, problem: samePiProblem(reviewed) }
 }
 
+// KB-155, PIR-80: my own review of the reviewed PI in a Discussion as read (ownReviewOf: my newest comment headed for that
+// PI, "PI 26.4" and "PI 2026.4" alike, mine by email, else by name) — undefined when the Discussion is not read, or for
+// a lead showing another person (others). The one comparison of the pop-up (which Features get their review replaced)
+// and of the job's check before each write, so the two cannot disagree on the same Discussion.
+export function ownReviewIn(discussion: Discussion | undefined, reviewed: string, viewer: { email?: string; name?: string }, setup?: PiFormSetup, others = false) {
+  if (others || discussion?.state !== 'done') return undefined
+  return ownReviewOf(discussion.comments, reviewPeriodOf(reviewed), viewer, setup)
+}
+
 // PIR-36: the ticked Features as targets — each with my own review of the chosen PI to replace, if it has one.
 export function bulkTargets<T extends AzureWorkItem>(items: readonly T[], own: (item: T) => { comment: { id: number; date: string } } | undefined): BulkTarget[] {
   return items.map((item) => { const mine = own(item); return mine ? { item, replace: { commentId: mine.comment.id, date: shownDateOf(mine.comment) } } : { item } })
@@ -92,8 +101,10 @@ export async function runBulkReview(targets: readonly BulkTarget[], writes: Bulk
     progress(`${step}: reading the Discussion of #${item.id}…`)
     let now: { id: number } | undefined
     try { now = await writes.ownNow(item) } catch (failure) { fail(`Its Discussion could not be read: ${failureText(failure)} Nothing was posted.`); continue }
-    if (target.replace && now?.id !== target.replace.commentId) { fail(now ? 'Your review of this PI is another comment now (changed in Azure DevOps since the pop-up opened). Nothing was changed: write it again.' : 'Your review of this PI is no longer in its Discussion. Nothing was posted: write it again.'); continue }
-    if (!target.replace && now) { fail('It has your review of this PI now (posted since the pop-up opened). Nothing was posted: use Edit review… to change it.'); continue }
+    // KB-155: the pop-up read the Discussions when it opened (PIR-80), so these remain only for a change in Azure DevOps
+    // while it was open — each says what to do.
+    if (target.replace && now?.id !== target.replace.commentId) { fail(now ? `Your review of this PI was changed in Azure DevOps after the pop-up opened (it is another comment now). Nothing was changed: tick #${item.id} again and use Update review… to replace it.` : `Your review of this PI was deleted in Azure DevOps after the pop-up opened (it is no longer in its Discussion). Nothing was posted: tick #${item.id} again and use Update review… to post it as a new comment.`); continue }
+    if (!target.replace && now) { fail(`Your review of this PI was posted in Azure DevOps after the pop-up opened (it has your review of this PI now). Nothing was posted: tick #${item.id} again and use Update review… to replace it.`); continue }
     progress(`${step}: ${target.replace ? 'replacing your review' : 'posting the review'} of #${item.id}…`)
     try {
       if (target.replace) await writes.edit(item, target.replace.commentId)
