@@ -1389,6 +1389,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 - Inspection: `dist/build-info.json` and the `<meta name="app-build-id">` tag exist after the build.
 
 **TC-UPD-02 Force Update flow** — Req UPD-02…06 — **UAT**
+
+**TC-UPD-03 A view whose code is gone after a newer deploy loads the new version** — Req UPD-07 — L1 `app-update.test.mjs` ("UPD-07: a view whose code is gone after a newer deploy is recognised, and the new version loads from a fresh address, not the cached page (TC-UPD-03)"); E2E `stale-build.e2e.mjs` ("TC-UPD-03: a view whose code is gone after a newer deploy offers Load the new version, which loads from a fresh address"); browser check: keep the app open across a release, open a page not opened before, choose Load the new version and the page opens on the new build.
 - Steps:
   1. Open Force Update while a fetch runs.
   2. Leave a preview unsaved.
@@ -2825,6 +2827,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | STO-09 | TC-INS-01 |
 | UPD-01 | TC-UPD-01 |
 | UPD-02…06 | TC-UPD-02 |
+| UPD-07 | TC-UPD-03 |
 | DSK-01 | TC-DSK-01 |
 | DSK-02, DSK-03 | TC-INS-02 |
 | DSK-04…06 | TC-DSK-02 |
@@ -3405,7 +3408,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
-| UC-16 | TC-UPD-01, TC-UPD-02 |
+| UC-16 | TC-UPD-01, TC-UPD-02, TC-UPD-03 |
 | UC-17 | TC-DSK-01…03, TC-INS-02 |
 | UC-18 | TC-SMP-01, TC-ATM-06, TC-GIT-04, TC-SMP-02 |
 | UC-19 | TC-INS-04, TC-CI-01, TC-CI-02, TC-CI-03, TC-CI-07, TC-CI-08, TC-DOC-03 |

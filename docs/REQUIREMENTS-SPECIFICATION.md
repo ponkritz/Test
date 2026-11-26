@@ -883,6 +883,7 @@ OVR-01 to OVR-08 describe the earlier Overview (Team / Individual switch, "This 
 | UPD-04 | The app shall reload only when the fetched HTML's build id equals the deployed manifest's build id. Otherwise it shall show "The deployment is still propagating, or the server returned an older page. Please retry shortly. Nothing was reloaded." | T | M | UC-16 |
 | UPD-05 | The update check shall use no-store, no credentials, no redirects and a 15 s timeout. | T | M | UC-16 |
 | UPD-06 | Force Update shall not clear IndexedDB data, PAT settings or column preferences. | T | M | UC-16 |
+| UPD-07 | When a view cannot load because its code is no longer on the server — a newer build was deployed while the page was open ("Failed to fetch dynamically imported module" and the other browsers' wording) — the app shall say **"A newer version of the app was published"** instead of the data message, and **Load the new version** shall load the app from a fresh address (a new `_dp_refresh`), never the browser's cached copy of the old page; data in this browser and in Git stays as it is (product owner, 26 Nov 2026: "I keep getting this error"). | T | M | UC-16 |
 
 ### 5.17 Desktop app and updater (DSK) — UC-17
 
