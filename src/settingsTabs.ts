@@ -42,6 +42,8 @@ const moved: Record<string, { tab: SettingsTab; section?: string }> = {
   'epics:pireview': { tab: 'pireview' },
   access: { tab: 'resources', section: 'rights' }, tables: { tab: 'look', section: 'tables' }, 'pack:tables': { tab: 'look', section: 'tables' }, history: { tab: 'capacity', section: 'history' },
   'connections:email': { tab: 'my', section: 'email' }, 'connections:servers': { tab: 'my', section: 'servers' },
+  // GIT-37: the Load from Git section is part of Git storage.
+  'storage:load': { tab: 'storage', section: 'git' },
   'connections:views': { tab: 'storage', section: 'views' }, 'connections:sources': { tab: 'storage', section: 'sources' }, 'connections:sample': { tab: 'storage', section: 'sample' },
 }
 export function resolveSettings(tab: SettingsTab, section?: string): { tab: SettingsTab; section?: string } {

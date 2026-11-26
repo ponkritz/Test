@@ -72,7 +72,7 @@ export const settingsIndex: SettingsEntry[] = [
   { tab: 'look', section: 'layout', page: 'Look & feel', label: 'Page layout', words: 'margins border width padding' },
   { tab: 'look', section: 'theme', page: 'Look & feel', label: 'Theme and zoom', words: 'dark light zoom' },
   { tab: 'look', section: 'start', page: 'Look & feel', label: 'Start view and menu', words: 'tiles classic home customize menu' },
-  { tab: 'storage', section: 'git', page: 'Data & sharing', label: 'Git storage', words: 'github token repository' },
+  { tab: 'storage', section: 'git', page: 'Data & sharing', label: 'Git storage', words: 'github token repository load everything from git' },
   { tab: 'storage', section: 'shared', page: 'Data & sharing', label: 'Shared setup in Git', words: 'backup clean up connections' },
   { tab: 'storage', section: 'views', page: 'Data & sharing', label: 'Other views', words: 'connections queries backlog' },
   { tab: 'storage', section: 'sample', page: 'Data & sharing', label: 'Synthetic sample', words: 'demo test data' },

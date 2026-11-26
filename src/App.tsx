@@ -13,7 +13,7 @@ import { useAppStore } from './store'
 import { Notice } from './components/ui'
 import { StreamsUpdatePrompt } from './components/StreamsUpdatePrompt'
 import { streamsUpdateDue } from './streamsUpdate'
-import { loadEverythingRunning, startLoadEverything } from './loadEverythingJob'
+import { loadJobRunning, startLoadJob, type LoadKind } from './loadEverythingJob'
 import { MenuCustomizer } from './components/PersonalLayout'
 import { usePersonalViews } from './usePersonalViews'
 import { ThemeToggle } from './components/Clock'
@@ -240,23 +240,40 @@ export default function App() {
     const loaded: string[] = [], failed: string[] = []
     const step = async (label: string, run: () => Promise<string>) => { progress(`Loading ${label.toLowerCase()}…`); try { loaded.push(await run()) } catch (failure) { failed.push(`${label}: ${failure instanceof Error ? failure.message : String(failure)}`) } }
     await step('Planning data', async () => { if (!confirmReplace(git.dirty, git.status === 'conflict')) return 'planning data skipped: your unsaved changes were kept'; await git.load(); return 'planning data (baselines, release scope, region / role mapping)' })
-    await step('Connection setup', async () => { const result = await git.syncViews(azure.creatorEmail); azure.reloadConnectionProfiles(); return result ? `connection setup (${result.added.length} added, ${result.updated.length} updated, ${result.removed.length} removed, ${result.kept.length} kept as changed here)` : 'no connection setup in Git' })
+    await step('Connection setup', loadConnectionSetup)
+    await step('Custom streams', loadCustomStreams)
     await step('On-prem view data', async () => { const result = await git.pullSnapshots(); return `${result.files} on-prem view data file${result.files === 1 ? '' : 's'} (${result.applied.length} newer than here)` })
     await step('Windchill exports', async () => { const result = await git.pullWindchill(); await windchill.reload(); return `${result.files} Windchill export${result.files === 1 ? '' : 's'} (${result.applied.length} newer)` })
     await step('Access roles', async () => { await access.reload(); return 'access roles' })
     await step('Feature setup', async () => { await featureSetup.reload(); return 'Feature setup' })
     return { loaded, failed }
   }
-  // GIT-29…GIT-31: the forced Load everything from Git, once per change of the shared Streams file (azure-views.json)
+  // The Stream mapping part of a load: the connection setup (azure-views.json with its markers, the person's Other views,
+  // CON-120) merged as at start (syncViews), and the custom streams (custom-streams.json).
+  async function loadConnectionSetup() { const result = await git.syncViews(azure.creatorEmail); azure.reloadConnectionProfiles(); return result ? `connection setup (${result.added.length} added, ${result.updated.length} updated, ${result.removed.length} removed, ${result.kept.length} kept as changed here)` : 'no connection setup in Git' }
+  async function loadCustomStreams() { await customStreams.reload(true); return 'custom streams' }
+  // GIT-36: Load latest Release Details — the Stream mapping only (the forced pop-up's job); the Release Details pages
+  // then fetch their data as they always do.
+  async function loadReleaseDetails(progress: (text: string) => void = () => undefined) {
+    const loaded: string[] = [], failed: string[] = []
+    const step = async (label: string, run: () => Promise<string>) => { progress(`Loading ${label.toLowerCase()}…`); try { loaded.push(await run()) } catch (failure) { failed.push(`${label}: ${failure instanceof Error ? failure.message : String(failure)}`) } }
+    await step('Custom streams', loadCustomStreams)
+    await step('Stream mapping', loadConnectionSetup)
+    return { loaded, failed }
+  }
+  // GIT-29…GIT-31: the forced load, once per change of the shared Streams file (azure-views.json)
   // and once for everyone after this release; never in View as, with the sample, without Git or for this computer's own
   // save. It can never be skipped: after a failed load it shows the Git storage connection setup with Retry (GIT-31).
   // GIT-33…GIT-35: Load everything runs as a background job (Jobs done): the pop-up closes at once and stays closed while
   // the job runs — whatever the load does meanwhile (the planning data reloading, this computer's own save of the
   // Streams file) —; one job at a time; a failed job brings the pop-up back in its failed state.
   const [streamsRun, setStreamsRun] = useState<{ failed?: string[] }>({})
-  const loadRunning = useSyncExternalStore(subscribeJobs, loadEverythingRunning)
-  const loadEverythingJob = () => {
-    const done = startLoadEverything(loadEverything, git.streamsRepository, git.streamsVersionNow)
+  const loadRunning = useSyncExternalStore(subscribeJobs, loadJobRunning)
+  // GIT-36…GIT-38: the pop-up starts Load latest Release Details; Admin → Data & sharing → Git storage starts Load
+  // everything. One at a time: while either runs, neither starts. A failure of either brings the pop-up back failed
+  // while the Streams file is not loaded here.
+  const startJob = (kind: LoadKind) => {
+    const done = startLoadJob(kind, kind === 'mapping' ? loadReleaseDetails : loadEverything, git.streamsRepository, git.streamsVersionNow)
     if (!done) return null
     setStreamsRun({})
     return done.then((result) => { setStreamsRun(result.failed.length ? { failed: result.failed } : {}); return result })
@@ -730,7 +747,7 @@ export default function App() {
       <header className="topbar" ref={topbarRef}><button type="button" className="menu-button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="primary-navigation" onClick={() => setNavOpen((open) => !open)}>{navOpen ? '✕' : '☰'}</button><h1 title={page === 'ondemand' && onDemandPage ? onDemandPage.description || `${onDemandPage.name}, in ${groupNameOf(placementOf(menu.layout, onDemandPage.id).group)}` : meta.detail}>{page === 'board' ? view.name : page === 'windchill' && windchillView ? windchillView.name : page === 'admin' ? settingsLabel(settingsTab) : page === 'ondemand' && onDemandPage ? onDemandPage.name : meta.label}</h1><div className="topbar-slot" ref={setHeaderSlot} /><div className="topbar-actions">{openSteps > 0 && <button type="button" className="ghost setup-button" title="What to configure and how" onClick={() => setGuideOpen(true)}>Setup · {steps.filter((step) => step.required && step.state === 'done').length}/{steps.filter((step) => step.required).length}</button>}<JobsIndicator /><DataStatus azure={azure} />{(meta.usesMonth || (page === 'board' && view.readOnly)) && <label className="month-picker"><span className="sr-only">Month</span><input type="month" aria-label="Month" value={month} onChange={(event) => /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value) && setMonth(event.target.value)} /></label>}{personPage && <label className="topbar-person">Person<PersonPicker label="Person" value={my.chosenName} people={my.people} onChange={my.setName} meLabel={azure.creatorEmail.trim() ? 'Me' : 'Choose a person…'} /></label>}<ThemeToggle /><ProfileMenu name={my.self.me.name ?? ''} email={azure.creatorEmail.trim()} actions={profileActions} /></div></header>
       {access.viewingAs && <div className="view-as-banner" role="status"><span>👁 Viewing as <strong>{viewAsLabel(access.viewingAs)}</strong>{access.viewingAs.kind === 'role' ? '' : access.rights.roles.length ? ` (${access.rights.roles.join(', ')})` : ' (default role)'} — read only: nothing is saved to Azure DevOps or Git.</span><button type="button" className="ghost" onClick={() => setViewAsOpen(true)}>Change</button><button type="button" className="primary" onClick={() => setViewAs(null)}>Exit View as</button></div>}
       {viewAsOpen && <ViewAsDialog current={access.viewingAs} people={viewAsPeople(azure.items, access.policy)} onStart={(next) => { setViewAs(next); setViewAsOpen(false); setPage(startPageOf(startView)) }} onClose={() => setViewAsOpen(false)} />}
-      {!streamsSkipped && !loadRunning && (streamsDue || streamsRun.failed) && <StreamsUpdatePrompt git={git} failed={streamsRun.failed} onRun={() => { void loadEverythingJob() }} onContinue={() => { setStreamsSkipped(true); setStreamsRun({}) }} />}
+      {!streamsSkipped && !loadRunning && (streamsDue || streamsRun.failed) && <StreamsUpdatePrompt git={git} failed={streamsRun.failed} onRun={() => { void startJob('mapping') }} onContinue={() => { setStreamsSkipped(true); setStreamsRun({}) }} />}
       <DataNotices azure={azure} onOpenConnection={openConnection} />
       {/* CON-101 (fail closed): until the roles file is loaded the app is read-only; say why and what to do. */}
       {movedGit && git.config && <Notice tone="warning" className="git-moved"><strong>The team data has moved</strong> to {movedGit.owner}/{movedGit.repo}. This app is still connected to {git.config.owner}/{git.config.repo}, which is no longer updated.{' '}{git.connected ? <button type="button" className="primary" disabled={git.status === 'loading' || git.status === 'saving'} onClick={() => { if (confirmReplace(git.dirty, git.status === 'conflict')) void git.connect(movedGit, '', false) }}>Switch to {movedGit.owner}/{movedGit.repo}</button> : <button type="button" className="text-button" onClick={() => openSettings('storage', 'git')}>Open Git storage →</button>}</Notice>}
@@ -764,7 +781,7 @@ export default function App() {
       {page === 'admin' && settingsTab === 'pages' && <PagesMenuPage duplicates={duplicateNames} git={git} store={onDemand} menu={menu} viewer={viewer} onOpen={openOnDemand} onAddPage={(group) => setAddPageFor(group ?? '')} />}
       {/* PIR-29: Admin → PI Review Setup, the PI Review form setup on a page of its own. */}
       {page === 'admin' && settingsTab === 'pireview' && <PiReviewSetupPage store={piForm} block={piFormBlock} by={my.self.me.name?.trim() || azure.creatorEmail.trim()} />}
-      {page === 'admin' && settingsTab !== 'pages' && settingsTab !== 'pireview' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} setupSteps={steps} onSearch={() => setSearchOpen(true)} monthlyPack={monthlyPack} history={history} loadEverything={loadEverythingJob} onOpenBoard={() => setPage('board')} />}
+      {page === 'admin' && settingsTab !== 'pages' && settingsTab !== 'pireview' && <AdminPage look={{ startView, onStartView: switchView, onCustomizeMenu: () => setMenuEditor(true) }} key={`${settingsTab}:${settingsVisit}`} tab={settingsTab} onOpenTab={openSettings} {...pageProps} azure={azure} git={git} access={access} featureSetup={featureSetup} epicSetup={epicSetup} sharedLists={listsEnv} setupSteps={steps} onSearch={() => setSearchOpen(true)} monthlyPack={monthlyPack} history={history} loadEverything={() => startJob('everything')} onOpenBoard={() => setPage('board')} />}
       {page === 'docs' && <DocsPage key={docsVisit} />}
       </Fragment></Suspense>
       {addPageFor != null && <AddPageDialog viewer={viewer} layout={menu.layout} group={addPageFor || undefined} onCancel={() => setAddPageFor(null)} onCreate={async (input) => { const id = await createPage(onDemand, menu, input); setAddPageFor(null); openOnDemand(id) }} />}
