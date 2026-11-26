@@ -15,7 +15,8 @@ import { customFields, type PiFormSetup } from '../piReviewSetup'
 import { usePiChoice } from './usePiChoice'
 import { cutoffNote, reviewStartLabel, reviewStartOf, shownFrom } from '../piReviewStart'
 import { MeetingButton, SavedMeetings } from './PiMeeting'
-import { usePiMeeting, type MeetingGit } from '../usePiMeeting'
+import { usePiMeeting, type MeetingContext, type MeetingGit } from '../usePiMeeting'
+import { useEpicSetupFile } from '../useEpicSetup'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
@@ -204,7 +205,11 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
 
   // PIR-40…PIR-47: Conduct PI Meeting — the Features of the PI (all of them, whatever the filters), the start date in use.
-  const meeting = usePiMeeting({ pi, rows, setup, start, inRange: !pi || shownFrom(pi, cutoff), config, pat, readBlocked, viewer: poster, git })
+  // PIR-51…PIR-57: the data of the executive slides (all fetched items, the iterations, capacity, Release Details, Epic setup).
+  const epicFile = useEpicSetupFile()
+  const capacity = capacityContext(store.state)
+  const context: MeetingContext = { items, iterations: iterations.list, capacity, absenceEpicId, withStories, releaseState: store.state, profiles: azure.connectionProfiles, epicFile, team: config?.project ?? '' }
+  const meeting = usePiMeeting({ pi, rows, setup, start, inRange: !pi || shownFrom(pi, cutoff), config, pat, readBlocked, viewer: poster, git, context })
   const notice = !iterations.done ? null : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
 
   return <Page intro="The Features of a PI and their Discussions, read from Azure DevOps with your PAT, kept for this page load only. Review… posts a Feature’s review to its Discussion as a new comment; Edit review… changes your own review in place."

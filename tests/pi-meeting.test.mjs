@@ -57,16 +57,19 @@ test('PIR-42: the snapshot — each Feature reviewed or not by its latest commen
 })
 
 test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss during Meeting one per Feature, the other reviewed Features by Epic, the Not reviewed list, Learnings, then Struggles (TC-PIR-43)', () => {
-  assert.deepEqual(slideOrder, ['title', 'summary', 'summary-epics', 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles'])
+  // PIR-51…PIR-57: the executive slides after the Summary, before Discuss during Meeting.
+  const executive = ['executive', 'completion', 'pi-trend', 'repeat', 'topics', 'releases', 'hours', 'utilization', 'trends', 'long-running']
+  assert.deepEqual(slideOrder, ['title', 'summary', 'summary-epics', ...executive, 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles'])
   assert.deepEqual(Object.keys(slideMakers).sort(), [...slideOrder].sort(), 'each slide type is one function')
-  const slides = meetingSlides(meetingOf())
+  const slides = meetingSlides(meetingOf()).filter((slide) => !executive.includes(slide.kind))
   assert.deepEqual(slides.map((slide) => `${slide.kind}: ${slide.title}`), [
     'title: PI Review Meeting — PI 26.4', 'summary: Summary', 'summary-epics: Summary by Epic',
     'discuss: #201 Lab rig upgrade', 'discuss: #203 Fixture library',
     'reviewed: #202 Supplier audit pack', 'reviewed: #204 Calibration plan',
     'not-reviewed: Features not reviewed', 'learnings: Learnings', 'struggles: Struggles',
   ])
-  // Grouped by Epic: Audits before Tools (by name), No Epic last; the eyebrow names the Epic and the place in it.
+  // Grouped by Epic in the chosen order (PIR-62: Epic ID by default — Tools #100 before Audits #110), No Epic last; the
+  // eyebrow names the Epic and the place in it.
   assert.equal(slides[5].eyebrow, 'REVIEWED · AUDITS · 1 OF 2')
   assert.equal(slides[4].eyebrow, 'DISCUSS DURING MEETING · 2 OF 2')
   // The Not reviewed list names each Feature and why, No Epic last.
@@ -82,7 +85,7 @@ test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss dur
   assert.deepEqual(themeItems(meetingOf(), 'struggles').map((item) => `#${item.id} ${item.text}`), ['#201 vendor late', '#202 audit late', '#203 vendor late', '#204 We were blocked by the lab.'])
   // Without any review: the title, the summary, one Not reviewed list and the empty Themes — still in order.
   const none = meetingSlides(meetingOf({ features: meetingFeatures(rows, () => undefined, setup, start, 'PI 26.4') }))
-  assert.deepEqual(none.map((slide) => slide.kind), ['title', 'summary', 'summary-epics', 'not-reviewed', 'learnings', 'struggles'])
+  assert.deepEqual(none.map((slide) => slide.kind), ['title', 'summary', 'summary-epics', ...executive, 'not-reviewed', 'learnings', 'struggles'])
   assert.match(none[0].body, /7 Discussions were not read when it was built/)
 })
 
@@ -107,7 +110,9 @@ test('PIR-43: every value is escaped — a comment with <script> and "</script>"
   assert.equal(html.match(/<script/gi).length, 1)
   assert.equal(html.match(/<\/script>/gi).length, 1)
   const tags = html.match(/<[a-z][^<>]*>/gi)
-  assert.deepEqual(tags.map((tag) => tag.replace(/"[^"]*"/g, `""`)).filter((tag) => /^<(?:img|b|i|a|iframe|object|embed|link|form|base|svg|math)\b|\son[a-z]+=|\s(?:src|href|action|poster|srcset|style)=/i.test(tag)), [])
+  assert.deepEqual(tags.map((tag) => tag.replace(/"[^"]*"/g, `""`)).filter((tag) => /^<(?:img|b|i|a|iframe|object|embed|link|form|base|math)\b|\son[a-z]+=|\s(?:src|href|action|poster|srcset|style)=/i.test(tag)), [])
+  // PIR-51: the only SVG is the file's own charts (role="img", drawn by the builder), never markup from the data.
+  assert.ok(tags.filter((tag) => /^<svg\b/i.test(tag)).every((tag) => /^<svg class="(?:chart|key)"/.test(tag)))
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt; and &quot;&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;&quot; &amp; &#39;quotes&#39;'))
   // Display names only: no e-mail address, no identity id.
   assert.doesNotMatch(html, /@example\.com|8f1c2d3e-0a1b/)

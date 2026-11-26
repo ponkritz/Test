@@ -1,7 +1,17 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { listJobs, runInBackground, subscribeJobs } from './backgroundJobs'
 import { rateLimitWait, type AzureConfig } from './azureDevOps'
-import { discussionOf, readDiscussions } from './piReview'
+import { commentsFrom, discussionOf, epicOf, latestComment, moveLabel, piFeatures, piOptions, readDiscussions, reviewComments, reviewSplit } from './piReview'
+import { meetingExec, piSpanOf, type ExecFeature } from './piMeetingData'
+import { defaultMeetingSettings } from './piMeetingSettings'
+import { meetingReleaseInputs, meetingStreamEpics, monthsTouching } from './piMeetingSources'
+import { longRunning } from './piMeetingData'
+import { piName } from './myWork'
+import type { AzureIteration } from './azureRead'
+import type { CapacitySettings } from './capacity'
+import type { AppState } from './domain'
+import type { AzureConnectionProfileSummary } from './azureCredentials'
+import type { EpicSetupFile } from './epicSetup'
 import { readDiscussionInto, type ReviewViewer } from './piReviewPost'
 import { exportStamp } from './printExport'
 import { downloadHtml } from './publishTarget'
@@ -21,12 +31,28 @@ export interface MeetingGit {
   listMeetings: (folder: string) => Promise<string[]>; readMeeting: (path: string) => Promise<string>; writeMeeting: (path: string, html: string, commitMessage: string) => Promise<{ sha: string; commitUrl: string }>
 }
 type Row = { item: AzureWorkItem; epic?: AzureWorkItem }
-export interface MeetingInput { pi: string; rows: Row[]; setup: PiFormSetup; start: string; inRange: boolean; config: AzureConfig | null; pat: string; readBlocked: string; viewer: ReviewViewer & { env: { name?: string } | null }; git?: MeetingGit }
+// PIR-51…PIR-57: what the executive slides are worked out from — every fetched item (hours, utilization, the previous PI,
+// long-running Features), the iteration tree (the PI's dates), the capacity settings, the Release Details data and the
+// Epic setup (releases and their Release Classification).
+export interface MeetingContext {
+  items: AzureWorkItem[]; iterations: AzureIteration[] | null; capacity: CapacitySettings; absenceEpicId?: number; withStories: boolean
+  releaseState: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>; profiles: AzureConnectionProfileSummary[]; epicFile: EpicSetupFile | null; team: string
+}
+export interface MeetingInput { pi: string; rows: Row[]; setup: PiFormSetup; start: string; inRange: boolean; config: AzureConfig | null; pat: string; readBlocked: string; viewer: ReviewViewer & { env: { name?: string } | null }; git?: MeetingGit; context?: MeetingContext }
 type Saved = { state: 'idle' | 'loading' | 'done' | 'error'; paths: string[]; error: string }
 const fileOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 const sizeText = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, readBlocked, viewer, git }: MeetingInput) {
+const utcDay = (at: Date) => at.toISOString().slice(0, 10)
+// PIR-57: the Move to next PI of a Feature's latest headed review (any PI), else why there is none.
+function latestMove(item: AzureWorkItem, setup: PiFormSetup, start: string) {
+  const entry = discussionOf(item.key)
+  if (entry?.state !== 'done') return 'Discussion not read'
+  const comment = latestComment(reviewComments(commentsFrom(entry.comments, start).comments))
+  return comment ? moveLabel(reviewSplit(comment.text, setup)) || 'Not given' : 'No headed review'
+}
+
+export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, readBlocked, viewer, git, context }: MeetingInput) {
   const jobs = useSyncExternalStore(subscribeJobs, listJobs)
   const building = jobs.some((job) => job.key === meetingJobKey && job.state === 'running')
   const shown = canConductMeeting(viewer.can)
@@ -58,20 +84,42 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
   function build() {
     if (why || !shown) return
     const at = new Date(), snapshot = [...rows], builtBy = viewer.env?.name?.trim() || 'Unknown'
+    // PIR-51…PIR-57: the executive inputs at the click — the previous PI's Features, the long-running candidates.
+    const settings = setup.meeting ?? defaultMeetingSettings(), today = utcDay(at), ctx = context
+    const pis = ctx ? piOptions(ctx.iterations ?? [], ctx.items) : []
+    const here = pis.findIndex((entry) => piName(entry).toLowerCase() === name.toLowerCase())
+    const previousPath = here >= 0 ? pis[here + 1] : undefined
+    const byId = ctx ? new Map(ctx.items.map((item) => [item.id, item])) : new Map<number, AzureWorkItem>()
+    const previousRows: Row[] = ctx && previousPath ? piFeatures(ctx.items, previousPath, { absenceEpicId: ctx.absenceEpicId, withStories: ctx.withStories }).map((item) => ({ item, epic: epicOf(ctx.items, item, byId) })) : []
+    const { span } = piSpanOf(ctx?.iterations, name)
+    const streamEpics = meetingStreamEpics(settings.streams, ctx?.releaseState.releaseSourceSettings)
+    const candidates = ctx && span ? longRunning({ items: ctx.items, streamEpics, streams: settings.streams, settings, span, spanWhy: '', today, moveOf: () => '' }).rows.map((row) => byId.get(row.id)).filter((item): item is AzureWorkItem => Boolean(item)) : []
     const file = meetingFileName(name, at), target = git
     setNote(null)
     runInBackground(meetingJobKey, `${meetingName} · ${name}`, async (progress) => {
-      const unread = snapshot.filter((row) => discussionOf(row.item.key)?.state !== 'done').map((row) => row.item)
+      const toRead = new Map([...snapshot.map((row) => row.item), ...previousRows.map((row) => row.item), ...candidates].map((item) => [item.key, item]))
+      const unread = [...toRead.values()].filter((item) => discussionOf(item.key)?.state !== 'done')
       let readNote = ''
       if (unread.length && !readBlocked && config) {
         const byId = new Map(unread.map((item) => [item.id, item]))
         progress(`Reading Discussions · 0 of ${unread.length}`)
         const result = await readDiscussions(unread.map((item) => item.id), (id) => readDiscussionInto(config, pat, byId.get(id)!), { rateWait: rateLimitWait, onProgress: (done, total) => progress(`Reading Discussions · ${done} of ${total}`) })
-        const missing = result.failed + result.unread.length
+        // The PI's own Features whose Discussion is still not read (the earlier PI's and the long-running ones count apart).
+        const missing = snapshot.filter((row) => discussionOf(row.item.key)?.state !== 'done').length
         if (missing) readNote = ` ${missing} Discussion${missing === 1 ? '' : 's'} could not be read: listed as not reviewed.`
-      } else if (unread.length) readNote = ` ${unread.length} Discussion${unread.length === 1 ? ' was' : 's were'} not read (${readBlocked.replace(/\.$/, '')}): listed as not reviewed.`
+        else if (result.failed + result.unread.length) readNote = ` ${result.failed + result.unread.length} Discussion${result.failed + result.unread.length === 1 ? '' : 's'} of the previous PI or of long-running Features could not be read.`
+      } else if (unread.length) { const own = snapshot.filter((row) => discussionOf(row.item.key)?.state !== 'done').length; if (own) readNote = ` ${own} Discussion${own === 1 ? ' was' : 's were'} not read (${readBlocked.replace(/\.$/, '')}): listed as not reviewed.` }
       progress('Building the slides…')
-      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features: meetingFeatures(snapshot, discussionOf, setup, start, name) }
+      const features = meetingFeatures(snapshot, discussionOf, setup, start, name)
+      const keyOf = new Map(snapshot.map((row) => [row.item.id, row.item.key]))
+      const exec = ctx ? meetingExec({
+        pi: name, features, iterations: ctx.iterations, items: ctx.items, capacity: ctx.capacity, today, start, setup, settings, pis,
+        previousFeatures: previousPath ? meetingFeatures(previousRows, discussionOf, setup, start, piName(previousPath)) : [],
+        discussionOf: (feature: ExecFeature) => discussionOf(keyOf.get(feature.id) ?? ''),
+        releases: span && settings.streams.length ? meetingReleaseInputs(settings.streams, monthsTouching(span.start, span.end), ctx.releaseState, ctx.profiles, ctx.epicFile) : [],
+        streamEpics, moveOf: (item) => latestMove(item, setup, start),
+      }) : undefined
+      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features, settings, ...(exec ? { exec } : {}), ...(ctx?.team ? { team: ctx.team } : {}) }
       const html = await buildMeetingHtml(meeting), slides = meetingSlides(meeting).length
       downloadHtml(html, file.replace(/\.html$/, ''))
       const done = `Downloaded ${file} (${slides} slides).${readNote}`

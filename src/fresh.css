@@ -1262,6 +1262,22 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .page-settings-intro{margin:0 0 10px}
 .page-settings-admin{display:flex;justify-content:flex-end;margin:6px 0}
 .page-settings-body .panel{box-shadow:none}
+/* PIR-58…PIR-62: the Meeting presentation settings — the accent swatch of the summary and the editor (the title slide
+   preview beside the content settings). */
+.pir-accent{display:inline-flex;align-items:center;gap:6px}.pir-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--line)}
+.modal:has(.pir-meeting-editor){width:min(1180px,100%)}
+.pir-meeting-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.pir-meeting-editor section{display:grid;gap:10px;min-width:0}.pir-meeting-editor h3{margin:6px 0 0;font-size:14px;color:var(--heading)}
+.pir-meeting-editor label{display:grid;gap:3px}.pir-meeting-editor small{font-size:11px;color:var(--muted)}
+.pir-meeting-editor .form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.pir-streams{display:flex;flex-wrap:wrap;gap:4px 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0}.pir-streams legend{font-size:12px;font-weight:600;padding:0 4px}.pir-streams .check{display:inline-flex;margin:0;font-size:13px;color:var(--text)}.pir-streams small{flex-basis:100%}
+.pir-meeting-preview{display:grid;gap:6px;min-height:150px;padding:18px 20px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#0b5394}
+.pir-meeting-preview.dark{color:#fff}
+.pir-preview-eyebrow{font-size:10px;letter-spacing:.08em;font-weight:600;opacity:.75}
+.pir-preview-title{font-size:22px;line-height:1.2}
+.pir-preview-subtitle{font-size:13px;color:#1b2430}.pir-meeting-preview.dark .pir-preview-subtitle{color:#fff}
+.pir-preview-footer{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:6px;border-top:1px solid #e3e7ec;font-size:11px;color:#6b778a}.pir-meeting-preview.dark .pir-preview-footer{color:#fff;border-top-color:rgba(255,255,255,.4)}
+@media(max-width:760px){.pir-meeting-editor,.pir-meeting-editor .form-row{grid-template-columns:1fr}}
 /* UI-24: a wide table's sticky horizontal scroll bar — fixed at the bottom of the screen above the sticky footer (its
    place and width set by StickyScrollbar.tsx from the table's box and the footer's real top edge), in the theme's
    colours; the native scroll bar follows color-scheme (dark theme) and the system colours (high contrast). */

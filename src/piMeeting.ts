@@ -13,7 +13,7 @@
 //
 // Easy to change (PIR-41): each slide type is one small function (`slideMakers`) and the order is one list
 // (`slideOrder`), so the product owner's later wishes change slides and order cheaply.
-import { escapeHtml, inlineScript, inlineStyle, publishCsp, sha256Base64 } from './standaloneHtml.ts'
+import { inlineScript, inlineStyle, publishCsp, sha256Base64 } from './standaloneHtml.ts'
 import { commentsFrom, isNoneText, latestReviewFor, moveLabel, reviewModeLabel, reviewSplit, type Discussion, type MoveValue, type ReviewMode, type SplitFrom } from './piReview.ts'
 import { customFields, type PiFormSetup } from './piReviewSetup.ts'
 import { piText } from './piReviewPost.ts'
@@ -21,6 +21,13 @@ import { piName } from './myWork.ts'
 import { formatDate, formatDateTime } from './format.ts'
 import { shownDateOf } from './azureDevOps.ts'
 import type { AzureWorkItem } from './domain'
+import { chunks, displayName, lines, listMax, part, plural, text, themeBudget, themeMax } from './piMeetingText.ts'
+import { epicRank } from './piMeetingData.ts'
+import { isAdhocTask } from './workItemEdit.ts'
+import { defaultMeetingSettings, fillPlaceholders, type MeetingSettings } from './piMeetingSettings.ts'
+import { accentOf, completionSlides, execStyle, executiveSlides, hoursSlides, longRunningSlides, piTrendSlides, releaseSlides, repeatSlides, topicSlides, trendSlides, utilizationSlides } from './piMeetingExec.ts'
+import type { MeetingExec } from './piMeetingData.ts'
+export { chunks, displayName, listMax, scrub, text, themeBudget, themeMax } from './piMeetingText.ts'
 export { isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingBytes, meetingFileName, meetingFolder, meetingPath, meetingsFolder, meetingStamp, piSlug } from './piMeetingFile.ts'
 
 // ---- the snapshot ----
@@ -33,10 +40,14 @@ export interface MeetingReview {
   author: string; date: string; from: SplitFrom; learnings: string; struggles: string; move: string; moveValue?: MoveValue; movePi: string
   mode: string; reviewMode?: ReviewMode; remarks: string; fields: { label: string; text: string }[]; text: string
 }
-export interface MeetingFeature { id: number; title: string; epic: string; epicId?: number; assignedTo: string; state: string; status: MeetingStatus; error?: string; review?: MeetingReview }
+// PIR-51: closedDate, createdDate and adhoc (tagged ad-hoc) for the executive slides.
+export interface MeetingFeature { id: number; title: string; epic: string; epicId?: number; assignedTo: string; state: string; closedDate?: string; createdDate?: string; adhoc?: boolean; status: MeetingStatus; error?: string; review?: MeetingReview }
 // pi: "PI 26.4"; builtAt: the build's date and time as shown (the builder's clock and time zone); builtBy: a display name;
 // start: "PI Review starts from" (YYYY-MM-DD).
-export interface Meeting { pi: string; builtAt: string; builtBy: string; start: string; features: MeetingFeature[] }
+// PIR-51…PIR-62: exec — the executive figures worked out at build time (piMeetingData.ts); settings — the Meeting
+// presentation settings (title slide, footer, colours, Epic order; the defaults without them); team — {team} when the
+// settings name no team.
+export interface Meeting { pi: string; builtAt: string; builtBy: string; start: string; features: MeetingFeature[]; exec?: MeetingExec; settings?: MeetingSettings; team?: string }
 
 export const meetingName = 'PI Review Meeting'
 export const meetingPi = (path: string) => piText(piName(path)) || piName(path).trim() || 'PI'
@@ -47,7 +58,7 @@ export const meetingTitle = (pi: string) => `${meetingName} — ${pi}`
 // ("PI 26.4"); only a review headed for it counts.
 export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: AzureWorkItem }[], discussionOf: (key: string) => Discussion | undefined, setup: PiFormSetup, start: string, pi: string): MeetingFeature[] {
   return rows.map(({ item, epic }) => {
-    const base = { id: item.id, title: item.title, epic: epic ? epic.title || `#${epic.id}` : '', ...(epic ? { epicId: epic.id } : {}), assignedTo: item.assignedTo, state: item.state }
+    const base = { id: item.id, title: item.title, epic: epic ? epic.title || `#${epic.id}` : '', ...(epic ? { epicId: epic.id } : {}), assignedTo: item.assignedTo, state: item.state, ...(item.closedDate ? { closedDate: item.closedDate } : {}), ...(item.createdDate ? { createdDate: item.createdDate } : {}), ...(isAdhocTask(item.tags ?? '') ? { adhoc: true } : {}) }
     const entry = discussionOf(item.key)
     if (entry?.state === 'error') return { ...base, status: 'error', error: entry.error }
     if (entry?.state !== 'done') return { ...base, status: 'unread' }
@@ -64,50 +75,28 @@ export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: Azu
   })
 }
 
-// ---- safe text ----
-// PIR-43: no e-mail address and no identity id (a GUID, also as "@<GUID>") reaches the file; then HTML-escaped.
-const emailPattern = /[^\s@<>()[\]"',;:]+@[^\s@<>()[\]"',;:]+\.[A-Za-z]{2,}/g
-const identityPattern = /@?<?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b>?/gi
-export const scrub = (value: unknown) => String(value ?? '').replace(identityPattern, '[id]').replace(emailPattern, '[email]')
-export const text = (value: unknown) => escapeHtml(scrub(value))
-// A person: the display name only ("Rita Gomez <rita@…>" → "Rita Gomez"); "Unknown" when nothing is left.
-export const displayName = (value: unknown) => { const name = scrub(String(value ?? '').replace(/<[^>]*>/g, ' ')).replace(/\[email\]|\[id\]/g, ' ').replace(/\s+/g, ' ').trim(); return name || 'Unknown' }
-const lines = (value: string) => value.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•+–◦▪]|\d{1,2}[.)])[ \t]+(?=\S)/, '')).filter(Boolean)
+// ---- safe text (piMeetingText.ts) ----
 // A paragraph text as HTML: one line a paragraph, more lines a list.
 function block(value: string, empty = '—') {
   const all = lines(value)
   if (!all.length) return `<p class="muted">${text(empty)}</p>`
   return all.length === 1 ? `<p>${text(all[0])}</p>` : `<ul>${all.map((line) => `<li>${text(line)}</li>`).join('')}</ul>`
 }
-const plural = (count: number, word: string, many = `${word}s`) => `${count.toLocaleString('en')} ${count === 1 ? word : many}`
 
 // ---- the slides ----
-export type SlideKind = 'title' | 'summary' | 'summary-epics' | 'discuss' | 'reviewed' | 'not-reviewed' | 'learnings' | 'struggles'
+export type SlideKind = 'title' | 'summary' | 'summary-epics' | 'executive' | 'completion' | 'pi-trend' | 'repeat' | 'topics' | 'releases' | 'hours' | 'utilization' | 'trends' | 'long-running' | 'discuss' | 'reviewed' | 'not-reviewed' | 'learnings' | 'struggles'
 export interface Slide { kind: SlideKind; eyebrow: string; title: string; body: string }
 // PIR-41: the order of the slides — one list (product owner, 25 Nov 2026: Summary first, then the Features to discuss in
-// the meeting, then all other Features, then the Themes).
-export const slideOrder: readonly SlideKind[] = ['title', 'summary', 'summary-epics', 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles']
-export const listMax = 12, themeMax = 8, themeBudget = 1100
-// Long lists run over several slides: at most `max` entries and about `budget` characters a slide.
-export function chunks<T>(items: readonly T[], max: number, budget = Infinity, size: (item: T) => number = () => 0): T[][] {
-  const out: T[][] = []
-  let current: T[] = [], used = 0
-  for (const item of items) {
-    const length = size(item)
-    if (current.length && (current.length >= max || used + length > budget)) { out.push(current); current = []; used = 0 }
-    current.push(item); used += length
-  }
-  if (current.length) out.push(current)
-  return out
-}
-const part = (title: string, at: number, of: number) => of > 1 ? `${title} (${at + 1} of ${of})` : title
+// the meeting, then all other Features, then the Themes). PIR-51…PIR-57 (product owner, 26 Nov 2026): the executive slides
+// after the Summary and before Discuss during Meeting.
+export const slideOrder: readonly SlideKind[] = ['title', 'summary', 'summary-epics', 'executive', 'completion', 'pi-trend', 'repeat', 'topics', 'releases', 'hours', 'utilization', 'trends', 'long-running', 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles']
 const isDiscuss = (feature: MeetingFeature) => feature.review?.reviewMode === 'Discuss during Meeting'
 const reviewed = (meeting: Meeting) => meeting.features.filter((feature) => feature.status === 'reviewed')
 const notReviewed = (meeting: Meeting) => meeting.features.filter((feature) => feature.status !== 'reviewed')
 const noEpic = 'No Epic'
 const epicName = (feature: MeetingFeature) => feature.epic || noEpic
-// By Epic (its name; "No Epic" last), then by ID.
-const byEpic = (a: MeetingFeature, b: MeetingFeature) => (a.epic ? 0 : 1) - (b.epic ? 0 : 1) || epicName(a).localeCompare(epicName(b)) || a.id - b.id
+// PIR-62: by Epic in the chosen order (Epic ID ascending by default, or most Features first; "No Epic" last), then by ID.
+const epicOrderOf = (meeting: Meeting) => { const rank = epicRank(meeting.features, (meeting.settings ?? defaultMeetingSettings()).epicOrder); return (a: MeetingFeature, b: MeetingFeature) => rank(a) - rank(b) || a.id - b.id }
 
 interface Counts { features: number; reviewed: number; none: number; unread: number; yes: number; no: number; partly: number; noMove: number; discuss: number; offline: number; noMode: number; nextPis: Map<string, number> }
 export function meetingCounts(features: readonly MeetingFeature[]): Counts {
@@ -123,9 +112,20 @@ export function meetingCounts(features: readonly MeetingFeature[]): Counts {
 }
 
 const tile = (label: string, value: string, detail = '') => `<div class="tile"><dt>${text(label)}</dt><dd><strong>${text(value)}</strong>${detail ? `<small>${text(detail)}</small>` : ''}</dd></div>`
+// PIR-58: the values of the placeholders {PI} {date} {time} {builtBy} {team} — the date and time as built (builtAt is
+// "26 Nov 2026, 14:30 CET"), the builder's display name, the team of the settings (else the meeting's).
+export function meetingValues(meeting: Meeting) {
+  const at = meeting.builtAt.indexOf(', ')
+  return { pi: meeting.pi, date: at < 0 ? meeting.builtAt : meeting.builtAt.slice(0, at), time: at < 0 ? '' : meeting.builtAt.slice(at + 2), builtBy: displayName(meeting.builtBy), team: (meeting.settings?.team || meeting.team || '').trim() }
+}
+const settingsOf = (meeting: Meeting) => meeting.settings ?? defaultMeetingSettings()
+// PIR-58: the title slide from the template — Title and Subtitle with the placeholders filled (then escaped).
+export const meetingSlideTitle = (meeting: Meeting) => fillPlaceholders(settingsOf(meeting).title, meetingValues(meeting)) || meetingTitle(meeting.pi)
+export const meetingFooter = (meeting: Meeting) => fillPlaceholders(settingsOf(meeting).footer, meetingValues(meeting))
 const titleSlide = (meeting: Meeting): Slide[] => {
   const unread = meeting.features.filter((feature) => feature.status === 'unread' || feature.status === 'error').length
-  return [{ kind: 'title', eyebrow: 'PI REVIEW', title: meetingTitle(meeting.pi), body: `<p class="lead">Built ${text(meeting.builtAt)} by ${text(displayName(meeting.builtBy))}</p>
+  const subtitle = fillPlaceholders(settingsOf(meeting).subtitle, meetingValues(meeting))
+  return [{ kind: 'title', eyebrow: 'PI REVIEW', title: meetingSlideTitle(meeting), body: `${subtitle ? `<p class="lead subtitle">${text(subtitle)}</p>` : ''}
 <p>A snapshot of the PI reviews at that moment: it does not update. Only the comments headed “${text(`Feature Review for ${meeting.pi}`)}” and written on or after ${text(formatDate(meeting.start))} (when PI Review starts) count.</p>${unread ? `<p class="warning">${text(`${plural(unread, 'Discussion was', 'Discussions were')} not read when it was built: ${unread === 1 ? 'that Feature is' : 'those Features are'} listed as not reviewed.`)}</p>` : ''}
 <p class="muted">Keys: → or Space next, ← back, Home first, End last, O the slide overview. Print: one slide a page.</p>` }]
 }
@@ -143,7 +143,7 @@ ${tile('Offline Review', String(counts.offline), counts.noMode ? `${counts.noMod
 }
 const epicSlides = (meeting: Meeting): Slide[] => {
   const groups = new Map<string, MeetingFeature[]>()
-  for (const feature of [...meeting.features].sort(byEpic)) groups.set(epicName(feature), [...(groups.get(epicName(feature)) ?? []), feature])
+  for (const feature of [...meeting.features].sort(epicOrderOf(meeting))) groups.set(epicName(feature), [...(groups.get(epicName(feature)) ?? []), feature])
   if (groups.size < 2) return []
   const rows = [...groups].map(([epic, features]) => ({ epic, counts: meetingCounts(features) }))
   const pages = chunks(rows, listMax)
@@ -166,11 +166,11 @@ ${review.remarks ? section('Additional Remarks', review.remarks) : ''}${review.f
 }
 const featureSlide = (kind: SlideKind, eyebrow: string) => (feature: MeetingFeature): Slide => ({ kind, eyebrow, title: `#${feature.id} ${feature.title}`, body: featureBody(feature) })
 const discussSlides = (meeting: Meeting): Slide[] => {
-  const features = reviewed(meeting).filter(isDiscuss).sort(byEpic)
+  const features = reviewed(meeting).filter(isDiscuss).sort(epicOrderOf(meeting))
   return features.map((feature, at) => featureSlide('discuss', `DISCUSS DURING MEETING · ${at + 1} OF ${features.length}`)(feature))
 }
 const reviewedSlides = (meeting: Meeting): Slide[] => {
-  const features = reviewed(meeting).filter((feature) => !isDiscuss(feature)).sort(byEpic)
+  const features = reviewed(meeting).filter((feature) => !isDiscuss(feature)).sort(epicOrderOf(meeting))
   const perEpic = new Map<string, number>()
   for (const feature of features) perEpic.set(epicName(feature), (perEpic.get(epicName(feature)) ?? 0) + 1)
   const seen = new Map<string, number>()
@@ -178,7 +178,7 @@ const reviewedSlides = (meeting: Meeting): Slide[] => {
 }
 const why = (feature: MeetingFeature, start: string) => feature.status === 'none' ? `No review headed for this PI since ${formatDate(start)}` : feature.status === 'error' ? 'The Discussion could not be read' : 'The Discussion was not read'
 const notReviewedSlides = (meeting: Meeting): Slide[] => {
-  const features = notReviewed(meeting).sort(byEpic)
+  const features = notReviewed(meeting).sort(epicOrderOf(meeting))
   if (!features.length) return [{ kind: 'not-reviewed', eyebrow: 'NOT REVIEWED', title: 'Features not reviewed', body: '<p>None: every Feature of the PI has a review.</p>' }]
   const pages = chunks(features, listMax)
   return pages.map((page, at) => ({ kind: 'not-reviewed', eyebrow: `NOT REVIEWED · ${plural(features.length, 'FEATURE')}`, title: part('Features not reviewed', at, pages.length), body: `<table><thead><tr><th class="num">ID</th><th>Title</th><th>Epic</th><th>Assigned to</th><th>Why</th></tr></thead><tbody>
@@ -196,7 +196,10 @@ const themeSlides = (which: 'learnings' | 'struggles', label: string) => (meetin
   return pages.map((page, at) => ({ kind: which, eyebrow: `THEMES · ${plural(items.length, label.slice(0, -1).toUpperCase(), label.toUpperCase())}`, title: part(label, at, pages.length), body: `<ul class="themes">${page.map((item) => `<li><span class="fid">#${item.id}</span> ${text(item.text)}${item.suggested ? ' <small class="muted">(suggested)</small>' : ''}</li>`).join('')}</ul>` }))
 }
 export const slideMakers: Record<SlideKind, (meeting: Meeting) => Slide[]> = {
-  title: titleSlide, summary: summarySlide, 'summary-epics': epicSlides, discuss: discussSlides, reviewed: reviewedSlides,
+  title: titleSlide, summary: summarySlide, 'summary-epics': epicSlides,
+  executive: executiveSlides, completion: completionSlides, 'pi-trend': piTrendSlides, repeat: repeatSlides, topics: topicSlides,
+  releases: releaseSlides, hours: hoursSlides, utilization: utilizationSlides, trends: trendSlides, 'long-running': longRunningSlides,
+  discuss: discussSlides, reviewed: reviewedSlides,
   'not-reviewed': notReviewedSlides, learnings: themeSlides('learnings', 'Learnings'), struggles: themeSlides('struggles', 'Struggles'),
 }
 export const meetingSlides = (meeting: Meeting): Slide[] => slideOrder.flatMap((kind) => slideMakers[kind](meeting))
@@ -231,6 +234,23 @@ export const meetingScript = `(function () {
   toggle.addEventListener('click', function () { open(overview.hidden) })
   print.addEventListener('click', function () { window.print() })
   overview.addEventListener('click', function (event) { var target = event.target.closest('button[data-slide]'); if (target) { show(Number(target.getAttribute('data-slide'))); open(false) } })
+  // PIR-60: a number that opens another slide (the first slide of that kind).
+  doc.addEventListener('click', function (event) {
+    var go = event.target.closest && event.target.closest('button[data-goto]')
+    if (go) { for (var j = 0; j < slides.length; j++) if (slides[j].classList.contains('slide-' + go.getAttribute('data-goto'))) { show(j); break } return }
+    // PIR-62: a sortable table — its header buttons sort it (ascending, then descending), aria-sort on the header.
+    var button = event.target.closest && event.target.closest('table.sortable th button.sort')
+    if (!button) return
+    var th = button.parentNode, table = th.closest('table'), body = table.tBodies[0], col = Number(button.getAttribute('data-col'))
+    var order = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending'
+    var heads = table.querySelectorAll('thead th')
+    for (var h = 0; h < heads.length; h++) heads[h].setAttribute('aria-sort', 'none')
+    th.setAttribute('aria-sort', order)
+    var rows = Array.prototype.slice.call(body.rows)
+    function key(row) { var cell = row.cells[col]; if (!cell) return ''; var value = cell.getAttribute('data-value'); if (value !== null && value !== '' && !isNaN(Number(value))) return Number(value); return value !== null ? value : cell.textContent.trim() }
+    rows.sort(function (a, b) { var x = key(a), y = key(b), result = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }); return order === 'ascending' ? result : -result })
+    for (var r = 0; r < rows.length; r++) body.appendChild(rows[r])
+  })
   doc.addEventListener('keydown', function (event) {
     if (event.altKey || event.ctrlKey || event.metaKey) return
     var key = event.key, onButton = event.target && event.target.tagName === 'BUTTON'
@@ -307,12 +327,16 @@ th{font-size:13px;color:#56657a;background:#f2f5f8}
 // and the styles inline, the Content-Security-Policy of the interactive HTML file (no request of any kind).
 export async function buildMeetingHtml(meeting: Meeting): Promise<string> {
   const slides = meetingSlides(meeting), title = meetingTitle(meeting.pi), total = slides.length
-  const script = inlineScript(meetingScript), style = inlineStyle(meetingStyle)
+  // PIR-59: the accent colour (validated) in place of the built-in blue; a dark title slide when chosen.
+  const accent = accentOf(meeting.settings), dark = settingsOf(meeting).titleTheme === 'dark'
+  const script = inlineScript(meetingScript), style = inlineStyle(`${meetingStyle.replaceAll('#0b5394', accent)}${execStyle(accent)}`)
+  // PIR-58: the footer text of the template on every slide, with the slide number n / N.
+  const footer = meetingFooter(meeting)
   const [scriptHash, styleHash] = await Promise.all([sha256Base64(script), sha256Base64(style)])
-  const sections = slides.map((slide, at) => `<section class="slide slide-${slide.kind}" id="slide-${at + 1}" aria-roledescription="slide" aria-label="${at + 1} of ${total}: ${text(slide.title)}">
+  const sections = slides.map((slide, at) => `<section class="slide slide-${slide.kind}${slide.kind === 'title' && dark ? ' dark' : ''}" id="slide-${at + 1}" aria-roledescription="slide" aria-label="${at + 1} of ${total}: ${text(slide.title)}">
 <header><p class="eyebrow">${text(slide.eyebrow)}</p>${slide.kind === 'title' ? `<h1>${text(slide.title)}</h1>` : `<h2>${text(slide.title)}</h2>`}</header>
 <div class="body">${slide.body}</div>
-<footer><span>${text(title)} · built ${text(meeting.builtAt)}</span><span>${at + 1} / ${total}</span></footer>
+<footer><span class="footer-text">${text(footer)}</span><span class="slide-number">${at + 1} / ${total}</span></footer>
 </section>`).join('\n')
   return `<!doctype html>
 <html lang="en">

@@ -141,7 +141,10 @@ test('TC-PIR-46: the Scrum Master conducts the PI meeting — the file is downlo
     titles.push(await text(current(file).locator('h1, h2').first()))
     if (at < total - 1) { await file.keyboard.press('ArrowRight'); await file.locator('#counter', { hasText: `${at + 2} / ${total}` }).waitFor() }
   }
-  assert.deepEqual(titles, ['PI Review Meeting — PI 2026.4', 'Summary', '#201 Lab rig upgrade', '#202 Supplier audit pack', 'Features not reviewed', 'Learnings', 'Struggles'])
+  // PIR-51…PIR-57: the executive slides after the Summary (their content: pi-meeting-executive.e2e.mjs, TC-PIR-61).
+  const executive = ['Executive summary', 'Review completion per Epic', 'PI-over-PI trend: PI 2026.3 → PI 2026.4', 'Repeat carry-overs', 'Topics for discussion', 'Releases in the PI', 'Hours per Epic', 'Utilization', 'Actual hours (team, by month)', 'Features closed (by sprint)', 'Ad-hoc Features added (by sprint)', 'Long-running Features']
+  assert.deepEqual(titles, ['PI Review Meeting — PI 2026.4', 'Summary', ...executive, '#201 Lab rig upgrade', '#202 Supplier audit pack', 'Features not reviewed', 'Learnings', 'Struggles'])
+  const rigAt = titles.indexOf('#201 Lab rig upgrade') + 1
   // Home and End, ← back, the overview with O (Escape closes it), a click on a slide in it.
   await file.keyboard.press('Home')
   await file.locator('#counter', { hasText: `1 / ${total}` }).waitFor()
@@ -157,7 +160,7 @@ test('TC-PIR-46: the Scrum Master conducts the PI meeting — the file is downlo
   await overview.waitFor({ state: 'hidden' })
   await file.keyboard.press('o')
   await overview.getByRole('button', { name: /Lab rig upgrade/ }).click()
-  await file.locator('#counter', { hasText: `3 / ${total}` }).waitFor()
+  await file.locator('#counter', { hasText: `${rigAt} / ${total}` }).waitFor()
   // Discuss during Meeting: the Feature's facts and its review.
   const rig = (await text(current(file))).toLowerCase()
   for (const part of ['DISCUSS DURING MEETING · 1 OF 1', 'Epic DP releases', 'Assigned to Rita Gomez', 'State Active', 'Learnings Calibrate first', 'Struggles Vendor was late', 'Discuss during Meeting', 'Review by Rita Gomez']) assert.ok(rig.includes(part.toLowerCase()), `${part} in ${rig}`)
@@ -165,7 +168,7 @@ test('TC-PIR-46: the Scrum Master conducts the PI meeting — the file is downlo
   if (shots) await shot(file, 'pi-meeting-4-feature-slide')
   // The hostile comment is text: shown as written, never run.
   await file.keyboard.press('ArrowRight')
-  await file.locator('#counter', { hasText: `4 / ${total}` }).waitFor()
+  await file.locator('#counter', { hasText: `${rigAt + 1} / ${total}` }).waitFor()
   assert.ok((await text(current(file))).includes(hostile.replace(/\s+/g, ' ')), 'the comment as written')
   assert.equal(await file.evaluate(() => window.__ran), undefined)
   // 203's only review is before the start date: listed as not reviewed.

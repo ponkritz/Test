@@ -2546,6 +2546,26 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-51 An older review without the heading is Not reviewed until reviewed again** — Req PIR-50, PIR-49, PIR-17, PIR-48 — **UAT** — E2E `pi-review-form.e2e.mjs` ("TC-PIR-51: an older review without the “Feature Review for PI …” heading is Not reviewed; reviewed again it counts, whatever the PI dates": PI 2026.4 without dates; 301 headed for PI 2026.4 Reviewed with no "every review counts" note; 302 with an older review without the heading Not reviewed (no PI named), no Edit review…; the My review ⓘ says "Only comments headed “Feature Review for PI …” count as a PI review …"; Review… on 302 posts a comment whose POST body starts with `<p>Feature Review for PI 2026.4</p>`, then 302 is Reviewed, "2 of 3 reviewed"); UAT (day 4): a Feature owner sees a Feature they reviewed before the heading existed as Not reviewed, reads why in the ⓘ, reviews it again and sees it Reviewed.
 
+**TC-PIR-52 Closed in the PI, carried forward, ad-hoc and the topics** — Req PIR-51, PIR-60 — L1 `pi-meeting-exec.test.mjs` ("PIR-51: Closed in the PI is Closed / Done with the Closed Date inside the PI’s dates (both ends); carried forward from the headed review only; the ad-hoc tag counted (TC-PIR-52)": the PI's dates from its own dates and from its Sprints, a Feature closed the day before / the first / the last / the day after, Move = Yes without the heading not carried, the ad-hoc tag in any case, the counts per Epic, a month by its 15th day; "PIR-51: topics for discussion — every point of a Discuss during Meeting review with who raised it (display name) and when (TC-PIR-52)").
+
+**TC-PIR-53 The Epic order** — Req PIR-62 — L1 `pi-meeting-exec.test.mjs` ("PIR-62: the Epics in the chosen order — Epic ID ascending by default, or most Features first; No Epic last (TC-PIR-53)").
+
+**TC-PIR-54 Hours per Epic, Allocation % and Utilization agree with the Dashboard** — Req PIR-55 — L1 `pi-meeting-exec.test.mjs` ("PIR-55: hours per Epic are the Dashboard’s actuals; Allocation % adds up to 100; Utilization is the Dashboard’s actual ÷ capacity (TC-PIR-54)": the hours per Epic and per month, the shares adding up to 100, the utilization equal to `totals(personMonths(…))`, the reasons without data or dates).
+
+**TC-PIR-55 Peaks and spikes** — Req PIR-56 — L1 `pi-meeting-exec.test.mjs` ("PIR-56: a spike is a point above 1.5 × the PI’s average — one constant; the peak is the highest point (TC-PIR-55)": the constant, a point exactly at 1.5 × not a spike, the hours by month and the closed / ad-hoc Features by Sprint, the top contributors, the rule on the slide, the chart as SVG).
+
+**TC-PIR-56 PI-over-PI and repeat carry-overs** — Req PIR-52, PIR-53 — L1 `pi-meeting-exec.test.mjs` ("PIR-52, PIR-53: PI-over-PI from the same data; repeat carry-overs from headed reviews in a row (TC-PIR-56)").
+
+**TC-PIR-57 Releases and their Release Classification** — Req PIR-54 — L1 `pi-meeting-exec.test.mjs` ("PIR-54: releases of the ticked streams inside the PI’s dates, each once, with their Release Classification counts (TC-PIR-57)": a release the day before the PI left out, one without a date by its month, one counted once, a stream without data and without a classification with the reason, "No release-based streams chosen").
+
+**TC-PIR-58 Long-running Features** — Req PIR-57 — L1 `pi-meeting-exec.test.mjs` ("PIR-57: long-running Features of the ticked streams — N per Epic (default 2), age in months, years and PIs, oldest first (TC-PIR-58)").
+
+**TC-PIR-59 The meeting presentation settings** — Req PIR-58, PIR-59 — L1 `pi-meeting-exec.test.mjs` ("PIR-58, PIR-59: the settings — defaults, strict reading, old files load, placeholders filled, contrast refused (TC-PIR-59)": the defaults not written, a schema 1 file loads and stays schema 1, settings make schema 2 and read back, a schema 1 file with settings and a schema 3 file refused, a bad colour and threshold refused, the merge, the placeholders, unknown placeholders refused, 4.5:1 against white).
+
+**TC-PIR-60 The executive file** — Req PIR-58, PIR-59, PIR-60, PIR-61, PIR-62, PIR-43 — L1 `pi-meeting-exec.test.mjs` ("PIR-58, PIR-60, PIR-62: the file — the executive slides in order, the template escaped, the footer with n / N, sortable tables, no request (TC-PIR-60)": a hostile title, subtitle and team escaped, one script, no inline style or event attribute, the footer text and n / N on every slide, the dark title slide and the accent colour, the order of the slides, the sortable headers and the script, the Not reviewed button, the file still recognised, every new slide "—" with the reason without the figures); `pi-meeting.test.mjs` (the slide order and the escaping, the file's own SVG only).
+
+**TC-PIR-61 Set up the meeting presentation and conduct the executive meeting** — Req PIR-58, PIR-59, PIR-62, PIR-51, PIR-52, PIR-53, PIR-54, PIR-55, PIR-56, PIR-57, PIR-60, PIR-61 — **UAT** — E2E `pi-meeting-executive.e2e.mjs` ("TC-PIR-61: the Scrum Master sets up the meeting presentation …": against a mocked GitHub (a custom stream Platform over the Tools Epic) and a fake dev.azure.com with month Tasks, the Scrum Master opens Admin → Feature & PI setup → PI Review form → Meeting presentation, sets the footer "Confidential · {team} · PI {PI}", the team, a dark title slide, Order Epics by Number of Features, ticks Platform and Tools' threshold 3; #f2a600 is refused with its contrast, #1b5e20 accepted, the preview follows, Save to Git writes schema 2; Conduct PI Meeting: the file opened offline has the executive slides in order after the Summary, the footer text and n / N on every slide, Audits before Tools, the Epic ID header re-sorts with Enter (aria-sort ascending, then descending, the slide unchanged), the Not reviewed number opens the list, the repeat carry-over, the topic raised by Ken Ito, Platform's releases "—" with the reason, the hours and Allocation %, the utilization, the spike month with its top Epics, the long-running Feature with its threshold; no request leaves the file); UAT: the Scrum Master sets the presentation for the team, builds the meeting of the current PI on the released build, checks the executive figures against the Dashboard and Release Details, re-sorts a table while presenting and prints it.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3478,6 +3498,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-48 | TC-PIR-48, TC-PIR-51 |
 | PIR-49 | TC-PIR-27, TC-PIR-49, TC-PIR-50, TC-PIR-51 |
 | PIR-50 | TC-PIR-50, TC-PIR-51 |
+| PIR-51 | TC-PIR-52, TC-PIR-61 |
+| PIR-52 | TC-PIR-56, TC-PIR-61 |
+| PIR-53 | TC-PIR-56, TC-PIR-61 |
+| PIR-54 | TC-PIR-57, TC-PIR-61 |
+| PIR-55 | TC-PIR-54, TC-PIR-61 |
+| PIR-56 | TC-PIR-55, TC-PIR-61 |
+| PIR-57 | TC-PIR-58, TC-PIR-61 |
+| PIR-58 | TC-PIR-59, TC-PIR-60, TC-PIR-61 |
+| PIR-59 | TC-PIR-59, TC-PIR-60, TC-PIR-61 |
+| PIR-60 | TC-PIR-52, TC-PIR-60, TC-PIR-61 |
+| PIR-61 | TC-PIR-60, TC-PIR-61 |
+| PIR-62 | TC-PIR-53, TC-PIR-60, TC-PIR-61 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3592,7 +3624,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…51, TC-UI-27 |
+| UC-40 | TC-PIR-01…61, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record
