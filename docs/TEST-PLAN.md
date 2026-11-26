@@ -2566,6 +2566,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-61 Set up the meeting presentation and conduct the executive meeting** — Req PIR-58, PIR-59, PIR-62, PIR-51, PIR-52, PIR-53, PIR-54, PIR-55, PIR-56, PIR-57, PIR-60, PIR-61 — **UAT** — E2E `pi-meeting-executive.e2e.mjs` ("TC-PIR-61: the Scrum Master sets up the meeting presentation …": against a mocked GitHub (a custom stream Platform over the Tools Epic) and a fake dev.azure.com with month Tasks, the Scrum Master opens Admin → Feature & PI setup → PI Review form → Meeting presentation, sets the footer "Confidential · {team} · PI {PI}", the team, a dark title slide, Order Epics by Number of Features, ticks Platform and Tools' threshold 3; #f2a600 is refused with its contrast, #1b5e20 accepted, the preview follows, Save to Git writes schema 2; Conduct PI Meeting: the file opened offline has the executive slides in order after the Summary, the footer text and n / N on every slide, Audits before Tools, the Epic ID header re-sorts with Enter (aria-sort ascending, then descending, the slide unchanged), the Not reviewed number opens the list, the repeat carry-over, the topic raised by Ken Ito, Platform's releases "—" with the reason, the hours and Allocation %, the utilization, the spike month with its top Epics, the long-running Feature with its threshold; no request leaves the file); UAT: the Scrum Master sets the presentation for the team, builds the meeting of the current PI on the released build, checks the executive figures against the Dashboard and Release Details, re-sorts a table while presenting and prints it.
 
+**TC-PIR-62 My PI Review reads the Discussions with the date from Git** — Req PIR-63, PIR-17, PIR-33, PIR-35 — L1 `pi-review-edit.test.mjs` ("KB-140: a read started with an older "PI Review starts from" that answers last does not overwrite the read with the date in use, nor does a read a fresh one replaced (TC-PIR-62)") ; E2E `my-pi-review-read.e2e.mjs` ("TC-PIR-62: My PI Review reads the Discussions again when "PI Review starts from" comes from Git during the read …": the page starts reading with this browser's date, the earlier date from Git arrives during the read, the second read answers first and the first read last; 201 stays Reviewed with Edit review…, 1 of 4 reviewed; back from PI Review nothing is read again — failed on v14.3.0: 201 fell back to Review… once the first read answered).
+
+**TC-PIR-63 Not read with Retry on My PI Review** — Req PIR-63 — L1 `pi-review-edit.test.mjs` ("KB-140: a read that has not answered after 90 s is shown as not read (discussionStuck, TC-PIR-63)") ; E2E `my-pi-review-read.e2e.mjs` (same scenario: Azure DevOps answers 503 for 204, its row shows Not read with Retry and the reason in the tooltip; Retry reads it again and the row shows Not reviewed) ; browser check: a Discussion whose read does not answer turns into Not read with Retry after 90 s.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3464,7 +3468,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-14 | TC-PIR-13, TC-PIR-16, TC-PIR-28, TC-PIR-29, TC-PIR-48 |
 | PIR-15 | TC-PIR-15, TC-PIR-16 |
 | PIR-16 | TC-PIR-16 |
-| PIR-17 | TC-PIR-17, TC-PIR-26, TC-PIR-27, TC-PIR-35, TC-PIR-38, TC-PIR-50, TC-PIR-51 |
+| PIR-17 | TC-PIR-17, TC-PIR-26, TC-PIR-27, TC-PIR-35, TC-PIR-38, TC-PIR-50, TC-PIR-51, TC-PIR-62 |
 | PIR-18 | TC-PIR-14, TC-PIR-18, TC-PIR-25, TC-PIR-28, TC-PIR-33, TC-PIR-48 |
 | PIR-19 | TC-PIR-19, TC-PIR-22, TC-PIR-23, TC-PIR-30, TC-PIR-34 |
 | PIR-20 | TC-PIR-20, TC-PIR-23, TC-PIR-24, TC-PIR-33 |
@@ -3480,9 +3484,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-30 | TC-PIR-31, TC-PIR-24 |
 | PIR-31 | TC-PIR-24, TC-PIR-30, TC-PIR-31, TC-CON-71 |
 | PIR-32 | TC-PIR-33 |
-| PIR-33 | TC-PIR-34, TC-PIR-50 |
+| PIR-33 | TC-PIR-34, TC-PIR-50, TC-PIR-62 |
 | PIR-34 | TC-PIR-35, TC-PIR-36, TC-PIR-37, TC-PIR-38, TC-PIR-39, TC-PIR-48, TC-PIR-50 |
-| PIR-35 | TC-PIR-37 |
+| PIR-35 | TC-PIR-37, TC-PIR-62 |
 | PIR-36 | TC-PIR-38, TC-PIR-48, TC-PIR-50 |
 | PIR-37 | TC-PIR-38, TC-PIR-39 |
 | PIR-38 | TC-PIR-40 |
@@ -3510,6 +3514,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-60 | TC-PIR-52, TC-PIR-60, TC-PIR-61 |
 | PIR-61 | TC-PIR-60, TC-PIR-61 |
 | PIR-62 | TC-PIR-53, TC-PIR-60, TC-PIR-61 |
+| PIR-63 | TC-PIR-62, TC-PIR-63 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |

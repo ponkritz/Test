@@ -74,7 +74,8 @@ export function commentsFrom(comments: readonly WorkItemComment[], start: string
 
 // The Discussions read so far, by work item key, for this page load only (PIR-05, PIR-06): never stored.
 // PIR-33: comments — only those on or after the start date in use when they were read (from); ignored — how many before it.
-export type Discussion = { state: 'loading' } | { state: 'done'; comments: WorkItemComment[]; capped: boolean; readAt: string; from?: string; ignored?: number } | { state: 'error'; error: string }
+// KB-140: since — when the read started (ms), so a read that never answers shows Not read with Retry (discussionStuck).
+export type Discussion = { state: 'loading'; since?: number } | { state: 'done'; comments: WorkItemComment[]; capped: boolean; readAt: string; from?: string; ignored?: number } | { state: 'error'; error: string }
 const discussions = new Map<string, Discussion>()
 const listeners = new Set<() => void>()
 let version = 0
@@ -90,6 +91,9 @@ export const discussionsVersion = () => version
 export function subscribeDiscussions(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } }
 export function setDiscussion(key: string, value: Discussion | undefined) { if (value) discussions.set(key, value); else discussions.delete(key); version += 1; for (const listener of listeners) listener() }
 export function clearDiscussions() { discussions.clear(); version += 1; for (const listener of listeners) listener() }
+// KB-140 (PIR-17): a read still 'loading' after this long (two request timeouts of 45 s) is shown as Not read with Retry.
+export const discussionStuckAfterMs = 90_000
+export const discussionStuck = (entry: Discussion | undefined, now: number = Date.now()) => entry?.state === 'loading' && entry.since != null && now - entry.since >= discussionStuckAfterMs
 
 // PIR-06: read the Discussions of several Features, `concurrency` (3) at a time. When Azure DevOps asks to slow down
 // (429, rateWait gives the Retry-After seconds) the read waits (at most 60 s) and tries that Feature once more; a second

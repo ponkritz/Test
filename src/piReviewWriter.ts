@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { isRunning, runInBackground, recordJob } from './backgroundJobs'
-import { ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewForm, type ReviewViewer } from './piReviewPost'
+import { discussionReading, ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewForm, type ReviewViewer } from './piReviewPost'
 import { discussionOf, discussionsFrom, discussionsVersion, latestComment, piLabel, readDiscussions, reviewComments, reviewSplit, setDiscussion, subscribeDiscussions, type BulkReadResult } from './piReview'
 import { rateLimitWait, shownDateOf, type AzureConfig } from './azureDevOps'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
@@ -159,7 +159,14 @@ const running = new Set<string>(), runningListeners = new Set<() => void>()
 let runningVersion = 0
 const setRunning = (key: string, on: boolean) => { if (on) running.add(key); else running.delete(key); runningVersion += 1; for (const listener of runningListeners) listener() }
 const subscribeRunning = (listener: () => void) => { runningListeners.add(listener); return () => { runningListeners.delete(listener) } }
+// KB-140: the Feature lists whose automatic read has finished (in this page load), so a page can offer Retry for a
+// Discussion it left unread (a read stopped by a second 429 or a refused PAT).
+const settled = new Set<string>()
 export function useDiscussionsRead(config: AzureConfig | null, pat: string, features: readonly AzureWorkItem[], blocked: string, onDone?: (result: BulkReadResult, count: number) => void) {
+  return useDiscussionsReadState(config, pat, features, blocked, onDone).pending
+}
+// pending: as useDiscussionsRead; settled — the read of this list has finished (nothing is read for it now).
+export function useDiscussionsReadState(config: AzureConfig | null, pat: string, features: readonly AzureWorkItem[], blocked: string, onDone?: (result: BulkReadResult, count: number) => void) {
   useSyncExternalStore(subscribeDiscussions, discussionsVersion)
   useSyncExternalStore(subscribeRunning, () => runningVersion)
   const readKey = useRef('')
@@ -167,14 +174,16 @@ export function useDiscussionsRead(config: AzureConfig | null, pat: string, feat
   useEffect(() => {
     if (blocked || !config || !listKey || readKey.current === listKey) return
     readKey.current = listKey
-    const targets = features.filter((item) => !discussionOf(item.key))
+    // KB-140: a Discussion shown as being read while no read of it is under way (its read was dropped) is read again.
+    const targets = features.filter((item) => { const entry = discussionOf(item.key); return !entry || (entry.state === 'loading' && !discussionReading(item)) })
     if (!targets.length) return
     const byId = new Map(targets.map((item) => [item.id, item]))
     setRunning(listKey, true)
-    void readDiscussions(targets.map((item) => item.id), (id) => readDiscussionInto(config, pat, byId.get(id)!), { rateWait: rateLimitWait }).then((result) => { setRunning(listKey, false); onDone?.(result, targets.length) })
+    void readDiscussions(targets.map((item) => item.id), (id) => readDiscussionInto(config, pat, byId.get(id)!), { rateWait: rateLimitWait }).then((result) => { settled.add(listKey); setRunning(listKey, false); onDone?.(result, targets.length) })
   }, [listKey, blocked, config, pat, features]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (blocked || !running.has(listKey)) return 0
-  return features.filter((item) => { const state = discussionOf(item.key)?.state; return state !== 'done' && state !== 'error' }).length
+  const done = !blocked && Boolean(listKey) && settled.has(listKey) && !running.has(listKey)
+  if (blocked || !running.has(listKey)) return { pending: 0, settled: done }
+  return { pending: features.filter((item) => { const state = discussionOf(item.key)?.state; return state !== 'done' && state !== 'error' }).length, settled: false }
 }
 
 // PIR-37: Post for several Features — ONE Background jobs entry "PI review for {n} Features": per Feature, one after

@@ -1,14 +1,14 @@
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { DataTable, type DataColumn } from '../components/DataTable'
 import { EmptyState, Notice, Page, Pill, TablePanel, WriteBlocked } from '../components/ui'
 import { formatDateTime } from '../format'
 import { isMine, type Me } from '../myWork'
 import { PersonPicker } from '../components/PersonPicker'
-import { discussionOf, discussionsVersion, moveLabel, oneLine, piFeatures, piLabel, reviewHeadingNote, reviewModeLabel, samePi, subscribeDiscussions, type ReviewSplit } from '../piReview'
-import { discussionReadBlock, myReviewOf, otherPersonBlock, otherPiHint, personOf, reviewCountOf, reviewPageBlock, reviewPeriodOf, reviewPostBlock, type ReviewCount, type ReviewPeriod } from '../piReviewPost'
+import { discussionOf, discussionStuck, discussionStuckAfterMs, discussionsVersion, moveLabel, oneLine, piFeatures, piLabel, reviewHeadingNote, reviewModeLabel, samePi, subscribeDiscussions, type ReviewSplit } from '../piReview'
+import { discussionReadBlock, readDiscussionInto, myReviewOf, otherPersonBlock, otherPiHint, personOf, reviewCountOf, reviewPageBlock, reviewPeriodOf, reviewPostBlock, type ReviewCount, type ReviewPeriod } from '../piReviewPost'
 import { BulkReviewDialog, ReviewAction, ReviewDialog } from './PiReviewForm'
 import { PiSetupGear } from '../components/PiFormSetupPanel'
-import { formSetupOf, useBulkReview, useDiscussionsRead, useOwnReview, useReviewViewer, useReviewWriter } from '../piReviewWriter'
+import { formSetupOf, useBulkReview, useDiscussionsReadState, useOwnReview, useReviewViewer, useReviewWriter } from '../piReviewWriter'
 import { bulkBlock, bulkTargets, inBulkJob } from '../piReviewBulk'
 import { listJobs, subscribeJobs } from '../backgroundJobs'
 import type { PiFormSetup } from '../piReviewSetup'
@@ -32,9 +32,11 @@ import type { MyWork } from '../useMyWork'
 // without the heading is no review (PIR-50: older reviews included).
 const piKey = 'demand-planning-my-pi-review-pi-v1'
 type Status = { state: 'unread' | 'loading' | 'error' | 'none' | 'reviewed' | 'other'; comment?: WorkItemComment; split?: ReviewSplit; error?: string; count?: ReviewCount }
-function statusOf(item: AzureWorkItem, name: string | undefined, period: ReviewPeriod, setup?: PiFormSetup): Status {
+// KB-140: now — a read still running after discussionStuckAfterMs is shown as not read (with Retry).
+function statusOf(item: AzureWorkItem, name: string | undefined, period: ReviewPeriod, setup?: PiFormSetup, now = Date.now()): Status {
   const entry = discussionOf(item.key)
   if (!entry) return { state: 'unread' }
+  if (discussionStuck(entry, now)) return { state: 'error', error: `Azure DevOps did not answer within ${discussionStuckAfterMs / 1000} s.` }
   if (entry.state === 'loading') return { state: 'loading' }
   if (entry.state === 'error') return { state: 'error', error: entry.error }
   const newest = [...entry.comments].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
@@ -51,7 +53,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
   const poster = useReviewViewer()
   // PIR-19: my review is found by the headings of the form setup in use (and the built-in ones).
   const setup = formSetupOf(poster.env)
-  useSyncExternalStore(subscribeDiscussions, discussionsVersion)
+  const version = useSyncExternalStore(subscribeDiscussions, discussionsVersion)
   // PIR-33: only the PIs that did not end before "PI Review starts from" (the form setup's date).
   const { options, current, pi, choose, fallback, remembered, iterations, cutoff } = usePiChoice(azure, piKey, reviewStartOf(setup))
   // PIR-24: whose Features — me (my own work email, else my name; not the top bar's Person of other pages) or, for a
@@ -71,11 +73,21 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
   // PIR-17, PIR-24: read the shown Features' Discussions not read yet (3 at a time), once per Feature list — and again
   // when "PI Review starts from" changed (PIR-33: the Discussions read before are forgotten). PIR-35: the same read as PI
   // Review's automatic read of my own Features (useDiscussionsRead).
-  useDiscussionsRead(config, pat, rows, readBlocked)
+  const reading = useDiscussionsReadState(config, pat, rows, readBlocked)
+  // KB-140: a read that does not answer turns into Not read with Retry after discussionStuckAfterMs (re-rendered then).
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const since = rows.map((item) => discussionOf(item.key)).flatMap((entry) => entry?.state === 'loading' && entry.since != null && !discussionStuck(entry) ? [entry.since] : [])
+    if (!since.length) return
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(...since) + discussionStuckAfterMs - Date.now()) + 50)
+    return () => clearTimeout(timer)
+  }, [rows, version, now])
+  // KB-140: Retry — a Discussion not read (an error, a read that did not answer, or left unread when the read stopped).
+  const retryOf = (item: AzureWorkItem, shown: Status) => !readBlocked && config && (shown.state === 'error' || (shown.state === 'unread' && reading.settled)) ? () => { void readDiscussionInto(config, pat, item, { fresh: true }).catch(() => { /* shown in the row */ }) } : undefined
   const writer = useReviewWriter(pi, { list: iterations.list, reading: !iterations.done })
   // PIR-49: the chosen PI — a review counts when its heading names it.
   const period = useMemo(() => reviewPeriodOf(pi), [pi])
-  const status = (item: AzureWorkItem) => statusOf(item, name, period, setup)
+  const status = (item: AzureWorkItem) => statusOf(item, name, period, setup, now)
   // PIR-34: Edit review… — my own review comment that counts for the chosen PI (useOwnReview, shared with PI Review);
   // never when a lead shows another person (their comments are theirs to edit).
   const ownOptions = { others: Boolean(who) || !self.known, me: { email: poster.email || self.me.email, name: self.me.name } }
@@ -98,7 +110,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     { id: 'state', label: 'State', value: (item) => item.state },
     { id: 'status', label: who ? 'Their review' : 'My review', hint: `Reviewed: ${who ? `${who} wrote` : 'you wrote'} a review comment for the chosen PI — a comment headed “Feature Review for PI 26.4” counts for PI 26.4 only. Not reviewed: none yet, or only a review for another PI (its date and PI shown)${who ? '; a review posted by someone else does not count' : ''}. ${reviewHeadingNote} Read from Azure DevOps when the page opens.`,
       value: (item) => statusText(status(item)), title: (item) => status(item).error,
-      render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}</span> } },
+      render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{retryOf(item, shown) && <button type="button" className="ghost" aria-label={`Read the Discussion of Feature ${item.id} again`} title={shown.error ? `${shown.error} Read it again.` : 'Read the Discussion again.'} onClick={retryOf(item, shown)}>Retry</button>}{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}</span> } },
     { id: 'date', label: who ? 'Date of their review' : 'Date of my review', firstSortDesc: true, value: (item) => { const comment = status(item).comment; return comment ? shownDateOf(comment) : '' }, render: (item) => { const shown = status(item); return shown.comment ? <span title={shown.comment.updated ? `Written ${formatDateTime(shown.comment.date)}, updated ${formatDateTime(shown.comment.updated)}` : undefined}>{formatDateTime(shownDateOf(shown.comment))}</span> : <span className="muted">—</span> } },
     { id: 'move', label: 'Move to Next PI', value: (item) => { const split = status(item).split; return split ? moveLabel(split) : '' }, render: (item) => { const split = status(item).split; return split ? <span className="pir-clip">{oneLine(moveLabel(split))}</span> : <span className="muted">—</span> } },
     { id: 'review-mode', label: 'Review mode', value: (item) => { const split = status(item).split; return split ? reviewModeLabel(split) : '' } },

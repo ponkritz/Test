@@ -448,17 +448,23 @@ export function readDiscussionInto(config: AzureConfig, pat: string, item: Pick<
   const from = discussionsFrom(), key = `${item.key}|${from}`
   const running = fresh ? undefined : reading.get(key)
   if (running) return running
-  setDiscussion(item.key, { state: 'loading' })
+  setDiscussion(item.key, { state: 'loading', since: Date.now() })
+  // KB-140: a read whose answer is no longer wanted — "PI Review starts from" changed meanwhile (the Discussions were
+  // forgotten and are read again with the new date), or a fresh read replaced it — keeps its answer out of the store, so
+  // an older read that answers last never overwrites the newer one (which the pages would then never read again).
+  const current = () => discussionsFrom() === from && reading.get(key) === read
   // PIR-33: only the comments on or after "PI Review starts from" are kept.
-  const read = (async () => {
-    try { const read = await readDiscussion(config, pat, item.id, transport), kept = commentsFrom(read.comments, from); setDiscussion(item.key, { state: 'done', comments: kept.comments, capped: read.capped, readAt: new Date().toISOString(), from, ignored: kept.ignored }) }
-    catch (failure) { setDiscussion(item.key, { state: 'error', error: failure instanceof Error ? failure.message : 'Could not read the Discussion.' }); throw failure }
+  const read: Promise<void> = (async () => {
+    try { const read = await readDiscussion(config, pat, item.id, transport), kept = commentsFrom(read.comments, from); if (current()) setDiscussion(item.key, { state: 'done', comments: kept.comments, capped: read.capped, readAt: new Date().toISOString(), from, ignored: kept.ignored }) }
+    catch (failure) { if (current()) setDiscussion(item.key, { state: 'error', error: failure instanceof Error ? failure.message : 'Could not read the Discussion.' }); throw failure }
   })()
   reading.set(key, read)
   const done = () => { if (reading.get(key) === read) reading.delete(key) }
   read.then(done, done)
   return read
 }
+// KB-140: whether a read of this Feature's Discussion (with the date in use) is under way.
+export const discussionReading = (item: Pick<AzureWorkItem, 'key'>) => reading.has(`${item.key}|${discussionsFrom()}`)
 // PIR-35: the Features of a list that are mine — Assigned To by my work email, else my display name (isMine, as My PI
 // Review and PIR-24); none when nothing is known about me.
 export function ownFeatures<T extends Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>>(items: readonly T[], me: Me | undefined): T[] {

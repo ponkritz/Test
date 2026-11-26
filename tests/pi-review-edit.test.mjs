@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { buildReviewComment, discussionReadBlock, editTargetOf, isOwnComment, ownFeatures, ownReadBlock, ownReviewOf, readDiscussionInto, reviewCountOf, reviewPeriodOf, updateReview } from '../src/piReviewPost.ts'
-import { discussionOf } from '../src/piReview.ts'
+import { buildReviewComment, discussionReading, discussionReadBlock, editTargetOf, isOwnComment, ownFeatures, ownReadBlock, ownReviewOf, readDiscussionInto, reviewCountOf, reviewPeriodOf, updateReview } from '../src/piReviewPost.ts'
+import { discussionOf, discussionStuck, discussionStuckAfterMs, discussionsFrom, setDiscussionsFrom } from '../src/piReview.ts'
 import { guardAzureWrites, readDiscussion, requestAzure, shownDateOf } from '../src/azureDevOps.ts'
 
 // PIR-34: Edit review… in My PI Review — the comment it edits (the viewer's own review that counts for the chosen PI),
@@ -169,6 +169,52 @@ test('PIR-35: a Discussion being read is not requested again — a second read w
   // Once a read has finished, the next one (↻ Read again) asks again too.
   await readDiscussionInto(config, 'p', item, { transport })
   assert.equal(sent.length, 3)
+})
+
+test('KB-140: a read started with an older "PI Review starts from" that answers last does not overwrite the read with the date in use, nor does a read a fresh one replaced (TC-PIR-62)', async () => {
+  const start = discussionsFrom()
+  const gates = []
+  const comment = (id, date) => ({ id, text: 'Feature Review for PI 26.4', createdBy: { displayName: 'Rita Gomez' }, createdDate: `${date}T10:00:00Z` })
+  const transport = () => new Promise((resolve) => gates.push(resolve))
+  const item = { key: 'example/quality/9301', id: 9301 }
+  try {
+    setDiscussionsFrom('2026-09-21')
+    const old = readDiscussionInto(config, 'p', item, { transport })
+    assert.equal(discussionOf(item.key).state, 'loading')
+    assert.ok(Number.isFinite(discussionOf(item.key).since), 'the start of the read is kept')
+    assert.equal(discussionReading(item), true)
+    // The date comes from Git: the Discussions are forgotten and read again with it.
+    setDiscussionsFrom('2026-05-01')
+    assert.equal(discussionOf(item.key), undefined)
+    assert.equal(discussionReading(item), false, 'no read with the date in use yet')
+    const now = readDiscussionInto(config, 'p', item, { transport })
+    gates[1]({ comments: [comment(1, '2026-08-01')] })
+    await now
+    assert.equal(discussionOf(item.key).comments.length, 1)
+    // The older read answers last: its answer (read with 21 Sep) is not kept.
+    gates[0]({ comments: [comment(1, '2026-08-01')] })
+    await old
+    assert.equal(discussionOf(item.key).from, '2026-05-01')
+    assert.equal(discussionOf(item.key).comments.length, 1, 'the review of 1 Aug still counts')
+    // A read a fresh one replaced (Retry, a post) answers last: not kept either.
+    const stale = readDiscussionInto(config, 'p', item, { transport })
+    const fresh = readDiscussionInto(config, 'p', item, { transport, fresh: true })
+    gates[3]({ comments: [comment(1, '2026-08-01'), comment(2, '2026-11-01')] })
+    await fresh
+    gates[2]({ comments: [] })
+    await stale
+    assert.equal(discussionOf(item.key).comments.length, 2)
+    assert.equal(discussionReading(item), false)
+  } finally { setDiscussionsFrom(start) }
+})
+
+test('KB-140: a read that has not answered after 90 s is shown as not read (discussionStuck, TC-PIR-63)', () => {
+  assert.equal(discussionStuckAfterMs, 90_000)
+  assert.equal(discussionStuck({ state: 'loading', since: 1_000 }, 1_000 + 89_999), false)
+  assert.equal(discussionStuck({ state: 'loading', since: 1_000 }, 1_000 + 90_000), true)
+  assert.equal(discussionStuck({ state: 'loading' }, 1e12), false, 'no start known')
+  assert.equal(discussionStuck({ state: 'error', error: 'x' }, 1e12), false)
+  assert.equal(discussionStuck(undefined), false)
 })
 
 test('PIR-38: a review shows when it was updated — the modifiedDate of an edited comment, else when it was written; which PI it counts for still goes by the written date (TC-PIR-40)', async () => {
