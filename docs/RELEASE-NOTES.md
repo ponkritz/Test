@@ -2,6 +2,15 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v12.1.0 — 2026-11-26
+
+**Changed**
+- **Load everything from Git runs in the background** — pressing Load everything from Git in the forced pop-up (or Retry) closes it at once and the load runs as the background job "Load everything from Git" in the top bar's Background jobs (Jobs done): running with the part being loaded, then done with what was loaded, or failed naming each part; the app can be used meanwhile. One load at a time; the pop-up stays closed while it runs and comes back in its failed state (what failed, the Git storage setup, Retry) only when it fails. Admin → Data & sharing → Load from Git → Load everything from Git runs the same job. At phone width the Background jobs list opens over the page (GIT-33, GIT-34, GIT-35).
+
+DF-397, DF-398, DF-399; TC-GIT-28, TC-GIT-29, TC-GIT-30.
+
+PR #439.
+
 ## v12.0.1 — 2026-11-26
 
 **Dependencies**
