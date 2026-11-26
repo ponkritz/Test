@@ -21,13 +21,14 @@ import { piName } from './myWork.ts'
 import { formatDate, formatDateTime } from './format.ts'
 import { shownDateOf } from './azureDevOps.ts'
 import type { AzureWorkItem } from './domain'
-import { chunks, displayName, lines, listMax, part, plural, text, themeBudget, themeMax } from './piMeetingText.ts'
+import { displayName, lines, plural, text } from './piMeetingText.ts'
+import { cellOf, clampClass, columnGap, columns, columnWidth, contentWidth, fixed, flowSlides, gap, headLine, maxClamp, padBottom, padTop, padX, paragraph, pointList, pointsOf, rowLine, section, sectionOf, slideHeight, slideWidth, table, tileHeight, tiles, titleAttr, titleCut, titleFont, titleLineHeight, titleLines, widthStyle, wrapLines, type Block } from './piMeetingLayout.ts'
 import { epicRank } from './piMeetingData.ts'
 import { isAdhocTask } from './workItemEdit.ts'
 import { defaultMeetingSettings, fillPlaceholders, type MeetingSettings } from './piMeetingSettings.ts'
 import { accentOf, completionSlides, execStyle, executiveSlides, hoursSlides, longRunningSlides, piTrendSlides, releaseSlides, repeatSlides, topicSlides, trendSlides, utilizationSlides } from './piMeetingExec.ts'
 import type { MeetingExec } from './piMeetingData.ts'
-export { chunks, displayName, listMax, scrub, text, themeBudget, themeMax } from './piMeetingText.ts'
+export { displayName, scrub, text } from './piMeetingText.ts'
 export { isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingBytes, meetingFileName, meetingFolder, meetingPath, meetingsFolder, meetingStamp, piSlug } from './piMeetingFile.ts'
 
 // ---- the snapshot ----
@@ -75,14 +76,6 @@ export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: Azu
   })
 }
 
-// ---- safe text (piMeetingText.ts) ----
-// A paragraph text as HTML: one line a paragraph, more lines a list.
-function block(value: string, empty = '—') {
-  const all = lines(value)
-  if (!all.length) return `<p class="muted">${text(empty)}</p>`
-  return all.length === 1 ? `<p>${text(all[0])}</p>` : `<ul>${all.map((line) => `<li>${text(line)}</li>`).join('')}</ul>`
-}
-
 // ---- the slides ----
 export type SlideKind = 'title' | 'summary' | 'summary-epics' | 'executive' | 'completion' | 'pi-trend' | 'repeat' | 'topics' | 'releases' | 'hours' | 'utilization' | 'trends' | 'long-running' | 'discuss' | 'reviewed' | 'not-reviewed' | 'learnings' | 'struggles'
 export interface Slide { kind: SlideKind; eyebrow: string; title: string; body: string }
@@ -111,7 +104,6 @@ export function meetingCounts(features: readonly MeetingFeature[]): Counts {
   return counts
 }
 
-const tile = (label: string, value: string, detail = '') => `<div class="tile"><dt>${text(label)}</dt><dd><strong>${text(value)}</strong>${detail ? `<small>${text(detail)}</small>` : ''}</dd></div>`
 // PIR-58: the values of the placeholders {PI} {date} {time} {builtBy} {team} — the date and time as built (builtAt is
 // "26 Nov 2026, 14:30 CET"), the builder's display name, the team of the settings (else the meeting's).
 export function meetingValues(meeting: Meeting) {
@@ -122,68 +114,81 @@ const settingsOf = (meeting: Meeting) => meeting.settings ?? defaultMeetingSetti
 // PIR-58: the title slide from the template — Title and Subtitle with the placeholders filled (then escaped).
 export const meetingSlideTitle = (meeting: Meeting) => fillPlaceholders(settingsOf(meeting).title, meetingValues(meeting)) || meetingTitle(meeting.pi)
 export const meetingFooter = (meeting: Meeting) => fillPlaceholders(settingsOf(meeting).footer, meetingValues(meeting))
+// PIR-64: the title slide fits its canvas — the title at most 3 lines, the subtitle 2, each paragraph clamped (the full
+// text in a title).
 const titleSlide = (meeting: Meeting): Slide[] => {
   const unread = meeting.features.filter((feature) => feature.status === 'unread' || feature.status === 'error').length
   const subtitle = fillPlaceholders(settingsOf(meeting).subtitle, meetingValues(meeting))
-  return [{ kind: 'title', eyebrow: 'PI REVIEW', title: meetingSlideTitle(meeting), body: `${subtitle ? `<p class="lead subtitle">${text(subtitle)}</p>` : ''}
-<p>A snapshot of the PI reviews at that moment: it does not update. Only the comments headed “${text(`Feature Review for ${meeting.pi}`)}” and written on or after ${text(formatDate(meeting.start))} (when PI Review starts) count.</p>${unread ? `<p class="warning">${text(`${plural(unread, 'Discussion was', 'Discussions were')} not read when it was built: ${unread === 1 ? 'that Feature is' : 'those Features are'} listed as not reviewed.`)}</p>` : ''}
-<p class="muted">Keys: → or Space next, ← back, Home first, End last, O the slide overview. Print: one slide a page.</p>` }]
+  const clamped = (className: string, value: string, max: number, font: number) => { const need = wrapLines(value, contentWidth, font), shown = Math.min(max, need); return `<p class="${className}${className ? ' ' : ''}${clampClass(shown)}"${titleAttr(value, need > shown)}>${text(value)}</p>` }
+  return [{ kind: 'title', eyebrow: 'PI REVIEW', title: meetingSlideTitle(meeting), body: `${subtitle ? clamped('lead subtitle', subtitle, 2, 20) : ''}
+${clamped('', `A snapshot of the PI reviews at that moment: it does not update. Only the comments headed “Feature Review for ${meeting.pi}” and written on or after ${formatDate(meeting.start)} (when PI Review starts) count.`, 3, 15)}${unread ? clamped('warning', `${plural(unread, 'Discussion was', 'Discussions were')} not read when it was built: ${unread === 1 ? 'that Feature is' : 'those Features are'} listed as not reviewed.`, 2, 15) : ''}
+${clamped('muted', 'Keys: → or Space next, ← back, Home first, End last, O the slide overview. Print: one 16:9 slide a page.', 2, 15)}` }]
 }
 const summarySlide = (meeting: Meeting): Slide[] => {
   const counts = meetingCounts(meeting.features)
   const next = [...counts.nextPis].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([pi, count]) => `${count} to ${pi}`).join(', ')
-  return [{ kind: 'summary', eyebrow: 'SUMMARY', title: 'Summary', body: `<dl class="tiles">
-${tile('Features in the PI', String(counts.features))}
-${tile('Reviewed', String(counts.reviewed), `${counts.none + counts.unread} not reviewed${counts.unread ? ` (${counts.unread} Discussion${counts.unread === 1 ? '' : 's'} not read)` : ''}`)}
-${tile('Move to next PI: Yes', String(counts.yes), next || 'none moves')}
-${tile('Move to next PI: No', String(counts.no), `${counts.partly ? `${counts.partly} partly` : ''}${counts.partly && counts.noMove ? ', ' : ''}${counts.noMove ? `${counts.noMove} not given` : ''}`)}
-${tile('Discuss during Meeting', String(counts.discuss), `one slide each, next`)}
-${tile('Offline Review', String(counts.offline), counts.noMode ? `${counts.noMode} not given` : '')}
-</dl>${counts.reviewed ? '' : `<p class="muted">${text(`No Feature has a review on or after ${formatDate(meeting.start)}.`)}</p>`}` }]
+  return flowSlides('summary', 'SUMMARY', 'Summary', [tiles([
+    { label: 'Features in the PI', value: String(counts.features) },
+    { label: 'Reviewed', value: String(counts.reviewed), detail: `${counts.none + counts.unread} not reviewed${counts.unread ? ` (${counts.unread} Discussion${counts.unread === 1 ? '' : 's'} not read)` : ''}` },
+    { label: 'Move to next PI: Yes', value: String(counts.yes), detail: next || 'none moves' },
+    { label: 'Move to next PI: No', value: String(counts.no), detail: `${counts.partly ? `${counts.partly} partly` : ''}${counts.partly && counts.noMove ? ', ' : ''}${counts.noMove ? `${counts.noMove} not given` : ''}` },
+    { label: 'Discuss during Meeting', value: String(counts.discuss), detail: 'one slide each, next' },
+    { label: 'Offline Review', value: String(counts.offline), detail: counts.noMode ? `${counts.noMode} not given` : '' },
+  ]), ...(counts.reviewed ? [] : [paragraph('muted', `No Feature has a review on or after ${formatDate(meeting.start)}.`)])])
 }
 const epicSlides = (meeting: Meeting): Slide[] => {
   const groups = new Map<string, MeetingFeature[]>()
   for (const feature of [...meeting.features].sort(epicOrderOf(meeting))) groups.set(epicName(feature), [...(groups.get(epicName(feature)) ?? []), feature])
   if (groups.size < 2) return []
   const rows = [...groups].map(([epic, features]) => ({ epic, counts: meetingCounts(features) }))
-  const pages = chunks(rows, listMax)
-  return pages.map((page, at) => ({ kind: 'summary-epics', eyebrow: 'SUMMARY', title: part('Summary by Epic', at, pages.length), body: `<table><thead><tr><th>Epic</th><th class="num">Features</th><th class="num">Reviewed</th><th class="num">Not reviewed</th><th class="num">Move: Yes</th><th class="num">Move: No</th><th class="num">Discuss</th><th class="num">Offline</th></tr></thead><tbody>
-${page.map(({ epic, counts }) => `<tr><td>${text(epic)}</td><td class="num">${counts.features}</td><td class="num">${counts.reviewed}</td><td class="num">${counts.none + counts.unread}</td><td class="num">${counts.yes}</td><td class="num">${counts.no}</td><td class="num">${counts.discuss}</td><td class="num">${counts.offline}</td></tr>`).join('\n')}
-</tbody></table>` }))
+  const heads = [{ label: 'Epic', width: 30 }, ...['Features', 'Reviewed', 'Not reviewed', 'Move: Yes', 'Move: No', 'Discuss', 'Offline'].map((label) => ({ label, width: 10, num: true }))]
+  return flowSlides('summary-epics', 'SUMMARY', 'Summary by Epic', [table({ label: 'Summary by Epic', columns: heads, rows: rows.map(({ epic, counts }) => [cellOf(epic), ...[counts.features, counts.reviewed, counts.none + counts.unread, counts.yes, counts.no, counts.discuss, counts.offline].map((value) => cellOf(value))]) })])
 }
 // PIR-44: one Feature's review — ID, Title, Epic, Assigned to, State; Learnings and Struggles; Move to next PI with the
 // reason; the Review meeting advice, Additional Remarks and the fields added in PI Review Setup; when and by whom.
-function featureBody(feature: MeetingFeature) {
+// PIR-65: as blocks — a long review runs on to "(n of N)" slides, Learnings and Struggles side by side on each.
+const factWidth = (count: number) => (contentWidth - 32 * (count - 1)) / count
+function facts(list: { label: string; value: string }[], className: string, max: number): Block {
+  const width = factWidth(list.length)
+  let most = 1
+  const html = list.map(({ label, value }) => { const shown = value || '—', need = wrapLines(shown, width, 15), use = Math.min(max, need); most = Math.max(most, use); return `<div><dt>${text(label)}</dt><dd class="${clampClass(use)}"${titleAttr(shown, need > use)}>${text(shown)}</dd></div>` }).join('')
+  return fixed(`<dl class="${className}">${html}</dl>`, 16 + 20 * most)
+}
+function featureBlocks(feature: MeetingFeature): Block[] {
   const review = feature.review!
   const suggested = review.from === 'Keywords'
-  const fact = (label: string, value: string) => `<div><dt>${text(label)}</dt><dd>${text(value || '—')}</dd></div>`
-  const section = (label: string, value: string) => `<section class="part"><h3>${text(label)}</h3>${block(value)}</section>`
-  return `<dl class="facts">${fact('Epic', feature.epic || noEpic)}${fact('Assigned to', displayName(feature.assignedTo || 'Unassigned'))}${fact('State', feature.state)}</dl>
-${suggested ? '<p class="muted">Suggested from keywords: the comment has no headings.</p>' : ''}${review.from === 'None' ? section('Comment', review.text) : `<div class="columns${suggested ? ' suggested' : ''}">${section('Learnings', review.learnings)}${section('Struggles', review.struggles)}</div>
-<dl class="facts wide">${fact('Move to next PI', review.move)}${fact('Review meeting', review.mode)}</dl>
-${review.remarks ? section('Additional Remarks', review.remarks) : ''}${review.fields.map((field) => section(field.label, field.text)).join('')}`}
-<p class="byline">Review by ${text(displayName(review.author))}, ${text(review.date)}</p>`
+  const full = (label: string, value: string) => section(sectionOf(label, lines(value), contentWidth))
+  return [
+    facts([{ label: 'Epic', value: feature.epic || noEpic }, { label: 'Assigned to', value: displayName(feature.assignedTo || 'Unassigned') }, { label: 'State', value: feature.state }], 'facts', 1),
+    ...(suggested ? [paragraph('muted', 'Suggested from keywords: the comment has no headings.')] : []),
+    ...(review.from === 'None' ? [full('Comment', review.text)] : [
+      columns(sectionOf('Learnings', lines(review.learnings), columnWidth), sectionOf('Struggles', lines(review.struggles), columnWidth), suggested ? 'suggested' : ''),
+      facts([{ label: 'Move to next PI', value: review.move }, { label: 'Review meeting', value: review.mode }], 'facts wide', 2),
+      ...(review.remarks ? [full('Additional Remarks', review.remarks)] : []),
+      ...review.fields.map((field) => full(field.label, field.text)),
+    ]),
+    paragraph('byline', `Review by ${displayName(review.author)}, ${review.date}`, { font: 14, lineHeight: 20, max: 1 }),
+  ]
 }
-const featureSlide = (kind: SlideKind, eyebrow: string) => (feature: MeetingFeature): Slide => ({ kind, eyebrow, title: `#${feature.id} ${feature.title}`, body: featureBody(feature) })
+const featureSlides = (kind: SlideKind, eyebrow: string) => (feature: MeetingFeature): Slide[] => flowSlides(kind, eyebrow, `#${feature.id} ${feature.title}`, featureBlocks(feature))
 const discussSlides = (meeting: Meeting): Slide[] => {
   const features = reviewed(meeting).filter(isDiscuss).sort(epicOrderOf(meeting))
-  return features.map((feature, at) => featureSlide('discuss', `DISCUSS DURING MEETING · ${at + 1} OF ${features.length}`)(feature))
+  return features.flatMap((feature, at) => featureSlides('discuss', `DISCUSS DURING MEETING · ${at + 1} OF ${features.length}`)(feature))
 }
 const reviewedSlides = (meeting: Meeting): Slide[] => {
   const features = reviewed(meeting).filter((feature) => !isDiscuss(feature)).sort(epicOrderOf(meeting))
   const perEpic = new Map<string, number>()
   for (const feature of features) perEpic.set(epicName(feature), (perEpic.get(epicName(feature)) ?? 0) + 1)
   const seen = new Map<string, number>()
-  return features.map((feature) => { const epic = epicName(feature), at = (seen.get(epic) ?? 0) + 1; seen.set(epic, at); return featureSlide('reviewed', `REVIEWED · ${epic.toUpperCase()} · ${at} OF ${perEpic.get(epic)}`)(feature) })
+  return features.flatMap((feature) => { const epic = epicName(feature), at = (seen.get(epic) ?? 0) + 1; seen.set(epic, at); return featureSlides('reviewed', `REVIEWED · ${epic.toUpperCase()} · ${at} OF ${perEpic.get(epic)}`)(feature) })
 }
 const why = (feature: MeetingFeature, start: string) => feature.status === 'none' ? `No review headed for this PI since ${formatDate(start)}` : feature.status === 'error' ? 'The Discussion could not be read' : 'The Discussion was not read'
 const notReviewedSlides = (meeting: Meeting): Slide[] => {
   const features = notReviewed(meeting).sort(epicOrderOf(meeting))
   if (!features.length) return [{ kind: 'not-reviewed', eyebrow: 'NOT REVIEWED', title: 'Features not reviewed', body: '<p>None: every Feature of the PI has a review.</p>' }]
-  const pages = chunks(features, listMax)
-  return pages.map((page, at) => ({ kind: 'not-reviewed', eyebrow: `NOT REVIEWED · ${plural(features.length, 'FEATURE')}`, title: part('Features not reviewed', at, pages.length), body: `<table><thead><tr><th class="num">ID</th><th>Title</th><th>Epic</th><th>Assigned to</th><th>Why</th></tr></thead><tbody>
-${page.map((feature) => `<tr><td class="num">${feature.id}</td><td>${text(feature.title)}</td><td>${text(epicName(feature))}</td><td>${text(displayName(feature.assignedTo || 'Unassigned'))}</td><td>${text(why(feature, meeting.start))}</td></tr>`).join('\n')}
-</tbody></table>` }))
+  return flowSlides('not-reviewed', `NOT REVIEWED · ${plural(features.length, 'FEATURE')}`, 'Features not reviewed', [table({ label: 'Features not reviewed',
+    columns: [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 20 }, { label: 'Assigned to', width: 16 }, { label: 'Why', width: 22 }],
+    rows: features.map((feature) => [cellOf(feature.id), cellOf(feature.title), cellOf(epicName(feature)), cellOf(displayName(feature.assignedTo || 'Unassigned')), cellOf(why(feature, meeting.start))]) })])
 }
 // PIR-45: the Themes — every Learning, then every Struggle, each with its Feature ID; a "None" answer is left out.
 export function themeItems(meeting: Meeting, which: 'learnings' | 'struggles'): { id: number; text: string; suggested: boolean }[] {
@@ -192,8 +197,8 @@ export function themeItems(meeting: Meeting, which: 'learnings' | 'struggles'): 
 const themeSlides = (which: 'learnings' | 'struggles', label: string) => (meeting: Meeting): Slide[] => {
   const items = themeItems(meeting, which)
   if (!items.length) return [{ kind: which, eyebrow: 'THEMES', title: label, body: `<p class="muted">${text(`No ${label.toLowerCase()} were written.`)}</p>` }]
-  const pages = chunks(items, themeMax, themeBudget, (item) => item.text.length + 20)
-  return pages.map((page, at) => ({ kind: which, eyebrow: `THEMES · ${plural(items.length, label.slice(0, -1).toUpperCase(), label.toUpperCase())}`, title: part(label, at, pages.length), body: `<ul class="themes">${page.map((item) => `<li><span class="fid">#${item.id}</span> ${text(item.text)}${item.suggested ? ' <small class="muted">(suggested)</small>' : ''}</li>`).join('')}</ul>` }))
+  // PIR-65: each point a row; a long point runs on (its next lines without the Feature ID), the list over "(n of N)".
+  return flowSlides(which, `THEMES · ${plural(items.length, label.slice(0, -1).toUpperCase(), label.toUpperCase())}`, label, [pointList(pointsOf(items.map((item) => ({ text: item.text, prefix: `<span class="fid">#${item.id}</span>`, ...(item.suggested ? { suffix: '<small class="muted">(suggested)</small>', suffixText: '(suggested)' } : {}) })), contentWidth - 72))])
 }
 export const slideMakers: Record<SlideKind, (meeting: Meeting) => Slide[]> = {
   title: titleSlide, summary: summarySlide, 'summary-epics': epicSlides,
@@ -207,12 +212,17 @@ export const meetingSlides = (meeting: Meeting): Slide[] => slideOrder.flatMap((
 // ---- the file ----
 // PIR-46: the navigation — ← / →, Space, Page Up / Down, Home / End, O (or the button) for the slide overview, Escape
 // closes it; printing shows every slide, one a page. Without JavaScript every slide shows, one after another.
+// PIR-64: the slide is a 1280 × 720 canvas; the script only scales it to the window (--scale, letterboxed and centred,
+// set through the CSS object model, which the file's policy allows) — nothing reflows when the window changes.
 export const meetingScript = `(function () {
   var doc = document, root = doc.documentElement
   var slides = Array.prototype.slice.call(doc.querySelectorAll('.slide'))
   var overview = doc.getElementById('overview'), counter = doc.getElementById('counter')
   var prev = doc.getElementById('prev'), next = doc.getElementById('next'), toggle = doc.getElementById('toggle'), print = doc.getElementById('print')
   var at = 0
+  function fit() { root.style.setProperty('--scale', String(Math.min(window.innerWidth / ${slideWidth}, window.innerHeight / ${slideHeight}))) }
+  fit()
+  window.addEventListener('resize', fit)
   root.classList.add('js')
   function show(index) {
     at = Math.max(0, Math.min(slides.length - 1, index))
@@ -226,6 +236,7 @@ export const meetingScript = `(function () {
     overview.hidden = !on
     toggle.setAttribute('aria-expanded', on ? 'true' : 'false')
     var items = overview.querySelectorAll('button[data-slide]')
+    for (var k = 0; k < items.length; k++) { if (k === at) items[k].setAttribute('aria-current', 'true'); else items[k].removeAttribute('aria-current') }
     if (on && items[at]) items[at].focus()
     if (!on) toggle.focus()
   }
@@ -268,60 +279,87 @@ export const meetingScript = `(function () {
   show(first >= 1 ? first - 1 : 0)
 })()
 `
-export const meetingStyle = `*{box-sizing:border-box}
+// PIR-64…PIR-67: the styles. Every size is fixed in px on the 1280 × 720 canvas (piMeetingLayout.ts counts with the same
+// numbers); a clamped text (class "c lN") shows at most N lines of its line height (--lh). Print: one 16:9 page a slide,
+// the colours kept.
+export const meetingStyle = `*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 html{color-scheme:light}
-body{margin:0;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1b2430;background:#e9edf2}
-.slide{display:flex;flex-direction:column;min-height:100vh;padding:40px 56px 24px;background:#fff;border-bottom:1px solid #d5dbe3}
-.js .slide{display:none}
-.js .slide.current{display:flex}
-.slide header{margin-bottom:18px}
-.eyebrow{margin:0 0 6px;font-size:12px;letter-spacing:.08em;font-weight:600;color:#56657a;text-transform:uppercase}
-h1{margin:18vh 0 18px;font-size:44px;line-height:1.15;color:#0b5394}
-h2{margin:0;font-size:30px;line-height:1.2;color:#0b5394}
-h3{margin:0 0 6px;font-size:15px;text-transform:uppercase;letter-spacing:.05em;color:#56657a}
-.slide .body{flex:1;overflow:auto}
-.slide footer{display:flex;justify-content:space-between;margin-top:16px;padding-top:10px;border-top:1px solid #e3e7ec;font-size:12px;color:#6b778a}
+body{margin:0;font:15px/21px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--lh:21px;color:#1b2430;background:#e9edf2}
+.slide{position:relative;display:flex;flex-direction:column;width:${slideWidth}px;height:${slideHeight}px;margin:0 auto 16px;padding:${padTop}px ${padX}px ${padBottom}px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.js body{overflow:hidden;background:#2f3640}
+.js main{position:fixed;inset:0;overflow:hidden}
+.js .slide{display:none;margin:0}
+.js .slide.current{display:flex;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scale,1));box-shadow:none}
+.slide header{flex:none;margin:0 0 14px}
+.eyebrow{margin:0 0 4px;font-size:12px;line-height:16px;letter-spacing:.08em;font-weight:600;color:#56657a;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h1,h2{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+h1{margin:96px 0 18px;font-size:44px;line-height:52px;max-height:156px;-webkit-line-clamp:3;color:#0b5394}
+h2{margin:0;font-size:${titleFont}px;line-height:${titleLineHeight}px;color:#0b5394}
+.t1 h2{-webkit-line-clamp:1;max-height:${titleLineHeight}px}
+.t2 h2{-webkit-line-clamp:2;max-height:${2 * titleLineHeight}px}
+h3{margin:0 0 4px;font-size:13px;line-height:18px;text-transform:uppercase;letter-spacing:.05em;color:#56657a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h3 small{font-size:11px;text-transform:none;letter-spacing:0}
+.slide .body{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:${gap}px;overflow:hidden}
+.body>*{flex:none;margin:0}
+.slide footer{flex:none;display:flex;gap:24px;height:32px;margin-top:8px;padding-top:8px;border-top:1px solid #e3e7ec;font-size:12px;line-height:16px;color:#6b778a;white-space:nowrap;overflow:hidden}
+.footer-text{min-width:0;max-width:680px;overflow:hidden;text-overflow:ellipsis}
+.slide-number{flex:none}
+.c{display:-webkit-box;-webkit-box-orient:vertical;box-sizing:content-box;overflow:hidden;overflow-wrap:anywhere;line-height:var(--lh);max-height:calc(var(--lh) * var(--n))}
+${Array.from({ length: maxClamp }, (_, at) => `.l${at + 1}{--n:${at + 1};-webkit-line-clamp:${at + 1}}`).join('')}
+p{margin:0}
 .lead{font-size:20px}
+.subtitle{font-size:20px;--lh:28px}
 .muted{color:#6b778a}
-.warning{padding:10px 14px;border-left:4px solid #c27c0e;background:#fff6e5}
-.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0}
-.tile{padding:16px 18px;border:1px solid #d5dbe3;border-radius:8px;background:#f7f9fb}
-.tile dt{font-size:13px;color:#56657a}
-.tile dd{margin:4px 0 0}
-.tile strong{display:block;font-size:34px;color:#1b2430}
-.tile small{display:block;color:#56657a}
-table{width:100%;border-collapse:collapse;font-size:15px}
-th,td{padding:7px 10px;border-bottom:1px solid #e3e7ec;text-align:left;vertical-align:top}
-th{font-size:13px;color:#56657a;background:#f2f5f8}
-.num{text-align:right;font-variant-numeric:tabular-nums}
-.facts{display:flex;flex-wrap:wrap;gap:8px 32px;margin:0 0 16px}
-.facts dt{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#56657a}
-.facts dd{margin:2px 0 0;font-weight:600}
-.facts.wide{margin-top:16px}
-.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.warning{padding:8px 12px;border-left:4px solid #c27c0e;background:#fff6e5}
+.missing{padding:8px 12px;border-left:4px solid #8a96a8;background:#f2f5f8}
+.missing strong{font-size:20px;vertical-align:top;margin-right:6px}
+.note,.rule{font-size:13px;--lh:18px;color:#56657a}
+.rule{font-weight:600}
+.byline{font-size:14px;--lh:20px;color:#56657a}
+.tiles{display:grid;grid-auto-rows:${tileHeight}px;gap:${gap}px;margin:0}
+.tiles.n1{grid-template-columns:minmax(0,1fr)}.tiles.n2{grid-template-columns:repeat(2,minmax(0,1fr))}.tiles.n3{grid-template-columns:repeat(3,minmax(0,1fr))}.tiles.n4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tile{height:${tileHeight}px;overflow:hidden;padding:10px 16px;border:1px solid #d5dbe3;border-radius:8px;background:#f7f9fb}
+.tile dt{font-size:13px;--lh:18px;color:#56657a}
+.tile dd{margin:2px 0 0}
+.tile strong{display:block;font-size:30px;line-height:36px;color:#1b2430;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile small{font-size:12px;--lh:16px;color:#56657a}
+table.t{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;line-height:${rowLine}px}
+table.t th,table.t td{padding:5px 8px;border-bottom:1px solid #e3e7ec;text-align:left;vertical-align:top;--lh:${rowLine}px}
+table.t thead th{padding:6px 8px;font-size:12px;line-height:${headLine}px;--lh:${headLine}px;font-weight:600;color:#56657a;background:#f2f5f8}
+table.t tbody th{font-weight:600}
+table.t .num{text-align:right}
+.num{font-variant-numeric:tabular-nums}
+${widthStyle()}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 32px;margin:0}
+.facts.wide{grid-template-columns:repeat(2,minmax(0,1fr))}
+.facts dt{margin:0 0 2px;font-size:11px;line-height:14px;text-transform:uppercase;letter-spacing:.05em;color:#56657a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facts dd{margin:0;font-weight:600;--lh:20px}
+.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 ${columnGap}px;align-items:start}
 .suggested p,.suggested li{font-style:italic}
-.part{margin-bottom:12px}
-.part p{margin:0 0 6px}
+.part{margin:0}
+.part p{margin:0 0 3px}
 .part ul{margin:0;padding-left:20px}
-.byline{margin-top:12px;font-size:14px;color:#56657a}
-.themes{margin:0;padding-left:0;list-style:none}
-.themes li{padding:8px 0;border-bottom:1px solid #e3e7ec}
+.part li{margin:0 0 3px}
+.part li.more,.themes li.more{list-style:none}
+.themes{margin:0;padding:0;list-style:none}
+.themes li{padding:5px 0;border-bottom:1px solid #e3e7ec}
 .fid{display:inline-block;min-width:64px;font-weight:700;color:#0b5394}
 .controls{display:none}
-.js .controls{display:flex;position:fixed;right:16px;bottom:16px;gap:6px;align-items:center;padding:6px;border:1px solid #d5dbe3;border-radius:8px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.js .controls{display:flex;position:fixed;right:12px;bottom:12px;z-index:2;gap:6px;align-items:center;padding:4px;border:1px solid #d5dbe3;border-radius:8px;background:rgba(255,255,255,.94);box-shadow:0 2px 8px rgba(0,0,0,.18)}
 .controls button,#overview button{font:inherit;padding:6px 12px;border:1px solid #c4ccd6;border-radius:6px;background:#fff;color:#1b2430;cursor:pointer}
 .controls button:disabled{opacity:.45;cursor:default}
 .controls button:focus-visible,#overview button:focus-visible{outline:2px solid #0b5394;outline-offset:2px}
 #counter{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
-#overview{position:fixed;inset:0;overflow:auto;padding:32px 40px;background:rgba(233,237,242,.98)}
+#overview{position:fixed;inset:0;z-index:3;overflow:auto;padding:24px 32px;background:rgba(233,237,242,.98)}
 #overview[hidden]{display:none}
-#overview h2{margin-bottom:16px}
-#overview ol{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin:0;padding:0;list-style:none}
-#overview button{display:block;width:100%;height:100%;min-height:72px;text-align:left}
+#overview h2{margin-bottom:16px;display:block}
+#overview ol{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin:0;padding:0;list-style:none}
+#overview button{display:flex;flex-direction:column;gap:6px;width:100%;aspect-ratio:16/9;padding:10px 12px;overflow:hidden;text-align:left;border-top:4px solid #0b5394;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#overview button[aria-current="true"]{outline:2px solid #0b5394}
 #overview .n{display:block;font-size:12px;color:#56657a}
-@media (max-width:700px){.slide{padding:24px 16px}.tiles,.columns{grid-template-columns:1fr}h1{font-size:32px}h2{font-size:24px}}
-@page{size:landscape;margin:12mm}
-@media print{body{background:#fff}.js .slide,.slide{display:flex;min-height:0;height:auto;padding:0;border:0;break-after:page;page-break-after:always}.slide:last-of-type{break-after:auto;page-break-after:auto}.slide .body{overflow:visible}.controls,.js .controls,#overview{display:none}}
+#overview .t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;font-weight:600;color:#0b5394}
+@page{size:${slideWidth}px ${slideHeight}px;margin:0}
+@media print{html,body,.js body{margin:0;background:#fff;overflow:visible}.js main{position:static;overflow:visible}.slide,.js .slide,.js .slide.current{display:flex;position:relative;left:auto;top:auto;transform:none;margin:0;box-shadow:none;break-inside:avoid;break-after:page;page-break-after:always}.slide:last-of-type{break-after:auto;page-break-after:auto}.controls,.js .controls,#overview{display:none}}
 `
 // PIR-43: the whole file. One self-contained HTML file: the slides (every value through text()), the navigation script
 // and the styles inline, the Content-Security-Policy of the interactive HTML file (no request of any kind).
@@ -333,8 +371,9 @@ export async function buildMeetingHtml(meeting: Meeting): Promise<string> {
   // PIR-58: the footer text of the template on every slide, with the slide number n / N.
   const footer = meetingFooter(meeting)
   const [scriptHash, styleHash] = await Promise.all([sha256Base64(script), sha256Base64(style)])
+  // PIR-64: the title clamped to the lines it was counted with (the full title in the header's title when cut).
   const sections = slides.map((slide, at) => `<section class="slide slide-${slide.kind}${slide.kind === 'title' && dark ? ' dark' : ''}" id="slide-${at + 1}" aria-roledescription="slide" aria-label="${at + 1} of ${total}: ${text(slide.title)}">
-<header><p class="eyebrow">${text(slide.eyebrow)}</p>${slide.kind === 'title' ? `<h1>${text(slide.title)}</h1>` : `<h2>${text(slide.title)}</h2>`}</header>
+<header class="t${slide.kind === 'title' ? 3 : titleLines(slide.title)}"${titleAttr(slide.title, slide.kind === 'title' ? wrapLines(slide.title, contentWidth, 44) > 3 : titleCut(slide.title))}><p class="eyebrow">${text(slide.eyebrow)}</p>${slide.kind === 'title' ? `<h1>${text(slide.title)}</h1>` : `<h2>${text(slide.title)}</h2>`}</header>
 <div class="body">${slide.body}</div>
 <footer><span class="footer-text">${text(footer)}</span><span class="slide-number">${at + 1} / ${total}</span></footer>
 </section>`).join('\n')
@@ -353,7 +392,7 @@ export async function buildMeetingHtml(meeting: Meeting): Promise<string> {
 <main>
 ${sections}
 </main>
-<nav id="overview" hidden aria-label="Slide overview"><h2>Slides</h2><ol>${slides.map((slide, at) => `<li><button type="button" data-slide="${at}"><span class="n">${at + 1}</span>${text(slide.title)}</button></li>`).join('')}</ol></nav>
+<nav id="overview" hidden aria-label="Slide overview"><h2>Slides</h2><ol>${slides.map((slide, at) => `<li><button type="button" data-slide="${at}"><span class="n">${at + 1}</span><span class="t">${text(slide.title)}</span></button></li>`).join('')}</ol></nav>
 <div class="controls" role="toolbar" aria-label="Slides"><button type="button" id="prev" aria-label="Previous slide">‹</button><span id="counter" aria-live="polite">1 / ${total}</span><button type="button" id="next" aria-label="Next slide">›</button><button type="button" id="toggle" aria-expanded="false" aria-controls="overview">Overview</button><button type="button" id="print">Print</button></div>
 <script>${script}</script>
 </body>

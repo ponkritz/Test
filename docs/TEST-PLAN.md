@@ -2569,6 +2569,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-PIR-62 My PI Review reads the Discussions with the date from Git** — Req PIR-63, PIR-17, PIR-33, PIR-35 — L1 `pi-review-edit.test.mjs` ("KB-140: a read started with an older "PI Review starts from" that answers last does not overwrite the read with the date in use, nor does a read a fresh one replaced (TC-PIR-62)") ; E2E `my-pi-review-read.e2e.mjs` ("TC-PIR-62: My PI Review reads the Discussions again when "PI Review starts from" comes from Git during the read …": the page starts reading with this browser's date, the earlier date from Git arrives during the read, the second read answers first and the first read last; 201 stays Reviewed with Edit review…, 1 of 4 reviewed; back from PI Review nothing is read again — failed on v14.3.0: 201 fell back to Review… once the first read answered).
 
 **TC-PIR-63 Not read with Retry on My PI Review** — Req PIR-63 — L1 `pi-review-edit.test.mjs` ("KB-140: a read that has not answered after 90 s is shown as not read (discussionStuck, TC-PIR-63)") ; E2E `my-pi-review-read.e2e.mjs` (same scenario: Azure DevOps answers 503 for 204, its row shows Not read with Retry and the reason in the tooltip; Retry reads it again and the row shows Not reviewed) ; browser check: a Discussion whose read does not answer turns into Not read with Retry after 90 s.
+**TC-PIR-64 Every slide a 16:9 page, nothing outside it** — Req PIR-64, PIR-65, PIR-66, PIR-67, PIR-45, PIR-46 — L1 `pi-meeting-layout.test.mjs` ("PIR-64: the canvas is 1280 × 720 (16:9); the body is what the header and footer leave": 1280 / 720 = 16 / 9, the body 564 px under a one-line title, 530 px under two; "PIR-65: lines are counted word by word at a generous character width; a long text is cut into parts": the line count, a long word broken, the parts of at most N lines with nothing lost; "PIR-65: a table runs on by rows …": 40 rows over slides, each part within the body, the header on each, the total row on the last, a long cell clamped to 2 lines with the full text in its title, 17 one-line rows a slide; "PIR-65, PIR-66: points, review columns and bar charts run on …": long points in parts of at most 6 lines, Learnings carried on "(continued)", a 40-bar chart as 19 + 19 + 2 bars with the legend on each, "(n of N)" titles) and `pi-meeting.test.mjs` ("PIR-45, PIR-65: long lists run over several slides — as many rows as fit on the 16:9 slide": 30 Learnings as 17 + 13, 30 Features not reviewed as 17 + 13) ; E2E `pi-meeting-16x9.e2e.mjs` ("TC-PIR-64: every slide is a 16:9 page — …"): a meeting built in Node with 24 Epics of long names, 72 Features with long titles, a review long enough for six slides, 36 long-running rows and 25 repeat carry-overs; at 1366 × 768 and 1920 × 1200 every slide is 16:9 (±0.5 %), centred and letterboxed in the window, no element outside the slide box, neither the slide nor its body scrolls, the same layout at both sizes (scaled, not reflowed), no console error or policy report and no request; the Overview's thumbnails are 16:9; printed with page.pdf() the PDF has one page a slide, all 16:9 (960 × 540 pt).
 
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
@@ -3496,8 +3497,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-42 | TC-PIR-42, TC-PIR-46, TC-PIR-50 |
 | PIR-43 | TC-PIR-44 |
 | PIR-44 | TC-PIR-43, TC-PIR-46 |
-| PIR-45 | TC-PIR-42, TC-PIR-43 |
-| PIR-46 | TC-PIR-46 |
+| PIR-45 | TC-PIR-42, TC-PIR-43, TC-PIR-64 |
+| PIR-46 | TC-PIR-46, TC-PIR-64 |
 | PIR-47 | TC-PIR-45, TC-PIR-46, TC-PIR-47 |
 | PIR-48 | TC-PIR-48, TC-PIR-51 |
 | PIR-49 | TC-PIR-27, TC-PIR-49, TC-PIR-50, TC-PIR-51 |
@@ -3515,6 +3516,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-61 | TC-PIR-60, TC-PIR-61 |
 | PIR-62 | TC-PIR-53, TC-PIR-60, TC-PIR-61 |
 | PIR-63 | TC-PIR-62, TC-PIR-63 |
+| PIR-64 | TC-PIR-64 |
+| PIR-65 | TC-PIR-64 |
+| PIR-66 | TC-PIR-64 |
+| PIR-67 | TC-PIR-64 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3629,7 +3634,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…61, TC-UI-27 |
+| UC-40 | TC-PIR-01…61, TC-PIR-64, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record

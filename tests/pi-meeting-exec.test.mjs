@@ -8,6 +8,10 @@ import { executiveLines, topicItems } from '../src/piMeetingExec.ts'
 import { personMonths, totals } from '../src/dashboard.ts'
 import { adhocTag } from '../src/workItemEdit.ts'
 
+// PIR-64: the slide markup without its clamp wrappers ("c lN" boxes that hold each text to its counted lines), so the
+// content can be read as before.
+const plain = (html) => html.replace(/<(div|span) class="c l\d+"(?: title="[^"]*")?>([\s\S]*?)<\/\1>(?=<\/t[dh]>|<\/li>|<span class="arrow")/g, '$2').replace(/ class="c l\d+"(?: title="[^"]*")?/g, '').replace(/ class="([^"]*?) c l\d+"(?: title="[^"]*")?/g, ' class="$1"')
+const slidesOf = (meeting) => meetingSlides(meeting).map((slide) => ({ ...slide, body: plain(slide.body) }))
 // PIR-51…PIR-62: the executive slides of the PI Review Meeting on one fixed, synthetic dataset — PI 26.4 runs 7 Sep to
 // 29 Nov 2026 in three Sprints; PI 26.3 before it is dated by its Sprints only.
 const setup = builtInFormSetup(), start = '2026-09-01', today = '2026-11-26'
@@ -89,9 +93,9 @@ test('PIR-62: the Epics in the chosen order — Epic ID ascending by default, or
   const list = [...features, { id: 1, title: 'Loose', epic: '', state: 'Active', status: 'none' }]
   assert.deepEqual(epicGroups(list, 'id').map((group) => group.name), ['Tools', 'Audits', 'No Epic'])
   assert.deepEqual(epicGroups(list, 'features').map((group) => `${group.name} ${group.features.length}`), ['Audits 5', 'Tools 4', 'No Epic 1'])
-  const byFeatures = meetingSlides(meetingOf({ settings: { ...settings, epicOrder: 'features' } }))
+  const byFeatures = slidesOf(meetingOf({ settings: { ...settings, epicOrder: 'features' } }))
   assert.match(byFeatures.find((slide) => slide.kind === 'executive').body, /Audits[\s\S]*Tools/)
-  assert.match(meetingSlides(meetingOf()).find((slide) => slide.kind === 'executive').body, /<td>Tools<\/td>[\s\S]*<td>Audits<\/td>/)
+  assert.match(slidesOf(meetingOf()).find((slide) => slide.kind === 'executive').body, /<td>Tools<\/td>[\s\S]*<td>Audits<\/td>/)
 })
 
 test('PIR-55: hours per Epic are the Dashboard’s actuals; Allocation % adds up to 100; Utilization is the Dashboard’s actual ÷ capacity (TC-PIR-54)', () => {
@@ -126,7 +130,7 @@ test('PIR-56: a spike is a point above 1.5 × the PI’s average — one constan
   assert.equal(hours.points[2].detail, 'Tools 160 h, Audits 20 h', 'the top contributors of the spike')
   assert.deepEqual(closed.points.map((point) => point.value), [0, 1, 1], '201 in Sprint 2, 203 in Sprint 3')
   assert.deepEqual(adhoc.points.map((point) => point.value), [0, 1, 0], '207 created in Sprint 2; 201 before the PI')
-  const slides = meetingSlides(meetingOf()).filter((slide) => slide.kind === 'trends')
+  const slides = slidesOf(meetingOf()).filter((slide) => slide.kind === 'trends')
   assert.deepEqual(slides.map((slide) => slide.title), ['Actual hours (team, by month)', 'Features closed (by sprint)', 'Ad-hoc Features added (by sprint)'])
   assert.match(slides[0].body, /Rule: a spike is a point above 1\.5 × the PI’s average \(average 100 h; spike above 150 h\)\. Peak: Nov 2026, 180 h\./)
   assert.match(slides[0].body, /<text x="[\d.]+" y="[\d.]+" text-anchor="middle" class="label">Sep 2026<\/text>/)
@@ -145,10 +149,10 @@ test('PIR-52, PIR-53: PI-over-PI from the same data; repeat carry-overs from hea
   // Before PI Review starts there are no headed reviews: carried forward says why.
   assert.match(execOf({ start: '2026-09-10' }).previous.why.carried, /ended before PI Review starts/)
   assert.match(execOf({ pis: ['p\\PI 26.4'] }).previousWhy, /No earlier PI/)
-  const body = meetingSlides(meetingOf()).find((slide) => slide.kind === 'pi-trend').body
+  const body = slidesOf(meetingOf()).find((slide) => slide.kind === 'pi-trend').body
   assert.match(body, /Features closed in the PI<\/th><td class="num">1<\/td><td class="num">2<\/td><td><span class="up">▲ 1<\/span>/)
   assert.match(body, /Carried forward<\/th><td class="num">1<\/td><td class="num">2<\/td><td><span class="up">▲ 1<\/span> <span class="spike-tag">spike<\/span>/)
-  assert.match(meetingSlides(meetingOf()).find((slide) => slide.kind === 'repeat').body, /PI 26\.3 → PI 26\.4/)
+  assert.match(slidesOf(meetingOf()).find((slide) => slide.kind === 'repeat').body, /PI 26\.3 → PI 26\.4/)
 })
 
 test('PIR-54: releases of the ticked streams inside the PI’s dates, each once, with their Release Classification counts (TC-PIR-57)', () => {
@@ -158,9 +162,9 @@ test('PIR-54: releases of the ticked streams inside the PI’s dates, each once,
   assert.match(iocc.why, /not fetched yet/)
   assert.match(piReleases([{ stream: 'X', releases: [{ key: 'a', release: '1', month: '2026-09' }] }], span, piMonths(span), '')[0].classWhy, /No Release Classification/)
   assert.match(piReleases([{ stream: 'X', releases: [] }], undefined, [], 'No PI dates.')[0].why, /No PI dates/)
-  const none = meetingSlides(meetingOf({ exec: execOf({ settings: { ...settings, streams: [] } }) })).find((slide) => slide.kind === 'releases').body
+  const none = slidesOf(meetingOf({ exec: execOf({ settings: { ...settings, streams: [] } }) })).find((slide) => slide.kind === 'releases').body
   assert.match(none, /No release-based streams chosen/)
-  const body = meetingSlides(meetingOf()).find((slide) => slide.kind === 'releases').body
+  const body = slidesOf(meetingOf()).find((slide) => slide.kind === 'releases').body
   assert.match(body, /<td>DP<\/td><td class="num" data-value="2">2<\/td><td>Major 1 · MLD 1<\/td>/)
   assert.match(body, /<td>IOCC<\/td><td class="num" data-value="-1">— <small class="muted">No Release Details data: not fetched yet\.<\/small>/)
 })
@@ -175,7 +179,7 @@ test('PIR-57: long-running Features of the ticked streams — N per Epic (defaul
   assert.match(without.byStream[0].why, /No Epics are mapped to DP/)
   assert.match(longRunning({ items, streamEpics: {}, streams: ['DP'], settings, spanWhy: 'The PI’s dates are not known.', today, moveOf: () => '' }).why, /age in PIs, and so which Features run long, cannot be worked out/)
   assert.match(longRunning({ items, streamEpics: {}, streams: [], settings, today, spanWhy: '', moveOf: () => '' }).why, /No release-based streams chosen/)
-  const body = meetingSlides(meetingOf()).find((slide) => slide.kind === 'long-running').body
+  const body = slidesOf(meetingOf()).find((slide) => slide.kind === 'long-running').body
   assert.match(body, /<td class="num" data-value="300">300<\/td><td>Feature 300<\/td><td>Tools<\/td><td>Active<\/td><td>2025-12-01<\/td><td class="num" data-value="360">11\.8 · 1 · 4\.3<\/td><td class="num" data-value="2">2<\/td><td>No<\/td>/)
 })
 
@@ -226,7 +230,7 @@ test('PIR-58, PIR-60, PIR-62: the file — the executive slides in order, the te
   assert.doesNotMatch(html, /https?:|url\(|@import|@example\.com/i)
   const tags = html.match(/<[a-z][^<>]*>/gi).map((tag) => tag.replace(/"[^"]*"/g, '""'))
   assert.deepEqual(tags.filter((tag) => /^<(?:img|iframe|object|embed|link|form|base|a)\b|\son[a-z]+=|\s(?:src|href|action|style)=/i.test(tag)), [], 'no markup from the data, no inline style or event attribute')
-  const slides = meetingSlides(meeting), total = slides.length
+  const slides = slidesOf(meeting), total = slides.length
   const footers = [...html.matchAll(/<footer><span class="footer-text">([^<]*)<\/span><span class="slide-number">(\d+) \/ (\d+)<\/span><\/footer>/g)]
   assert.equal(footers.length, total)
   assert.deepEqual(footers.map((found) => found[1])[0], 'Confidential · &lt;b&gt;Q&amp;A&lt;/b&gt; · PI 26.4')
@@ -238,13 +242,13 @@ test('PIR-58, PIR-60, PIR-62: the file — the executive slides in order, the te
   const kinds = [...new Set(slides.map((slide) => slide.kind))]
   assert.deepEqual(kinds, ['title', 'summary', 'summary-epics', 'executive', 'completion', 'pi-trend', 'repeat', 'topics', 'releases', 'hours', 'utilization', 'trends', 'long-running', 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles'])
   // Sortable headers: buttons with aria-sort on the header; the script sorts by data-value, else the text.
-  assert.match(html, /<th scope="col" aria-sort="none"><button type="button" class="sort" data-col="0">Epic<span class="arrow" aria-hidden="true"><\/span><\/button><\/th>/)
+  assert.match(plain(html), /<th scope="col" aria-sort="none"><button type="button" class="sort" data-col="0">Epic<span class="arrow" aria-hidden="true"><\/span><\/button><\/th>/)
   const script = /<script>([\s\S]*)<\/script>/.exec(html)[1]
   for (const part of ["'aria-sort'", "'ascending'", "'descending'", 'data-value', 'data-goto']) assert.ok(script.includes(part), part)
   // Review completion links its Not reviewed number to the list.
   assert.match(slides.find((slide) => slide.kind === 'completion').body, /<button type="button" class="goto" data-goto="not-reviewed">4<\/button>/)
   assert.equal(await isMeetingHtml(html), true, 'a file of this version, whatever the colours')
   // Without the executive figures every new slide says why, never a number.
-  const bare = meetingSlides({ ...meetingOf(), exec: undefined })
+  const bare = slidesOf({ ...meetingOf(), exec: undefined })
   for (const kind of ['pi-trend', 'repeat', 'releases', 'hours', 'utilization', 'trends', 'long-running']) assert.match(bare.find((slide) => slide.kind === kind).body, /class="missing"><strong>—<\/strong> <span>Not worked out/, kind)
 })

@@ -1271,7 +1271,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .pir-meeting-editor label{display:grid;gap:3px}.pir-meeting-editor small{font-size:11px;color:var(--muted)}
 .pir-meeting-editor .form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .pir-streams{display:flex;flex-wrap:wrap;gap:4px 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0}.pir-streams legend{font-size:12px;font-weight:600;padding:0 4px}.pir-streams .check{display:inline-flex;margin:0;font-size:13px;color:var(--text)}.pir-streams small{flex-basis:100%}
-.pir-meeting-preview{display:grid;gap:6px;min-height:150px;padding:18px 20px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#0b5394}
+.pir-meeting-preview{display:grid;gap:6px;aspect-ratio:16/9;max-width:480px;overflow:hidden;padding:18px 20px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#0b5394}
 .pir-meeting-preview.dark{color:#fff}
 .pir-preview-eyebrow{font-size:10px;letter-spacing:.08em;font-weight:600;opacity:.75}
 .pir-preview-title{font-size:22px;line-height:1.2}

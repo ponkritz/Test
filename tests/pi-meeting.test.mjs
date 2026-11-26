@@ -1,9 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMeetingHtml, canConductMeeting, chunks, displayName, isMeetingHtml, isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingCounts, meetingFeatures, meetingFileName, meetingFolder, meetingPath, meetingPi, meetingSaveBlock, meetingSlides, meetingTitle, scrub, slideMakers, slideOrder, themeItems } from '../src/piMeeting.ts'
+import { buildMeetingHtml, canConductMeeting, displayName, isMeetingHtml, isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingCounts, meetingFeatures, meetingFileName, meetingFolder, meetingPath, meetingPi, meetingSaveBlock, meetingSlides, meetingTitle, scrub, slideMakers, slideOrder, themeItems } from '../src/piMeeting.ts'
 import { builtInFormSetup } from '../src/piReviewSetup.ts'
 import { sha256Base64, inlineScript } from '../src/standaloneHtml.ts'
 
+// PIR-64: the slide markup without its clamp wrappers ("c lN" boxes that hold each text to its counted lines), so the
+// content can be read as before.
+const plain = (html) => html.replace(/<(div|span) class="c l\d+"(?: title="[^"]*")?>([\s\S]*?)<\/\1>(?=<\/t[dh]>|<\/li>|<span class="arrow")/g, '$2').replace(/ class="c l\d+"(?: title="[^"]*")?/g, '').replace(/ class="([^"]*?) c l\d+"(?: title="[^"]*")?/g, ' class="$1"')
+const slidesOf = (meeting) => meetingSlides(meeting).map((slide) => ({ ...slide, body: plain(slide.body) }))
 // The PI Review Meeting presentation (PIR-40…PIR-47; TC-PIR-42…TC-PIR-45). Synthetic data only.
 const feature = (id, title, epicId, assignedTo = 'Rita Gomez', state = 'Active') => ({ key: `example/project/${id}`, id, title, workItemType: 'Feature', state, assignedTo, assignedToEmail: `${assignedTo.split(' ')[0].toLowerCase()}@example.com`, iterationPath: 'Project\\PI 26.4', parentId: epicId })
 const epic = (id, title) => ({ key: `example/project/${id}`, id, title, workItemType: 'Epic', state: 'Active', assignedTo: '', iterationPath: 'Project' })
@@ -61,7 +65,7 @@ test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss dur
   const executive = ['executive', 'completion', 'pi-trend', 'repeat', 'topics', 'releases', 'hours', 'utilization', 'trends', 'long-running']
   assert.deepEqual(slideOrder, ['title', 'summary', 'summary-epics', ...executive, 'discuss', 'reviewed', 'not-reviewed', 'learnings', 'struggles'])
   assert.deepEqual(Object.keys(slideMakers).sort(), [...slideOrder].sort(), 'each slide type is one function')
-  const slides = meetingSlides(meetingOf()).filter((slide) => !executive.includes(slide.kind))
+  const slides = slidesOf(meetingOf()).filter((slide) => !executive.includes(slide.kind))
   assert.deepEqual(slides.map((slide) => `${slide.kind}: ${slide.title}`), [
     'title: PI Review Meeting — PI 26.4', 'summary: Summary', 'summary-epics: Summary by Epic',
     'discuss: #201 Lab rig upgrade', 'discuss: #203 Fixture library',
@@ -84,20 +88,24 @@ test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss dur
   assert.deepEqual(themeItems(meetingOf(), 'learnings').map((item) => `#${item.id} ${item.text}${item.suggested ? ' (suggested)' : ''}`), ['#201 book the rig early', '#203 reuse fixtures', '#204 Next time we book early. (suggested)'])
   assert.deepEqual(themeItems(meetingOf(), 'struggles').map((item) => `#${item.id} ${item.text}`), ['#201 vendor late', '#202 audit late', '#203 vendor late', '#204 We were blocked by the lab.'])
   // Without any review: the title, the summary, one Not reviewed list and the empty Themes — still in order.
-  const none = meetingSlides(meetingOf({ features: meetingFeatures(rows, () => undefined, setup, start, 'PI 26.4') }))
+  const none = slidesOf(meetingOf({ features: meetingFeatures(rows, () => undefined, setup, start, 'PI 26.4') }))
   assert.deepEqual(none.map((slide) => slide.kind), ['title', 'summary', 'summary-epics', ...executive, 'not-reviewed', 'learnings', 'struggles'])
   assert.match(none[0].body, /7 Discussions were not read when it was built/)
 })
 
-test('PIR-45: long lists run over several slides', () => {
-  assert.deepEqual(chunks([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]])
-  assert.deepEqual(chunks(['aaaa', 'bb', 'cccc'], 10, 6, (item) => item.length), [['aaaa', 'bb'], ['cccc']])
+test('PIR-45, PIR-65: long lists run over several slides — as many rows as fit on the 16:9 slide (TC-PIR-64)', () => {
   const many = Array.from({ length: 30 }, (_, index) => ({ item: feature(300 + index, `Feature ${index}`, 100), epic: tools }))
   const discussed = Object.fromEntries(many.map(({ item }) => [item.key, done([comment(item.id, '2026-10-02T09:00:00Z', review({ learnings: `- learning ${item.id}`, struggles: 'None' }))])]))
-  const slides = meetingSlides(meetingOf({ features: meetingFeatures(many, (key) => discussed[key], setup, start, 'PI 26.4') }))
-  assert.deepEqual(slides.filter((slide) => slide.kind === 'learnings').map((slide) => slide.title), ['Learnings (1 of 4)', 'Learnings (2 of 4)', 'Learnings (3 of 4)', 'Learnings (4 of 4)'])
-  const unread = meetingSlides(meetingOf({ features: meetingFeatures(many, () => undefined, setup, start, 'PI 26.4') }))
-  assert.deepEqual(unread.filter((slide) => slide.kind === 'not-reviewed').map((slide) => slide.title), ['Features not reviewed (1 of 3)', 'Features not reviewed (2 of 3)', 'Features not reviewed (3 of 3)'])
+  const slides = slidesOf(meetingOf({ features: meetingFeatures(many, (key) => discussed[key], setup, start, 'PI 26.4') }))
+  // A one-line point is 32 px (21 px line, 5 px above and below, a 1 px rule); the body of a slide with a one-line title
+  // is 564 px: 17 points a slide.
+  const learnings = slides.filter((slide) => slide.kind === 'learnings')
+  assert.deepEqual(learnings.map((slide) => slide.title), ['Learnings (1 of 2)', 'Learnings (2 of 2)'])
+  assert.deepEqual(learnings.map((slide) => slide.body.match(/<li/g).length), [17, 13])
+  // A one-line row is 30 px (19 px line, 5 px above and below, a 1 px rule), the header row 29 px: 17 rows a slide.
+  const unread = slidesOf(meetingOf({ features: meetingFeatures(many, () => undefined, setup, start, 'PI 26.4') })).filter((slide) => slide.kind === 'not-reviewed')
+  assert.deepEqual(unread.map((slide) => slide.title), ['Features not reviewed (1 of 2)', 'Features not reviewed (2 of 2)'])
+  assert.deepEqual(unread.map((slide) => slide.body.match(/<tr>/g).length - 1), [17, 13])
 })
 
 test('PIR-43: every value is escaped — a comment with <script> and "</script>" stays text; no e-mail, identity id or external address in the file; the policy blocks every request (TC-PIR-44)', async () => {
@@ -130,7 +138,8 @@ test('PIR-43: every value is escaped — a comment with <script> and "</script>"
   // The title carries the PI, the build date and time; the keyboard and print are part of the file.
   assert.match(html, /<title>PI Review Meeting — PI 26.4 &lt;i&gt; · 26 Nov 2026, 14:30 CET<\/title>/)
   for (const key of ["'ArrowRight'", "'ArrowLeft'", "'Home'", "'End'", "'Escape'"]) assert.ok(script.includes(key), key)
-  assert.match(style, /@media print\{body\{[^}]*\}\.js \.slide,\.slide\{[^}]*break-after:page/)
+  assert.match(style, /@page\{size:1280px 720px;margin:0\}/)
+  assert.match(style, /@media print\{[^@]*\.slide,\.js \.slide,\.js \.slide\.current\{[^}]*break-inside:avoid;break-after:page/)
   // A file of this version is recognised; a changed one is not (Open refuses it).
   assert.equal(await isMeetingHtml(html), true)
   assert.equal(await isMeetingHtml(html.replace("script-src 'sha256-", "script-src 'unsafe-inline' 'sha256-")), false)
