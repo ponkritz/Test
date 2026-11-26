@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v14.7.0 — 2026-11-26
+
+**Added**
+- **Reviews written in the old format** (temporary) — a Discussion comment written as Struggles / Learnings / Moving to next PI without the heading "Feature Review for PI …" is found and flagged **Old format — convert**; it still does not count as a review (PIR-75). Its author converts it with **Convert…** on My PI Review (or the Feature's drawer on PI Review): the review form prefilled from it, the reviewed PI to choose, saved as an edit of that same comment in the review format, so it then counts (PIR-76). My PI Review filters **Old format (n)**; PI Review shows an **Old format** column and filter with the authors, and only the author can convert (PIR-77). **Search Discussions…** on PI Review searches the comments read (PIR-78). One constant switches it off once everyone has converted (LIM-235).
+
+DF-550…DF-554, SM-340, SM-341, LIM-235, LIM-236; TC-PIR-75…TC-PIR-79.
+- **Move sentences** (PIR-81): a line such as "Feature needs to be shifted to PI.27.1" (or "to be moved to the next PI", "carried forward to PI 27.1"; "will not be shifted" for No) is read as the Move to next PI answer with its reason, also without a "Moving to next PI" heading — so "Struggles: … / Learnings: … / Feature needs to be shifted to PI.27.1" is flagged and Convert… prefills Move = Yes.
+
+PR #463.
+
 ## v14.6.0 — 2026-11-26
 
 - **Time Writing: ⚙ opens the Month locks only, from the "last day" tile** (SET-36). On Time Writing the ⚙ Settings moved from the top right into the **Plan / Actuals: last day** tile, next to the date it sets, and opens only the **Month locks** of the month. Hour classification, Capacity, Setup per Epic and User Story templates stay on My Tasks [Board]'s ⚙ and in Admin. TC-SET-17, TC-SET-18.
