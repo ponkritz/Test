@@ -11,9 +11,8 @@ const require = createRequire(import.meta.url)
 const config = { organization: 'org', project: 'Quality', team: 'T' }
 const form = (learnings, reviewedPi = 'PI 26.4') => ({ learnings, struggles: 'None', move: 'No', moveReason: '', movePi: 'PI 27.1', mode: 'Offline Review', remarks: '', reviewedPi })
 const review = (id, date, learnings, author = 'Rita Gomez', authorEmail = 'rita.gomez@example.com', reviewedPi) => ({ id, date, text: buildReviewComment(form(learnings, reviewedPi)).replace(/<[^>]+>/g, '\n'), author, ...(authorEmail ? { authorEmail } : {}) })
-const it = (path, start, finish) => ({ name: path.split('\\').at(-1), path, attributes: { startDate: `${start}T00:00:00Z`, finishDate: `${finish}T00:00:00Z` } })
-const tree = [it('Q\\PI 26.3', '2026-06-22', '2026-09-20'), it('Q\\PI 26.4', '2026-09-21', '2026-12-20')]
-const counts = (feature = { state: 'Active' }) => (entry) => reviewCountOf(entry, feature, reviewPeriodOf('Q\\PI 26.4', tree)).counts
+// PIR-49: a review counts for the PI its heading ("Feature Review for PI 26.4") names.
+const counts = () => (entry) => reviewCountOf(entry, reviewPeriodOf('Q\\PI 26.4')).counts
 const rita = { email: 'rita.gomez@example.com', name: 'Rita Gomez' }
 
 test('PIR-34: a comment is the viewer’s own by the author’s email when Azure DevOps gives it, else by the display name (TC-PIR-35)', () => {
@@ -37,11 +36,15 @@ test('PIR-34: Edit review… edits only my newest review comment, and only when 
   // Only Ben's review: nothing to edit for me (a lead viewing Ben gets no Edit either: the page never asks for him).
   assert.equal(editTargetOf([bens], rita, counts()), undefined)
   assert.equal(editTargetOf([bens], { email: 'ben.okafor@example.com', name: 'Ben Okafor' }, counts()).comment.id, 12)
-  // My newest review is for PI 26.3 (its heading names it): not editable for PI 26.4 — Write review… posts a new one;
-  // an older review of mine for PI 26.4 is not picked either (the newest review is the one the page shows).
+  // PIR-49: my newest review is for PI 26.3 (its heading names it): not editable for PI 26.4; my older review headed for
+  // PI 26.4 is the one the page shows for PI 26.4, so it is the one edited. Without one for PI 26.4: none (Review…).
   const older = review(9, '2026-09-25T10:00:00Z', 'Old')
   const other = review(10, '2026-10-10T10:00:00Z', 'For the last PI', 'Rita Gomez', 'rita.gomez@example.com', 'PI 26.3')
-  assert.equal(editTargetOf([other, older], rita, counts()), undefined)
+  assert.equal(editTargetOf([other, older], rita, counts()).comment.id, 9)
+  assert.equal(editTargetOf([other], rita, counts()), undefined)
+  // A comment of mine without the heading — an older review — is no review: nothing to edit.
+  const unheaded = { ...older, id: 8, text: older.text.replace('Feature Review for PI 26.4', '') }
+  assert.equal(editTargetOf([unheaded], rita, counts()), undefined)
   // Two comments of mine at the same time: the higher ID.
   assert.equal(editTargetOf([review(20, '2026-10-05T10:00:00Z', 'A'), review(21, '2026-10-05T10:00:00Z', 'B')], rita, counts()).comment.id, 21)
 })
@@ -97,21 +100,21 @@ test('PIR-34: an edited comment keeps its createdDate — it stays in its place 
   assert.deepEqual(comments.map((entry) => [entry.id, entry.date, entry.authorEmail, entry.edited]), [[12, '2026-11-01T10:00:00Z', undefined, undefined], [11, '2026-10-05T10:00:00Z', 'rita.gomez@example.com', true]])
 })
 
-test('PIR-34: PI Review offers Edit review… by the same rule — my own newest review that counts for the chosen PI, never a lead’s Edit on another person’s review, none while the PI dates are read (TC-PIR-36)', () => {
-  const period = reviewPeriodOf('Q\\PI 26.4', tree)
+test('PIR-34: PI Review offers Edit review… by the same rule — my own newest review that counts for the chosen PI, never a lead’s Edit on another person’s review, none before the Discussion is read (TC-PIR-36)', () => {
+  const period = reviewPeriodOf('Q\\PI 26.4')
   const ritas = review(11, '2026-10-05T10:00:00Z', 'Calibrate first')
   const lenas = review(12, '2026-11-01T10:00:00Z', 'Lead’s view', 'Lena Berg', 'lena.berg@example.com')
   const lena = { email: 'lena.berg@example.com', name: 'Lena Berg' }
   // Rita's Feature with Rita's review and a newer one by Lena (a lead): Rita edits hers, Lena edits only hers.
-  assert.equal(ownReviewOf([lenas, ritas], { state: 'Active' }, period, rita).comment.id, 11)
-  assert.equal(ownReviewOf([lenas, ritas], { state: 'Active' }, period, lena).comment.id, 12)
-  assert.equal(ownReviewOf([ritas], { state: 'Active' }, period, lena), undefined, 'a lead gets no Edit on Rita’s review')
-  // Not read yet, or the PI dates still being read: no Edit (Write review… is offered).
-  assert.equal(ownReviewOf(undefined, { state: 'Active' }, period, rita), undefined)
-  assert.equal(ownReviewOf([ritas], { state: 'Active' }, null, rita), undefined)
-  // A review for another PI does not count, so no Edit; Closed and reviewed after its Closed Date counts.
-  assert.equal(ownReviewOf([review(13, '2026-07-01T10:00:00Z', 'Old', 'Rita Gomez', 'rita.gomez@example.com', 'PI 26.3')], { state: 'Active' }, period, rita), undefined)
-  assert.equal(ownReviewOf([review(14, '2027-01-10T10:00:00Z', 'At close', 'Rita Gomez', 'rita.gomez@example.com', 'PI 26.3')], { state: 'Closed', closedDate: '2027-01-09T16:00:00Z' }, period, rita).comment.id, 14)
+  assert.equal(ownReviewOf([lenas, ritas], period, rita).comment.id, 11)
+  assert.equal(ownReviewOf([lenas, ritas], period, lena).comment.id, 12)
+  assert.equal(ownReviewOf([ritas], period, lena), undefined, 'a lead gets no Edit on Rita’s review')
+  // Not read yet: no Edit (Review… is offered).
+  assert.equal(ownReviewOf(undefined, period, rita), undefined)
+  assert.equal(ownReviewOf([ritas], null, rita), undefined)
+  // PIR-49: a review headed for another PI does not count, so no Edit — also at close (the Closed Date no longer decides).
+  assert.equal(ownReviewOf([review(13, '2026-07-01T10:00:00Z', 'Old', 'Rita Gomez', 'rita.gomez@example.com', 'PI 26.3')], period, rita), undefined)
+  assert.equal(ownReviewOf([review(14, '2027-01-10T10:00:00Z', 'At close', 'Rita Gomez', 'rita.gomez@example.com', 'PI 26.3')], period, rita), undefined)
 })
 
 // PIR-35: PI Review reads my own Features' Discussions when it opens — which Features are mine, when it does not read,

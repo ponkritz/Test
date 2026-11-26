@@ -170,7 +170,7 @@ test('TC-PIR-46: the Scrum Master conducts the PI meeting — the file is downlo
   assert.equal(await file.evaluate(() => window.__ran), undefined)
   // 203's only review is before the start date: listed as not reviewed.
   await file.keyboard.press('ArrowRight')
-  assert.match(await text(current(file)), /203 Fixture library refresh DP releases Rita Gomez No review since/)
+  assert.match(await text(current(file)), /203 Fixture library refresh DP releases Rita Gomez No review headed for this PI since/)
   // Print: every slide, one a page.
   await file.emulateMedia({ media: 'print' })
   assert.equal(await file.locator('.slide:visible').count(), total)

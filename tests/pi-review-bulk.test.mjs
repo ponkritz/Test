@@ -15,14 +15,15 @@ const today = new Date('2026-11-25T12:00:00Z')
 const done = { state: 'done', comments: [], capped: false, readAt: '2026-11-25T10:00:00Z' }
 
 test('PIR-36: a row can be ticked only when Write review… could post it and whether my review is there is known — each other row says why (TC-PIR-38)', () => {
-  assert.equal(bulkBlock('', { discussion: done, periodKnown: true }), '')
+  assert.equal(bulkBlock('', { discussion: done }), '')
   // The rights and the page's reasons of Write review… come first, word for word (View as, sample data, not the assignee…).
-  assert.equal(bulkBlock('Read only while viewing as Ben Okafor: nothing is posted to Azure DevOps. Exit View as to post a review.', { discussion: done, periodKnown: true }), 'Read only while viewing as Ben Okafor: nothing is posted to Azure DevOps. Exit View as to post a review.')
-  assert.equal(bulkBlock('', { discussion: done, periodKnown: true, busy: 'Feature #7 is in the running job.' }), 'Feature #7 is in the running job.')
-  assert.match(bulkBlock('', { discussion: done, periodKnown: false }), /PI dates are still being read/)
-  assert.match(bulkBlock('', { discussion: undefined, periodKnown: true }), /Discussion is still being read/)
-  assert.match(bulkBlock('', { discussion: { state: 'loading' }, periodKnown: true }), /Discussion is still being read/)
-  assert.equal(bulkBlock('', { discussion: { state: 'error', error: 'Azure DevOps refused the PAT (401).' }, periodKnown: true }), 'Its Discussion could not be read (Azure DevOps refused the PAT (401)), so whether your review is there is not known.')
+  assert.equal(bulkBlock('Read only while viewing as Ben Okafor: nothing is posted to Azure DevOps. Exit View as to post a review.', { discussion: done }), 'Read only while viewing as Ben Okafor: nothing is posted to Azure DevOps. Exit View as to post a review.')
+  assert.equal(bulkBlock('', { discussion: done, busy: 'Feature #7 is in the running job.' }), 'Feature #7 is in the running job.')
+  // PIR-49: which review is mine for the PI goes by its heading — the PI dates are no longer waited for.
+  assert.equal(bulkBlock('', { discussion: done }), '')
+  assert.match(bulkBlock('', { discussion: undefined }), /Discussion is still being read/)
+  assert.match(bulkBlock('', { discussion: { state: 'loading' } }), /Discussion is still being read/)
+  assert.equal(bulkBlock('', { discussion: { state: 'error', error: 'Azure DevOps refused the PAT (401).' } }), 'Its Discussion could not be read (Azure DevOps refused the PAT (401)), so whether your review is there is not known.')
 })
 
 test('PIR-36: the ticked Features become targets — my review of the chosen PI to replace where I have one; one form for one PI, started as the single form starts (TC-PIR-38)', () => {

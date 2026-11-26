@@ -1,6 +1,7 @@
 // PIR-40…PIR-47 The PI Review Meeting presentation: "Conduct PI Meeting" on PI Review builds ONE self-contained, offline
-// HTML file of slides for the chosen PI — a frozen snapshot of the reviews (the latest comment of each Feature's
-// Discussion on or after "PI Review starts from", PIR-33) at the moment it is built. Pure: the Features, their
+// HTML file of slides for the chosen PI — a frozen snapshot of the reviews (the latest review of each Feature's
+// Discussion for the PI — PIR-49: the newest comment headed "Feature Review for <the PI>" — on or after "PI Review starts
+// from", PIR-33) at the moment it is built. Pure: the Features, their
 // Discussions, the form setup, the start date, who built it and when are passed in; nothing here touches the DOM, Git or
 // the network.
 //
@@ -13,7 +14,7 @@
 // Easy to change (PIR-41): each slide type is one small function (`slideMakers`) and the order is one list
 // (`slideOrder`), so the product owner's later wishes change slides and order cheaply.
 import { escapeHtml, inlineScript, inlineStyle, publishCsp, sha256Base64 } from './standaloneHtml.ts'
-import { commentsFrom, isNoneText, latestComment, moveLabel, reviewModeLabel, reviewSplit, type Discussion, type MoveValue, type ReviewMode, type SplitFrom } from './piReview.ts'
+import { commentsFrom, isNoneText, latestReviewFor, moveLabel, reviewModeLabel, reviewSplit, type Discussion, type MoveValue, type ReviewMode, type SplitFrom } from './piReview.ts'
 import { customFields, type PiFormSetup } from './piReviewSetup.ts'
 import { piText } from './piReviewPost.ts'
 import { piName } from './myWork.ts'
@@ -23,8 +24,9 @@ import type { AzureWorkItem } from './domain'
 export { isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingBytes, meetingFileName, meetingFolder, meetingPath, meetingsFolder, meetingStamp, piSlug } from './piMeetingFile.ts'
 
 // ---- the snapshot ----
-// PIR-42: a Feature as the meeting shows it. status — reviewed: its Discussion was read and has a comment on or after
-// the start date (the latest one is the review); none: read, no such comment; unread: not read (e.g. sample data, no
+// PIR-42: a Feature as the meeting shows it. status — reviewed: its Discussion was read and has a review for the PI
+// (PIR-49: a comment headed "Feature Review for <the PI>") on or after the start date (the latest one is the review);
+// none: read, no such comment (a comment without the heading is no review, PIR-50); unread: not read (e.g. sample data, no
 // PAT); error: the read failed (error says why).
 export type MeetingStatus = 'reviewed' | 'none' | 'unread' | 'error'
 export interface MeetingReview {
@@ -41,14 +43,15 @@ export const meetingPi = (path: string) => piText(piName(path)) || piName(path).
 export const meetingTitle = (pi: string) => `${meetingName} — ${pi}`
 
 // PIR-42: the Features of the PI with their review, taken from the Discussions read (only the comments on or after the
-// start date count — applied here again, whatever the Discussion was read with).
-export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: AzureWorkItem }[], discussionOf: (key: string) => Discussion | undefined, setup: PiFormSetup, start: string): MeetingFeature[] {
+// start date count — applied here again, whatever the Discussion was read with). PIR-49: pi — the PI of the meeting
+// ("PI 26.4"); only a review headed for it counts.
+export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: AzureWorkItem }[], discussionOf: (key: string) => Discussion | undefined, setup: PiFormSetup, start: string, pi: string): MeetingFeature[] {
   return rows.map(({ item, epic }) => {
     const base = { id: item.id, title: item.title, epic: epic ? epic.title || `#${epic.id}` : '', ...(epic ? { epicId: epic.id } : {}), assignedTo: item.assignedTo, state: item.state }
     const entry = discussionOf(item.key)
     if (entry?.state === 'error') return { ...base, status: 'error', error: entry.error }
     if (entry?.state !== 'done') return { ...base, status: 'unread' }
-    const comment = latestComment(commentsFrom(entry.comments, start).comments)
+    const comment = latestReviewFor(commentsFrom(entry.comments, start).comments, pi)
     if (!comment) return { ...base, status: 'none' }
     const split = reviewSplit(comment.text, setup)
     const review: MeetingReview = {
@@ -123,7 +126,7 @@ const tile = (label: string, value: string, detail = '') => `<div class="tile"><
 const titleSlide = (meeting: Meeting): Slide[] => {
   const unread = meeting.features.filter((feature) => feature.status === 'unread' || feature.status === 'error').length
   return [{ kind: 'title', eyebrow: 'PI REVIEW', title: meetingTitle(meeting.pi), body: `<p class="lead">Built ${text(meeting.builtAt)} by ${text(displayName(meeting.builtBy))}</p>
-<p>A snapshot of the PI reviews at that moment: it does not update. Only the comments written on or after ${text(formatDate(meeting.start))} (when PI Review starts) count.</p>${unread ? `<p class="warning">${text(`${plural(unread, 'Discussion was', 'Discussions were')} not read when it was built: ${unread === 1 ? 'that Feature is' : 'those Features are'} listed as not reviewed.`)}</p>` : ''}
+<p>A snapshot of the PI reviews at that moment: it does not update. Only the comments headed “${text(`Feature Review for ${meeting.pi}`)}” and written on or after ${text(formatDate(meeting.start))} (when PI Review starts) count.</p>${unread ? `<p class="warning">${text(`${plural(unread, 'Discussion was', 'Discussions were')} not read when it was built: ${unread === 1 ? 'that Feature is' : 'those Features are'} listed as not reviewed.`)}</p>` : ''}
 <p class="muted">Keys: → or Space next, ← back, Home first, End last, O the slide overview. Print: one slide a page.</p>` }]
 }
 const summarySlide = (meeting: Meeting): Slide[] => {
@@ -173,7 +176,7 @@ const reviewedSlides = (meeting: Meeting): Slide[] => {
   const seen = new Map<string, number>()
   return features.map((feature) => { const epic = epicName(feature), at = (seen.get(epic) ?? 0) + 1; seen.set(epic, at); return featureSlide('reviewed', `REVIEWED · ${epic.toUpperCase()} · ${at} OF ${perEpic.get(epic)}`)(feature) })
 }
-const why = (feature: MeetingFeature, start: string) => feature.status === 'none' ? `No review since ${formatDate(start)}` : feature.status === 'error' ? 'The Discussion could not be read' : 'The Discussion was not read'
+const why = (feature: MeetingFeature, start: string) => feature.status === 'none' ? `No review headed for this PI since ${formatDate(start)}` : feature.status === 'error' ? 'The Discussion could not be read' : 'The Discussion was not read'
 const notReviewedSlides = (meeting: Meeting): Slide[] => {
   const features = notReviewed(meeting).sort(byEpic)
   if (!features.length) return [{ kind: 'not-reviewed', eyebrow: 'NOT REVIEWED', title: 'Features not reviewed', body: '<p>None: every Feature of the PI has a review.</p>' }]

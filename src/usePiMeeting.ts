@@ -71,7 +71,7 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
         if (missing) readNote = ` ${missing} Discussion${missing === 1 ? '' : 's'} could not be read: listed as not reviewed.`
       } else if (unread.length) readNote = ` ${unread.length} Discussion${unread.length === 1 ? ' was' : 's were'} not read (${readBlocked.replace(/\.$/, '')}): listed as not reviewed.`
       progress('Building the slides…')
-      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features: meetingFeatures(snapshot, discussionOf, setup, start) }
+      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features: meetingFeatures(snapshot, discussionOf, setup, start, name) }
       const html = await buildMeetingHtml(meeting), slides = meetingSlides(meeting).length
       downloadHtml(html, file.replace(/\.html$/, ''))
       const done = `Downloaded ${file} (${slides} slides).${readNote}`

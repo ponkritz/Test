@@ -4,7 +4,7 @@ import { formatDate, formatDateTime } from '../format'
 import { reviewStartOf } from '../piReviewStart'
 import { emptyReviewForm, formSetupProblems, reviewBlocks, withFieldValue, type ReviewForm } from '../piReviewPost'
 import { ReviewPreview } from '../pages/PiReviewForm'
-import { headingText, piPlaceholder, reviewedPiPlaceholder } from '../piReview'
+import { headingText, piPlaceholder, reviewHeadingOf, reviewedPiPlaceholder } from '../piReview'
 import { defaultReviewStart, isReviewStartDay, builtInFields, fieldDrafts, fieldsOf, isBuiltInField, isChoice, maxFormFields, newFieldId, piFieldTypes, piFormFile, setupChanges, setupGearLabel, showsSetupGear, type PiFormField, type PiFormSetup } from '../piReviewSetup'
 import { typeLabel, type ColumnDraft } from '../onDemand'
 import { ColumnListEditor } from './ColumnListEditor'
@@ -110,7 +110,7 @@ function PiFormEditor({ setup, by, blocked, onSave, onClose }: { setup: PiFormSe
       </section>
       <section className="pir-review-preview" aria-label="Comment preview">
         <h3>Comment preview</h3>
-        <ReviewPreview blocks={sampleComment(draft)} />
+        <ReviewPreview heading={reviewHeadingOf('PI 26.4')} blocks={sampleComment(draft)} />
         <small className="muted">A review written with this form, as it is posted to the Feature’s Discussion. Reviews written before keep their columns: PI Review reads the built-in headings too.</small>
       </section>
     </div>

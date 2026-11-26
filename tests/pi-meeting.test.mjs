@@ -7,7 +7,7 @@ import { sha256Base64, inlineScript } from '../src/standaloneHtml.ts'
 // The PI Review Meeting presentation (PIR-40…PIR-47; TC-PIR-42…TC-PIR-45). Synthetic data only.
 const feature = (id, title, epicId, assignedTo = 'Rita Gomez', state = 'Active') => ({ key: `example/project/${id}`, id, title, workItemType: 'Feature', state, assignedTo, assignedToEmail: `${assignedTo.split(' ')[0].toLowerCase()}@example.com`, iterationPath: 'Project\\PI 26.4', parentId: epicId })
 const epic = (id, title) => ({ key: `example/project/${id}`, id, title, workItemType: 'Epic', state: 'Active', assignedTo: '', iterationPath: 'Project' })
-const review = ({ learnings = '- book the rig early', struggles = '- vendor late', move = 'No', mode = 'Offline Review', remarks = '' } = {}) => `Learnings of PI 26.4:\n${learnings}\nStruggles of PI 26.4:\n${struggles}\nWhether the feature needs to be shifted to PI 27.1 : ${move}\nAdvise to discuss the Feature during the Review meeting: ${mode}${remarks ? `\nAdditional Remarks:\n${remarks}` : ''}`
+const review = ({ learnings = '- book the rig early', struggles = '- vendor late', move = 'No', mode = 'Offline Review', remarks = '' } = {}) => `Feature Review for PI 26.4\nLearnings of PI 26.4:\n${learnings}\nStruggles of PI 26.4:\n${struggles}\nWhether the feature needs to be shifted to PI 27.1 : ${move}\nAdvise to discuss the Feature during the Review meeting: ${mode}${remarks ? `\nAdditional Remarks:\n${remarks}` : ''}`
 const comment = (id, date, text, author = 'Rita Gomez') => ({ id, date, text, author, authorEmail: 'rita.gomez@example.com' })
 const done = (comments) => ({ state: 'done', comments, capped: false, readAt: '2026-11-26T10:00:00Z' })
 const tools = epic(100, 'Tools'), audit = epic(110, 'Audits')
@@ -24,13 +24,13 @@ const discussions = {
   'example/project/201': done([comment(1, '2026-10-02T09:00:00Z', review({ mode: 'Discuss during Meeting', move: 'Yes — waiting for the vendor', remarks: 'Needs a decision' }))]),
   'example/project/202': done([comment(2, '2026-10-05T09:00:00Z', review({ learnings: 'None', struggles: '- audit late' }), 'Ken Ito <ken.ito@example.com>')]),
   'example/project/203': done([comment(3, '2026-10-06T09:00:00Z', review({ learnings: '- reuse fixtures', mode: 'Discuss during Meeting' }))]),
-  'example/project/204': done([comment(4, '2026-10-07T09:00:00Z', 'We were blocked by the lab. Next time we book early.')]),
+  'example/project/204': done([comment(4, '2026-10-07T09:00:00Z', 'Feature Review for PI 26.4\nWe were blocked by the lab. Next time we book early.')]),
   // Only a comment before the start date: not reviewed.
   'example/project/205': done([comment(5, '2026-09-01T09:00:00Z', review({ learnings: '- an old learning' }))]),
   'example/project/206': { state: 'error', error: 'Azure DevOps answered 500.' },
 }
 const setup = builtInFormSetup(), start = '2026-09-21'
-const meetingOf = (overrides = {}) => ({ pi: 'PI 26.4', builtAt: '26 Nov 2026, 14:30 CET', builtBy: 'Rita Gomez', start, features: meetingFeatures(rows, (key) => discussions[key], setup, start), ...overrides })
+const meetingOf = (overrides = {}) => ({ pi: 'PI 26.4', builtAt: '26 Nov 2026, 14:30 CET', builtBy: 'Rita Gomez', start, features: meetingFeatures(rows, (key) => discussions[key], setup, start, 'PI 26.4'), ...overrides })
 
 test('PIR-42: the snapshot — each Feature reviewed or not by its latest comment on or after the start date; the counts of the Summary (TC-PIR-42)', () => {
   const meeting = meetingOf()
@@ -45,8 +45,15 @@ test('PIR-42: the snapshot — each Feature reviewed or not by its latest commen
   const counts = meetingCounts(meeting.features)
   assert.deepEqual({ ...counts, nextPis: [...counts.nextPis] }, { features: 7, reviewed: 4, none: 1, unread: 2, yes: 1, no: 2, partly: 0, noMove: 1, discuss: 2, offline: 1, noMode: 1, nextPis: [['PI 27.1', 1]] })
   // Another start date: the same Discussions, read again with it.
-  assert.equal(meetingFeatures(rows, (key) => discussions[key], setup, '2026-08-01')[4].status, 'reviewed')
-  assert.equal(meetingFeatures(rows, (key) => discussions[key], setup, '2026-10-06')[0].status, 'none')
+  assert.equal(meetingFeatures(rows, (key) => discussions[key], setup, '2026-08-01', 'PI 26.4')[4].status, 'reviewed')
+  assert.equal(meetingFeatures(rows, (key) => discussions[key], setup, '2026-10-06', 'PI 26.4')[0].status, 'none')
+  // PIR-49: only a comment headed "Feature Review for PI 26.4" is a review of PI 26.4 — not one headed for PI 26.5, not
+  // one without the heading (an older review).
+  const only = (text) => meetingFeatures([rows[0]], () => done([comment(1, '2026-10-02T09:00:00Z', text)]), setup, start, 'PI 26.4')[0].status
+  assert.equal(only(review()), 'reviewed')
+  assert.equal(only(review().replace('PI 26.4\n', 'PI 26.5\n')), 'none')
+  assert.equal(only(review().replace('Feature Review for PI 26.4\n', '')), 'none')
+  assert.equal(meetingFeatures([rows[0]], (key) => discussions[key], setup, start, 'PI 26.5')[0].status, 'none')
 })
 
 test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss during Meeting one per Feature, the other reviewed Features by Epic, the Not reviewed list, Learnings, then Struggles (TC-PIR-43)', () => {
@@ -63,7 +70,7 @@ test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss dur
   assert.equal(slides[5].eyebrow, 'REVIEWED · AUDITS · 1 OF 2')
   assert.equal(slides[4].eyebrow, 'DISCUSS DURING MEETING · 2 OF 2')
   // The Not reviewed list names each Feature and why, No Epic last.
-  assert.match(slides[7].body, /205<\/td><td>Old review only<\/td><td>Tools<\/td><td>Rita Gomez<\/td><td>No review since /)
+  assert.match(slides[7].body, /205<\/td><td>Old review only<\/td><td>Tools<\/td><td>Rita Gomez<\/td><td>No review headed for this PI since /)
   assert.match(slides[7].body, /206<\/td>.*The Discussion could not be read/)
   assert.match(slides[7].body, /207<\/td><td>Without Epic<\/td><td>No Epic<\/td>.*The Discussion was not read/)
   // A Feature slide: its facts, Learnings and Struggles, Move with the reason, the advice, Additional Remarks, the byline.
@@ -74,7 +81,7 @@ test('PIR-41: the slides come in one fixed order — Title, Summary, Discuss dur
   assert.deepEqual(themeItems(meetingOf(), 'learnings').map((item) => `#${item.id} ${item.text}${item.suggested ? ' (suggested)' : ''}`), ['#201 book the rig early', '#203 reuse fixtures', '#204 Next time we book early. (suggested)'])
   assert.deepEqual(themeItems(meetingOf(), 'struggles').map((item) => `#${item.id} ${item.text}`), ['#201 vendor late', '#202 audit late', '#203 vendor late', '#204 We were blocked by the lab.'])
   // Without any review: the title, the summary, one Not reviewed list and the empty Themes — still in order.
-  const none = meetingSlides(meetingOf({ features: meetingFeatures(rows, () => undefined, setup, start) }))
+  const none = meetingSlides(meetingOf({ features: meetingFeatures(rows, () => undefined, setup, start, 'PI 26.4') }))
   assert.deepEqual(none.map((slide) => slide.kind), ['title', 'summary', 'summary-epics', 'not-reviewed', 'learnings', 'struggles'])
   assert.match(none[0].body, /7 Discussions were not read when it was built/)
 })
@@ -84,9 +91,9 @@ test('PIR-45: long lists run over several slides', () => {
   assert.deepEqual(chunks(['aaaa', 'bb', 'cccc'], 10, 6, (item) => item.length), [['aaaa', 'bb'], ['cccc']])
   const many = Array.from({ length: 30 }, (_, index) => ({ item: feature(300 + index, `Feature ${index}`, 100), epic: tools }))
   const discussed = Object.fromEntries(many.map(({ item }) => [item.key, done([comment(item.id, '2026-10-02T09:00:00Z', review({ learnings: `- learning ${item.id}`, struggles: 'None' }))])]))
-  const slides = meetingSlides(meetingOf({ features: meetingFeatures(many, (key) => discussed[key], setup, start) }))
+  const slides = meetingSlides(meetingOf({ features: meetingFeatures(many, (key) => discussed[key], setup, start, 'PI 26.4') }))
   assert.deepEqual(slides.filter((slide) => slide.kind === 'learnings').map((slide) => slide.title), ['Learnings (1 of 4)', 'Learnings (2 of 4)', 'Learnings (3 of 4)', 'Learnings (4 of 4)'])
-  const unread = meetingSlides(meetingOf({ features: meetingFeatures(many, () => undefined, setup, start) }))
+  const unread = meetingSlides(meetingOf({ features: meetingFeatures(many, () => undefined, setup, start, 'PI 26.4') }))
   assert.deepEqual(unread.filter((slide) => slide.kind === 'not-reviewed').map((slide) => slide.title), ['Features not reviewed (1 of 3)', 'Features not reviewed (2 of 3)', 'Features not reviewed (3 of 3)'])
 })
 
@@ -94,7 +101,7 @@ test('PIR-43: every value is escaped — a comment with <script> and "</script>"
   const hostile = '<script>alert(1)</script> and "</script><img src=x onerror=alert(2)>" & \'quotes\''
   const evil = [{ item: { ...feature(201, `Rig ${hostile}`, 100, 'Rita Gomez <rita.gomez@example.com>'), state: '<b>Active</b>' }, epic: epic(100, `Tools ${hostile}`) }]
   const text = review({ learnings: `- ${hostile}`, struggles: '- mail ken.ito@example.com or @<8f1c2d3e-0a1b-4c5d-9e8f-001122334455>', mode: 'Discuss during Meeting', remarks: hostile })
-  const meeting = meetingOf({ pi: 'PI 26.4 <i>', builtBy: 'Rita Gomez <rita.gomez@example.com>', features: meetingFeatures(evil, () => done([comment(1, '2026-10-02T09:00:00Z', text, `Ken <ken.ito@example.com>`)]), setup, start) })
+  const meeting = meetingOf({ pi: 'PI 26.4 <i>', builtBy: 'Rita Gomez <rita.gomez@example.com>', features: meetingFeatures(evil, () => done([comment(1, '2026-10-02T09:00:00Z', text, `Ken <ken.ito@example.com>`)]), setup, start, 'PI 26.4') })
   const html = await buildMeetingHtml(meeting)
   // Exactly one script element — the navigation — and no markup from the data.
   assert.equal(html.match(/<script/gi).length, 1)

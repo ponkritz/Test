@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { isRunning, runInBackground, recordJob } from './backgroundJobs'
 import { ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewForm, type ReviewViewer } from './piReviewPost'
-import { discussionOf, discussionsFrom, discussionsVersion, latestComment, piLabel, readDiscussions, reviewSplit, setDiscussion, subscribeDiscussions, type BulkReadResult } from './piReview'
+import { discussionOf, discussionsFrom, discussionsVersion, latestComment, piLabel, readDiscussions, reviewComments, reviewSplit, setDiscussion, subscribeDiscussions, type BulkReadResult } from './piReview'
 import { rateLimitWait, shownDateOf, type AzureConfig } from './azureDevOps'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
 import { ReadOnlyContext, useCan } from './useCan'
@@ -33,7 +33,8 @@ export type Writing = { item: AzureWorkItem; pi: string; initial: ReviewForm; pr
 // PIR-19: the form setup in use (the built-in form without a provider or a file).
 export const formSetupOf = (env: ReviewEnv | null | undefined) => env?.formSetup ?? builtInSetup
 
-// PIR-13: the form as it starts for a Feature — prefilled from its latest review comment (split by headings) when its
+// PIR-13: the form as it starts for a Feature — prefilled from its latest review comment (PIR-49: the newest comment
+// headed "Feature Review for PI …", any PI; split by headings) when its
 // Discussion was read; the reviewed PI is pi, else the Feature's own PI. Moves to — PIR-25: the PI after today's PI by the
 // Azure DevOps iteration dates (not after the reviewed PI) when they give one, else a fallback said so; a Moves to taken from the latest
 // review says so. today: the date the next PI is worked out for (the caller's clock; nextPiOf has none).
@@ -41,14 +42,14 @@ export const formSetupOf = (env: ReviewEnv | null | undefined) => env?.formSetup
 export function startForm(item: AzureWorkItem, pi: string, items: AzureWorkItem[], setup: PiFormSetup = builtInFormSetup(), iterations: PiIterations = { list: null }, today: Date = new Date(), from?: WorkItemComment): Writing {
   const reviewed = reviewedPiOf(item, pi)
   const entry = discussionOf(item.key)
-  const comment = from ?? (entry?.state === 'done' ? latestComment(entry.comments) : undefined)
+  const comment = from ?? (entry?.state === 'done' ? latestComment(reviewComments(entry.comments)) : undefined)
   const split = comment ? reviewSplit(comment.text, setup) : undefined
   const headings = split?.from === 'Headings'
   const next = nextPiFor(reviewed, items, setup, iterations, today)
   // PIR-28: the headings name the reviewed PI ("Learnings of PI 26.4:").
   const initial = { ...reviewFormFrom(split, next.pi, setup), reviewedPi: piText(piLabel(reviewed)) }
-  // PIR-26: the latest review is still the prefill; when it does not count for the reviewed PI, the form says so.
-  const prefilledOther = headings && comment ? prefilledOtherPi(comment, split, item, reviewed, iterations) : ''
+  // PIR-26, PIR-49: the latest review is still the prefill; when its heading names another PI, the form says so.
+  const prefilledOther = headings && comment ? prefilledOtherPi(split, reviewed) : ''
   const fromComment = headings && Boolean(split?.movePi) && initial.movePi !== next.pi
   const moveNote = fromComment ? `As in the latest review comment; the next PI ${next.source === 'dates' ? 'by the Azure DevOps iteration dates' : 'by a fallback'} is ${next.pi || 'not known'}. ${next.note}`.trim() : next.note
   const moveShort = fromComment ? `As in the latest review comment (the next PI is ${next.pi || 'not known'}).` : next.short
@@ -131,17 +132,17 @@ export function useReviewWriter(pi: string, iterations: PiIterations = { list: n
   return { writing, start, startEdit, post, postNew, cancel: () => setWriting(null) }
 }
 
-// PIR-34: Edit review… on PI Review and My PI Review — the viewer's own review of a Feature that counts for the chosen PI
-// (ownReviewOf), by the viewer's work email, else their display name; none while the iterations are read, and none
-// when `others` (a lead showing another person's Features in My PI Review).
-export function useOwnReview(pi: string, iterations: PiIterations & { problem?: string }, { others = false, me }: { others?: boolean; me?: { email?: string; name?: string } } = {}) {
+// PIR-34: Edit review… on PI Review and My PI Review — the viewer's own review of a Feature for the chosen PI
+// (ownReviewOf; PIR-49: headed "Feature Review for <the chosen PI>"), by the viewer's work email, else their display
+// name; none when `others` (a lead showing another person's Features in My PI Review).
+export function useOwnReview(pi: string, { others = false, me }: { others?: boolean; me?: { email?: string; name?: string } } = {}) {
   const env = useContext(ReviewEnvContext)
   const viewer = { email: me?.email || env?.email || '', name: me?.name || env?.name || '' }
-  const period = iterations.reading ? null : reviewPeriodOf(pi, iterations.list, { problem: iterations.problem })
+  const period = reviewPeriodOf(pi)
   return (item: AzureWorkItem) => {
     if (others) return undefined
     const entry = discussionOf(item.key)
-    return ownReviewOf(entry?.state === 'done' ? entry.comments : undefined, item, period, viewer, formSetupOf(env))
+    return ownReviewOf(entry?.state === 'done' ? entry.comments : undefined, period, viewer, formSetupOf(env))
   }
 }
 
@@ -204,8 +205,7 @@ export function useBulkReview(pi: string, iterations: PiIterations & { problem?:
             await readDiscussionInto(config, env.pat, item, { fresh: true })
             if (others) return undefined
             const entry = discussionOf(item.key)
-            const period = reviewPeriodOf(reviewed, iterations.list, { problem: iterations.problem })
-            return ownReviewOf(entry?.state === 'done' ? entry.comments : undefined, item, period, viewer, setup)?.comment
+            return ownReviewOf(entry?.state === 'done' ? entry.comments : undefined, reviewPeriodOf(reviewed), viewer, setup)?.comment
           },
           post: (item) => postAndAudit(env, item, form, text, reviewed),
           edit: (item, commentId) => editAndAudit(env, item, commentId, form, text, reviewed),

@@ -30,11 +30,11 @@ export type BulkOutcome = { item: Pick<AzureWorkItem, 'id' | 'key'>; result: 'po
 // PIR-36: why a Feature's row cannot be ticked ('' when it can) — the rights and the page's reasons of Write review…
 // (reviewPostBlock: View as, sample data, read-only token or roles file, no PAT, an on-premises server, not the
 // assignee without the lead right, CON-113), a review of it being written already, and — so that "replace mine" is
-// decided on what Azure DevOps holds — the PI dates and its Discussion still being read, or the Discussion not readable.
-export function bulkBlock(postBlock: string, { discussion, periodKnown, busy = '' }: { discussion: Discussion | undefined; periodKnown: boolean; busy?: string }): string {
+// decided on what Azure DevOps holds — its Discussion still being read, or not readable. (PIR-49: which review is mine
+// for the PI goes by its heading, so the PI dates are no longer waited for.)
+export function bulkBlock(postBlock: string, { discussion, busy = '' }: { discussion: Discussion | undefined; busy?: string }): string {
   if (postBlock) return postBlock
   if (busy) return busy
-  if (!periodKnown) return 'The PI dates are still being read from Azure DevOps: wait a moment.'
   if (!discussion || discussion.state === 'loading') return 'Its Discussion is still being read from Azure DevOps.'
   if (discussion.state === 'error') return `Its Discussion could not be read (${(discussion.error || 'unknown error').replace(/\.$/, '')}), so whether your review is there is not known.`
   return ''

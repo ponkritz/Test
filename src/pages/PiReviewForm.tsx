@@ -2,7 +2,7 @@ import { shownDateOf } from '../azureDevOps'
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Info, Modal, Notice, WriteBlocked } from '../components/ui'
 import { formatDateTime } from '../format'
-import { buildReviewComment, fieldValue, moveDefaultNote, noneChoice, reviewBlocks, reviewFormProblems, reviewSummary, withFieldValue, withNoTexts, type ReviewBlock, type ReviewForm, type ReviewMove } from '../piReviewPost'
+import { buildReviewComment, fieldValue, moveDefaultNote, noneChoice, reviewBlocks, reviewFormProblems, reviewHeadingFor, reviewSummary, withFieldValue, withNoTexts, type ReviewBlock, type ReviewForm, type ReviewMove } from '../piReviewPost'
 import { reviewFooter } from '../piReview'
 import { piLabel } from '../piReview'
 import { builtInFormSetup, listHelp, type PiFormField, type PiFormSetup } from '../piReviewSetup'
@@ -67,23 +67,24 @@ export function ReviewFields({ form, onChange, pi, partly, optionalTexts = false
       {setup.fields.flatMap((field) => field.id === firstNone ? [noneBox, fieldNode(field)] : [fieldNode(field)])}
     </div>
     <section className="pir-review-preview" aria-label="Preview">
-      <h3>Preview <Info iconOnly label="About the preview">The comment posted, as you, to the Feature’s Discussion in Azure DevOps, as it will look there: a bulleted list, each paragraph’s lines as bullets under its heading (what you type is sent as text: &lt;, &gt; and &amp; shown as typed). The last line marks it as posted from this app; PI Review ignores it.</Info></h3>
-      <ReviewPreview blocks={reviewBlocks(form, setup)} />
+      <h3>Preview <Info iconOnly label="About the preview">The comment posted, as you, to the Feature’s Discussion in Azure DevOps, as it will look there: the heading “Feature Review for” the reviewed PI first (only a comment with it counts as the PI review, for that PI only), then a bulleted list, each paragraph’s lines as bullets under its heading (what you type is sent as text: &lt;, &gt; and &amp; shown as typed). The last line marks it as posted from this app; PI Review ignores it.</Info></h3>
+      <ReviewPreview heading={reviewHeadingFor(form)} blocks={reviewBlocks(form, setup)} />
     </section>
   </div>
 }
 
 // PIR-14: the Preview — the same blocks the comment's HTML is built from (reviewCommentHtml), rendered as elements (the
-// texts as text, never as HTML), so it looks as the comment will in Azure DevOps.
-export function ReviewPreview({ blocks }: { blocks: readonly ReviewBlock[] }) {
+// texts as text, never as HTML), so it looks as the comment will in Azure DevOps. PIR-48: the heading first.
+export function ReviewPreview({ blocks, heading = '' }: { blocks: readonly ReviewBlock[]; heading?: string }) {
   return <div className="pir-review-comment">
+    {heading && <p className="pir-review-heading">{heading}</p>}
     {blocks.length > 0 && <ul>{blocks.map((block, index) => <li key={index}>{block.text}{block.items?.length ? block.numbered ? <ol>{block.items.map((item, at) => <li key={at}>{item}</li>)}</ol> : <ul>{block.items.map((item, at) => <li key={at}>{item}</li>)}</ul> : null}</li>)}</ul>}
     <p>{reviewFooter}</p>
   </div>
 }
 
 // PIR-13, PIR-32: what posting does — in the form's ⓘ.
-export const postingNote = 'Posting adds a new comment to the Feature’s Discussion; PI Review reads the newest, so a correction is posted as a new review.'
+export const postingNote = 'Posting adds a new comment to the Feature’s Discussion, headed “Feature Review for” the reviewed PI (e.g. “Feature Review for PI 26.4”): only a comment with that heading counts as the PI review, for that PI only. PI Review reads the newest one, so a correction is posted as a new review.'
 
 // PIR-13, PIR-34: the review action of a Feature (a table row, the drawer's footer) — **Edit review…** when the viewer's
 // own review counts for the chosen PI (own), else **Review…** (PIR-39: "Instead of Write Review, Just 'Review' is enough"); one button, disabled with the reason.
@@ -95,7 +96,7 @@ export function ReviewAction({ item, own, why, primary = false, onWrite, onEdit 
 }
 
 // PIR-34: what saving an edit does — in the form's ⓘ.
-export const editingNote = 'Saving replaces your review comment in the Feature’s Discussion (Azure DevOps marks it edited; its date stays, so it still counts for the same PI).'
+export const editingNote = 'Saving replaces your review comment in the Feature’s Discussion (Azure DevOps marks it edited; it keeps its heading “Feature Review for” the reviewed PI, so it still counts for the same PI).'
 
 // PIR-13: the "Write review" pop-up (UI-STANDARDS §3, §4): the fields and the Preview; Cancel and **Post to Azure
 // DevOps**, disabled with the reason; Post opens the confirmation pop-up naming the Feature, then onPost.
@@ -129,7 +130,7 @@ export function ReviewDialog({ writing, blocked, onPost, onPostNew, onClose }: {
     {confirming && <Modal title={editingThis ? `Save the edited review of Feature #${feature.id}?` : `Post the review to Feature #${feature.id}?`} eyebrow="PI REVIEW · AZURE DEVOPS WRITE" onClose={() => setConfirming('')}>
       {editingThis ? <p>Your review comment of {formatDateTime(editing!.date)} in the Discussion of Feature #{feature.id} “{feature.title}” is replaced in Azure DevOps, as you (your PAT): <strong>{reviewSummary(form)}</strong>.</p>
         : <p>A new comment is added to the Discussion of Feature #{feature.id} “{feature.title}” in Azure DevOps, as you (your PAT): <strong>{reviewSummary(form)}</strong>.</p>}
-      <p className="muted">{editingThis ? 'Azure DevOps marks it edited; its date stays, so it still counts for the same PI.' : 'It cannot be deleted from this app; to correct it, write the review again — the newest comment counts.'}</p>
+      <p className="muted">{editingThis ? 'Azure DevOps marks it edited; it keeps its heading “Feature Review for” the reviewed PI, so it still counts for the same PI.' : 'It cannot be deleted from this app; to correct it, write the review again — the newest comment headed “Feature Review for” the PI counts.'}</p>
       <div className="modal-actions"><button type="button" className="ghost" onClick={() => setConfirming('')}>Cancel</button><button type="button" className="primary" onClick={() => { const text = buildReviewComment(form, setup); setConfirming(''); if (editingThis) onPost(form, text); else (editing ? onPostNew ?? onPost : onPost)(form, text) }}>{editingThis ? `Save review to #${feature.id}` : `Post review to #${feature.id}`}</button></div>
     </Modal>}
   </Modal>

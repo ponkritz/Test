@@ -97,7 +97,7 @@ const datedTree = () => node('', [node('PI 2027.2', [], span(dayFromToday(61), d
 const withLead = () => { const policy = JSON.parse(teamMembersSeePiReview()); policy.members['lena.berg@example.com'] = ['People Manager']; return JSON.stringify(policy) }
 // PIR-33: start — "PI Review starts from", as the last form setup read from Git kept in this browser (no Git here).
 async function open({ email = 'rita.gomez@example.com', width = 1300, height = 1000, scale, roles = teamMembersSeePiReview(), tree, team, world: items = world(), comments, start } = {}) {
-  const state = { tree, team, world: items, comments: comments ?? { 201: [{ id: 5, text: '<div>Struggles: test rig late</div><div>Learnings: book the rig early</div><div>Move to next PI: Partly - waiting for vendor</div>', createdBy: ben, createdDate: '2026-11-21T14:30:00Z' }] }, posts: [], edits: [], reads: [], log: [], failNextPost: false, failNextEdit: false }
+  const state = { tree, team, world: items, comments: comments ?? { 201: [{ id: 5, text: '<div><b>Feature Review for PI 2026.4</b></div><div>Struggles: test rig late</div><div>Learnings: book the rig early</div><div>Move to next PI: Partly - waiting for vendor</div>', createdBy: ben, createdDate: '2026-11-21T14:30:00Z' }] }, posts: [], edits: [], reads: [], log: [], failNextPost: false, failNextEdit: false }
   const { page, context, errors } = await openPage(app, { width, height, scale, init: ([connection, mail, roles, setup]) => {
     if (setup) localStorage.setItem('demand-planning-pi-review-form-v1', setup)
     localStorage.setItem('demand-planning-access-v1', roles)
@@ -179,7 +179,7 @@ test('TC-PIR-16: the Feature’s assignee writes its review — prefilled, previ
   // PIR-32: the help is behind "ⓘ How to fill in" (what posting does, the default, the paragraphs' help) and the
   // Preview's ⓘ — not on the form.
   const help = await tipOf(page, dialog.getByRole('button', { name: 'ⓘ How to fill in' }))
-  assert.match(help, /^Posting adds a new comment to the Feature’s Discussion; PI Review reads the newest, so a correction is posted as a new review\./)
+  assert.match(help, /^Posting adds a new comment to the Feature’s Discussion, headed “Feature Review for” the reviewed PI \(e\.g\. “Feature Review for PI 26\.4”\): only a comment with that heading counts as the PI review, for that PI only\. PI Review reads the newest one, so a correction is posted as a new review\./)
   assert.match(help, /Move to next PI: Move to next PI is pre-selected No\. With Yes, Moves to \(the next PI\) and the Reason/)
   assert.match(help, /Learnings: One point per line; start a line with - or 1\. for a list\./)
   assert.match(help, /Additional Remarks: Anything else for the review\./)
@@ -198,6 +198,8 @@ test('TC-PIR-16: the Feature’s assignee writes its review — prefilled, previ
   const form = { learnings: 'Book the rig early\n- share the <b>calendar</b> & plan\n1. align with the vendor', struggles: 'test rig late', move: 'Yes', moveReason: 'waiting for vendor', movePi: 'PI 2026.5', mode: 'Discuss during Meeting', remarks: 'Thanks to the lab team' }
   // PIR-14, PIR-28: the Preview is the bulleted list as Azure DevOps shows it, the reviewed PI in the headings.
   const expected = buildReviewComment({ ...form, reviewedPi: 'PI 2026.4' })
+  // PIR-48: the Preview starts with the review heading, as the comment does.
+  assert.equal(await text(dialog.locator('.pir-review-comment > .pir-review-heading')), 'Feature Review for PI 2026.4')
   assert.deepEqual(await dialog.locator('.pir-review-comment > ul > li').evaluateAll((items) => items.map((item) => [item.firstChild.textContent, item.querySelector('ol, ul')?.tagName ?? '', [...item.querySelectorAll('li')].map((entry) => entry.textContent)])), [
     ['Learnings of PI 2026.4:', 'OL', ['Book the rig early', 'share the <b>calendar</b> & plan', 'align with the vendor']], ['Struggles of PI 2026.4:', 'UL', ['test rig late']],
     ['Whether the feature needs to be shifted to PI 2026.5 : Yes', 'UL', ['waiting for vendor']], ['Advise to discuss the Feature during the Review meeting : Discuss during Meeting', '', []], ['Additional Remarks:', 'UL', ['Thanks to the lab team']],
@@ -212,8 +214,9 @@ test('TC-PIR-16: the Feature’s assignee writes its review — prefilled, previ
   await drawer.getByRole('heading', { name: 'Discussion (2)' }).waitFor()
   assert.equal(state.posts.length, 1)
   assert.deepEqual(state.posts[0], { id: 201, body: { text: expected } })
+  assert.ok(state.posts[0].body.text.startsWith('<p>Feature Review for PI 2026.4</p><ul>'), 'PIR-48: the Discussion POST starts with the heading')
   assert.ok(!state.posts[0].body.text.includes('<b>') && state.posts[0].body.text.includes('&lt;b&gt;calendar&lt;/b&gt;'), 'no user markup sent: escaped')
-  const latest = drawer.getByRole('region', { name: 'Latest comment' })
+  const latest = drawer.getByRole('region', { name: 'Latest review' })
   assert.deepEqual(await latest.locator('dd').allInnerTexts(), ['test rig late', 'Book the rig early\nshare the <b>calendar</b> & plan\nalign with the vendor', 'Yes — waiting for vendor · to PI 2026.5', 'Discuss during Meeting', 'Thanks to the lab team'])
   await page.keyboard.press('Escape')
   await drawer.waitFor({ state: 'detached' })
@@ -278,7 +281,7 @@ test('TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the
   // iterations are read the PI number (PI 2027.1 after PI 2026.4), then the tree (today's PI 2026.4, its undated PI 2026.5).
   await review.locator('.pir-review-comment', { hasText: 'shifted to PI 2026.5 : No' }).waitFor()
   assert.equal(await review.getByRole('textbox', { name: /^Moves to/ }).count(), 0)
-  assert.match(await tipOf(page, review.getByRole('button', { name: 'ⓘ How to fill in' })), /^Posted as a new comment in the Feature’s Discussion before the items close\./)
+  assert.match(await tipOf(page, review.getByRole('button', { name: 'ⓘ How to fill in' })), /^Posted as a new comment in the Feature’s Discussion before the items close, headed “Feature Review for PI 2026\.4” \(it counts for that PI only\)\./)
   assert.equal(await review.getByRole('checkbox', { name: 'No learnings or struggles' }).isChecked(), false, 'PIR-27: in the Close pop-up too, not ticked')
   const go = dialog.getByRole('button', { name: /^Post review and close 1 item$/ })
   await go.click()
@@ -296,6 +299,7 @@ test('TC-PIR-18: closing a Feature asks its review — Move pre-selected No, the
   await page.locator('.content').getByText('Closed #205.').first().waitFor()
   assert.deepEqual(state.log, ['POST 205 failed', 'POST 205', 'PATCH 205 Closed'])
   assert.equal(state.posts[0].body.text, buildReviewComment({ learnings: '', struggles: '', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi: 'PI 2026.4' }))
+  assert.ok(state.posts[0].body.text.startsWith('<p>Feature Review for PI 2026.4</p>'), 'PIR-48: the Close pop-up’s review is headed too')
   await jobDone(page, 'Post review · #205', 'Posted to the Discussion of #205 before closing it')
   assert.deepEqual(errors, [])
   await context.close()
@@ -395,47 +399,50 @@ test('TC-PIR-32: no PI dated over today — Moves to from the number after the l
   await context.close()
 })
 
-// PIR-26, PIR-28 (TC-PIR-27): the iteration tree dated around today, so the scenario does not depend on the clock —
-// PI 2026.3 ended 101 days ago; PI 2026.4 (dated by its Sprints only) runs from 100 days ago to 30 days ahead; PI
-// 2026.5 follows. Rita's Features in PI 2026.4: 301 reviewed 10 days ago; 302 reviewed 150 days ago (in PI 2026.3); 303
-// Closed 105 days ago and reviewed the day after (in PI 2026.3, after its Closed Date).
+// PIR-49, PIR-50 (TC-PIR-27, TC-PIR-51): a review counts for the PI its heading "Feature Review for PI …" names only —
+// not by its date. The iteration tree dated around today, so the scenario does not depend on the clock: PI 2026.3 ended
+// 101 days ago; PI 2026.4 (dated by its Sprints only) runs from 100 days ago to 30 days ahead; PI 2026.5 follows. Rita's
+// Features in PI 2026.4: 301 reviewed 10 days ago, headed for PI 2026.4; 302 reviewed 150 days ago, headed for PI
+// 2026.3; 303 Closed, with an older review (no heading) written in PI 2026.4 after its Closed Date.
 const dayFromToday = (offset) => { const now = new Date(); return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset)).toISOString().slice(0, 10) }
 const relativeTree = () => node('', [
   node('PI 2026.3', [], span(dayFromToday(-200), dayFromToday(-101))),
   node('PI 2026.4', [node('PI 2026.4\\Sprint 1', [], span(dayFromToday(-100), dayFromToday(-50))), node('PI 2026.4\\Sprint 2', [], span(dayFromToday(-49), dayFromToday(30)))]),
   node('PI 2026.5', [], span(dayFromToday(31), dayFromToday(120))),
 ])
-const ritaReview = (id, offset, learnings) => ({ id, text: buildReviewComment({ learnings, struggles: 'None', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '' }), createdBy: rita, createdDate: `${dayFromToday(offset)}T10:00:00Z` })
+const ritaReview = (id, offset, learnings, reviewedPi = 'PI 2026.4') => ({ id, text: buildReviewComment({ learnings, struggles: 'None', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi }), createdBy: rita, createdDate: `${dayFromToday(offset)}T10:00:00Z` })
+// An older review, posted before the heading existed: the same fields, no "Feature Review for PI …" heading.
+const oldReview = (id, offset, learnings) => ({ ...ritaReview(id, offset, learnings), text: ritaReview(id, offset, learnings).text.replace(/^<p>Feature Review for PI [^<]+<\/p>/, '') })
 const periodWorld = () => [
   raw(100, 'Epic', 'DP releases', 'Project'),
   raw(301, 'Feature', 'Sample rig calibration', 'Project\\PI 2026.4', 100),
   raw(302, 'Feature', 'Supplier audit pack', 'Project\\PI 2026.4', 100),
-  { ...raw(303, 'Feature', 'Lab bench move', 'Project\\PI 2026.4', 100, rita, 'Closed'), fields: { ...raw(303, 'Feature', 'Lab bench move', 'Project\\PI 2026.4', 100, rita, 'Closed').fields, 'Microsoft.VSTS.Common.ClosedDate': `${dayFromToday(-105)}T16:00:00Z` } },
+  { ...raw(303, 'Feature', 'Lab bench move', 'Project\\PI 2026.4', 100, rita, 'Closed'), fields: { ...raw(303, 'Feature', 'Lab bench move', 'Project\\PI 2026.4', 100, rita, 'Closed').fields, 'Microsoft.VSTS.Common.ClosedDate': `${dayFromToday(-20)}T16:00:00Z` } },
 ]
 const status = async (page, id) => text(rowOf(page, id).locator('td').nth(4))
 
-test('TC-PIR-27: My PI Review counts a review for the chosen PI — in its dates or at close — and shows a review for another PI as Not reviewed with its date and PI; choosing another PI recomputes it', async () => {
-  const { page, context, errors, state } = await open({ tree: relativeTree(), world: periodWorld(), comments: { 301: [ritaReview(11, -10, 'Calibrate first')], 302: [ritaReview(12, -150, 'Audit early')], 303: [ritaReview(13, -104, 'Move benches at night')] }, start: dayFromToday(-250), ...(shots ? { width: 1440, height: 900, scale: 2 } : {}) })
+test('TC-PIR-27: My PI Review counts a review for the PI its heading names — a review headed for another PI is Not reviewed with its date and PI; choosing another PI recomputes it', async () => {
+  const { page, context, errors, state } = await open({ tree: relativeTree(), world: periodWorld(), comments: { 301: [ritaReview(11, -10, 'Calibrate first')], 302: [ritaReview(12, -150, 'Audit early', 'PI 2026.3')], 303: [oldReview(13, -15, 'Move benches at night')] }, start: dayFromToday(-250), ...(shots ? { width: 1440, height: 900, scale: 2 } : {}) })
   await navigate(page, 'My PI Review')
   await page.locator('.pir-filters .pill', { hasText: 'Current PI' }).waitFor()
   assert.equal(await page.getByLabel('PI', { exact: true }).inputValue(), 'Project\\PI 2026.4')
-  await rowOf(page, '303').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  await rowOf(page, '301').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
   await rowOf(page, '302').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
-  assert.equal(await status(page, '301'), 'Reviewed', 'dated within PI 2026.4 (its Sprints’ dates)')
-  assert.match(await status(page, '302'), /^Not reviewed Last review .+ \(PI 2026\.3\)$/, 'an earlier PI’s review, named')
-  assert.match(await status(page, '303'), /^Reviewed At close \(.+\)$/, 'Closed, reviewed on or after its Closed Date')
-  assert.match(await text(page.locator('.data-table-status')), /^2 of 3 reviewed$/)
-  assert.equal(await page.locator('.content .notice').filter({ hasText: 'every review comment counts' }).count(), 0, 'the PI has dates: no fallback note')
+  assert.equal(await status(page, '301'), 'Reviewed', 'headed “Feature Review for PI 2026.4”')
+  assert.match(await status(page, '302'), /^Not reviewed Last review .+ \(PI 2026\.3\)$/, 'headed for PI 2026.3: named')
+  // PIR-50: an older review without the heading — written in PI 2026.4, after the Feature closed — no longer counts.
+  assert.equal(await status(page, '303'), 'Not reviewed')
+  assert.match(await text(page.locator('.data-table-status')), /^1 of 3 reviewed$/)
   if (shots) { mkdirSync(shots, { recursive: true }); await page.emulateMedia({ colorScheme: 'light' }); await page.screenshot({ path: `${shots}/my-pi-review-reviewed-in-pi-2026-4-1440-light.png` }) }
-  // Write review… on 302: still prefilled from the latest review, labelled as written for PI 2026.3.
+  // Review… on 302: still prefilled from the latest review, labelled as written for PI 2026.3.
   await page.getByRole('button', { name: 'Review Feature 302' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review of Feature #302' })
   assert.match(await text(dialog.locator('.pir-review-note')), /^Prefilled from the latest review comment \(Rita Gomez, .+\), written for PI 2026\.3: check it before posting\./)
   assert.equal(await dialog.getByRole('textbox', { name: /^Learnings/ }).inputValue(), 'Audit early')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await dialog.waitFor({ state: 'detached' })
-  // The Feature 301 is carried over to PI 2026.5 in Azure DevOps; fetched again, PI 2026.5 chosen: the same review now
-  // belongs to another PI — Not reviewed, "(PI 2026.4)".
+  // The Feature 301 is carried over to PI 2026.5 in Azure DevOps; fetched again, PI 2026.5 chosen: its review is headed
+  // for PI 2026.4 — Not reviewed, "(PI 2026.4)".
   state.world.find((item) => item.id === 301).fields['System.IterationPath'] = 'Project\\PI 2026.5'
   await page.locator('.fetch-time-writing').click()
   await page.getByLabel('PI', { exact: true }).selectOption('Project\\PI 2026.5')
@@ -448,12 +455,33 @@ test('TC-PIR-27: My PI Review counts a review for the chosen PI — in its dates
   await context.close()
 })
 
-test('TC-PIR-27: the chosen PI has no dates — every review counts, and the page says so', async () => {
-  const { page, context, errors } = await open({ tree: node('', [node('PI 2026.4', [node('PI 2026.4\\Sprint 2')])]), team: [], world: periodWorld(), comments: { 302: [ritaReview(12, -150, 'Audit early')] }, start: dayFromToday(-250) })
+// PIR-49, PIR-50 (TC-PIR-51): the heading decides, not the PI's dates — without dates a review headed for the PI still
+// counts and nothing says "every review counts"; an older review without the heading is Not reviewed until reviewed
+// again, and the column's ⓘ says why. Reviewed again, the new comment is headed and counts.
+test('TC-PIR-51: an older review without the “Feature Review for PI …” heading is Not reviewed; reviewed again it counts, whatever the PI dates', async () => {
+  const { page, context, errors, state } = await open({ tree: node('', [node('PI 2026.4', [node('PI 2026.4\\Sprint 2')])]), team: [], world: periodWorld(), comments: { 301: [ritaReview(11, -10, 'Calibrate first')], 302: [oldReview(12, -5, 'Audit early')] }, start: dayFromToday(-250), ...(shots ? { width: 1440, height: 900, scale: 2 } : {}) })
   await navigate(page, 'My PI Review')
   await page.getByLabel('PI', { exact: true }).selectOption('Project\\PI 2026.4')
+  await rowOf(page, '301').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  await rowOf(page, '302').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
+  assert.equal(await status(page, '302'), 'Not reviewed', 'no heading: no review, no other PI named')
+  assert.equal(await page.locator('.content .notice').filter({ hasText: 'every review comment counts' }).count(), 0, 'the dates no longer decide: no note')
+  const hint = page.locator('.pir-table thead').getByRole('button', { name: 'About My review' })
+  assert.match(await tipOf(page, hint), /a comment headed “Feature Review for PI 26\.4” counts for PI 26\.4 only.*Only comments headed “Feature Review for PI …” count as a PI review: a comment without that heading — older reviews included, whatever their date — does not, so its Feature shows as Not reviewed until it is reviewed again\./)
+  if (shots) { mkdirSync(shots, { recursive: true }); await page.emulateMedia({ colorScheme: 'light' }); await page.screenshot({ path: `${shots}/my-pi-review-old-review-not-reviewed-1440-light.png` }) }
+  // No Edit review… on the older comment: Review… posts a new, headed review — and then it counts.
+  assert.equal(await page.getByRole('button', { name: 'Edit review of Feature 302' }).count(), 0)
+  await page.getByRole('button', { name: 'Review Feature 302' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review of Feature #302' })
+  await dialog.getByRole('textbox', { name: /^Learnings/ }).fill('Audit early')
+  await dialog.getByRole('textbox', { name: /^Struggles/ }).fill('None')
+  await dialog.getByRole('radio', { name: 'Offline Review' }).check()
+  await dialog.getByRole('button', { name: 'Post to Azure DevOps' }).click()
+  await page.getByRole('dialog', { name: 'Post the review to Feature #302?' }).getByRole('button', { name: 'Post review to #302' }).click()
+  await jobDone(page, 'Post review · #302', 'Posted to the Discussion of #302 and read back')
+  assert.ok(state.posts[0].body.text.startsWith('<p>Feature Review for PI 2026.4</p>'), 'PIR-48: the POST body starts with the heading')
   await rowOf(page, '302').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
-  assert.match(await text(page.locator('.content .notice').filter({ hasText: 'every review comment counts' })), /^PI 2026\.4 has no dates in Azure DevOps \(neither its own nor its Sprints’\): every review comment counts as Reviewed, whatever its date\.$/)
+  assert.match(await text(page.locator('.data-table-status')), /^2 of 3 reviewed$/)
   assert.deepEqual(errors, [])
   await context.close()
 })
@@ -496,7 +524,7 @@ test('TC-PIR-28: “No learnings or struggles” — not ticked; ticked it write
   await jobDone(page, 'Post review · #205', 'Posted to the Discussion of #205 and read back')
   const expected = buildReviewComment({ learnings: 'None', struggles: 'None', move: 'No', moveReason: '1. two stories left\n2. docs pending', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi: 'PI 2026.4' })
   assert.deepEqual(state.posts, [{ id: 205, body: { text: expected } }], 'the list HTML as built')
-  assert.match(expected, /^<ul><li>Learnings of PI 2026\.4:<ul><li>None<\/li><\/ul><\/li><li>Struggles of PI 2026\.4:<ul><li>None<\/li><\/ul><\/li><li>Whether the feature needs to be shifted to PI 2026\.5 : No<\/li>/)
+  assert.match(expected, /^<p>Feature Review for PI 2026\.4<\/p><ul><li>Learnings of PI 2026\.4:<ul><li>None<\/li><\/ul><\/li><li>Struggles of PI 2026\.4:<ul><li>None<\/li><\/ul><\/li><li>Whether the feature needs to be shifted to PI 2026\.5 : No<\/li>/)
   await rowOf(page, '205').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
   // PI Review shows None in both columns, and the reviewed PI from the headings.
   await navigate(page, 'PI Review')

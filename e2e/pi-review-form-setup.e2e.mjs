@@ -175,7 +175,7 @@ test('TC-PIR-24: a People Manager has no PI Review Setup — not in the menu, Se
   const setup = builtInFormSetup()
   setup.fields.splice(4, 0, { id: 'f-6', label: 'Customer impact', heading: 'Customer impact', type: 'dropdown', options: ['None', 'Some sites'], required: true, defaultValue: '', help: '' })
   const gh = fakeGitHub({ files: { 'access.json': policy(), 'pi-review-form.json': serializePiFormSetup(setup) } })
-  const comment = buildReviewComment({ ...emptyReviewForm('PI 2026.5', setup), learnings: 'a', struggles: 'b', mode: 'Offline Review', extra: { 'f-6': 'Some sites' } }, setup)
+  const comment = buildReviewComment({ ...emptyReviewForm('PI 2026.5', setup), learnings: 'a', struggles: 'b', mode: 'Offline Review', extra: { 'f-6': 'Some sites' }, reviewedPi: 'PI 2026.4' }, setup)
   const { page, context, errors } = await open(gh, 'pia.patel@example.com', { comments: { 205: [{ id: 7, text: comment, createdBy: rita, createdDate: '2026-11-21T14:30:00Z' }] } })
   // PIR-29: without "PI Review: set up the review form" the page is hidden — not in the Admin menu, not found by Search settings.
   await navigate(page, 'Feature & PI setup')
