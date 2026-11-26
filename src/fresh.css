@@ -1227,6 +1227,10 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
    its split in the drawer, line breaks kept. */
 .pir-table table.no-wrap .pir-clip{display:block;max-width:18rem;overflow:hidden;text-overflow:ellipsis}
 .pir-status{display:grid;justify-items:start;gap:3px}.pir-status small{font-size:11px}
+/* PIR-75…PIR-78 (temporary): the Old format flag, the old-format comments in the drawer, Convert…, Search Discussions */
+.pir-old-format{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}.pir-old-format small{font-size:11px}
+.pir-old-formats ul{display:grid;gap:8px;margin:6px 0 0;padding:0;list-style:none}.pir-old-formats li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pir-convert-why{flex-basis:100%;font-size:11.5px}
+.pir-convert{display:grid;gap:8px;justify-items:start;margin-bottom:10px}.pir-search-note{margin:0 0 8px}.pir-search table.no-wrap .pir-clip{display:block;max-width:24rem;overflow:hidden;text-overflow:ellipsis}
 .pir-latest{display:grid;gap:6px;padding-top:4px}.pir-latest h3{margin:0;font-size:14px;color:var(--heading)}.pir-latest .pir-comment-head,.pir-latest p{margin:0}
 .pir-split dd{margin:0;font-size:13px;white-space:pre-line;overflow-wrap:anywhere}
 .pir-suggested,.pir-split.pir-suggested dd{font-style:italic;color:var(--text-2)}.pir-suggested-mark{font-style:normal;font-size:11px;color:var(--muted)}

@@ -4,6 +4,8 @@ import { Info, Modal, Notice, WriteBlocked } from '../components/ui'
 import { formatDateTime } from '../format'
 import { buildReviewComment, fieldValue, moveDefaultNote, noneChoice, reviewBlocks, reviewFormProblems, reviewHeadingFor, reviewSummary, withFieldValue, withNoTexts, type ReviewBlock, type ReviewForm, type ReviewMove } from '../piReviewPost'
 import { reviewFooter } from '../piReview'
+import { ConvertPi } from './OldFormatParts'
+import { oldFormatNote } from '../piReviewOldFormat'
 import { piLabel } from '../piReview'
 import { builtInFormSetup, listHelp, type PiFormField, type PiFormSetup } from '../piReviewSetup'
 import type { BulkWriting, Writing } from '../piReviewWriter'
@@ -103,7 +105,7 @@ export const editingNote = 'Saving replaces your review comment in the Feature�
 // PIR-34: with writing.editing, the "Edit review" pop-up — prefilled from the viewer's own review comment; **Save to Azure
 // DevOps** replaces that comment (onPost); after a failed save the error and **Post as a new review instead** (onPostNew).
 export function ReviewDialog({ writing, blocked, onPost, onPostNew, onClose }: { writing: Writing; blocked: string; onPost: (form: ReviewForm, text: string) => void; onPostNew?: (form: ReviewForm, text: string) => void; onClose: () => void }) {
-  const { item: feature, pi, prefilledFrom, prefilledOther, partly, setup, moveNote, moveShort, moveWarn, editing } = writing
+  const { item: feature, pi, prefilledFrom, prefilledOther, partly, setup, moveNote, moveShort, moveWarn, editing, converting } = writing
   const [form, setForm] = useState(writing.initial)
   const [tried, setTried] = useState(false)
   const [confirming, setConfirming] = useState<'' | 'save' | 'new'>('')
@@ -117,20 +119,23 @@ export function ReviewDialog({ writing, blocked, onPost, onPostNew, onClose }: {
   }
   const asNew = () => { setTried(true); if (!blocked && !problems.length) setConfirming('new') }
   const editingThis = Boolean(editing) && confirming !== 'new'
-  return <Modal title={editing ? `Edit review of Feature #${feature.id}` : `Review of Feature #${feature.id}`} eyebrow="PI REVIEW · AZURE DEVOPS WRITE" wide onClose={onClose}>
+  // PIR-76 (temporary): Convert… of an old-format comment — its own title, the note and the reviewed PI.
+  return <Modal title={converting ? `Convert old-format comment of Feature #${feature.id}` : editing ? `Edit review of Feature #${feature.id}` : `Review of Feature #${feature.id}`} eyebrow="PI REVIEW · AZURE DEVOPS WRITE" wide onClose={onClose}>
     <form className="pir-review-form" onSubmit={submit} noValidate>
       <p className="pir-title"><strong>{feature.title}</strong> <span className="muted">· {pi ? piLabel(pi) : 'no PI'} · Assigned to {feature.assignedTo || 'nobody'}</span></p>
-      {editing ? <p className="muted pir-review-note">Editing your review comment of {formatDateTime(editing.date)}.</p>
+      {converting && editing ? <ConvertPi form={form} options={converting.options} date={editing.date} onChange={setForm} />
+        : editing ? <p className="muted pir-review-note">Editing your review comment of {formatDateTime(editing.date)}.</p>
         : prefilledFrom && <p className="muted pir-review-note">Prefilled from the latest review comment ({prefilledFrom.author}, {formatDateTime(prefilledFrom.date)}){prefilledOther ? `, written for ${prefilledOther}: check it before posting` : ''}.</p>}
-      <ReviewFields form={form} onChange={setForm} pi={pi} partly={partly} setup={setup} moveNote={moveNote} moveShort={moveShort} moveWarn={moveWarn} about={editing ? editingNote : postingNote} />
+      <ReviewFields form={form} onChange={setForm} pi={pi} partly={partly} setup={setup} moveNote={moveNote} moveShort={moveShort} moveWarn={moveWarn} about={converting ? oldFormatNote : editing ? editingNote : postingNote} />
       {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}
       {editing?.failed && <Notice tone="error">The review was not edited: {editing.failed} Try again, or post it as a new review instead (PI Review reads the newest comment).</Notice>}
       <div className="modal-actions"><WriteBlocked reason={why} /><button type="button" className="ghost" onClick={onClose}>Cancel</button>{editing?.failed && onPostNew && <button type="button" className="ghost" disabled={Boolean(blocked)} onClick={asNew}>Post as a new review instead</button>}<button type="submit" className="primary" disabled={Boolean(blocked)} title={blocked || undefined}>{editing ? 'Save to Azure DevOps' : 'Post to Azure DevOps'}</button></div>
     </form>
-    {confirming && <Modal title={editingThis ? `Save the edited review of Feature #${feature.id}?` : `Post the review to Feature #${feature.id}?`} eyebrow="PI REVIEW · AZURE DEVOPS WRITE" onClose={() => setConfirming('')}>
-      {editingThis ? <p>Your review comment of {formatDateTime(editing!.date)} in the Discussion of Feature #{feature.id} “{feature.title}” is replaced in Azure DevOps, as you (your PAT): <strong>{reviewSummary(form)}</strong>.</p>
+    {confirming && <Modal title={editingThis && converting ? `Save the converted review of Feature #${feature.id}?` : editingThis ? `Save the edited review of Feature #${feature.id}?` : `Post the review to Feature #${feature.id}?`} eyebrow="PI REVIEW · AZURE DEVOPS WRITE" onClose={() => setConfirming('')}>
+      {editingThis && converting ? <p>Your old-format comment of {formatDateTime(editing!.date)} in the Discussion of Feature #{feature.id} “{feature.title}” is replaced in Azure DevOps, as you (your PAT), headed “{reviewHeadingFor(form)}”: <strong>{reviewSummary(form)}</strong>.</p>
+        : editingThis ? <p>Your review comment of {formatDateTime(editing!.date)} in the Discussion of Feature #{feature.id} “{feature.title}” is replaced in Azure DevOps, as you (your PAT): <strong>{reviewSummary(form)}</strong>.</p>
         : <p>A new comment is added to the Discussion of Feature #{feature.id} “{feature.title}” in Azure DevOps, as you (your PAT): <strong>{reviewSummary(form)}</strong>.</p>}
-      <p className="muted">{editingThis ? 'Azure DevOps marks it edited; it keeps its heading “Feature Review for” the reviewed PI, so it still counts for the same PI.' : 'It cannot be deleted from this app; to correct it, write the review again — the newest comment headed “Feature Review for” the PI counts.'}</p>
+      <p className="muted">{editingThis && converting ? 'Azure DevOps marks it edited; from then on it counts as the PI review of the PI its heading names.' : editingThis ? 'Azure DevOps marks it edited; it keeps its heading “Feature Review for” the reviewed PI, so it still counts for the same PI.' : 'It cannot be deleted from this app; to correct it, write the review again — the newest comment headed “Feature Review for” the PI counts.'}</p>
       <div className="modal-actions"><button type="button" className="ghost" onClick={() => setConfirming('')}>Cancel</button><button type="button" className="primary" onClick={() => { const text = buildReviewComment(form, setup); setConfirming(''); if (editingThis) onPost(form, text); else (editing ? onPostNew ?? onPost : onPost)(form, text) }}>{editingThis ? `Save review to #${feature.id}` : `Post review to #${feature.id}`}</button></div>
     </Modal>}
   </Modal>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { DataTable, type DataColumn } from '../components/DataTable'
 import { MultiSelect } from '../components/MultiSelect'
 import { Drawer, EmptyState, Notice, Page, Pill, TablePanel, WriteBlocked } from '../components/ui'
@@ -25,6 +25,9 @@ import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { PageProps } from './types'
 import type { Me } from '../myWork'
+import { convertBlock, isOldFormat, oldFormatComments, oldFormatNote, oldFormatSearch } from '../piReviewOldFormat'
+import { ConvertButton, OldFormatFlag } from './OldFormatParts'
+import { DiscussionSearch } from './DiscussionSearch'
 
 // PI Review (PIR-01…PIR-16): choose a PI, see its Features, and read each Feature's Discussion (all pages, newest
 // first, as plain text) in a drawer, or every Discussion at once as a background job; the latest review of each read
@@ -37,8 +40,13 @@ const piKey = 'demand-planning-pi-review-pi-v1'
 const jobKey = 'pireview:read-all'
 const plural = (count: number, word: string, many = `${word}s`) => `${count.toLocaleString()} ${count === 1 ? word : many}`
 type Row = { item: AzureWorkItem; epic?: AzureWorkItem }
-interface Filters { epics: string[]; states: string[]; people: string[]; moves: string[]; modes: string[]; text: string }
-const noFilters: Filters = { epics: [], states: [], people: [], moves: [], modes: [], text: '' }
+// PIR-77: olds — the Old format filter (temporary, LIM-235).
+interface Filters { epics: string[]; states: string[]; people: string[]; moves: string[]; modes: string[]; text: string; olds: string[] }
+const noFilters: Filters = { epics: [], states: [], people: [], moves: [], modes: [], text: '', olds: [] }
+// PIR-77: the Old format filter — a Feature with an old-format comment, without one, its Discussion not read.
+const oldOptions: [string, string][] = [['old', 'Old format — convert'], ['none', 'No old-format comment'], ['unread', 'Discussion not read']]
+const oldsOf = (item: AzureWorkItem) => { const entry = discussionOf(item.key); return entry?.state === 'done' ? oldFormatComments(entry.comments) : undefined }
+const oldKey = (item: AzureWorkItem) => { const olds = oldsOf(item); return !olds ? 'unread' : olds.length ? 'old' : 'none' }
 
 // PIR-07, PIR-08, PIR-11, PIR-49: the latest review for the chosen PI (the newest comment headed "Feature Review for
 // <that PI>"; none: Not reviewed) of a Feature whose Discussion was read in this page load, split by its
@@ -91,6 +99,8 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   const [open, setOpen] = useState<{ key: string; order: string[] } | null>(null)
   // PIR-69: the Product Owner filter (the Product Owner of the Feature's Epic), remembered in this browser.
   const owners = useOwnerFilter('pireview')
+  // PIR-78: the Search Discussions… pop-up.
+  const [searching, setSearching] = useState(false)
 
   // PIR-03: the PI's Features, with their Epic.
   const rows: Row[] = useMemo(() => { const byId = new Map(items.map((item) => [item.id, item])); return piFeatures(items, pi, { absenceEpicId, withStories }).map((item) => ({ item, epic: epicOf(items, item, byId) })) }, [items, pi, absenceEpicId, withStories])
@@ -161,6 +171,11 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
       render: ({ item }) => { const latest = latestOf(item); return !latest ? <span className="muted">—</span> : <span className="pir-clip">{oneLine(reviewModeLabel(latest.split))}</span> } },
     textColumn('remarks', 'Additional Remarks', 'The text after the heading “Additional Remarks:” (or Remarks, Additional comments) in the latest review.', (latest) => latest.split.remarks),
     // PIR-28, PIR-49: the reviewed PI the latest review's heading names ("Feature Review for PI 26.4"), also in the export.
+    // PIR-77 (temporary): the Feature’s old-format comments and who wrote them — leads see who still has to convert (not
+    // exported: the export keeps its columns while the mechanism is temporary).
+    ...(oldFormatSearch ? [{ id: 'old-format', label: 'Old format', export: false, hint: `${oldFormatNote} The authors are named. Filter it with Old format.`,
+      value: ({ item }: Row) => { const olds = oldsOf(item); return olds?.length ? `Old format — ${[...new Set(olds.map((comment) => comment.author))].join(', ')}` : '' },
+      render: ({ item }: Row) => { const olds = oldsOf(item); return !olds ? <span className="muted">—</span> : <OldFormatFlag comments={olds} withAuthor /> } } satisfies DataColumn<Row>] : []),
     textColumn('reviewed-pi', 'Reviewed PI', 'The PI the latest review is headed for (“Feature Review for PI 26.4”) — the chosen PI; empty when the Feature is Not reviewed.', (latest) => latest.split.reviewedPi),
     // PIR-20: a column for each field added in the PI Review form setup, by its label.
     ...customFields(setup).map((field) => textColumn(`field-${field.id}`, field.label, `The text after the heading “${field.heading}:” in the latest review (a field added in the PI Review form setup, Admin → Feature & PI setup → PI Review form).`, (latest) => latest.split.extra?.[field.id])),
@@ -183,8 +198,9 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     && (!filters.moves.length || filters.moves.includes(moveKey(latestOf(item))))
     && (!filters.modes.length || filters.modes.includes(modeKey(latestOf(item))))
     && owners.keeps([owners.ofEpic(epic?.id)])
+    && (!filters.olds.length || filters.olds.includes(oldKey(item)))
     && (!text || searchText(row).includes(text)) })
-  const filtered = owners.active || filters.epics.length > 0 || filters.states.length > 0 || filters.people.length > 0 || filters.moves.length > 0 || filters.modes.length > 0 || Boolean(filters.text)
+  const filtered = owners.active || filters.epics.length > 0 || filters.states.length > 0 || filters.people.length > 0 || filters.moves.length > 0 || filters.modes.length > 0 || Boolean(filters.text) || filters.olds.length > 0
 
   const toolbar = <span className="people-filters pir-filters">
     <label className="inline-select">PI<select aria-label="PI" value={pi} onChange={(event) => choose(event.target.value)}>
@@ -198,6 +214,7 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     <MultiSelect label="Assigned to" options={personOptions} value={filters.people} onChange={(value) => setFilters({ ...filters, people: value })} />
     <MultiSelect label="Move to next PI" options={moveOptions} value={filters.moves} onChange={(value) => setFilters({ ...filters, moves: value })} />
     <MultiSelect label="Review mode" options={modeOptions} value={filters.modes} onChange={(value) => setFilters({ ...filters, modes: value })} />
+    {oldFormatSearch && <MultiSelect label="Old format" options={oldOptions} value={filters.olds} onChange={(value) => setFilters({ ...filters, olds: value })} />}
     <label className="check"><input type="checkbox" checked={withStories} onChange={(event) => setWithStories(event.target.checked)} />Also Features with User Stories in this PI</label>
     <input type="search" className="search" aria-label="Search Features" placeholder="Search Features, comments" title="Searches every column shown and the whole latest review" value={filters.text} onChange={(event) => setFilters({ ...filters, text: event.target.value })} />
     <button type="button" className="ghost" disabled={!filtered} onClick={() => { setFilters(noFilters); owners.change([]) }}>Reset filters</button>
@@ -210,6 +227,8 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   const writer = useReviewWriter(pi, { list: iterations.list, reading: !iterations.done })
   // PIR-34: my own review of a Feature that counts for the chosen PI (the rule of My PI Review), for Edit review….
   const ownReview = useOwnReview(pi)
+  // PIR-77: Convert… of an old-format comment, by its author only (the drawer).
+  const convertMe = { email: poster.env?.email || me?.email, name: poster.env?.name || me?.name }
   const pageBlock = reviewPageBlock(poster)
   const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}${ownedEpics(owners.file, poster.email).length ? ' and of the Features of the Epics you are the Product Owner of' : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
 
@@ -222,7 +241,7 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   const notice = !iterations.done ? null : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
 
   return <Page intro="The Features of a PI and their Discussions, read from Azure DevOps with your PAT, kept for this page load only. Review… posts a Feature’s review to its Discussion as a new comment; Edit review… changes your own review in place."
-    actions={<><MeetingButton meeting={meeting} /><button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}{/* PIR-30: ⚙ PI Review Setup, last (UI-STANDARDS §6), when the page is in the viewer's menu. */}<PiSetupGear /></>}>
+    actions={<><MeetingButton meeting={meeting} /><button type="button" className="ghost" disabled={Boolean(readAllWhy)} title={readAllWhy || undefined} onClick={readAll}>↻ Read all Discussions</button>{readAllWhy && rows.length > 0 && !reading && <WriteBlocked reason={readAllWhy} />}{oldFormatSearch && <button type="button" className="ghost" disabled={!rows.length} title={rows.length ? 'Search the comments of the Discussions read (temporary: finds the reviews written in the old format)' : 'No Features in this PI.'} onClick={() => setSearching(true)}>Search Discussions…</button>}{/* PIR-30: ⚙ PI Review Setup, last (UI-STANDARDS §6), when the page is in the viewer's menu. */}<PiSetupGear /></>}>
     {!items.length && <EmptyState title="No QMS-0025 data yet." detail="Fetch the Time Writing connection (↻ in the top bar) or load the synthetic sample; the PIs and Features come from that data." />}
     {notice && <Notice tone="warning">{notice}</Notice>}
     {items.length > 0 && <TablePanel title="Features" info={`The Features whose Iteration Path is in the chosen PI (with the toggle also those with a User Story in the PI), without Removed Features and those under the absence Epic. The PIs come from the Time Writing connection’s iterations and the fetched data; the current PI (by the Sprint dates, UTC) is chosen first, and your last choice is remembered in this browser. ${cutoffNote(cutoff)} Click a Feature to read its Discussion; Review… posts the Feature’s review as a new comment in its Discussion, headed “Feature Review for ${pi ? piLabel(pi) : 'PI …'}”. The review columns show each Feature’s latest review for the chosen PI — the newest comment headed “Feature Review for” that PI (one headed for PI 26.4 counts for PI 26.4 only); without one the Feature is Not reviewed. ${reviewHeadingNote}`}>
@@ -232,8 +251,11 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
         onRowOpen={(row, order) => setOpen({ key: row.item.key, order: order.map((entry) => entry.item.key) })} rowLabel={(row) => `Feature ${row.item.id}: open`}
         empty={<EmptyState title={!pi ? 'Choose a PI.' : rows.length ? 'No Feature matches the filters.' : `No Features in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI to review in the PI list.' : rows.length ? 'Change the filters, or Reset filters.' : 'Tick “Also Features with User Stories in this PI”, choose another PI, or fetch the data again.'} />} />
     </TablePanel>}
+    {/* PIR-78 (temporary): Search Discussions… — the comments of the Discussions read. */}
+    {searching && <DiscussionSearch items={rows.map((row) => row.item)} onClose={() => setSearching(false)} onOpen={(item) => { setSearching(false); setOpen({ key: item.key, order: shown.some((row) => row.item.key === item.key) ? shown.map((row) => row.item.key) : [item.key] }) }} />}
     {items.length > 0 && pi && <SavedMeetings meeting={meeting} git={git} />}
-    {open && openRow && <FeatureDrawer key={openRow.item.key} row={openRow} setup={setup} pi={pi} position={{ at: open.order.indexOf(open.key), of: open.order.length }} onStep={step} onClose={() => setOpen(null)} config={config} pat={pat} blocked={readBlocked} postBlocked={reviewPostBlock(poster, openRow.item)} own={ownReview(openRow.item)} onWrite={() => void writer.start(openRow.item)} onEdit={(comment) => writer.startEdit(openRow.item, comment)} />}
+    {open && openRow && <FeatureDrawer key={openRow.item.key} row={openRow} setup={setup} pi={pi} position={{ at: open.order.indexOf(open.key), of: open.order.length }} onStep={step} onClose={() => setOpen(null)} config={config} pat={pat} blocked={readBlocked} postBlocked={reviewPostBlock(poster, openRow.item)} own={ownReview(openRow.item)} onWrite={() => void writer.start(openRow.item)} onEdit={(comment) => writer.startEdit(openRow.item, comment)}
+      oldFormat={oldFormatSearch ? <OldFormatComments item={openRow.item} why={(comment) => convertBlock(poster, openRow.item, comment, convertMe)} onConvert={(comment) => writer.startConvert(openRow.item, comment, options)} /> : null} />}
     {writer.writing && byKey.get(writer.writing.item.key) && <ReviewDialog key={`review:${writer.writing.item.key}`} writing={writer.writing} blocked={reviewPostBlock(poster, writer.writing.item)} onPost={writer.post} onPostNew={writer.postNew} onClose={writer.cancel} />}
   </Page>
 }
@@ -252,7 +274,7 @@ function textColumnOf(id: string, label: string, hint: string, pick: (latest: La
 
 // PIR-05: one Feature in a drawer (UI-STANDARDS §4a), read only: its details, then its Discussion, newest first, as
 // plain text (mentions as @Name, images as [image]); read when the drawer opens unless read before, ↻ Read again.
-function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, postBlocked, onWrite, setup, own, onEdit, pi }: { setup: PiFormSetup; pi: string; row: Row; position: { at: number; of: number }; onStep: (by: number) => void; onClose: () => void; config: AzureConfig | null; pat: string; blocked: string; postBlocked: string; onWrite: () => void; own?: { comment: WorkItemComment }; onEdit: (comment: WorkItemComment) => void }) {
+function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, postBlocked, onWrite, setup, own, onEdit, pi, oldFormat }: { setup: PiFormSetup; pi: string; row: Row; position: { at: number; of: number }; onStep: (by: number) => void; onClose: () => void; config: AzureConfig | null; pat: string; blocked: string; postBlocked: string; onWrite: () => void; own?: { comment: WorkItemComment }; onEdit: (comment: WorkItemComment) => void; oldFormat?: ReactNode }) {
   const { item, epic } = row
   const entry = discussionOf(item.key)
   const read = () => { if (!blocked && config) readInto(config, pat, item).catch(() => { /* shown from the entry */ }) }
@@ -276,6 +298,7 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, p
       <div><dt>Target date</dt><dd>{formatDate(item.targetDate)}</dd></div>
     </dl>
     {entry?.state === 'done' && <LatestComment comments={entry.comments} setup={setup} pi={pi} />}
+    {entry?.state === 'done' && oldFormat}
     <section aria-label="Discussion" className="pir-discussion">
       <div className="pir-discussion-head"><h3>Discussion{entry?.state === 'done' ? ` (${entry.comments.length.toLocaleString()}${entry.capped ? '+' : ''})` : ''}</h3>
         <button type="button" className="ghost" disabled={Boolean(blocked) || entry?.state === 'loading'} title={blocked || undefined} onClick={read}>↻ Read again</button></div>
@@ -287,7 +310,7 @@ function FeatureDrawer({ row, position, onStep, onClose, config, pat, blocked, p
       {entry?.state === 'done' && entry.capped && <p className="muted">Showing the newest 1,000 comments; older ones are not read.</p>}
       {entry?.state === 'done' && entry.comments.length > 0 && <ol className="pir-comments">
         {entry.comments.map((comment) => <li key={comment.id}>
-          <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(shownDateOf(comment))}{comment.updated ? ' (updated)' : ''}</small></p>
+          <p className="pir-comment-head"><strong>{comment.author}</strong> <small className="muted">{formatDateTime(shownDateOf(comment))}{comment.updated ? ' (updated)' : ''}</small>{oldFormatSearch && isOldFormat(comment) && <OldFormatFlag comments={[comment]} />}</p>
           <p className="pir-comment-text">{comment.text || <span className="muted">(no text)</span>}</p>
         </li>)}
       </ol>}
@@ -322,5 +345,21 @@ function LatestComment({ comments, setup, pi }: { comments: WorkItemComment[]; s
       {split.from === 'Headings' && <div><dt>Additional Remarks</dt><dd>{split.remarks || '—'}</dd></div>}
       {split.from === 'Headings' && customFields(setup).map((field) => <div key={field.id}><dt>{field.label}</dt><dd>{split.extra?.[field.id] || '—'}</dd></div>)}
     </dl> : <p className="muted">No Struggles, Learnings or Move to next PI heading or keyword in this review: see the whole comment in the Discussion below.</p>}
+  </section>
+}
+
+// PIR-77 (temporary, LIM-235): the Feature's old-format comments in the drawer — each flagged, with its author and date,
+// and Convert… for its author (anyone else sees the reason: only the author can convert their comment).
+function OldFormatComments({ item, why, onConvert }: { item: AzureWorkItem; why: (comment: WorkItemComment) => string; onConvert: (comment: WorkItemComment) => void }) {
+  const entry = discussionOf(item.key)
+  const olds = entry?.state === 'done' ? oldFormatComments(entry.comments) : []
+  if (!olds.length) return null
+  return <section aria-label="Old-format comments" className="pir-latest pir-old-formats">
+    <h3>Old-format comments</h3>
+    <p className="muted">{oldFormatNote}</p>
+    <ul className="plain-list">{olds.map((comment) => { const reason = why(comment); return <li key={comment.id}>
+      <OldFormatFlag comments={[comment]} /> <strong>{comment.author}</strong> <small className="muted">{formatDateTime(shownDateOf(comment))}</small>{' '}
+      <ConvertButton itemId={item.id} why={reason} onConvert={() => onConvert(comment)} />{reason && <small className="muted pir-convert-why">{reason}</small>}
+    </li> })}</ul>
   </section>
 }

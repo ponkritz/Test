@@ -12,6 +12,7 @@ import type { AzureWorkItem } from './domain'
 import { builtInFormSetup, builtInSetup, type PiFormSetup } from './piReviewSetup'
 import { bulkSummary, markBulk, nextPiFor, reviewedPiOf, runBulkReview, startBulkForm, type BulkTarget, type BulkWriting, type PiIterations } from './piReviewBulk'
 export type { BulkWriting, PiIterations } from './piReviewBulk'
+import { oldFormatForm, oldFormatOf } from './piReviewOldFormat'
 
 // PIR-13, PIR-17, PIR-18: writing a PI review from any page — the viewer's rights, the form a Feature starts from, the
 // post with its audit, and the Write review… state with its Background jobs entry. The form itself: pages/PiReviewForm.
@@ -33,7 +34,9 @@ export function useReviewViewer(): ReviewViewer & { env: ReviewEnv | null } {
 // ("PI 2026.3", "another PI"); '' otherwise.
 // PIR-34: editing — Edit review…: the viewer's own review comment the save replaces (its ID and date); failed — why the
 // last save did not go through (the pop-up then offers "Post as a new review instead").
-export type Writing = { item: AzureWorkItem; pi: string; initial: ReviewForm; prefilledFrom?: WorkItemComment; prefilledOther?: string; partly: boolean; setup: PiFormSetup; next: NextPi; moveNote: string; moveShort: string; moveWarn: boolean; editing?: { commentId: number; date: string; failed?: string } }
+// PIR-76 (temporary, LIM-235): converting — Convert… of an old-format comment: the PIs the reviewed PI is chosen from;
+// saving is the edit of that comment (editing), audited as converted.
+export type Writing = { item: AzureWorkItem; pi: string; initial: ReviewForm; prefilledFrom?: WorkItemComment; prefilledOther?: string; partly: boolean; setup: PiFormSetup; next: NextPi; moveNote: string; moveShort: string; moveWarn: boolean; editing?: { commentId: number; date: string; failed?: string }; converting?: { options: string[] } }
 // PIR-25: PiIterations — the Azure DevOps iterations the next PI is worked out from (piReviewBulk).
 // PIR-19: the form setup in use (the built-in form without a provider or a file).
 export const formSetupOf = (env: ReviewEnv | null | undefined) => env?.formSetup ?? builtInSetup
@@ -64,10 +67,11 @@ export function startForm(item: AzureWorkItem, pi: string, items: AzureWorkItem[
 // PIR-13, PIR-14: post the review and record it — the audit entry (as other Azure DevOps writes) and, for the Discussion
 // in PI Review's memory, a fresh read later. Returns the new comment's ID.
 // PIR-34: Edit review… — replace the viewer's own review comment and record it (the audit entry "Edit PI review").
-export async function editAndAudit(env: ReviewEnv, item: AzureWorkItem, commentId: number, form: ReviewForm, text: string, pi: string) {
+// PIR-76: converted — an old-format comment replaced in the review format ("Convert PI review (old format)").
+export async function editAndAudit(env: ReviewEnv, item: AzureWorkItem, commentId: number, form: ReviewForm, text: string, pi: string, converted = false) {
   if (!env.config) throw new Error('Connect the Time Writing connection (with its PAT) to edit a review.')
   const id = await updateReview(env.config, env.pat, item, commentId, text)
-  env.addAudit({ actor: 'u-owner', action: 'Edit PI review', entity: 'AzureDevOps Feature', entityId: String(item.id), detail: `PI review comment ${id} in the Discussion of Feature #${item.id} edited${pi ? ` (${piLabel(pi)})` : ''}: ${reviewSummary(form)}.` })
+  env.addAudit({ actor: 'u-owner', action: converted ? 'Convert PI review (old format)' : 'Edit PI review', entity: 'AzureDevOps Feature', entityId: String(item.id), detail: `${converted ? 'Old-format comment' : 'PI review comment'} ${id} in the Discussion of Feature #${item.id} ${converted ? 'converted to the review format' : 'edited'}${pi ? ` (${piLabel(pi)})` : ''}: ${reviewSummary(form)}.` })
   return id
 }
 export async function postAndAudit(env: ReviewEnv, item: AzureWorkItem, form: ReviewForm, text: string, pi: string) {
@@ -94,15 +98,26 @@ export function useReviewWriter(pi: string, iterations: PiIterations = { list: n
     if (!env?.config) return
     setWriting({ ...startForm(item, pi, env.items, formSetupOf(env), iterations, new Date(), comment), editing: { commentId: comment.id, date: shownDateOf(comment) } })
   }
+  // PIR-76 (temporary, LIM-235): Convert… — the form prefilled from an old-format comment of mine (oldFormatForm), the
+  // reviewed PI chosen in the form (default the page's PI); saving replaces that comment (the edit of Edit review…).
+  function startConvert(item: AzureWorkItem, comment: WorkItemComment, options: string[]) {
+    if (!env?.config) return
+    const old = oldFormatOf(comment.text)
+    if (!old) return
+    const base = startForm(item, pi, env.items, formSetupOf(env), iterations, new Date(), comment)
+    setWriting({ ...base, initial: oldFormatForm(old, base.initial, base.setup), partly: old.moveValue === 'Partly', editing: { commentId: comment.id, date: shownDateOf(comment) }, converting: { options } })
+  }
   // PIR-34: save an edit — a Background jobs entry "Edit review · #id": update the comment, audit, read the Discussion
   // again; a failed edit opens the pop-up again with what was typed, the error and "Post as a new review instead".
+  // PIR-76: a conversion is saved the same way, for the reviewed PI chosen in the form.
   function saveEdit(current: Writing, form: ReviewForm, text: string) {
     if (!env?.config || !current.editing) return
-    const { item, pi: reviewed } = current, commentId = current.editing.commentId, config = env.config
+    const { item } = current, commentId = current.editing.commentId, config = env.config, converted = Boolean(current.converting)
+    const reviewed = converted ? form.reviewedPi || current.pi : current.pi
     setWriting(null)
-    const started = runInBackground(`pireview:edit:${item.key}`, `Edit review · #${item.id}`, async (progress) => {
-      progress(`Saving the edited review of #${item.id}…`)
-      try { await editAndAudit(env, item, commentId, form, text, reviewed) }
+    const started = runInBackground(`pireview:edit:${item.key}`, converted ? `Convert review · #${item.id}` : `Edit review · #${item.id}`, async (progress) => {
+      progress(`Saving the ${converted ? 'converted' : 'edited'} review of #${item.id}…`)
+      try { await editAndAudit(env, item, commentId, form, text, reviewed, converted) }
       catch (failure) {
         const message = failure instanceof Error ? failure.message : 'unknown error'
         setWriting({ ...current, initial: form, editing: { ...current.editing!, failed: message } })
@@ -110,7 +125,7 @@ export function useReviewWriter(pi: string, iterations: PiIterations = { list: n
       }
       progress(`Reading the Discussion of #${item.id} again…`)
       try { await readDiscussionInto(config, env.pat, item, { fresh: true }) } catch (failure) { return { text: `Edited the review of #${item.id}, but the Discussion could not be read again: ${failure instanceof Error ? failure.message : 'unknown error'}`, failed: true } }
-      return { text: `Edited the review of #${item.id} and read back: ${reviewSummary(form)}.`, failed: false }
+      return { text: `${converted ? 'Converted the old-format comment' : 'Edited the review'} of #${item.id} and read back: ${reviewSummary(form)}.`, failed: false }
     })
     if (!started) recordJob(`pireview:edit:${item.key}:busy`, `Edit review · #${item.id}`, { text: `The review of #${item.id} is being saved already: wait for it. Nothing else was changed.`, failed: true })
   }
@@ -134,7 +149,7 @@ export function useReviewWriter(pi: string, iterations: PiIterations = { list: n
     })
     if (!started) recordJob(`pireview:post:${item.key}:busy`, `Post review · #${item.id}`, { text: `A review of #${item.id} is being posted already: wait for it, then write again if needed. Nothing else was posted.`, failed: true })
   }
-  return { writing, start, startEdit, post, postNew, cancel: () => setWriting(null) }
+  return { writing, start, startEdit, startConvert, post, postNew, cancel: () => setWriting(null) }
 }
 
 // PIR-34: Edit review… on PI Review and My PI Review — the viewer's own review of a Feature for the chosen PI

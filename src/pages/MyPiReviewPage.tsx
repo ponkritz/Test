@@ -21,6 +21,8 @@ import type { MyWork } from '../useMyWork'
 import { useEpicSetupFile } from '../useEpicSetup'
 import { ownedEpics, ownedFeatures } from '../epicOwners'
 import { epicOf } from '../piReview'
+import { convertBlock, convertTargetOf, oldFormatComments, oldFormatSearch } from '../piReviewOldFormat'
+import { ConvertButton, OldFormatFlag } from './OldFormatParts'
 
 // My PI Review (PIR-17, My Work group): the Features assigned to me in a PI (the current PI first, a PI picker), each
 // with my review status — my latest review comment (a comment I wrote with the review headings) and its date, its Move
@@ -84,8 +86,10 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
   const offersEpics = (epicFile?.epics ?? []).some((entry) => entry.productOwner)
   const asOwner = offersEpics && show === 'epics'
   const rows = useMemo(() => !shownMe ? [] : asOwner ? ownedFeatures(epicFile, items, piRows, ownerEmail) : piRows.filter((item) => isMine(item, shownMe)), [piRows, shownMe, asOwner, epicFile, items, ownerEmail])
-  const filtered = Boolean(who) || asOwner || Boolean(remembered && !samePi(remembered, fallback.pi))
-  const resetFilters = () => { setPerson(''); choose(''); setShow('assigned') }
+  // PIR-77: the filter Old format (n) — part of the filter row, cleared by Reset filters.
+  const [oldOnly, setOldOnly] = useState(false)
+  const filtered = Boolean(who) || asOwner || Boolean(remembered && !samePi(remembered, fallback.pi)) || oldOnly
+  const resetFilters = () => { setPerson(''); choose(''); setShow('assigned'); setOldOnly(false) }
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
   const epicName = (item: AzureWorkItem) => { const epic = epicOf(items, item, byId); return epic ? epic.title || `#${epic.id}` : '' }
   const readBlocked = discussionReadBlock({ isSample, config, pat })
@@ -122,6 +126,13 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
   const actionBlock = (item: AzureWorkItem) => reviewPostBlock(poster, item) || busyOf(item)
   const tickBlock = (item: AzureWorkItem) => bulkBlock(reviewPostBlock(poster, item), { discussion: discussionOf(item.key), busy: busyOf(item) })
   const picked = rows.filter((item) => selected.includes(item.key) && !tickBlock(item))
+  // PIR-77 (temporary, LIM-235): the old-format comments of each Feature (read Discussions only), Convert… for their
+  // author, and the filter "Old format (n)".
+  const oldOf = (item: AzureWorkItem) => { const entry = discussionOf(item.key); return oldFormatComments(entry?.state === 'done' ? entry.comments : undefined) }
+  const oldCount = rows.filter((item) => oldOf(item).length > 0).length
+  const shownRows = oldFormatSearch && oldOnly ? rows.filter((item) => oldOf(item).length > 0) : rows
+  const convertMe = ownOptions.me
+  const convertOf = (item: AzureWorkItem) => { const entry = discussionOf(item.key); return convertTargetOf(entry?.state === 'done' ? entry.comments : undefined, convertMe) }
 
   const columns: DataColumn<AzureWorkItem>[] = [
     { id: 'id', label: 'ID', value: (item) => item.id, align: 'right', render: (item) => item.url ? <a href={item.url} target="_blank" rel="noreferrer" title={`Open Feature #${item.id} in Azure DevOps`}>{item.id}</a> : item.id },
@@ -131,13 +142,14 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     ...(asOwner ? [{ id: 'epic', label: 'Epic', value: (item: AzureWorkItem) => epicName(item) }, { id: 'assigned', label: 'Assigned to', value: (item: AzureWorkItem) => item.assignedTo }] : []),
     { id: 'status', label: who ? 'Their review' : 'My review', hint: `Reviewed: ${who ? `${who} wrote` : 'you wrote'} a review comment for the chosen PI — a comment headed “Feature Review for PI 26.4” counts for PI 26.4 only. Not reviewed: none yet, or only a review for another PI (its date and PI shown)${who ? '; a review posted by someone else does not count' : ''}. ${reviewHeadingNote} Read from Azure DevOps when the page opens.`,
       value: (item) => statusText(status(item)), title: (item) => status(item).error,
-      render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{retryOf(item, shown) && <button type="button" className="ghost" aria-label={`Read the Discussion of Feature ${item.id} again`} title={shown.error ? `${shown.error} Read it again.` : 'Read the Discussion again.'} onClick={retryOf(item, shown)}>Retry</button>}{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}</span> } },
+      render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{retryOf(item, shown) && <button type="button" className="ghost" aria-label={`Read the Discussion of Feature ${item.id} again`} title={shown.error ? `${shown.error} Read it again.` : 'Read the Discussion again.'} onClick={retryOf(item, shown)}>Retry</button>}{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}<OldFormatFlag comments={oldOf(item)} /></span> } },
     { id: 'date', label: who ? 'Date of their review' : 'Date of my review', firstSortDesc: true, value: (item) => { const comment = status(item).comment; return comment ? shownDateOf(comment) : '' }, render: (item) => { const shown = status(item); return shown.comment ? <span title={shown.comment.updated ? `Written ${formatDateTime(shown.comment.date)}, updated ${formatDateTime(shown.comment.updated)}` : undefined}>{formatDateTime(shownDateOf(shown.comment))}</span> : <span className="muted">—</span> } },
     { id: 'move', label: 'Move to Next PI', value: (item) => { const split = status(item).split; return split ? moveLabel(split) : '' }, render: (item) => { const split = status(item).split; return split ? <span className="pir-clip">{oneLine(moveLabel(split))}</span> : <span className="muted">—</span> } },
     { id: 'review-mode', label: 'Review mode', value: (item) => { const split = status(item).split; return split ? reviewModeLabel(split) : '' } },
     { id: 'actions', label: 'Actions', export: false, sortable: false,
       // PIR-34: one action per row — Edit review… in place of Write review… when my own review counts for the PI.
-      render: (item) => { const own = editTarget(item); return <ReviewAction item={item} own={own} why={actionBlock(item)} onWrite={() => void writer.start(item)} onEdit={() => { if (own) writer.startEdit(item, own.comment) }} /> } },
+      // PIR-77: Convert… beside it when the Feature has an old-format comment (only its author can convert it).
+      render: (item) => { const own = editTarget(item), old = convertOf(item); return <span className="button-row"><ReviewAction item={item} own={own} why={actionBlock(item)} onWrite={() => void writer.start(item)} onEdit={() => { if (own) writer.startEdit(item, own.comment) }} />{old && <ConvertButton itemId={item.id} why={convertBlock(poster, item, old, convertMe) || busyOf(item)} onConvert={() => writer.startConvert(item, old, options)} />}</span> } },
   ]
   const reviewed = rows.filter((item) => status(item).state === 'reviewed').length
   const notice = !iterations.done ? '' : fallback.why === 'overlap' || ((fallback.why === 'fallback' || fallback.why === 'none') && !remembered) ? fallback.note : ''
@@ -149,6 +161,10 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     {pi && samePi(pi, current) && <Pill tone="info">Current PI</Pill>}
     {offersEpics && <div className="segmented" role="radiogroup" aria-label="Show">{([['assigned', who ? `Features assigned to ${who}` : 'Features assigned to me'], ['epics', who ? `Epics of ${who} (as Product Owner)` : 'My Epics (as Product Owner)']] as [Show, string][]).map(([key, label]) => <button key={key} type="button" role="radio" aria-checked={show === key} className={show === key ? 'active' : ''} onClick={() => setShow(key)}>{label}</button>)}</div>}
     <label className="inline-select pir-person">Person<PersonPicker label="Person" value={who} people={people} onChange={setPerson} meLabel={self.known ? `Me (${self.me.name ?? self.me.email})` : 'Choose a person…'} disabled={Boolean(personBlock)} title={personBlock || undefined} /></label>
+    {oldFormatSearch && (oldCount > 0 || oldOnly) && <span className="segmented" role="group" aria-label="Show Features">
+      <button type="button" aria-pressed={!oldOnly} onClick={() => setOldOnly(false)}>All</button>
+      <button type="button" aria-pressed={oldOnly} title="Features with a comment in the old format (Struggles / Learnings / Moving to next PI, without the heading “Feature Review for PI …”): it does not count as a review until its author converts it." onClick={() => setOldOnly(true)}>Old format ({oldCount})</button>
+    </span>}
     <button type="button" className="ghost" disabled={!filtered} onClick={resetFilters}>Reset filters</button>
     <WriteBlocked reason={personBlock} />
   </span>
@@ -163,9 +179,9 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
           <button type="button" className="ghost" onClick={() => bulk.start(bulkTargets(picked, editTarget))}>Update review for {picked.length}…</button>
           <button type="button" className="text-button" onClick={() => setSelected([])}>Clear selection</button>
         </div>}
-        <DataTable id="mypireview:features" className="pir-table" columns={columns} rows={rows} rowKey={(item) => item.key}
+        <DataTable id="mypireview:features" className="pir-table" columns={columns} rows={shownRows} rowKey={(item) => item.key}
           selection={{ selected, onChange: setSelected, label: (item) => `Feature ${item.id}`, blocked: tickBlock }} exportName={`My PI Review ${pi ? piLabel(pi) : ''}${who ? ` ${who}` : ''}${asOwner ? ' Product Owner' : ''}`.trim()} toolbar={toolbar}
-          status={`${reviewed} of ${rows.length} reviewed`} defaultSort={{ id: 'id' }}
+          status={`${reviewed} of ${rows.length} reviewed${shownRows.length !== rows.length ? ` · ${shownRows.length} shown` : ''}`} defaultSort={{ id: 'id' }}
           empty={<EmptyState title={!pi ? 'Choose a PI.' : asOwner ? owns.length ? `No Features of ${who ? `${who}’s` : 'your'} Epics in ${piLabel(pi)}.` : `${who || 'You'} ${who ? 'is' : 'are'} not the Product Owner of any Epic${ownerEmail ? '' : ' (no work email known)'}.` : `No Features assigned to ${who || 'you'} in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI in the PI list.' : asOwner && !owns.length ? 'The Product Owner of an Epic is set in Admin → Feature & PI setup → Setup per Epic (matched by work email).' : who ? 'Choose another PI or person, or Reset filters.' : 'Choose another PI, or fetch the data again.'} />} />
       </TablePanel>}
     {bulk.writing && <BulkReviewDialog key={`bulk:${bulk.writing.targets.map((target) => target.item.key).join(',')}`} writing={bulk.writing} blocked={pageBlock} onPost={(form, text) => { setSelected([]); bulk.post(form, text) }} onClose={bulk.cancel} />}

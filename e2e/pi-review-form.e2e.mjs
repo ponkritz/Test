@@ -431,7 +431,8 @@ test('TC-PIR-27: My PI Review counts a review for the PI its heading names — a
   assert.equal(await status(page, '301'), 'Reviewed', 'headed “Feature Review for PI 2026.4”')
   assert.match(await status(page, '302'), /^Not reviewed Last review .+ \(PI 2026\.3\)$/, 'headed for PI 2026.3: named')
   // PIR-50: an older review without the heading — written in PI 2026.4, after the Feature closed — no longer counts.
-  assert.equal(await status(page, '303'), 'Not reviewed')
+  // PIR-75: it is flagged as an old-format comment to convert, still not counted.
+  assert.equal(await status(page, '303'), 'Not reviewed Old format — convert')
   assert.match(await text(page.locator('.data-table-status')), /^1 of 3 reviewed$/)
   if (shots) { mkdirSync(shots, { recursive: true }); await page.emulateMedia({ colorScheme: 'light' }); await page.screenshot({ path: `${shots}/my-pi-review-reviewed-in-pi-2026-4-1440-light.png` }) }
   // Review… on 302: still prefilled from the latest review, labelled as written for PI 2026.3.
@@ -464,7 +465,7 @@ test('TC-PIR-51: an older review without the “Feature Review for PI …” hea
   await page.getByLabel('PI', { exact: true }).selectOption('Project\\PI 2026.4')
   await rowOf(page, '301').locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
   await rowOf(page, '302').locator('.pill', { hasText: 'Not reviewed' }).waitFor()
-  assert.equal(await status(page, '302'), 'Not reviewed', 'no heading: no review, no other PI named')
+  assert.equal(await status(page, '302'), 'Not reviewed Old format — convert', 'no heading: no review, no other PI named (PIR-75: flagged old-format)')
   assert.equal(await page.locator('.content .notice').filter({ hasText: 'every review comment counts' }).count(), 0, 'the dates no longer decide: no note')
   const hint = page.locator('.pir-table thead').getByRole('button', { name: 'About My review' })
   assert.match(await tipOf(page, hint), /a comment headed “Feature Review for PI 26\.4” counts for PI 26\.4 only.*Only comments headed “Feature Review for PI …” count as a PI review: a comment without that heading — older reviews included, whatever their date — does not, so its Feature shows as Not reviewed until it is reviewed again\./)
