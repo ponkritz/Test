@@ -10,6 +10,7 @@ import { readDiscussion } from './azureDevOps.ts'
 import { commentsFrom, discussionsFrom, headingText, isReviewFor, piPlaceholder, reviewFooter, reviewHeadingIn, reviewHeadingOf, reviewSplit, samePiNumber, setDiscussion, tidyReviewText, type ReviewSplit } from './piReview.ts'
 import { builtInFormSetup, fieldOf, setupProblems, type PiFormField, type PiFormSetup } from './piReviewSetup.ts'
 import type { AzureWorkItem } from './domain'
+import type { ProductOwner } from './epicSetup.ts'
 import type { WorkItemComment } from './azureDevOps.ts'
 import type { AzureIteration } from './azureRead.ts'
 
@@ -199,10 +200,15 @@ export function personOf(items: readonly Pick<AzureWorkItem, 'assignedTo' | 'ass
 
 // CON-113, PIR-13: who may post the review of a Feature — a lead ("PI Review: post the review of a Feature") on every
 // Feature; the Feature's assignee (their work email is the Feature's Assigned To email) with "Add a comment".
-export interface ReviewViewer { can: (action: Action) => boolean; readOnly: boolean; viewingAs: string; email: string; isSample: boolean; config: AzureConfig | null; pat: string }
+// PIR-70: epicOwnerOf — the Product Owner of the Epic a Feature is under (the shared Epic setup in Git, EPS-11).
+export type ReviewFeature = Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'> & Partial<Pick<AzureWorkItem, 'id' | 'parentId' | 'workItemType'>>
+export interface ReviewViewer { can: (action: Action) => boolean; readOnly: boolean; viewingAs: string; email: string; isSample: boolean; config: AzureConfig | null; pat: string; epicOwnerOf?: (feature: ReviewFeature) => ProductOwner | undefined }
 const sameEmail = (a: string | undefined, b: string | undefined) => Boolean(a?.trim() && b?.trim() && a.trim().toLowerCase() === b.trim().toLowerCase())
 export const isReviewLead = (viewer: Pick<ReviewViewer, 'can'>) => viewer.can('pireview.post')
 export const isFeatureAssignee = (viewer: Pick<ReviewViewer, 'email'>, feature: Pick<AzureWorkItem, 'assignedToEmail'>) => sameEmail(viewer.email, feature.assignedToEmail)
+// PIR-70: the viewer is the Product Owner of the Feature's Epic — matched by the work email of the Time Writing
+// connection against the email saved in the Epic setup (never by name).
+export const isEpicOwner = (viewer: Pick<ReviewViewer, 'email' | 'epicOwnerOf'>, feature: ReviewFeature) => sameEmail(viewer.email, viewer.epicOwnerOf?.(feature)?.email)
 // PIR-13: why nothing can be posted on this page ('' when posting may be possible): the roles not loaded, View as,
 // sample data, no Time Writing connection or PAT, an on-premises server.
 export function reviewPageBlock(viewer: ReviewViewer): string {
@@ -216,11 +222,13 @@ export function reviewPageBlock(viewer: ReviewViewer): string {
   return ''
 }
 // PIR-13: why this Feature's review cannot be posted ('' when it can): the page's reason, else the right.
-export function reviewPostBlock(viewer: ReviewViewer, feature: Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>): string {
+// PIR-70: the Product Owner of the Feature's Epic may post it as the assignee may (with "Add a comment"), without the
+// lead right; the page's reasons (View as, sample data, no PAT, on premises, read-only roles) still apply first.
+export function reviewPostBlock(viewer: ReviewViewer, feature: ReviewFeature): string {
   const page = reviewPageBlock(viewer)
   if (page) return page
   if (isReviewLead(viewer)) return ''
-  if (!isFeatureAssignee(viewer, feature)) return `Only the Feature’s assignee (${feature.assignedTo.trim() || 'nobody'}) or a lead with “PI Review: post the review of a Feature” can post its review${viewer.email ? '' : ' (enter your work email on the Time Writing connection: the assignee is matched by it)'}. An Admin can change this in Admin → People & access → Role rights.`
+  if (!isFeatureAssignee(viewer, feature) && !isEpicOwner(viewer, feature)) return `Only the Feature’s assignee (${feature.assignedTo.trim() || 'nobody'}), the Product Owner of its Epic or a lead with “PI Review: post the review of a Feature” can post its review${viewer.email ? '' : ' (enter your work email on the Time Writing connection: you are matched by it)'}. An Admin can change this in Admin → People & access → Role rights; the Product Owner is set in Admin → Feature & PI setup → Setup per Epic.`
   return viewer.can('work.comment') ? '' : writeBlockedReason(false, ['work.comment'])
 }
 

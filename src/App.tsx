@@ -54,6 +54,7 @@ import { useHistory } from './useHistory'
 import { withHistory } from './history'
 import { CanContext, ReadOnlyContext } from './useCan'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
+import { featureOwner } from './epicOwners'
 import { usePiFormSetup } from './usePiFormSetup'
 import { formSetupBlock } from './piReviewSetup'
 import { SettingsSearch } from './components/SettingsSearch'
@@ -101,7 +102,7 @@ import { capacityContext, setAccessRoles, setAzureEmails } from './capacity'
 import { hasServerPat, loadServerPat, serverKey } from './azureCredentials'
 import { ListCatalogContext, useSharedLists } from './useSharedLists'
 import { listCatalog, listsBlock, listUsage, ownsAPage, removeListBlock, serverPatKey } from './sharedLists'
-import { collectionUrl } from './azureClient'
+import { collectionUrl, guardEpicOwners } from './azureClient'
 import { useMonthTaskStates } from './useMonthTaskStates'
 import { valuesOf } from './onDemand'
 import type { SharedListsEnv } from './components/SharedListsPanel'
@@ -552,6 +553,8 @@ export default function App() {
     usage: (ref) => listUsage(onDemand.pages, ref),
     rowsWith: (ref, names) => onDemand.pages.reduce((sum, page) => sum + page.rows.filter((row) => page.columns.some((column) => column.list === ref && valuesOf(row.cells[column.id]).some((value) => names.includes(value)))).length, 0),
   }
+  // PIR-70: the in-app write guard learns the Product Owner of each fetched work item's Epic (the shared Epic setup in Git).
+  useEffect(() => { const byId = new Map(azure.items.map((item) => [item.id, item])); guardEpicOwners((id) => featureOwner(epicSetup.file, azure.items, byId.get(id), byId)?.email ?? '') }, [azure.items, epicSetup.file])
   const reviewEnv: ReviewEnv = { email: access.email, name: my.self.me.name ?? '', viewingAs: access.viewingAs ? viewAsLabel(access.viewingAs) : '', isSample: azure.isSample, config: azure.config, pat: azure.pat, items: azure.items, addAudit: store.addAudit, formSetup: piForm.setup, openFormSetup: () => openSettings('epics', 'pireview') }
   const storageLabel = store.cache.status === 'error' ? '⚠ Not saved locally' : store.cache.status === 'saving' ? '◌ Saving locally' : '○ Local IndexedDB'
   const buildStatus = <BuildStatus pending={store.hasPendingSave} failed={store.ready && store.cache.status === 'error'} busy={azure.busy} preview={Boolean(azure.preview)} details={<p className="storage-line" title="Where app data is saved"><strong>Data saved:</strong> {storageLabel}</p>} onBackup={store.ready ? () => exportStateJson({ ...store.state, azureWorkItems: mergeAzureWorkItems(store.state.azureWorkItems ?? [], azure.preview?.items ?? []), ...(azure.preview ? { azureBacklogScope: azure.preview.scope } : {}) }) : undefined} />

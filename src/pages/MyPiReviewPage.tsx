@@ -18,6 +18,9 @@ import { shownDateOf, type WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
 import type { MyWork } from '../useMyWork'
+import { useEpicSetupFile } from '../useEpicSetup'
+import { ownedEpics, ownedFeatures } from '../epicOwners'
+import { epicOf } from '../piReview'
 
 // My PI Review (PIR-17, My Work group): the Features assigned to me in a PI (the current PI first, a PI picker), each
 // with my review status — my latest review comment (a comment I wrote with the review headings) and its date, its Move
@@ -31,6 +34,11 @@ import type { MyWork } from '../useMyWork'
 // otherwise the Feature is Not reviewed (other: my latest review, headed for another PI, with its hint). A comment
 // without the heading is no review (PIR-50: older reviews included).
 const piKey = 'demand-planning-my-pi-review-pi-v1'
+// PIR-71: which Features — assigned to me, or those of the Epics I am the Product Owner of; remembered in this browser.
+type Show = 'assigned' | 'epics'
+const showKey = 'demand-planning-my-pi-review-show-v1'
+const readShow = (): Show => { try { return localStorage.getItem(showKey) === 'epics' ? 'epics' : 'assigned' } catch { return 'assigned' } }
+const writeShow = (value: Show) => { try { localStorage.setItem(showKey, value) } catch { /* this visit only */ } }
 type Status = { state: 'unread' | 'loading' | 'error' | 'none' | 'reviewed' | 'other'; comment?: WorkItemComment; split?: ReviewSplit; error?: string; count?: ReviewCount }
 // KB-140: now — a read still running after discussionStuckAfterMs is shown as not read (with Retry).
 function statusOf(item: AzureWorkItem, name: string | undefined, period: ReviewPeriod, setup?: PiFormSetup, now = Date.now()): Status {
@@ -66,9 +74,20 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
   const name = shownMe?.name
   const piRows = useMemo(() => piFeatures(items, pi), [items, pi])
   const people = useMemo(() => [...new Set(piRows.filter((item) => !(self.known && isMine(item, self.me))).map((item) => item.assignedTo.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [piRows, self.known, self.me])
-  const rows = useMemo(() => shownMe ? piRows.filter((item) => isMine(item, shownMe)) : [], [piRows, shownMe])
-  const filtered = Boolean(who) || Boolean(remembered && !samePi(remembered, fallback.pi))
-  const resetFilters = () => { setPerson(''); choose('') }
+  // PIR-71: My Epics (as Product Owner) — the PI's Features under the Epics whose Product Owner (Setup per Epic) is the
+  // person shown, matched by work email; offered once any Epic has a Product Owner.
+  const epicFile = useEpicSetupFile()
+  const [show, setShowState] = useState<Show>(readShow)
+  const setShow = (value: Show) => { setShowState(value); writeShow(value) }
+  const ownerEmail = shownMe?.email || (who ? '' : poster.email)
+  const owns = ownedEpics(epicFile, ownerEmail)
+  const offersEpics = (epicFile?.epics ?? []).some((entry) => entry.productOwner)
+  const asOwner = offersEpics && show === 'epics'
+  const rows = useMemo(() => !shownMe ? [] : asOwner ? ownedFeatures(epicFile, items, piRows, ownerEmail) : piRows.filter((item) => isMine(item, shownMe)), [piRows, shownMe, asOwner, epicFile, items, ownerEmail])
+  const filtered = Boolean(who) || asOwner || Boolean(remembered && !samePi(remembered, fallback.pi))
+  const resetFilters = () => { setPerson(''); choose(''); setShow('assigned') }
+  const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
+  const epicName = (item: AzureWorkItem) => { const epic = epicOf(items, item, byId); return epic ? epic.title || `#${epic.id}` : '' }
   const readBlocked = discussionReadBlock({ isSample, config, pat })
   // PIR-17, PIR-24: read the shown Features' Discussions not read yet (3 at a time), once per Feature list — and again
   // when "PI Review starts from" changed (PIR-33: the Discussions read before are forgotten). PIR-35: the same read as PI
@@ -108,6 +127,8 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
     { id: 'id', label: 'ID', value: (item) => item.id, align: 'right', render: (item) => item.url ? <a href={item.url} target="_blank" rel="noreferrer" title={`Open Feature #${item.id} in Azure DevOps`}>{item.id}</a> : item.id },
     { id: 'title', label: 'Title', value: (item) => item.title },
     { id: 'state', label: 'State', value: (item) => item.state },
+    // PIR-71: in My Epics (as Product Owner), the Feature's Epic and assignee.
+    ...(asOwner ? [{ id: 'epic', label: 'Epic', value: (item: AzureWorkItem) => epicName(item) }, { id: 'assigned', label: 'Assigned to', value: (item: AzureWorkItem) => item.assignedTo }] : []),
     { id: 'status', label: who ? 'Their review' : 'My review', hint: `Reviewed: ${who ? `${who} wrote` : 'you wrote'} a review comment for the chosen PI — a comment headed “Feature Review for PI 26.4” counts for PI 26.4 only. Not reviewed: none yet, or only a review for another PI (its date and PI shown)${who ? '; a review posted by someone else does not count' : ''}. ${reviewHeadingNote} Read from Azure DevOps when the page opens.`,
       value: (item) => statusText(status(item)), title: (item) => status(item).error,
       render: (item) => { const shown = status(item); return <span className="pir-status"><Pill tone={shown.state === 'reviewed' ? 'open' : shown.state === 'none' || shown.state === 'other' ? 'warning' : shown.state === 'error' ? 'danger' : 'neutral'}>{statusLabel[shown.state]}</Pill>{retryOf(item, shown) && <button type="button" className="ghost" aria-label={`Read the Discussion of Feature ${item.id} again`} title={shown.error ? `${shown.error} Read it again.` : 'Read the Discussion again.'} onClick={retryOf(item, shown)}>Retry</button>}{shown.state === 'other' && shown.comment && shown.count && <small className="muted">{otherPiHint(shown.comment.date, shown.count)}</small>}</span> } },
@@ -126,15 +147,16 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
       {options.map((entry) => <option key={entry} value={entry}>{piLabel(entry)}{samePi(entry, current) ? ' (current)' : ''}</option>)}
     </select></label>
     {pi && samePi(pi, current) && <Pill tone="info">Current PI</Pill>}
+    {offersEpics && <div className="segmented" role="radiogroup" aria-label="Show">{([['assigned', who ? `Features assigned to ${who}` : 'Features assigned to me'], ['epics', who ? `Epics of ${who} (as Product Owner)` : 'My Epics (as Product Owner)']] as [Show, string][]).map(([key, label]) => <button key={key} type="button" role="radio" aria-checked={show === key} className={show === key ? 'active' : ''} onClick={() => setShow(key)}>{label}</button>)}</div>}
     <label className="inline-select pir-person">Person<PersonPicker label="Person" value={who} people={people} onChange={setPerson} meLabel={self.known ? `Me (${self.me.name ?? self.me.email})` : 'Choose a person…'} disabled={Boolean(personBlock)} title={personBlock || undefined} /></label>
     <button type="button" className="ghost" disabled={!filtered} onClick={resetFilters}>Reset filters</button>
     <WriteBlocked reason={personBlock} />
   </span>
   // PIR-30: ⚙ PI Review Setup in the page actions, when the page is in the viewer's menu (UI-STANDARDS §6).
-  return <Page intro="The Features assigned to you (a lead can choose another person) in a PI and whether their PI review is written. Review… posts it as a new comment in the Feature’s Discussion in Azure DevOps; Edit review… changes your own review of the chosen PI in place. Tick several Features to write one review for them all." actions={<PiSetupGear />}>
+  return <Page intro="The Features assigned to you (a lead can choose another person) — or, as an Epic’s Product Owner, the Features of your Epics — in a PI and whether their PI review is written. Review… posts it as a new comment in the Feature’s Discussion in Azure DevOps; Edit review… changes your own review of the chosen PI in place. Tick several Features to write one review for them all." actions={<PiSetupGear />}>
     {notice && <Notice tone="warning">{notice}</Notice>}
     {!shownMe ? <EmptyState title="Who are you in Azure DevOps?" detail="Enter your work email on the Time Writing connection, or choose your name in My Tasks [Board]." />
-      : <TablePanel title={who ? `Features of ${who}` : 'My Features'} info={`The Features of the chosen PI assigned to you — or, for a lead, to the person chosen (Assigned To, matched by work email where known) — not Removed, not under the absence Epic. Their Discussions are read from Azure DevOps when the page opens and kept for this page load; the review column says whether that person wrote a review comment for the chosen PI, and when. A review counts for the chosen PI only when it is headed “Feature Review for” that PI (e.g. “Feature Review for PI 26.4” counts for PI 26.4, not for PI 26.5) — whatever its date. A review for another PI shows as Not reviewed with its date and PI; choosing another PI recomputes the column. ${reviewHeadingNote} ${cutoffNote(cutoff)}`}>
+      : <TablePanel title={asOwner ? who ? `Features of the Epics of ${who} (Product Owner)` : 'Features of my Epics (as Product Owner)' : who ? `Features of ${who}` : 'My Features'} info={`The Features of the chosen PI assigned to you — or, for a lead, to the person chosen (Assigned To, matched by work email where known) — not Removed, not under the absence Epic. Their Discussions are read from Azure DevOps when the page opens and kept for this page load; the review column says whether that person wrote a review comment for the chosen PI, and when. A review counts for the chosen PI only when it is headed “Feature Review for” that PI (e.g. “Feature Review for PI 26.4” counts for PI 26.4, not for PI 26.5) — whatever its date. A review for another PI shows as Not reviewed with its date and PI; choosing another PI recomputes the column. ${reviewHeadingNote} ${cutoffNote(cutoff)}`}>
         <WriteBlocked reason={readBlocked || pageBlock} />
         {picked.length > 0 && <div className="bulk-bar" role="region" aria-label="Selected Features">
           <strong>{picked.length} selected</strong>
@@ -142,9 +164,9 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
           <button type="button" className="text-button" onClick={() => setSelected([])}>Clear selection</button>
         </div>}
         <DataTable id="mypireview:features" className="pir-table" columns={columns} rows={rows} rowKey={(item) => item.key}
-          selection={{ selected, onChange: setSelected, label: (item) => `Feature ${item.id}`, blocked: tickBlock }} exportName={`My PI Review ${pi ? piLabel(pi) : ''}${who ? ` ${who}` : ''}`.trim()} toolbar={toolbar}
+          selection={{ selected, onChange: setSelected, label: (item) => `Feature ${item.id}`, blocked: tickBlock }} exportName={`My PI Review ${pi ? piLabel(pi) : ''}${who ? ` ${who}` : ''}${asOwner ? ' Product Owner' : ''}`.trim()} toolbar={toolbar}
           status={`${reviewed} of ${rows.length} reviewed`} defaultSort={{ id: 'id' }}
-          empty={<EmptyState title={!pi ? 'Choose a PI.' : `No Features assigned to ${who || 'you'} in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI in the PI list.' : who ? 'Choose another PI or person, or Reset filters.' : 'Choose another PI, or fetch the data again.'} />} />
+          empty={<EmptyState title={!pi ? 'Choose a PI.' : asOwner ? owns.length ? `No Features of ${who ? `${who}’s` : 'your'} Epics in ${piLabel(pi)}.` : `${who || 'You'} ${who ? 'is' : 'are'} not the Product Owner of any Epic${ownerEmail ? '' : ' (no work email known)'}.` : `No Features assigned to ${who || 'you'} in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI in the PI list.' : asOwner && !owns.length ? 'The Product Owner of an Epic is set in Admin → Feature & PI setup → Setup per Epic (matched by work email).' : who ? 'Choose another PI or person, or Reset filters.' : 'Choose another PI, or fetch the data again.'} />} />
       </TablePanel>}
     {bulk.writing && <BulkReviewDialog key={`bulk:${bulk.writing.targets.map((target) => target.item.key).join(',')}`} writing={bulk.writing} blocked={pageBlock} onPost={(form, text) => { setSelected([]); bulk.post(form, text) }} onClose={bulk.cancel} />}
     {writer.writing && <ReviewDialog key={`review:${writer.writing.item.key}`} writing={writer.writing} blocked={reviewPostBlock(poster, writer.writing.item)} onPost={writer.post} onPostNew={writer.postNew} onClose={writer.cancel} />}

@@ -83,6 +83,11 @@ export function epicRank<T extends Pick<ExecFeature, 'epic' | 'epicId' | 'id'>>(
   return (feature: Pick<ExecFeature, 'epic' | 'epicId'>) => rank.get(feature.epicId != null ? `#${feature.epicId}` : feature.epic ? `name:${feature.epic}` : '') ?? Infinity
 }
 
+// PIR-68: the Product Owner shown for an Epic ('' when none; display names only, set when the meeting is built from the
+// Epic setup) and whether the meeting shows the Product Owner column at all (some Epic has one).
+export const ownerOfEpic = (meeting: { owners?: Record<string, string> }, epicId: number | undefined) => epicId == null ? '' : meeting.owners?.[String(epicId)] ?? ''
+export const showsOwners = (meeting: { owners?: Record<string, string> }) => Object.keys(meeting.owners ?? {}).length > 0
+
 // ---- PIR-53: repeat carry-overs ----
 // The PIs a Feature was carried forward in, one after another, back from the meeting's PI: the latest review headed for
 // each PI says Move to next PI = Yes. pis: the meeting's PI first, then the earlier ones, newest first.

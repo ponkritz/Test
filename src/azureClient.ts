@@ -202,11 +202,16 @@ let refusedBecause = 'The access roles are not loaded yet, so the app is read-on
 // CON-113: the writer's work email (the Time Writing connection's), for a PI Review post on their own Feature.
 let writerEmail = ''
 export function guardAzureWrites(check: (permission: AzureWritePermission) => boolean, refused = 'Your role does not allow this change in Azure DevOps. An Admin can change this in Admin → People & access → Role rights.', email = '') { writesAllowed = check; refusedBecause = refused; writerEmail = email.trim().toLowerCase() }
+// PIR-70: the work email of the Product Owner of the Epic a work item is under ('' for none), set by the app from the
+// fetched items and the shared Epic setup in Git (EPS-11) — never taken from the request.
+let epicOwnerEmail: (workItemId: number) => string = () => ''
+export function guardEpicOwners(lookup: (workItemId: number) => string) { epicOwnerEmail = lookup }
 // CON-113, PIR-13: a PI Review post is allowed with "PI Review: post the review of a Feature" (the leads), or with "Add a
-// comment" for the Feature's own assignee (the writer's work email is the Feature's Assigned To email).
-export function reviewPostAllowed(reviewOf: string, allowed: (permission: AzureWritePermission) => boolean = writesAllowed, email = writerEmail) {
-  const assignee = reviewOf.trim().toLowerCase()
-  return allowed('pireview.post') || (allowed('work.comment') && Boolean(assignee) && assignee === email.trim().toLowerCase())
+// comment" for the Feature's own assignee (the writer's work email is the Feature's Assigned To email). PIR-70: or with
+// "Add a comment" for the Product Owner of the Feature's Epic (the writer's work email is the Epic's Product Owner's).
+export function reviewPostAllowed(reviewOf: string, allowed: (permission: AzureWritePermission) => boolean = writesAllowed, email = writerEmail, owner = '') {
+  const assignee = reviewOf.trim().toLowerCase(), me = email.trim().toLowerCase(), po = owner.trim().toLowerCase()
+  return allowed('pireview.post') || (allowed('work.comment') && Boolean(me) && ((Boolean(assignee) && assignee === me) || (Boolean(po) && po === me)))
 }
 // OI-10: with the synthetic sample loaded nothing is written to Azure DevOps, from any page (set by the workspace).
 let sampleLoaded = () => false
@@ -237,7 +242,7 @@ export async function requestAzure(request: AzureRequest): Promise<unknown> {
   // PIR-34: an update is only ever a PI review edited from My PI Review: the review's rights, its HTML check, its comment id.
   if (request.operation === 'update-comment' && (request.reviewOf == null || request.htmlComment !== true || !Number.isSafeInteger(request.commentId) || request.commentId! < 1)) throw new Error('Only a PI review can be edited. Nothing was changed.')
   if (request.commentId != null && request.operation !== 'update-comment') throw new Error('Invalid comment.')
-  if (changesAzure(request.operation) && !(review && request.reviewOf != null ? reviewPostAllowed(request.reviewOf) : writePermissions(request).every((permission) => writesAllowed(permission)))) throw new Error(request.reviewOf != null && writesAllowed('work.comment') ? 'Only the Feature’s assignee or a lead with “PI Review: post the review of a Feature” can post its review. Nothing was posted.' : refusedBecause)
+  if (changesAzure(request.operation) && !(review && request.reviewOf != null ? reviewPostAllowed(request.reviewOf, writesAllowed, writerEmail, Number.isSafeInteger(request.workItemId) ? epicOwnerEmail(request.workItemId!) : '') : writePermissions(request).every((permission) => writesAllowed(permission)))) throw new Error(request.reviewOf != null && writesAllowed('work.comment') ? 'Only the Feature’s assignee, the Product Owner of its Epic or a lead with “PI Review: post the review of a Feature” can post its review. Nothing was posted.' : refusedBecause)
   assertWritableBase(request, request.operation)
   if ((request.operation === 'create-feature' || request.operation === 'create-child') && !isAssignee(request.feature?.assignedTo)) throw new Error('A new work item must be assigned to someone (an email). Nothing was created.')
   // BKL-53 (SM-295): a new Feature has one acceptance field, the Acceptance Criteria (Feature DoD) at the top of its

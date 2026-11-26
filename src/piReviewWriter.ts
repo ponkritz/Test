@@ -1,6 +1,8 @@
-import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { isRunning, runInBackground, recordJob } from './backgroundJobs'
-import { discussionReading, ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewForm, type ReviewViewer } from './piReviewPost'
+import { discussionReading, ownReviewOf, piText, postReview, prefilledOtherPi, readDiscussionInto, reviewPeriodOf, updateReview, reviewFormFrom, reviewSummary, type NextPi, type ReviewFeature, type ReviewForm, type ReviewViewer } from './piReviewPost'
+import { featureOwner } from './epicOwners'
+import { useEpicSetupFile } from './useEpicSetup'
 import { discussionOf, discussionsFrom, discussionsVersion, latestComment, piLabel, readDiscussions, reviewComments, reviewSplit, setDiscussion, subscribeDiscussions, type BulkReadResult } from './piReview'
 import { rateLimitWait, shownDateOf, type AzureConfig } from './azureDevOps'
 import { ReviewEnvContext, type ReviewEnv } from './reviewEnv'
@@ -14,9 +16,12 @@ export type { BulkWriting, PiIterations } from './piReviewBulk'
 // PIR-13, PIR-17, PIR-18: writing a PI review from any page — the viewer's rights, the form a Feature starts from, the
 // post with its audit, and the Write review… state with its Background jobs entry. The form itself: pages/PiReviewForm.
 // CON-113, PIR-13: the viewer as the review rights see them (useCan, the roles file, View as, the connection).
+// PIR-70: epicOwnerOf — the Product Owner of a Feature's Epic, from the fetched items and the shared Epic setup (EPS-11).
 export function useReviewViewer(): ReviewViewer & { env: ReviewEnv | null } {
-  const env = useContext(ReviewEnvContext), can = useCan(), readOnly = useContext(ReadOnlyContext)
-  return { env, can, readOnly, viewingAs: env?.viewingAs ?? '', email: env?.email ?? '', isSample: env?.isSample ?? false, config: env?.config ?? null, pat: env?.pat ?? '' }
+  const env = useContext(ReviewEnvContext), can = useCan(), readOnly = useContext(ReadOnlyContext), epicFile = useEpicSetupFile()
+  const items = env?.items
+  const epicOwnerOf = useMemo(() => { const list = items ?? [], byId = new Map(list.map((item) => [item.id, item])); return (feature: ReviewFeature) => featureOwner(epicFile, list, feature.id != null ? byId.get(feature.id) ?? (feature.workItemType ? feature as AzureWorkItem : undefined) : undefined, byId) }, [items, epicFile])
+  return { env, can, readOnly, viewingAs: env?.viewingAs ?? '', email: env?.email ?? '', isSample: env?.isSample ?? false, config: env?.config ?? null, pat: env?.pat ?? '', epicOwnerOf }
 }
 
 // PIR-13: the review being written — the Feature, its PI, the form it starts from, the comment it was prefilled from.

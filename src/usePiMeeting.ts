@@ -12,6 +12,7 @@ import type { CapacitySettings } from './capacity'
 import type { AppState } from './domain'
 import type { AzureConnectionProfileSummary } from './azureCredentials'
 import type { EpicSetupFile } from './epicSetup'
+import { meetingOwners, streamOwners } from './epicOwners'
 import { readDiscussionInto, type ReviewViewer } from './piReviewPost'
 import { exportStamp } from './printExport'
 import { downloadHtml } from './publishTarget'
@@ -119,7 +120,9 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
         releases: span && settings.streams.length ? meetingReleaseInputs(settings.streams, monthsTouching(span.start, span.end), ctx.releaseState, ctx.profiles, ctx.epicFile) : [],
         streamEpics, moveOf: (item) => latestMove(item, setup, start),
       }) : undefined
-      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features, settings, ...(exec ? { exec } : {}), ...(ctx?.team ? { team: ctx.team } : {}) }
+      // PIR-68: the Epics' Product Owners (display names) from the Epic setup in use.
+      const owners = meetingOwners(ctx?.epicFile), byStream = streamOwners(ctx?.epicFile, streamEpics)
+      const meeting = { pi: name, builtAt: exportStamp(at), builtBy, start, features, settings, ...(exec ? { exec } : {}), ...(ctx?.team ? { team: ctx.team } : {}), ...(Object.keys(owners).length ? { owners } : {}), ...(Object.keys(byStream).length ? { streamOwners: byStream } : {}) }
       const html = await buildMeetingHtml(meeting), slides = meetingSlides(meeting).length
       downloadHtml(html, file.replace(/\.html$/, ''))
       const done = `Downloaded ${file} (${slides} slides).${readNote}`

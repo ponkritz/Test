@@ -17,6 +17,9 @@ import { cutoffNote, reviewStartLabel, reviewStartOf, shownFrom } from '../piRev
 import { MeetingButton, SavedMeetings } from './PiMeeting'
 import { usePiMeeting, type MeetingContext, type MeetingGit } from '../usePiMeeting'
 import { useEpicSetupFile } from '../useEpicSetup'
+import { ProductOwnerFilter } from '../components/ProductOwnerFilter'
+import { useOwnerFilter } from '../useOwnerFilter'
+import { ownedEpics, ownerName } from '../epicOwners'
 import type { WorkItemComment } from '../azureDevOps'
 import type { AzureWorkItem } from '../domain'
 import type { AzureWorkspace } from '../useAzureWorkspace'
@@ -86,6 +89,8 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   const [withStories, setWithStories] = useState(false)
   const [filters, setFilters] = useState<Filters>(noFilters)
   const [open, setOpen] = useState<{ key: string; order: string[] } | null>(null)
+  // PIR-69: the Product Owner filter (the Product Owner of the Feature's Epic), remembered in this browser.
+  const owners = useOwnerFilter('pireview')
 
   // PIR-03: the PI's Features, with their Epic.
   const rows: Row[] = useMemo(() => { const byId = new Map(items.map((item) => [item.id, item])); return piFeatures(items, pi, { absenceEpicId, withStories }).map((item) => ({ item, epic: epicOf(items, item, byId) })) }, [items, pi, absenceEpicId, withStories])
@@ -129,6 +134,8 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     { id: 'id', label: 'ID', value: ({ item }) => item.id, align: 'right', render: ({ item }) => item.url ? <a href={item.url} target="_blank" rel="noreferrer" title={`Open Feature #${item.id} in Azure DevOps`}>{item.id}</a> : item.id },
     { id: 'title', label: 'Title', value: ({ item }) => item.title },
     { id: 'epic', label: 'Epic', value: ({ epic }) => epic?.title ?? '' },
+    // PIR-69: the Product Owner of the Feature's Epic (Setup per Epic), by name.
+    ...(owners.options.length ? [{ id: 'product-owner', label: 'Product Owner', value: ({ epic }: Row) => ownerName(owners.ofEpic(epic?.id)) }] : []),
     { id: 'state', label: 'State', value: ({ item }) => item.state },
     { id: 'assigned', label: 'Assigned to', value: ({ item }) => item.assignedTo },
     { id: 'target', label: 'Target date', value: ({ item }) => item.targetDate?.slice(0, 10) ?? '', render: ({ item }) => formatDate(item.targetDate), firstSortDesc: true },
@@ -175,8 +182,9 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     && (!filters.people.length || filters.people.includes(item.assignedTo.trim()))
     && (!filters.moves.length || filters.moves.includes(moveKey(latestOf(item))))
     && (!filters.modes.length || filters.modes.includes(modeKey(latestOf(item))))
+    && owners.keeps([owners.ofEpic(epic?.id)])
     && (!text || searchText(row).includes(text)) })
-  const filtered = filters.epics.length > 0 || filters.states.length > 0 || filters.people.length > 0 || filters.moves.length > 0 || filters.modes.length > 0 || Boolean(filters.text)
+  const filtered = owners.active || filters.epics.length > 0 || filters.states.length > 0 || filters.people.length > 0 || filters.moves.length > 0 || filters.modes.length > 0 || Boolean(filters.text)
 
   const toolbar = <span className="people-filters pir-filters">
     <label className="inline-select">PI<select aria-label="PI" value={pi} onChange={(event) => choose(event.target.value)}>
@@ -185,13 +193,14 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
     </select></label>
     {pi && samePi(pi, current) && <Pill tone="info">Current PI</Pill>}
     <MultiSelect label="Epic" options={epicOptions} value={filters.epics} onChange={(value) => setFilters({ ...filters, epics: value })} />
+    <ProductOwnerFilter filter={owners} />
     <MultiSelect label="State" options={stateOptions} value={filters.states} onChange={(value) => setFilters({ ...filters, states: value })} />
     <MultiSelect label="Assigned to" options={personOptions} value={filters.people} onChange={(value) => setFilters({ ...filters, people: value })} />
     <MultiSelect label="Move to next PI" options={moveOptions} value={filters.moves} onChange={(value) => setFilters({ ...filters, moves: value })} />
     <MultiSelect label="Review mode" options={modeOptions} value={filters.modes} onChange={(value) => setFilters({ ...filters, modes: value })} />
     <label className="check"><input type="checkbox" checked={withStories} onChange={(event) => setWithStories(event.target.checked)} />Also Features with User Stories in this PI</label>
     <input type="search" className="search" aria-label="Search Features" placeholder="Search Features, comments" title="Searches every column shown and the whole latest review" value={filters.text} onChange={(event) => setFilters({ ...filters, text: event.target.value })} />
-    <button type="button" className="ghost" disabled={!filtered} onClick={() => setFilters(noFilters)}>Reset filters</button>
+    <button type="button" className="ghost" disabled={!filtered} onClick={() => { setFilters(noFilters); owners.change([]) }}>Reset filters</button>
   </span>
 
   const byKey = new Map(rows.map((row) => [row.item.key, row]))
@@ -202,7 +211,7 @@ export function PiReviewPage({ azure, store, self, git }: { azure: AzureWorkspac
   // PIR-34: my own review of a Feature that counts for the chosen PI (the rule of My PI Review), for Edit review….
   const ownReview = useOwnReview(pi)
   const pageBlock = reviewPageBlock(poster)
-  const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
+  const postNote = pageBlock || (rows.length && !isReviewLead(poster) ? `You can post the review of the Features assigned to you${poster.email ? ` (${poster.email})` : ''}${ownedEpics(owners.file, poster.email).length ? ' and of the Features of the Epics you are the Product Owner of' : ''}; a lead with “PI Review: post the review of a Feature” can post on every Feature.` : '')
 
   // PIR-40…PIR-47: Conduct PI Meeting — the Features of the PI (all of them, whatever the filters), the start date in use.
   // PIR-51…PIR-57: the data of the executive slides (all fetched items, the iterations, capacity, Release Details, Epic setup).

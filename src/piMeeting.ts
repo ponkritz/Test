@@ -23,7 +23,7 @@ import { shownDateOf } from './azureDevOps.ts'
 import type { AzureWorkItem } from './domain'
 import { displayName, lines, plural, text } from './piMeetingText.ts'
 import { cellOf, clampClass, columnGap, columns, columnWidth, contentWidth, fixed, flowSlides, gap, headLine, maxClamp, padBottom, padTop, padX, paragraph, pointList, pointsOf, rowLine, section, sectionOf, slideHeight, slideWidth, table, tileHeight, tiles, titleAttr, titleCut, titleFont, titleLineHeight, titleLines, widthStyle, wrapLines, type Block } from './piMeetingLayout.ts'
-import { epicRank } from './piMeetingData.ts'
+import { epicRank, ownerOfEpic, showsOwners } from './piMeetingData.ts'
 import { isAdhocTask } from './workItemEdit.ts'
 import { defaultMeetingSettings, fillPlaceholders, type MeetingSettings } from './piMeetingSettings.ts'
 import { accentOf, completionSlides, execStyle, executiveSlides, hoursSlides, longRunningSlides, piTrendSlides, releaseSlides, repeatSlides, topicSlides, trendSlides, utilizationSlides } from './piMeetingExec.ts'
@@ -48,7 +48,10 @@ export interface MeetingFeature { id: number; title: string; epic: string; epicI
 // PIR-51…PIR-62: exec — the executive figures worked out at build time (piMeetingData.ts); settings — the Meeting
 // presentation settings (title slide, footer, colours, Epic order; the defaults without them); team — {team} when the
 // settings name no team.
-export interface Meeting { pi: string; builtAt: string; builtBy: string; start: string; features: MeetingFeature[]; exec?: MeetingExec; settings?: MeetingSettings; team?: string }
+// PIR-68: owners — the display name of each Epic's Product Owner (Setup per Epic, EPS-11) by Epic ID, never an email;
+// streamOwners — per release stream, the Product Owners of its Epics. Without them (none set) no Product Owner column.
+export interface Meeting { pi: string; builtAt: string; builtBy: string; start: string; features: MeetingFeature[]; exec?: MeetingExec; settings?: MeetingSettings; team?: string; owners?: Record<string, string>; streamOwners?: Record<string, string> }
+
 
 export const meetingName = 'PI Review Meeting'
 export const meetingPi = (path: string) => piText(piName(path)) || piName(path).trim() || 'PI'
@@ -140,9 +143,11 @@ const epicSlides = (meeting: Meeting): Slide[] => {
   const groups = new Map<string, MeetingFeature[]>()
   for (const feature of [...meeting.features].sort(epicOrderOf(meeting))) groups.set(epicName(feature), [...(groups.get(epicName(feature)) ?? []), feature])
   if (groups.size < 2) return []
-  const rows = [...groups].map(([epic, features]) => ({ epic, counts: meetingCounts(features) }))
-  const heads = [{ label: 'Epic', width: 30 }, ...['Features', 'Reviewed', 'Not reviewed', 'Move: Yes', 'Move: No', 'Discuss', 'Offline'].map((label) => ({ label, width: 10, num: true }))]
-  return flowSlides('summary-epics', 'SUMMARY', 'Summary by Epic', [table({ label: 'Summary by Epic', columns: heads, rows: rows.map(({ epic, counts }) => [cellOf(epic), ...[counts.features, counts.reviewed, counts.none + counts.unread, counts.yes, counts.no, counts.discuss, counts.offline].map((value) => cellOf(value))]) })])
+  const rows = [...groups].map(([epic, features]) => ({ epic, owner: ownerOfEpic(meeting, features[0].epicId), counts: meetingCounts(features) }))
+  // PIR-68: with Product Owners set, their column after the Epic (the widths still add up to the slide's).
+  const po = showsOwners(meeting)
+  const heads = [{ label: 'Epic', width: po ? 22 : 30 }, ...(po ? [{ label: 'Product Owner', width: 15 }] : []), ...['Features', 'Reviewed', 'Not reviewed', 'Move: Yes', 'Move: No', 'Discuss', 'Offline'].map((label) => ({ label, width: po ? 9 : 10, num: true }))]
+  return flowSlides('summary-epics', 'SUMMARY', 'Summary by Epic', [table({ label: 'Summary by Epic', columns: heads, rows: rows.map(({ epic, owner, counts }) => [cellOf(epic), ...(po ? [cellOf(owner || '—')] : []), ...[counts.features, counts.reviewed, counts.none + counts.unread, counts.yes, counts.no, counts.discuss, counts.offline].map((value) => cellOf(value))]) })])
 }
 // PIR-44: one Feature's review — ID, Title, Epic, Assigned to, State; Learnings and Struggles; Move to next PI with the
 // reason; the Review meeting advice, Additional Remarks and the fields added in PI Review Setup; when and by whom.
@@ -154,12 +159,12 @@ function facts(list: { label: string; value: string }[], className: string, max:
   const html = list.map(({ label, value }) => { const shown = value || '—', need = wrapLines(shown, width, 15), use = Math.min(max, need); most = Math.max(most, use); return `<div><dt>${text(label)}</dt><dd class="${clampClass(use)}"${titleAttr(shown, need > use)}>${text(shown)}</dd></div>` }).join('')
   return fixed(`<dl class="${className}">${html}</dl>`, 16 + 20 * most)
 }
-function featureBlocks(feature: MeetingFeature): Block[] {
+function featureBlocks(feature: MeetingFeature, owner = ''): Block[] {
   const review = feature.review!
   const suggested = review.from === 'Keywords'
   const full = (label: string, value: string) => section(sectionOf(label, lines(value), contentWidth))
   return [
-    facts([{ label: 'Epic', value: feature.epic || noEpic }, { label: 'Assigned to', value: displayName(feature.assignedTo || 'Unassigned') }, { label: 'State', value: feature.state }], 'facts', 1),
+    facts([{ label: 'Epic', value: feature.epic || noEpic }, ...(owner ? [{ label: 'Product Owner', value: owner }] : []), { label: 'Assigned to', value: displayName(feature.assignedTo || 'Unassigned') }, { label: 'State', value: feature.state }], 'facts', 1),
     ...(suggested ? [paragraph('muted', 'Suggested from keywords: the comment has no headings.')] : []),
     ...(review.from === 'None' ? [full('Comment', review.text)] : [
       columns(sectionOf('Learnings', lines(review.learnings), columnWidth), sectionOf('Struggles', lines(review.struggles), columnWidth), suggested ? 'suggested' : ''),
@@ -170,25 +175,26 @@ function featureBlocks(feature: MeetingFeature): Block[] {
     paragraph('byline', `Review by ${displayName(review.author)}, ${review.date}`, { font: 14, lineHeight: 20, max: 1 }),
   ]
 }
-const featureSlides = (kind: SlideKind, eyebrow: string) => (feature: MeetingFeature): Slide[] => flowSlides(kind, eyebrow, `#${feature.id} ${feature.title}`, featureBlocks(feature))
+const featureSlides = (kind: SlideKind, eyebrow: string, owner = '') => (feature: MeetingFeature): Slide[] => flowSlides(kind, eyebrow, `#${feature.id} ${feature.title}`, featureBlocks(feature, owner))
 const discussSlides = (meeting: Meeting): Slide[] => {
   const features = reviewed(meeting).filter(isDiscuss).sort(epicOrderOf(meeting))
-  return features.flatMap((feature, at) => featureSlides('discuss', `DISCUSS DURING MEETING · ${at + 1} OF ${features.length}`)(feature))
+  return features.flatMap((feature, at) => featureSlides('discuss', `DISCUSS DURING MEETING · ${at + 1} OF ${features.length}`, ownerOfEpic(meeting, feature.epicId))(feature))
 }
 const reviewedSlides = (meeting: Meeting): Slide[] => {
   const features = reviewed(meeting).filter((feature) => !isDiscuss(feature)).sort(epicOrderOf(meeting))
   const perEpic = new Map<string, number>()
   for (const feature of features) perEpic.set(epicName(feature), (perEpic.get(epicName(feature)) ?? 0) + 1)
   const seen = new Map<string, number>()
-  return features.flatMap((feature) => { const epic = epicName(feature), at = (seen.get(epic) ?? 0) + 1; seen.set(epic, at); return featureSlides('reviewed', `REVIEWED · ${epic.toUpperCase()} · ${at} OF ${perEpic.get(epic)}`)(feature) })
+  // PIR-68: the Epic heading (the eyebrow) names the Epic's Product Owner too.
+  return features.flatMap((feature) => { const epic = epicName(feature), at = (seen.get(epic) ?? 0) + 1, owner = ownerOfEpic(meeting, feature.epicId); seen.set(epic, at); return featureSlides('reviewed', `REVIEWED · ${epic.toUpperCase()}${owner ? ` · PO ${owner.toUpperCase()}` : ''} · ${at} OF ${perEpic.get(epic)}`, owner)(feature) })
 }
 const why = (feature: MeetingFeature, start: string) => feature.status === 'none' ? `No review headed for this PI since ${formatDate(start)}` : feature.status === 'error' ? 'The Discussion could not be read' : 'The Discussion was not read'
 const notReviewedSlides = (meeting: Meeting): Slide[] => {
-  const features = notReviewed(meeting).sort(epicOrderOf(meeting))
+  const features = notReviewed(meeting).sort(epicOrderOf(meeting)), po = showsOwners(meeting)
   if (!features.length) return [{ kind: 'not-reviewed', eyebrow: 'NOT REVIEWED', title: 'Features not reviewed', body: '<p>None: every Feature of the PI has a review.</p>' }]
   return flowSlides('not-reviewed', `NOT REVIEWED · ${plural(features.length, 'FEATURE')}`, 'Features not reviewed', [table({ label: 'Features not reviewed',
-    columns: [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 20 }, { label: 'Assigned to', width: 16 }, { label: 'Why', width: 22 }],
-    rows: features.map((feature) => [cellOf(feature.id), cellOf(feature.title), cellOf(epicName(feature)), cellOf(displayName(feature.assignedTo || 'Unassigned')), cellOf(why(feature, meeting.start))]) })])
+    columns: po ? [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 28 }, { label: 'Epic', width: 16 }, { label: 'Product Owner', width: 14 }, { label: 'Assigned to', width: 14 }, { label: 'Why', width: 20 }] : [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 20 }, { label: 'Assigned to', width: 16 }, { label: 'Why', width: 22 }],
+    rows: features.map((feature) => [cellOf(feature.id), cellOf(feature.title), cellOf(epicName(feature)), ...(po ? [cellOf(ownerOfEpic(meeting, feature.epicId) || '—')] : []), cellOf(displayName(feature.assignedTo || 'Unassigned')), cellOf(why(feature, meeting.start))]) })])
 }
 // PIR-45: the Themes — every Learning, then every Struggle, each with its Feature ID; a "None" answer is left out.
 export function themeItems(meeting: Meeting, which: 'learnings' | 'struggles'): { id: number; text: string; suggested: boolean }[] {

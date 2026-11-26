@@ -63,7 +63,7 @@ test('PIR-34: the edit is sent as update-comment — PATCH …/comments/{id} wit
     assert.deepEqual(JSON.parse(sent[0].body), { text: html })
     // Someone else's Feature without the lead right; markup the app does not build; an update without a comment id or
     // outside a PI review; a comment id on another operation — all refused before anything is sent.
-    await assert.rejects(updateReview(config, 'p', { id: 7, assignedToEmail: 'ben.okafor@example.com' }, 11, html), /Only the Feature’s assignee or a lead/)
+    await assert.rejects(updateReview(config, 'p', { id: 7, assignedToEmail: 'ben.okafor@example.com' }, 11, html), /Only the Feature’s assignee, the Product Owner of its Epic or a lead/)
     await assert.rejects(updateReview(config, 'p', { id: 7, assignedToEmail: 'rita.gomez@example.com' }, 11, '<ul><li onclick="x">A</li></ul>'), /markup the app does not send/)
     await assert.rejects(updateReview(config, 'p', { id: 7, assignedToEmail: 'rita.gomez@example.com' }, 0, html), /Only a PI review can be edited/)
     await assert.rejects(requestAzure({ ...config, pat: 'p', operation: 'update-comment', workItemId: 7, commentId: 11, comment: 'plain' }), /Only a PI review can be edited/)

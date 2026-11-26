@@ -1938,6 +1938,8 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-EPS-09 Sprint from set in Setup per Epic and used by bulk and Create Feature** — Req EPS-10, DPF-18 — **UAT** — E2E `dp-single-create.e2e.mjs` ("TC-DPF-18: …; TC-EPS-09: each User Story in the Sprint of its “Sprint from” milestone date, else the default Sprint with a note"); UAT: in Admin → Feature & PI setup → Setup per Epic → the DP bulk creation Epic → User Stories set "Sprint from" SFV on one story and PRD on another, Save to Git; on Release Details → DP pick a release whose DRfH Date is in a coming Sprint and whose DRPC Date is in a finished one: DP Create Features shows "SFV → Sprint n · PRD → default Sprint" and "PRD … is in a past Sprint — default Sprint" on its row; Create Feature on that row shows the same next to each story; in Azure DevOps the SFV story is in the Sprint holding the DRfH Date, the PRD story in the PI / Sprint chosen, the Feature in its PI.
 
+**TC-EPS-10 The Product Owner of an Epic: saved with the Epic setup, older files unchanged** — Req EPS-11 — L1 `epic-owners.test.mjs` ("EPS-11: the Product Owner is read strictly, saved with the Epic setup and an older file loads unchanged (TC-EPS-10)", "EPS-11: one Product Owner per Epic — set, changed, removed; Copy to Epics and removing the fields keep each Epic’s own (TC-EPS-10)"); E2E `epic-product-owner.e2e.mjs` (TC-PIR-68: the Tool Owner picks the Product Owner in Setup per Epic, Save to Git writes `productOwner` with the work email and the name, the Epic list shows "PO Rita Gomez"); browser check: a Team Member sees the Product Owner read only with the reason.
+
 **TC-ADM-01 Overview checks and settings search** — Req ADM-01, ADM-03 — L1 `admin-overview.test.mjs` ("Admin overview: open Get started steps and shared-setup checks, required first, each with its fix (ADM-01, TC-ADM-01)"; "Search settings: by name or what it affects, every page reachable (ADM-03, TC-ADM-01)").
 
 **TC-ADM-02 Overview, Ctrl K and History** — Req ADM-01…04 — E2E `shell.e2e.mjs` ("TC-ADM-02: Admin → Overview lists what to set up with links (and the bulk streams without an Epic, TC-ADM-03); Ctrl K finds a setting and opens it; History filters the changes"); browser check with Git storage: change a capacity setting — the ADMIN heading shows 1 and the Overview shows Unsaved shared changes with Save to Git; Save to Git clears both; Ctrl K → "dod" offers Feature setup; History → choose an area and type part of a change.
@@ -2571,6 +2573,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 **TC-PIR-63 Not read with Retry on My PI Review** — Req PIR-63 — L1 `pi-review-edit.test.mjs` ("KB-140: a read that has not answered after 90 s is shown as not read (discussionStuck, TC-PIR-63)") ; E2E `my-pi-review-read.e2e.mjs` (same scenario: Azure DevOps answers 503 for 204, its row shows Not read with Retry and the reason in the tooltip; Retry reads it again and the row shows Not reviewed) ; browser check: a Discussion whose read does not answer turns into Not read with Retry after 90 s.
 **TC-PIR-64 Every slide a 16:9 page, nothing outside it** — Req PIR-64, PIR-65, PIR-66, PIR-67, PIR-45, PIR-46 — L1 `pi-meeting-layout.test.mjs` ("PIR-64: the canvas is 1280 × 720 (16:9); the body is what the header and footer leave": 1280 / 720 = 16 / 9, the body 564 px under a one-line title, 530 px under two; "PIR-65: lines are counted word by word at a generous character width; a long text is cut into parts": the line count, a long word broken, the parts of at most N lines with nothing lost; "PIR-65: a table runs on by rows …": 40 rows over slides, each part within the body, the header on each, the total row on the last, a long cell clamped to 2 lines with the full text in its title, 17 one-line rows a slide; "PIR-65, PIR-66: points, review columns and bar charts run on …": long points in parts of at most 6 lines, Learnings carried on "(continued)", a 40-bar chart as 19 + 19 + 2 bars with the legend on each, "(n of N)" titles) and `pi-meeting.test.mjs` ("PIR-45, PIR-65: long lists run over several slides — as many rows as fit on the 16:9 slide": 30 Learnings as 17 + 13, 30 Features not reviewed as 17 + 13) ; E2E `pi-meeting-16x9.e2e.mjs` ("TC-PIR-64: every slide is a 16:9 page — …"): a meeting built in Node with 24 Epics of long names, 72 Features with long titles, a review long enough for six slides, 36 long-running rows and 25 repeat carry-overs; at 1366 × 768 and 1920 × 1200 every slide is 16:9 (±0.5 %), centred and letterboxed in the window, no element outside the slide box, neither the slide nor its body scrolls, the same layout at both sizes (scaled, not reflowed), no console error or policy report and no request; the Overview's thumbnails are 16:9; printed with page.pdf() the PDF has one page a slide, all 16:9 (960 × 540 pt).
 
+**TC-PIR-65 Who may post: the Product Owner of the Feature’s Epic** — Req PIR-70, CON-113, PIR-13 — L1 `epic-owners.test.mjs` ("PIR-70: the Product Owner is matched by work email (any case), never by name; the Epic of a Feature or a story (TC-PIR-65)", "PIR-70: who may post a Feature’s review — assignee, lead, the Product Owner of its Epic, nobody else (TC-PIR-65)": the truth table assignee / lead / Product Owner / Product Owner of another Epic / someone else / no Add a comment / View as / sample data / roles not loaded / no Epic setup; the write guard refuses before sending while the app knows no Product Owner, allows the Product Owner on their Epic’s Feature, refuses on another Epic’s); `pi-review-form.test.mjs` (TC-CON-70, the reason names the Product Owner).
+
+**TC-PIR-66 The Product Owner filter** — Req PIR-69 — L1 `epic-owners.test.mjs` ("PIR-69: the Product Owner filter — the options, what it keeps, Team overview streams (TC-PIR-66)"); E2E `epic-product-owner.e2e.mjs` (TC-PIR-68: on PI Review the filter keeps the three Features of Rita’s Epic, the Product Owner column shown, the choice remembered after leaving the page); browser check: on Release Details → DP and IOCC the filter keeps the releases whose QMS-0025 Feature is under a chosen Product Owner’s Epic, the counts unchanged; on Team overview the figures narrow to those Epics’ streams and Reset filters clears it.
+
+**TC-PIR-67 The Product Owner in the meeting file, within the 16:9 slide** — Req PIR-68, PIR-64, PIR-65 — L1 `epic-owners.test.mjs` ("PIR-68: the meeting shows each Epic’s Product Owner by name, never the email; the columns still fit the slide (TC-PIR-67)": Summary by Epic, Executive summary, Review completion and Features not reviewed with the column, every table’s widths adding up to 100 %, no email in the file, "—" for an Epic without one, no column without Product Owners, the reviewed Feature’s heading "REVIEWED · TOOLS · PO RITA GOMEZ · 1 OF 1"); E2E `epic-product-owner.e2e.mjs` (TC-PIR-68: the downloaded file names Rita Gomez, not her email).
+
+**TC-PIR-68 The Product Owner of an Epic, end to end** — Req EPS-11, PIR-68, PIR-69, PIR-70, PIR-71, PIR-63 — **UAT** — E2E `epic-product-owner.e2e.mjs` ("TC-PIR-68: the Tool Owner sets an Epic’s Product Owner; PI Review filters by it and the meeting names her; the Product Owner (a Team Member) posts the review of a Feature of her Epic assigned to someone else from My PI Review → My Epics"); UAT: as the Tool Owner, in Admin → Feature & PI setup → Setup per Epic choose an Epic and pick its Product Owner (a Team Member without “PI Review: post the review of a Feature”), Save to Git; on PI Review tick that person in the Product Owner filter: only that Epic’s Features remain; Conduct PI Meeting: the file shows the Product Owner’s name in the per-Epic tables, not the email. As that Product Owner, open My PI Review → My Epics (as Product Owner): the Epic’s Features are listed, also those assigned to others; Review… on a Feature assigned to someone else posts the review (headed “Feature Review for” the PI) to its Discussion in Azure DevOps; a Feature of another Epic stays disabled with the reason.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3163,6 +3173,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | EPS-08 | TC-EPS-06, TC-EPS-01 |
 | EPS-09 | TC-EPS-07, TC-DPF-02 |
 | EPS-10 | TC-EPS-08, TC-EPS-09, TC-DPF-18 |
+| EPS-11 | TC-EPS-10, TC-PIR-68 |
 | ADM-01 | TC-ADM-01, TC-ADM-02 |
 | ADM-02 | TC-ADM-02 |
 | ADM-03 | TC-ADM-01, TC-ADM-02 |
@@ -3520,6 +3531,10 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-65 | TC-PIR-64 |
 | PIR-66 | TC-PIR-64 |
 | PIR-67 | TC-PIR-64 |
+| PIR-68 | TC-PIR-67, TC-PIR-68 |
+| PIR-69 | TC-PIR-66, TC-PIR-68 |
+| PIR-70 | TC-PIR-65, TC-PIR-68 |
+| PIR-71 | TC-PIR-68 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3628,13 +3643,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-31 | TC-KPT-01…03 |
 | UC-32 | TC-DPF-01…04, TC-DPF-05, TC-DPF-06, TC-DPF-07, TC-DPF-08, TC-DPF-09, TC-DPF-10, TC-DPF-11, TC-DPF-12…16, TC-DPF-17, TC-DPF-18, TC-UI-26 |
 | UC-33 | TC-CNB-01, TC-CNB-02 |
-| UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07, TC-EPS-08, TC-EPS-09 |
+| UC-34 | TC-EPS-01, TC-EPS-02, TC-EPS-03, TC-EPS-04, TC-EPS-05, TC-EPS-06, TC-EPS-07, TC-EPS-08, TC-EPS-09, TC-EPS-10 |
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03, TC-STT-04, TC-STT-05, TC-STT-06 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…61, TC-PIR-64, TC-UI-27 |
+| UC-40 | TC-PIR-01…61, TC-PIR-64…68, TC-EPS-10, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record

@@ -160,7 +160,7 @@ test('TC-PIR-16: the Feature’s assignee writes its review — prefilled, previ
   // CON-113: a Team Member who is not the assignee sees Write review… disabled with the reason; the note says why.
   const other = page.getByRole('button', { name: 'Review Feature 202' })
   assert.equal(await other.isDisabled(), true)
-  assert.match(await other.getAttribute('title'), /^Only the Feature’s assignee \(Ben Okafor\) or a lead with “PI Review: post the review of a Feature” can post its review/)
+  assert.match(await other.getAttribute('title'), /^Only the Feature’s assignee \(Ben Okafor\), the Product Owner of its Epic or a lead with “PI Review: post the review of a Feature” can post its review/)
   assert.match(await text(page.locator('.table-panel > .write-blocked')), /You can post the review of the Features assigned to you \(rita\.gomez@example\.com\)/)
   // PIR-13: Write review… in the drawer — prefilled from the latest review (Partly → No, said so), the next PI filled in.
   await page.locator('.pir-table tr[data-row-key="example/project/201"] td').nth(1).click()

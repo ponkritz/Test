@@ -6,7 +6,7 @@
 // print-friendly colours, each with a table of the same numbers; every value goes through text().
 // PIR-64…PIR-66: every slide is a 16:9 canvas — each maker gives blocks (piMeetingLayout.ts) that run on to "(n of N)"
 // slides; the charts are drawn at the canvas width in CSS px (a viewBox of the same size, so 1 unit = 1 px).
-import { carriedForward, closedInPi, epicGroups, monthLabel, spikeFactor, type EpicGroup, type MeetingExec, type Trend } from './piMeetingData.ts'
+import { carriedForward, closedInPi, epicGroups, monthLabel, ownerOfEpic, showsOwners, spikeFactor, type EpicGroup, type MeetingExec, type Trend } from './piMeetingData.ts'
 import { defaultMeetingSettings, isHexColour, type MeetingSettings } from './piMeetingSettings.ts'
 import { displayName, lines, plural, text } from './piMeetingText.ts'
 import { charWidth, cellOf, contentWidth, fixed, flowSlides, paragraph, table, tiles, type Block, type Cell, type Column, type Tile } from './piMeetingLayout.ts'
@@ -96,6 +96,10 @@ const groupsOf = (meeting: Meeting) => epicGroups(meeting.features, settingsOf(m
 const orderNote = (meeting: Meeting) => `Epics by ${settingsOf(meeting).epicOrder === 'features' ? 'number of Features (most first)' : 'Epic ID'}; click a column header to re-sort.`
 const html = (value: string, plain: string, sort?: number | string): Cell => ({ html: value, plain, ...(sort != null ? { value: sort } : {}) })
 const sortable = (label: string, columns: Column[], rows: Cell[][], foot = ''): Block => table({ label, columns, rows, sortable: true, ...(foot ? { foot } : {}) })
+// PIR-68: the Product Owner column of a per-Epic table (display names only; "—" for an Epic without one) — only when the
+// meeting has Product Owners; the other columns then give it their share (the widths still add up to 100).
+const ownerColumn: Column = { label: 'Product Owner', width: 16 }
+const ownerCell = (meeting: Meeting, epicId: number | undefined) => cellOf(ownerOfEpic(meeting, epicId) || '—')
 
 // PIR-51: Executive summary — per Epic: Features, Closed in the PI, Carried forward, Ad-hoc; a stacked bar per Epic.
 interface EpicLine { group: EpicGroup<MeetingFeature>; features: number; closed: number | null; carried: number; adhoc: number }
@@ -114,9 +118,10 @@ export function executiveSlides(meeting: Meeting): Slide[] {
   const head = tiles([{ label: 'Features in the PI', value: number(meeting.features.length) }, { label: 'Closed in the PI', value: closedTotal == null ? '—' : number(closedTotal), detail: closedTotal == null ? why : 'Closed / Done with the Closed Date in the PI' }, { label: 'Carried forward', value: number(sum((line) => line.carried)), detail: nextText || 'Move to next PI = Yes: none' }, { label: 'Ad-hoc Features covered', value: number(sum((line) => line.adhoc)), detail: 'tagged ad-hoc' }])
   if (!list.length) return single('executive', 'EXECUTIVE SUMMARY', 'Executive summary', [head, ...(why ? [missingBlock(`Closed in the PI: ${why}`)] : []), paragraph('muted', 'No Features in the PI.')])
   const chart = barChart('Features per Epic: closed in the PI, carried forward, other', list.map((line) => { const closed = line.closed ?? 0, carried = line.group.features.filter((feature) => carriedForward(feature) && !(line.closed != null && closedInPi(feature, exec?.span))).length; return { label: line.group.name, parts: [closed, carried, Math.max(0, line.features - closed - carried)], total: `${line.features}` } }), [{ name: 'Closed in the PI', colour: chartColours.closed }, { name: 'Carried forward', colour: chartColours.carried }, { name: 'Other', colour: chartColours.other }])
-  const rows = sortable('Executive summary per Epic', [{ label: 'Epic', width: 40 }, { label: 'Epic ID', width: 12, num: true }, { label: 'Features', width: 12, num: true }, { label: 'Closed in the PI', width: 12, num: true }, { label: 'Carried forward', width: 12, num: true }, { label: 'Ad-hoc', width: 12, num: true }],
-    list.map((line) => [cellOf(line.group.name), cellOf(line.group.epicId != null ? `#${line.group.epicId}` : '—', line.group.epicId ?? Number.MAX_SAFE_INTEGER), cellOf(line.features), line.closed == null ? cellOf('—', -1) : cellOf(line.closed), cellOf(line.carried), cellOf(line.adhoc)]),
-    `<tr><th scope="row">All Epics</th><td></td><td class="num">${list.reduce((total, line) => total + line.features, 0)}</td><td class="num">${closedTotal == null ? '—' : closedTotal}</td><td class="num">${sum((line) => line.carried)}</td><td class="num">${sum((line) => line.adhoc)}</td></tr>`)
+  const po = showsOwners(meeting)
+  const rows = sortable('Executive summary per Epic', [{ label: 'Epic', width: po ? 28 : 40 }, ...(po ? [ownerColumn] : []), { label: 'Epic ID', width: po ? 8 : 12, num: true }, { label: 'Features', width: po ? 10 : 12, num: true }, { label: 'Closed in the PI', width: po ? 14 : 12, num: true }, { label: 'Carried forward', width: po ? 12 : 12, num: true }, { label: 'Ad-hoc', width: po ? 12 : 12, num: true }],
+    list.map((line) => [cellOf(line.group.name), ...(po ? [ownerCell(meeting, line.group.epicId)] : []), cellOf(line.group.epicId != null ? `#${line.group.epicId}` : '—', line.group.epicId ?? Number.MAX_SAFE_INTEGER), cellOf(line.features), line.closed == null ? cellOf('—', -1) : cellOf(line.closed), cellOf(line.carried), cellOf(line.adhoc)]),
+    `<tr><th scope="row">All Epics</th>${po ? '<td></td>' : ''}<td></td><td class="num">${list.reduce((total, line) => total + line.features, 0)}</td><td class="num">${closedTotal == null ? '—' : closedTotal}</td><td class="num">${sum((line) => line.carried)}</td><td class="num">${sum((line) => line.adhoc)}</td></tr>`)
   return single('executive', 'EXECUTIVE SUMMARY', 'Executive summary', [head, ...(why ? [missingBlock(`Closed in the PI: ${why}`)] : []), chart, rows, note(`${orderNote(meeting)} A Feature both closed and carried forward counts as closed in the chart. Carried forward: the latest review headed for ${meeting.pi} says Move to next PI = Yes.`)])
 }
 
@@ -126,14 +131,14 @@ export function completionSlides(meeting: Meeting): Slide[] {
   const groups = groupsOf(meeting)
   const reviewedOf = (group: EpicGroup<MeetingFeature>) => group.features.filter((feature) => feature.status === 'reviewed').length
   const share = (done: number, all: number) => all ? Math.round(done / all * 1000) / 10 : 0
-  const total = meeting.features.length, done = meeting.features.filter((feature) => feature.status === 'reviewed').length
+  const total = meeting.features.length, done = meeting.features.filter((feature) => feature.status === 'reviewed').length, po = showsOwners(meeting)
   const goto = (count: number) => count ? `<button type="button" class="goto" data-goto="not-reviewed">${text(count)}</button>` : '0'
   const head = tiles([{ label: 'Reviewed', value: `${number(share(done, total), 1)} %`, detail: `${done} of ${total} Features have a review headed for ${meeting.pi}` }, { label: 'Not reviewed', value: number(total - done), detail: 'listed on “Features not reviewed”' }])
   if (!groups.length) return single('completion', 'REVIEW COMPLETION', 'Review completion per Epic', [head, paragraph('muted', 'No Features in the PI.')])
   return single('completion', 'REVIEW COMPLETION', 'Review completion per Epic', [head,
     barChart('Share of Features reviewed per Epic (%)', groups.map((group) => ({ label: group.name, parts: [share(reviewedOf(group), group.features.length)], total: `${number(share(reviewedOf(group), group.features.length), 1)} %` })), [{ name: 'Reviewed %', colour: chartColours.bar }]),
-    sortable('Review completion per Epic', [{ label: 'Epic', width: 44 }, { label: 'Features', width: 14, num: true }, { label: 'Reviewed', width: 14, num: true }, { label: 'Reviewed %', width: 14, num: true }, { label: 'Not reviewed', width: 14, num: true }],
-      groups.map((group) => { const count = reviewedOf(group), left = group.features.length - count; return [cellOf(group.name), cellOf(group.features.length), cellOf(count), cellOf(`${number(share(count, group.features.length), 1)} %`, share(count, group.features.length)), html(goto(left), String(left), left)] })),
+    sortable('Review completion per Epic', [{ label: 'Epic', width: po ? 32 : 44 }, ...(po ? [ownerColumn] : []), { label: 'Features', width: po ? 13 : 14, num: true }, { label: 'Reviewed', width: po ? 13 : 14, num: true }, { label: 'Reviewed %', width: po ? 13 : 14, num: true }, { label: 'Not reviewed', width: po ? 13 : 14, num: true }],
+      groups.map((group) => { const count = reviewedOf(group), left = group.features.length - count; return [cellOf(group.name), ...(po ? [ownerCell(meeting, group.epicId)] : []), cellOf(group.features.length), cellOf(count), cellOf(`${number(share(count, group.features.length), 1)} %`, share(count, group.features.length)), html(goto(left), String(left), left)] })),
     note(`${orderNote(meeting)} A Not reviewed number opens the list of the Features not reviewed.`)])
 }
 
@@ -167,7 +172,8 @@ export function repeatSlides(meeting: Meeting): Slide[] {
   if (!exec.streaks.length) return single('repeat', 'RISK', 'Repeat carry-overs', [exec.streakWhy ? missingBlock(exec.streakWhy) : paragraph('', 'None: no Feature was carried forward in two or more PIs in a row.')])
   const rows = [...exec.streaks].sort((a, b) => b.pis.length - a.pis.length || a.id - b.id)
   return single('repeat', `RISK · ${plural(rows.length, 'FEATURE')}`, 'Repeat carry-overs', [paragraph('warning', 'Risk: these Features were carried forward (Move to next PI = Yes) in two or more PIs in a row.', { padding: 16, max: 2 }),
-    sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 18 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 30 }], rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))])
+    showsOwners(meeting) ? sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 28 }, { label: 'Epic', width: 14 }, { ...ownerColumn, width: 14 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 26 }], rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), ownerCell(meeting, entry.epicId), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))
+      : sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 18 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 30 }], rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))])
 }
 
 // PIR-60: Topics for discussion — each point (Learnings, Struggles, Additional Remarks lines) of the Features marked
@@ -192,12 +198,14 @@ export function releaseSlides(meeting: Meeting): Slide[] {
   if (!exec) return single('releases', 'RELEASES', 'Releases in the PI', [missingBlock(noData)])
   if (!exec.releases.length) return single('releases', 'RELEASES', 'Releases in the PI', [paragraph('', `${exec.releasesWhy || 'No release-based streams chosen'}.`), paragraph('muted', 'The streams are ticked in Admin → Feature & PI setup → PI Review form → Meeting presentation.')])
   const known = exec.releases.filter((entry) => entry.releases != null)
+  // PIR-68: a stream's Product Owners — those of its Epics (Admin → Streams → Bulk creation, a custom stream's Epics).
+  const streamPo = exec.releases.some((entry) => meeting.streamOwners?.[entry.stream])
   const total = known.reduce((sum, entry) => sum + (entry.releases ?? 0), 0)
   const classes = (entry: MeetingExec['releases'][number]) => entry.releases == null ? '—' : entry.classWhy ? `— (${entry.classWhy})` : [...entry.classes.map(([name, count]) => `${name} ${count}`), ...(entry.unclassified ? [`not classified ${entry.unclassified}`] : [])].join(' · ') || '—'
   const head: Tile[] = [{ label: 'Releases in the PI', value: known.length ? number(total) : '—', detail: exec.span ? `${exec.span.start} – ${exec.span.end}` : exec.spanWhy }, { label: 'Streams', value: number(exec.releases.length), detail: exec.releases.map((entry) => entry.stream).join(', ') }]
   return single('releases', 'RELEASES', 'Releases in the PI', [tiles(head),
     ...(known.length ? [barChart('Releases per stream', known.map((entry) => ({ label: entry.stream, parts: [entry.releases ?? 0], total: number(entry.releases ?? 0) })), [{ name: 'Releases', colour: chartColours.bar }])] : []),
-    sortable('Releases per stream', [{ label: 'Stream', width: 25 }, { label: 'Releases', width: 12, num: true }, { label: 'Release Classification', width: 63 }], exec.releases.map((entry) => [cellOf(entry.stream), entry.releases == null ? html(`— <small class="muted">${text(entry.why)}</small>`, `— ${entry.why}`, -1) : cellOf(entry.releases), cellOf(classes(entry))])),
+    sortable('Releases per stream', [{ label: 'Stream', width: streamPo ? 20 : 25 }, ...(streamPo ? [{ label: 'Product Owner', width: 18 }] : []), { label: 'Releases', width: 12, num: true }, { label: 'Release Classification', width: streamPo ? 50 : 63 }], exec.releases.map((entry) => [cellOf(entry.stream), ...(streamPo ? [cellOf(meeting.streamOwners?.[entry.stream] || '—')] : []), entry.releases == null ? html(`— <small class="muted">${text(entry.why)}</small>`, `— ${entry.why}`, -1) : cellOf(entry.releases), cellOf(classes(entry))])),
     note('Counted from the Release Details data of each stream: a release with its date (approval, else the stream’s own completion date) inside the PI’s dates, each once.')])
 }
 
@@ -209,11 +217,11 @@ export function hoursSlides(meeting: Meeting): Slide[] {
   const figures = exec.hours
   if (figures.why) return single('hours', 'HOURS', 'Hours per Epic', [missingBlock(figures.why)])
   const featureCount = new Map(groupsOf(meeting).map((group) => [group.epicId, group.features.length]))
-  const order = settingsOf(meeting).epicOrder
+  const order = settingsOf(meeting).epicOrder, po = showsOwners(meeting)
   const list = [...figures.byEpic].sort((a, b) => (a.key === 'unmapped' ? 1 : 0) - (b.key === 'unmapped' ? 1 : 0) || (order === 'features' ? (featureCount.get(b.epicId) ?? 0) - (featureCount.get(a.epicId) ?? 0) : 0) || (a.epicId ?? Infinity) - (b.epicId ?? Infinity) || a.title.localeCompare(b.title))
   return single('hours', `HOURS · ${figures.months.map(monthLabel).join(', ').toUpperCase()}`, 'Hours per Epic', [tiles([{ label: 'Actual hours', value: hours(figures.total), detail: 'booked on Epics in the PI’s months' }, { label: 'Epics', value: number(list.length), detail: 'with hours' }]),
     barChart('Actual hours per Epic', list.map((entry) => ({ label: entry.title, parts: [entry.hours], total: `${hours(entry.hours)} · ${number(entry.share, 1)} %` })), [{ name: 'Actual hours', colour: chartColours.bar }]),
-    sortable('Hours per Epic', [{ label: 'Epic', width: 46 }, { label: 'Epic ID', width: 18, num: true }, { label: 'Actual hours', width: 18, num: true }, { label: 'Allocation %', width: 18, num: true }], list.map((entry) => [cellOf(entry.title), cellOf(entry.epicId != null ? `#${entry.epicId}` : '—', entry.epicId ?? Number.MAX_SAFE_INTEGER), cellOf(hours(entry.hours), entry.hours), cellOf(`${number(entry.share, 1)} %`, entry.share)]), `<tr><th scope="row">All Epics</th><td></td><td class="num">${text(hours(figures.total))}</td><td class="num">100 %</td></tr>`),
+    sortable('Hours per Epic', [{ label: 'Epic', width: po ? 32 : 46 }, ...(po ? [{ ...ownerColumn, width: 18 }] : []), { label: 'Epic ID', width: po ? 14 : 18, num: true }, { label: 'Actual hours', width: 18, num: true }, { label: 'Allocation %', width: 18, num: true }], list.map((entry) => [cellOf(entry.title), ...(po ? [ownerCell(meeting, entry.epicId)] : []), cellOf(entry.epicId != null ? `#${entry.epicId}` : '—', entry.epicId ?? Number.MAX_SAFE_INTEGER), cellOf(hours(entry.hours), entry.hours), cellOf(`${number(entry.share, 1)} %`, entry.share)]), `<tr><th scope="row">All Epics</th>${po ? '<td></td>' : ''}<td></td><td class="num">${text(hours(figures.total))}</td><td class="num">100 %</td></tr>`),
     note('Actuals only: the Completed Work of the Time Writing month Tasks in the PI’s months (a month belongs to the PI that holds its 15th day), by the Feature’s Epic, as Team overview counts them. Allocation % = the Epic’s hours ÷ the hours of all Epics.')])
 }
 export function utilizationSlides(meeting: Meeting): Slide[] {
@@ -249,8 +257,9 @@ export function longRunningSlides(meeting: Meeting): Slide[] {
   const counts = sortable('Long-running Features by stream', [{ label: 'Stream', width: 70 }, { label: 'Long-running', width: 30, num: true }], figures.byStream.map((entry) => [cellOf(entry.stream), entry.why ? html(`— <small class="muted">${text(entry.why)}</small>`, `— ${entry.why}`, -1) : cellOf(entry.count)]))
   const head = note(`Not Closed / Done and created more than N PIs ago (N per Epic, set in PI setup). Age from the Created Date to the build, in months · years · PIs (one PI = ${figures.piDays} days, the length of ${meeting.pi}).`)
   if (!figures.rows.length) return single('long-running', 'LONG-RUNNING', 'Long-running Features', [counts, head, paragraph('', 'None: no open Feature of these streams is older than its threshold.')])
-  return single('long-running', `LONG-RUNNING · ${plural(figures.rows.length, 'FEATURE')}`, 'Long-running Features', [counts, head, sortable('Long-running Features, oldest first', [{ label: 'ID', width: 7, num: true }, { label: 'Title', width: 25 }, { label: 'Epic', width: 13 }, { label: 'State', width: 8 }, { label: 'Created', width: 10 }, { label: 'Age (months · years · PIs)', width: 14, num: true }, { label: 'Threshold (PIs)', width: 9, num: true }, { label: 'Move to next PI', width: 14 }],
-    figures.rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), cellOf(entry.state), cellOf(entry.created), cellOf(`${number(entry.months, 1)} · ${number(entry.years, 1)} · ${entry.pis == null ? '—' : number(entry.pis, 1)}`, entry.days), cellOf(entry.threshold), cellOf(entry.move || '—')]))])
+  const po = showsOwners(meeting)
+  return single('long-running', `LONG-RUNNING · ${plural(figures.rows.length, 'FEATURE')}`, 'Long-running Features', [counts, head, sortable('Long-running Features, oldest first', [{ label: 'ID', width: 7, num: true }, { label: 'Title', width: po ? 19 : 25 }, { label: 'Epic', width: po ? 11 : 13 }, ...(po ? [{ ...ownerColumn, width: 12 }] : []), { label: 'State', width: 8 }, { label: 'Created', width: 10 }, { label: 'Age (months · years · PIs)', width: po ? 12 : 14, num: true }, { label: 'Threshold (PIs)', width: 9, num: true }, { label: 'Move to next PI', width: po ? 12 : 14 }],
+    figures.rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), ...(po ? [ownerCell(meeting, entry.epicId)] : []), cellOf(entry.state), cellOf(entry.created), cellOf(`${number(entry.months, 1)} · ${number(entry.years, 1)} · ${entry.pis == null ? '—' : number(entry.pis, 1)}`, entry.days), cellOf(entry.threshold), cellOf(entry.move || '—')]))])
 }
 
 // The accent colour of the file (validated; the default otherwise).

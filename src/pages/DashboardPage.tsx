@@ -10,6 +10,9 @@ import { epicColors, shortFeatureTitle } from '../chartUtils'
 import { capacityContext, capacityModel, defaultStandardHours, monthlyHours, normalizeCapacitySettings, oldCalculation, sharedTimeScopeLabel, sharedTimeScopes, standardHoursTotal, type SharedTimeScope, type StandardHourLine, problemBreakdown, regions, resourceRoles, type Region, type ResourceRole } from '../capacity'
 import { applyFilter, bandOf, byPerson, byRole, byStream, change, concentration, groupBy, noFilter, narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, persistentOverload, personMonths, plannedOverload, quarterOf, rebalancing, streamTotals, totals, type Bands, type Dimension, type Period, type PersonMonth, type DashboardFilter } from '../dashboard'
 import { MultiSelect } from '../components/MultiSelect'
+import { ProductOwnerFilter } from '../components/ProductOwnerFilter'
+import { useOwnerFilter } from '../useOwnerFilter'
+import { ownerStreamKeys } from '../epicOwners'
 import { timeWritingMonth } from '../azureInsights'
 import { anomalies, healthScore, monthForecast, planAccuracy, resilience, streamMomentum, type ForecastStatus, type AccuracyVerdict, type Momentum } from '../insights'
 import { streamCounts, type StreamCounts } from '../releaseOverview'
@@ -156,22 +159,28 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
       : saved.period.months.length || !saved.period.quarters.length ? months.map(short).join(', ')
         : periodQuarters(saved.period, currentYear).map((quarter) => `Q${quarter.slice(6)} ${quarter.slice(0, 4)}`).join(', ')
   const everyone = personMonths(azure.items, months, today, settings)
-  const rows = applyFilter(everyone, saved.filter)
+  // PIR-69: the Product Owner filter narrows the streams (Epics) to those whose Product Owner is chosen, with the
+  // Stream filter (both: the streams in both); remembered in this browser.
+  const owners = useOwnerFilter('dashboard')
+  const streamOptions = streamTotals(everyone)
+  const ownerStreams = ownerStreamKeys(owners.file, azure.items, streamOptions.map((stream) => stream.key), owners.value)
+  const streamsChosen = ownerStreams ? (saved.filter.streams.length ? saved.filter.streams.filter((key) => ownerStreams.includes(key)) : ownerStreams) : saved.filter.streams
+  const effective = { ...saved.filter, streams: ownerStreams && !streamsChosen.length ? ['@no-stream'] : streamsChosen }
+  const rows = applyFilter(everyone, effective)
   const all = totals(rows)
   const elapsed = totals(rows.filter((row) => row.status === 'elapsed'))
   const thisMonth = today.slice(0, 7)
   const forecast = months.includes(thisMonth) ? monthForecast(rows, thisMonth, today, bands) : null
   const people = [...new Set(everyone.map((row) => row.person))].sort((a, b) => a.localeCompare(b))
-  const streamOptions = streamTotals(everyone)
   const notNow = months.filter((entry) => entry >= thisMonth)
   const overload = plannedOverload(rows, bands)
-  const filtered = Boolean(saved.filter.regions.length || saved.filter.roles.length || saved.filter.people.length || saved.filter.streams.length)
+  const filtered = Boolean(saved.filter.regions.length || saved.filter.roles.length || saved.filter.people.length || saved.filter.streams.length || owners.active)
   const meName = my.me.name
   // Streams tab charts: the work items with only the Tasks of the people left by the region, role and person filters
   // (unassigned Tasks such as regional holidays stay); the stream filter does not apply there and the tab says so.
-  const chartPeople = new Set(applyFilter(everyone, { ...saved.filter, streams: [] }).map((row) => row.person))
+  const chartPeople = new Set(applyFilter(everyone, { ...effective, streams: [] }).map((row) => row.person))
   const chartItems = filtered ? azure.items.filter((item) => item.workItemType !== 'Task' || !item.assignedTo || chartPeople.has(item.assignedTo)) : azure.items
-  const filterNote = filtered ? `Filters: ${[saved.filter.regions.length && 'region', saved.filter.roles.length && 'role', saved.filter.people.length && 'team member', saved.filter.streams.length && 'stream'].filter(Boolean).join(', ')}` : 'No filters'
+  const filterNote = filtered ? `Filters: ${[saved.filter.regions.length && 'region', saved.filter.roles.length && 'role', saved.filter.people.length && 'team member', saved.filter.streams.length && 'stream', owners.active && 'Product Owner'].filter(Boolean).join(', ')}` : 'No filters'
 
   return <Page actions={settingsGear ?? undefined}>
     <div className="dash-filters" role="group" aria-label="Dashboard filters">
@@ -182,7 +191,8 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
       <MultiSelect label="Role" options={resourceRoles.map((role) => [role, role])} value={saved.filter.roles} onChange={(value) => setFilter({ roles: value as ResourceRole[] })} />
       <MultiSelect label="Team member" options={people.map((name) => [name, name === meName ? `${name} (me)` : name])} value={saved.filter.people} onChange={(value) => setFilter({ people: value })} />
       <MultiSelect label="Stream" options={streamOptions.map((stream) => [stream.key, stream.title])} value={saved.filter.streams} onChange={(value) => setFilter({ streams: value })} />
-      <button type="button" className="ghost" disabled={!filtered && !periodChanged} onClick={() => update({ filter: noFilter, period: defaultPeriod(month) })}>Reset filters</button>
+      <ProductOwnerFilter filter={owners} />
+      <button type="button" className="ghost" disabled={!filtered && !periodChanged} onClick={() => { update({ filter: noFilter, period: defaultPeriod(month) }); owners.change([]) }}>Reset filters</button>
       {canLock && <ProfilePicker settings={shared} value={viewProfile} onChange={setViewProfile} />}
     </div>
     <PageViewForEveryone entryKey="dashboard" what="Team overview period, filters and tab" value={saved} onUse={(value) => setSaved(load(month, value))} />
@@ -203,10 +213,10 @@ export function DashboardPage({ month, azure, store, my, views, navigate, canSet
         { id: 'demand', label: 'Demand against capacity and findings', node: <SummaryTab rows={rows} months={months} bands={bands} parts={['demand']} /> },
       ]} />}
       {saved.tab === 'capacity' && <><SummaryTab rows={rows} months={months} bands={bands} parts={['rebalancing', 'monitor']} /><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['forecast', 'unusual']} /><MonthsTab rows={rows} months={months} bands={bands} /><PeopleTab rows={rows} months={months} bands={bands} terms={termsOf(settings, defaultProfile(settings).id)} /></>}
-      {saved.tab === 'streams' && <><StreamsTab rows={rows} months={months} items={chartItems} settings={settings} streamFiltered={saved.filter.streams.length > 0} /><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['momentum', 'resilience']} /></>}
+      {saved.tab === 'streams' && <><StreamsTab rows={rows} months={months} items={chartItems} settings={settings} streamFiltered={effective.streams.length > 0} /><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['momentum', 'resilience']} /></>}
       {saved.tab === 'quality' && <><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['health', 'accuracy']} /><SummaryTab rows={rows} months={months} bands={bands} parts={['horizon']} /></>}
-      {saved.tab === 'utilization' && <UtilizationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={saved.filter} profiles={settings.profiles ?? {}} bands={bands} canLock={canLock} onLock={lockFigures} onUnlock={unlockFigures} />}
-      {saved.tab === 'old' && <OldCalculationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={saved.filter} profiles={settings.profiles ?? {}} bands={bands} canEdit={canSetDefault} onSaveStandard={saveStandardHours} onSaveExcluded={saveExcludedScopes} />}
+      {saved.tab === 'utilization' && <UtilizationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={effective} profiles={settings.profiles ?? {}} bands={bands} canLock={canLock} onLock={lockFigures} onUnlock={unlockFigures} />}
+      {saved.tab === 'old' && <OldCalculationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={effective} profiles={settings.profiles ?? {}} bands={bands} canEdit={canSetDefault} onSaveStandard={saveStandardHours} onSaveExcluded={saveExcludedScopes} />}
       {saved.tab === 'definitions' && <DefinitionsTab terms={termsOf(settings, defaultProfile(settings).id)} hoursPerDay={settings.hoursPerDay} absenceEpicId={settings.absenceEpicId} bands={bands} formula={profileFormula(defaultProfile(settings), settings)} />}
     </>}
   </Page>

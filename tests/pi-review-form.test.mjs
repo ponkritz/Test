@@ -188,7 +188,7 @@ const feature = (email) => ({ id: 7, key: 'org/quality/7', assignedTo: email ? '
 test('CON-113: who may post — the assignee (with Add a comment), a lead (PI Review: post), nobody else; the page reasons (TC-CON-70)', async () => {
   assert.equal(reviewPostBlock(viewer(['work.comment']), feature('ana@example.com')), '', 'the assignee')
   assert.equal(reviewPostBlock(viewer(['pireview.post']), feature('ben@example.com')), '', 'a lead, on any Feature')
-  assert.match(reviewPostBlock(viewer(['work.comment']), feature('ben@example.com')), /Only the Feature’s assignee \(Ana\) or a lead/)
+  assert.match(reviewPostBlock(viewer(['work.comment']), feature('ben@example.com')), /Only the Feature’s assignee \(Ana\), the Product Owner of its Epic or a lead/)
   assert.match(reviewPostBlock(viewer([]), feature('ana@example.com')), /does not allow “Add a comment”/)
   assert.match(reviewPostBlock(viewer(['work.comment'], { email: '' }), feature('ana@example.com')), /enter your work email/)
   assert.match(reviewPageBlock(viewer(['pireview.post'], { readOnly: true })), /access roles are not loaded/)
@@ -207,7 +207,7 @@ test('CON-113: who may post — the assignee (with Add a comment), a lead (PI Re
   try {
     globalThis.fetch = async (url, init) => { sent.push({ url, body: init.body }); return new Response('{"id":91}', { status: 200, headers: { 'content-type': 'application/json' } }) }
     guardAzureWrites(can(['work.comment']), undefined, 'ana@example.com')
-    await assert.rejects(postReview(config, 'p', { id: 7, assignedToEmail: 'ben@example.com' }, buildReviewComment(form)), /Only the Feature’s assignee or a lead/)
+    await assert.rejects(postReview(config, 'p', { id: 7, assignedToEmail: 'ben@example.com' }, buildReviewComment(form)), /Only the Feature’s assignee, the Product Owner of its Epic or a lead/)
     assert.equal(sent.length, 0, 'nothing sent')
     assert.equal(await postReview(config, 'p', { id: 7, assignedToEmail: 'ana@example.com' }, buildReviewComment(form)), 91)
     assert.equal(sent[0].url, 'https://dev.azure.com/org/Quality/_apis/wit/workItems/7/comments?api-version=7.1-preview.4')
