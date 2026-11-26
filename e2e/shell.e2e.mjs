@@ -1685,7 +1685,7 @@ test('TC-CON-60: Setup per Epic — All Epics defaults, and an Epic showing whic
   // The Epic: its DoD customized, stories and estimate from All Epics, shown in the preview.
   await page.locator('.efe-epics button', { hasText: '#4242' }).click()
   const switchOf = (name) => page.getByRole('switch', { name: `Customize ${name} for this Epic` })
-  assert.deepEqual([await switchOf('Definition of Done').getAttribute('aria-checked'), await switchOf('User Stories').getAttribute('aria-checked'), await switchOf('Month Task').getAttribute('aria-checked')], ['true', 'false', 'false'])
+  assert.deepEqual([await switchOf('Acceptance Criteria (Feature DoD)').getAttribute('aria-checked'), await switchOf('User Stories').getAttribute('aria-checked'), await switchOf('Month Task').getAttribute('aria-checked')], ['true', 'false', 'false'])
   assert.match(await text(page.locator('section[aria-label="User Stories"] .efe-inherited')), /FROM ALL EPICS All Epics story/)
   assert.match(await text(page.locator('.efe-preview')), /Feature DoD: Own DoD.*User Stories All Epics story.*Month Task 3 h/s)
   const list = await page.locator('.efe-epics').evaluate((el) => { const style = getComputedStyle(el); return [style.overflowY, style.position, el.getBoundingClientRect().height <= 600] })

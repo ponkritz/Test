@@ -150,7 +150,7 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
     const ruleProblems = dirtyEpic ? (epicSetup.draft?.epics ?? []).flatMap((item) => item.fields.flatMap((field) => classRuleProblems(field.classRules).map((problem) => `Epic #${item.epicId} ${field.label}: ${problem}`))) : []
     if (ruleProblems.length) { setResult({ tone: 'error', text: `Not saved: ${ruleProblems.join(' ')}` }); return }
     const missingDoD = [...(dirtyShared ? sharedFile.epics : []), ...(dirtyPersonal ? personalFile.epics : [])].filter((item) => !(item.inherits ?? []).includes('featureDoD') && !item.featureDoD.trim())
-    if (missingDoD.length) { setResult({ tone: 'error', text: `Not saved: give Epic ${missingDoD.map((item) => `#${item.epicId}`).join(', ')} a Definition of Done, or switch off “Customize for this Epic”.` }); return }
+    if (missingDoD.length) { setResult({ tone: 'error', text: `Not saved: give Epic ${missingDoD.map((item) => `#${item.epicId}`).join(', ')} Acceptance Criteria (Feature DoD), or switch off “Customize for this Epic”.` }); return }
     setBusy(true)
     try {
       if (dirtyEpic) await epicSetup.save(epicSetup.draft!, `Update the Epic setup (${title})`)
@@ -222,11 +222,11 @@ export function EpicFeatureEditor({ setup, epicSetup, git, items, initialEpicId 
           {!own && <small className="muted">Now: the Epic’s default.</small>}</div>}
       </section>}
 
-      <section className="efe-section" aria-label="Definition of Done">
-        <header><span className="efe-n">{isAll ? 1 : 2}</span><div><h3>Definition of Done{value && ` — ${value}`}</h3><small>Written at the top of the Feature’s Description</small></div>{!value && switchView('dod', 'Definition of Done')}</header>
-        {value ? own ? <label className="efe-field">Definition of Done for {value}<textarea rows={2} value={own.featureDoD} disabled={!editable} placeholder={`Empty: the Epic’s DoD (${resolved?.featureDoD || 'none'})`} onChange={(event) => changeEntry((item) => { item.classSets![ownKey!].featureDoD = event.target.value })} /></label>
+      <section className="efe-section" aria-label="Acceptance Criteria (Feature DoD)">
+        <header><span className="efe-n">{isAll ? 1 : 2}</span><div><h3>Acceptance Criteria (Feature DoD){value && ` — ${value}`}</h3><small>Written at the top of the Feature’s Description as “Feature DoD: …”</small></div>{!value && switchView('dod', 'Acceptance Criteria (Feature DoD)')}</header>
+        {value ? own ? <label className="efe-field">Acceptance Criteria (Feature DoD) for {value}<textarea rows={2} value={own.featureDoD} disabled={!editable} placeholder={`Empty: the Epic’s DoD (${resolved?.featureDoD || 'none'})`} onChange={(event) => changeEntry((item) => { item.classSets![ownKey!].featureDoD = event.target.value })} /></label>
           : <div className="efe-inherited"><small>FROM THE EPIC’S DEFAULT</small><span>{dod || '—'}</span></div>
-        : !isAll && !custom.dod ? fromDefaults(defaults.featureDoD || 'None set: typed in New Feature') : <label className="efe-field">Definition of Done{!isAll && ' (required)'}<textarea rows={2} value={isAll ? defaults.featureDoD ?? '' : entry?.featureDoD ?? ''} disabled={!editable} onChange={(event) => isAll ? changeDefaults((value) => { if (event.target.value.trim()) value.featureDoD = event.target.value; else delete value.featureDoD }) : changeEntry((value) => { value.featureDoD = event.target.value })} placeholder={isAll ? 'Empty: typed in New Feature' : ''} /></label>}
+        : !isAll && !custom.dod ? fromDefaults(defaults.featureDoD || 'None set: typed in New Feature') : <label className="efe-field">Acceptance Criteria (Feature DoD){!isAll && ' — required'}<textarea rows={2} value={isAll ? defaults.featureDoD ?? '' : entry?.featureDoD ?? ''} disabled={!editable} onChange={(event) => isAll ? changeDefaults((value) => { if (event.target.value.trim()) value.featureDoD = event.target.value; else delete value.featureDoD }) : changeEntry((value) => { value.featureDoD = event.target.value })} placeholder={isAll ? 'Empty: typed in New Feature' : ''} /></label>}
       </section>
 
       <section className="efe-section" aria-label="User Stories">

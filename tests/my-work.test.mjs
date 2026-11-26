@@ -624,3 +624,18 @@ test('TC-ATM-25: a Time Writing User Story opens to its Month Tasks, any assigne
   assert.deepEqual(storyChildren(data, data.find((entry) => entry.id === 3)).map((entry) => entry.id), [4, 17], "ascending ID; Ben's Task included")
   assert.deepEqual(storyChildren(data, data.find((entry) => entry.id === 5)), [])
 })
+
+test('BKL-52: the web transport takes a Priority (1–4) on a new Feature only, before anything is fetched (TC-BKL-41)', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const request = (operation, priority, workItemType) => ({ ...config, pat: 'p', operation, ...(workItemType ? { workItemType } : {}), validateOnly: true, feature: { parentId: 2, title: 't', description: 'Feature DoD: x', acceptanceCriteria: '', areaPath: 'A', assignedTo: 'ana@x.com', priority } })
+  const sent = []
+  globalThis.window = {}; const original = globalThis.fetch
+  globalThis.fetch = async (url, options) => { sent.push(JSON.parse(options.body)); return new Response('{"id":0}', { status: 200, headers: { 'Content-Type': 'application/json' } }) }
+  try {
+    await requestAzure(request('create-feature', 3))
+    await assert.rejects(requestAzure(request('create-feature', 7)), /Priority must be 1, 2, 3 or 4/)
+    await assert.rejects(requestAzure(request('create-child', 1, 'Task')), /set on a new User Story only/)
+  } finally { delete globalThis.window; globalThis.fetch = original }
+  assert.equal(sent.length, 1, 'only the valid Feature create was sent')
+  assert.deepEqual(sent[0].find((entry) => entry.path === '/fields/Microsoft.VSTS.Common.Priority'), { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 3 })
+})

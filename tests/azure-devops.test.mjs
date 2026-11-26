@@ -234,6 +234,35 @@ test('Feature creation validates first, links to Epic, then verifies persisted p
   assert.equal(JSON.stringify(created).includes(pat), false)
 })
 
+test('BKL-52: New Feature sends its Priority to Microsoft.VSTS.Common.Priority and verifies it after creation; only 1–4, Feature create only (TC-BKL-41)', async () => {
+  const operations = []
+  const world = (priority) => async (request) => {
+    operations.push(request)
+    if (request.operation === 'items' && request.ids[0] === 10) return { value: [{ id: 10, fields: { 'System.WorkItemType': 'Epic', 'System.AreaPath': 'Quality\\Team A', 'System.TeamProject': config.project } }] }
+    if (request.operation === 'create-feature') return { id: request.validateOnly ? 0 : 11, fields: {} }
+    return { value: [{ id: 11, fields: { 'System.WorkItemType': 'Feature', 'System.AreaPath': 'Quality\\Team A', 'System.Parent': 10, ...(priority != null ? { 'Microsoft.VSTS.Common.Priority': priority } : {}) } }] }
+  }
+  const created = await createAzureFeature(config, pat, { ...feature, priority: 1 }, world(1))
+  assert.equal(created.id, 11)
+  const creates = operations.filter((request) => request.operation === 'create-feature')
+  assert.deepEqual(creates.map((request) => [request.validateOnly, request.feature.priority]), [[true, 1], [false, 1]], 'validated and created with the Priority chosen')
+  assert.deepEqual(featurePatch(config, creates[1].feature).find((entry) => entry.path === '/fields/Microsoft.VSTS.Common.Priority'), { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 1 }, 'the web request body')
+  const proxy = JSON.parse(azureFeatureRequest({ ...config, pat, operation: 'create-feature', validateOnly: true, feature: { ...creates[1].feature } }).options.body)
+  assert.deepEqual(proxy.find((entry) => entry.path === '/fields/Microsoft.VSTS.Common.Priority'), { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 1 }, 'the desktop proxy body')
+  assert.equal(featurePatch(config, { ...feature, areaPath: 'A' }).some((entry) => entry.path === '/fields/Microsoft.VSTS.Common.Priority'), false, 'no Priority given (bulk creation): none sent, Azure DevOps keeps its default')
+  // Read back with another Priority: the Feature exists but is reported as not verified.
+  await assert.rejects(createAzureFeature(config, pat, { ...feature, priority: 3 }, world(2)), /Feature #11 was created, but .*priority could not be verified/)
+  // Only 1–4, refused before anything is sent; Story Points, Risk and Value area stay User Story fields.
+  const sent = [], refuse = async (request) => { sent.push(request); throw new Error('nothing may be sent') }
+  await assert.rejects(createAzureFeature(config, pat, { ...feature, priority: 5 }, refuse), /Priority must be 1, 2, 3 or 4/)
+  await assert.rejects(createAzureFeature(config, pat, { ...feature, priority: 2, storyPoints: 3 }, refuse), /set on a new User Story only/)
+  assert.equal(sent.length, 0)
+  assert.throws(() => azureFeatureRequest({ ...config, pat, operation: 'create-feature', validateOnly: true, feature: { ...creates[1].feature, priority: 0 } }), /Priority must be 1, 2, 3 or 4/)
+  assert.throws(() => azureFeatureRequest({ ...config, pat, operation: 'create-feature', validateOnly: true, feature: { ...creates[1].feature, risk: '1 - High' } }), /set on a new User Story only/)
+  assert.throws(() => azureFeatureRequest({ ...config, pat, operation: 'create-child', workItemType: 'Task', validateOnly: true, feature: { ...creates[1].feature, priority: 1 } }), /set on a new User Story only/, 'a Task still cannot carry a Priority')
+
+})
+
 test('wrong parent type and failed project validation prevent Feature creation', async () => {
   await assert.rejects(createAzureFeature(config, pat, feature, async () => ({ value: [{ id: 10, fields: { 'System.WorkItemType': 'Task' } }] })), /not an accessible Epic/)
   let persisted = false

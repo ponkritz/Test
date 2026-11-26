@@ -547,8 +547,8 @@ View as is read only: nothing is saved to Azure DevOps or Git while it is on. Re
 Every page creates a Feature with the same **New Feature** form: QMS-0025, My Tasks [Board], Time Writing and Create Feature on a Release page.
 
 1. Press **＋ New Feature**.
-2. **1 Feature** — choose the **Parent Epic** first, then fill in the title (or the title fields of that Epic), Assigned to, PI → Sprint, Start date and Target date.
-3. **2 Definition of Done** — the Feature DoD is required. Check it and press **Continue**.
+2. **1 Feature** — choose the **Parent Epic** first, then fill in the title (or the title fields of that Epic), Assigned to, PI → Sprint, Start date, Target date and **Priority** (1–4, default 2; Azure DevOps Priority field).
+3. **2 Acceptance Criteria (Feature DoD)** — the Acceptance Criteria (Feature DoD) is required (it is saved at the top of the Description as “Feature DoD: …”). Check it and press **Continue**.
 4. **3 User Stories** — tick the stories to create, add your own, and press **Continue**.
 5. **4 Estimates for the month** — the hours of each month's Time Writing Task.
 6. Press **Save**. The Feature and its children are created in the background.

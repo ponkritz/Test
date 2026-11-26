@@ -61,7 +61,7 @@ export interface AzureRequest extends AzureConfig {
   // comments (DSK-11, PIR-05): the next page of the Discussion, as Azure DevOps returned it (at most 2,048 characters).
   continuationToken?: string
 }
-export interface FeatureInput { parentId: number; title: string; description: string; acceptanceCriteria: string; areaPath?: string; iterationPath?: string; assignedTo?: string; startDate?: string; targetDate?: string; assignToCreator?: boolean; storyIterationPath?: string; taskOriginalEstimate?: number; taskCompletedWork?: number }
+export interface FeatureInput { parentId: number; title: string; description: string; acceptanceCriteria: string; areaPath?: string; iterationPath?: string; assignedTo?: string; startDate?: string; targetDate?: string; assignToCreator?: boolean; storyIterationPath?: string; taskOriginalEstimate?: number; taskCompletedWork?: number; priority?: number }
 
 export const validStoryPoints = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1000
 // The Azure DevOps User Story fields under Planning and Classification (Agile process): Story Points, Priority 1–4
@@ -70,6 +70,14 @@ export const storyPriorities = [1, 2, 3, 4] as const
 export const storyRisks = ['1 - High', '2 - Medium', '3 - Low'] as const
 export const storyValueAreas = ['Business', 'Architectural'] as const
 export interface StoryFields { storyPoints?: number; priority?: number; risk?: string; valueArea?: string }
+// BKL-52: a new Feature (create-feature) may carry its Priority only (Microsoft.VSTS.Common.Priority, 1–4; the New
+// Feature form's default 2, as Azure's); Story Points, Risk and Value area stay User Story fields.
+export function featureFieldsProblem(fields: StoryFields | undefined) {
+  if (!fields) return ''
+  const { priority, ...rest } = fields
+  if (priority != null && !(storyPriorities as readonly number[]).includes(priority)) return 'Priority must be 1, 2, 3 or 4.'
+  return storyFieldsProblem(rest, false)
+}
 // '' when the fields are valid for a new User Story, else why not; any of them on another create is refused.
 export function storyFieldsProblem(fields: StoryFields | undefined, isNewStory: boolean) {
   if (!fields) return ''
@@ -231,7 +239,7 @@ export async function requestAzure(request: AzureRequest): Promise<unknown> {
   if (changesAzure(request.operation) && !(review && request.reviewOf != null ? reviewPostAllowed(request.reviewOf) : writePermissions(request).every((permission) => writesAllowed(permission)))) throw new Error(request.reviewOf != null && writesAllowed('work.comment') ? 'Only the Feature’s assignee or a lead with “PI Review: post the review of a Feature” can post its review. Nothing was posted.' : refusedBecause)
   assertWritableBase(request, request.operation)
   if ((request.operation === 'create-feature' || request.operation === 'create-child') && !isAssignee(request.feature?.assignedTo)) throw new Error('A new work item must be assigned to someone (an email). Nothing was created.')
-  const storyProblem = storyFieldsProblem(request.feature, request.operation === 'create-child' && request.workItemType === 'User Story')
+  const storyProblem = request.operation === 'create-feature' ? featureFieldsProblem(request.feature) : storyFieldsProblem(request.feature, request.operation === 'create-child' && request.workItemType === 'User Story')
   if (storyProblem) throw new Error(`${storyProblem} Nothing was created.`)
   if (request.feature?.adhoc != null && (request.feature.adhoc !== true || request.operation !== 'create-child' || request.workItemType !== 'Task')) throw new Error('Only a new Task can be tagged ad-hoc. Nothing was created.')
   if (request.operation === 'edit-work-item') { const problem = !Number.isSafeInteger(request.workItemId) || request.workItemId! < 1 || !Number.isSafeInteger(request.rev) || request.rev! < 1 ? 'Invalid work item or revision.' : editProblem(request.edit ?? {}); if (problem) throw new Error(`${problem} Nothing was changed.`) }
