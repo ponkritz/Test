@@ -7,7 +7,7 @@
 // PIR-64…PIR-66: every slide is a 16:9 canvas — each maker gives blocks (piMeetingLayout.ts) that run on to "(n of N)"
 // slides; the charts are drawn at the canvas width in CSS px (a viewBox of the same size, so 1 unit = 1 px).
 import { carriedForward, closedInPi, epicGroups, monthLabel, ownerOfEpic, showsOwners, spikeFactor, type EpicGroup, type MeetingExec, type Trend } from './piMeetingData.ts'
-import { defaultMeetingSettings, isHexColour, type MeetingSettings } from './piMeetingSettings.ts'
+import { defaultMeetingSettings, isHexColour, monthsLabel, type MeetingSettings } from './piMeetingSettings.ts'
 import { displayName, lines, plural, text } from './piMeetingText.ts'
 import { charWidth, cellOf, contentWidth, fixed, flowSlides, paragraph, table, tiles, type Block, type Cell, type Column, type Tile } from './piMeetingLayout.ts'
 import { isNoneText } from './piReview.ts'
@@ -248,18 +248,18 @@ export function trendSlides(meeting: Meeting): Slide[] {
   })
 }
 
-// PIR-57: Long-running Features of the ticked streams — oldest first, each with its Epic's threshold.
+// PIR-57, PIR-85: Long-running Features of the ticked streams — oldest first, each with its Epic's limit in months.
 export function longRunningSlides(meeting: Meeting): Slide[] {
   const exec = execOf(meeting)
   if (!exec) return single('long-running', 'LONG-RUNNING', 'Long-running Features', [missingBlock(noData)])
   const figures = exec.long
   if (figures.why) return single('long-running', 'LONG-RUNNING', 'Long-running Features', [missingBlock(figures.why)])
   const counts = sortable('Long-running Features by stream', [{ label: 'Stream', width: 70 }, { label: 'Long-running', width: 30, num: true }], figures.byStream.map((entry) => [cellOf(entry.stream), entry.why ? html(`— <small class="muted">${text(entry.why)}</small>`, `— ${entry.why}`, -1) : cellOf(entry.count)]))
-  const head = note(`Not Closed / Done and created more than N PIs ago (N per Epic, set in PI setup). Age from the Created Date to the build, in months · years · PIs (one PI = ${figures.piDays} days, the length of ${meeting.pi}).`)
-  if (!figures.rows.length) return single('long-running', 'LONG-RUNNING', 'Long-running Features', [counts, head, paragraph('', 'None: no open Feature of these streams is older than its threshold.')])
+  const head = note(`Not Closed / Done and created more than N months ago (N per Epic, set in PI setup). Age from the Created Date to the build, in months · years · PIs (${figures.piDays ? `one PI = ${figures.piDays} days, the length of ${meeting.pi}` : `PIs —: the dates of ${meeting.pi} are not known`}).`)
+  if (!figures.rows.length) return single('long-running', 'LONG-RUNNING', 'Long-running Features', [counts, head, paragraph('', 'None: no open Feature of these streams is older than its limit.')])
   const po = showsOwners(meeting)
-  return single('long-running', `LONG-RUNNING · ${plural(figures.rows.length, 'FEATURE')}`, 'Long-running Features', [counts, head, sortable('Long-running Features, oldest first', [{ label: 'ID', width: 7, num: true }, { label: 'Title', width: po ? 19 : 25 }, { label: 'Epic', width: po ? 11 : 13 }, ...(po ? [{ ...ownerColumn, width: 12 }] : []), { label: 'State', width: 8 }, { label: 'Created', width: 10 }, { label: 'Age (months · years · PIs)', width: po ? 12 : 14, num: true }, { label: 'Threshold (PIs)', width: 9, num: true }, { label: 'Move to next PI', width: po ? 12 : 14 }],
-    figures.rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), ...(po ? [ownerCell(meeting, entry.epicId)] : []), cellOf(entry.state), cellOf(entry.created), cellOf(`${number(entry.months, 1)} · ${number(entry.years, 1)} · ${entry.pis == null ? '—' : number(entry.pis, 1)}`, entry.days), cellOf(entry.threshold), cellOf(entry.move || '—')]))])
+  return single('long-running', `LONG-RUNNING · ${plural(figures.rows.length, 'FEATURE')}`, 'Long-running Features', [counts, head, sortable('Long-running Features, oldest first', [{ label: 'ID', width: 7, num: true }, { label: 'Title', width: po ? 19 : 25 }, { label: 'Epic', width: po ? 11 : 13 }, ...(po ? [{ ...ownerColumn, width: 12 }] : []), { label: 'State', width: 8 }, { label: 'Created', width: 10 }, { label: 'Age (months · years · PIs)', width: po ? 12 : 14, num: true }, { label: 'Limit', width: 9, num: true }, { label: 'Move to next PI', width: po ? 12 : 14 }],
+    figures.rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), ...(po ? [ownerCell(meeting, entry.epicId)] : []), cellOf(entry.state), cellOf(entry.created), cellOf(`${number(entry.months, 1)} · ${number(entry.years, 1)} · ${entry.pis == null ? '—' : number(entry.pis, 1)}`, entry.days), cellOf(monthsLabel(entry.threshold), entry.threshold), cellOf(entry.move || '—')]))])
 }
 
 // The accent colour of the file (validated; the default otherwise).

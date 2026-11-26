@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildMeetingHtml, isMeetingHtml, meetingFeatures, meetingSlides, slideOrder } from '../src/piMeeting.ts'
 import { allocation, carriedForward, carryStreak, closedInPi, epicGroups, hoursAndUtilization, longRunning, meetingExec, piMonths, piReleases, piSpanOf, spikeFactor, trendOf } from '../src/piMeetingData.ts'
-import { colourProblem, contrastRatio, defaultMeetingSettings, fillPlaceholders, meetingSettingsProblems, parseMeetingSettings, serializeMeetingSettings } from '../src/piMeetingSettings.ts'
+import { addMonths, colourProblem, contrastRatio, defaultMeetingSettings, fillPlaceholders, isLongRunning, meetingSettingsChanges, meetingSettingsProblems, oldPiLimitsNote, parseMeetingSettings, sameMeetingSettings, serializeMeetingSettings } from '../src/piMeetingSettings.ts'
 import { builtInFormSetup, mergePiFormText, parsePiFormSetup, serializePiFormSetup } from '../src/piReviewSetup.ts'
 import { executiveLines, topicItems } from '../src/piMeetingExec.ts'
 import { personMonths, totals } from '../src/dashboard.ts'
@@ -55,12 +55,12 @@ const task = (month, parent, hours, who = 'Rita Gomez') => wi(next++, 'Task', `$
 const items = [tools, audits, ...pi,
   task('September 2026', pi[3], 40), task('October 2026', pi[3], 40), task('November 2026', pi[3], 160, 'Ken Ito'),
   task('September 2026', pi[7], 20), task('October 2026', pi[7], 20), task('November 2026', pi[7], 20),
-  // PIR-57: long-running candidates — 300 (Tools, a year old), 301 (Audits, 1.6 PIs; Audits' own threshold is 1), 303
-  // (Tools, 1.6 PIs, below the default 2), 302 (Tools, closed).
+  // PIR-57, PIR-85: long-running candidates — 300 (Tools, a year old), 301 (Audits, 4.4 months; Audits' own limit is 3
+  // months), 303 (Tools, 4.4 months, below the default 6), 302 (Tools, closed).
   feature(300, tools, { createdDate: '2025-12-01T00:00:00Z', iterationPath: 'p' }), feature(301, audits, { createdDate: '2026-07-15T00:00:00Z', iterationPath: 'p' }),
   feature(302, tools, { createdDate: '2025-01-01T00:00:00Z', state: 'Closed', iterationPath: 'p' }), feature(303, tools, { createdDate: '2026-07-15T00:00:00Z', iterationPath: 'p' }),
 ]
-const settings = { ...defaultMeetingSettings(), streams: ['DP', 'IOCC'], longRunning: { 110: 1 } }
+const settings = { ...defaultMeetingSettings(), streams: ['DP', 'IOCC'], longRunningMonths: { 110: 3 } }
 const execOf = (extra = {}) => meetingExec({
   pi: 'PI 26.4', features, iterations, items, capacity, today, start, setup, settings, pis: ['p\\PI 26.4', 'p\\PI 26.3'],
   previousFeatures: [{ id: 150, title: 'Old', epic: 'Tools', epicId: 100, state: 'Closed', closedDate: '2026-07-01', status: 'reviewed', review: { moveValue: 'Yes', movePi: 'PI 26.4' } }, { id: 151, title: 'Older', epic: 'Tools', epicId: 100, state: 'Active', adhoc: true, status: 'unread' }],
@@ -169,18 +169,70 @@ test('PIR-54: releases of the ticked streams inside the PI’s dates, each once,
   assert.match(body, /<td>IOCC<\/td><td class="num" data-value="-1">— <small class="muted">No Release Details data: not fetched yet\.<\/small>/)
 })
 
-test('PIR-57: long-running Features of the ticked streams — N per Epic (default 2), age in months, years and PIs, oldest first (TC-PIR-58)', () => {
+test('PIR-57, PIR-85: long-running Features of the ticked streams — N months per Epic (default 6), age in months, years and PIs, oldest first (TC-PIR-58, TC-PIR-85)', () => {
   const long = execOf().long
   assert.equal(long.piDays, 84)
-  assert.deepEqual(long.rows.map((row) => [row.id, row.epic, row.threshold, row.months, row.years, row.pis, row.streams]), [[300, 'Tools', 2, 11.8, 1, 4.3, ['DP']], [301, 'Audits', 1, 4.4, 0.4, 1.6, ['IOCC']], [208, 'Audits', 1, 3.8, 0.3, 1.4, ['IOCC']], [209, 'Audits', 1, 3.8, 0.3, 1.4, ['IOCC']]])
-  assert.ok(!long.rows.some((row) => row.id === 303), '1.6 PIs is not more than the default 2')
+  assert.deepEqual(long.rows.map((row) => [row.id, row.epic, row.threshold, row.months, row.years, row.pis, row.streams]), [[300, 'Tools', 6, 11.8, 1, 4.3, ['DP']], [301, 'Audits', 3, 4.4, 0.4, 1.6, ['IOCC']], [208, 'Audits', 3, 3.8, 0.3, 1.4, ['IOCC']], [209, 'Audits', 3, 3.8, 0.3, 1.4, ['IOCC']]])
+  assert.ok(!long.rows.some((row) => row.id === 303), '4.4 months is not more than the default 6')
   assert.deepEqual(long.byStream, [{ stream: 'DP', count: 1, why: '' }, { stream: 'IOCC', count: 3, why: '' }])
   const without = longRunning({ items, streamEpics: { DP: [] }, streams: ['DP'], settings, span, spanWhy: '', today, moveOf: () => '' })
   assert.match(without.byStream[0].why, /No Epics are mapped to DP/)
-  assert.match(longRunning({ items, streamEpics: {}, streams: ['DP'], settings, spanWhy: 'The PI’s dates are not known.', today, moveOf: () => '' }).why, /age in PIs, and so which Features run long, cannot be worked out/)
+  // PIR-85: which Features run long does not depend on the PI's dates; only the age in PIs is then "—".
+  const undated = longRunning({ items, streamEpics: { DP: [100] }, streams: ['DP'], settings, spanWhy: 'The PI’s dates are not known.', today, moveOf: () => '' })
+  assert.equal(undated.why, '')
+  assert.deepEqual(undated.rows.map((row) => [row.id, row.pis]), [[300, null]])
   assert.match(longRunning({ items, streamEpics: {}, streams: [], settings, today, spanWhy: '', moveOf: () => '' }).why, /No release-based streams chosen/)
   const body = slidesOf(meetingOf()).find((slide) => slide.kind === 'long-running').body
-  assert.match(body, /<td class="num" data-value="300">300<\/td><td>Feature 300<\/td><td>Tools<\/td><td>Active<\/td><td>2025-12-01<\/td><td class="num" data-value="360">11\.8 · 1 · 4\.3<\/td><td class="num" data-value="2">2<\/td><td>No<\/td>/)
+  assert.match(body, /Not Closed \/ Done and created more than N months ago \(N per Epic, set in PI setup\)\. Age from the Created Date to the build, in months · years · PIs \(one PI = 84 days, the length of PI 26\.4\)\./)
+  assert.match(body, /<th[^>]*>.*Limit/)
+  assert.match(body, /<td class="num" data-value="300">300<\/td><td>Feature 300<\/td><td>Tools<\/td><td>Active<\/td><td>2025-12-01<\/td><td class="num" data-value="360">11\.8 · 1 · 4\.3<\/td><td class="num" data-value="6">6 months<\/td><td>No<\/td>/)
+  assert.match(body, /<td class="num" data-value="3">3 months<\/td>/)
+  const undatedBody = slidesOf(meetingOf({ exec: { ...execOf(), long: undated } })).find((slide) => slide.kind === 'long-running').body
+  assert.match(undatedBody, /11\.8 · 1 · —/)
+  assert.match(undatedBody, /PIs —: the dates of PI 26\.4 are not known/)
+})
+
+test('PIR-85: the month boundary — created + N calendar months before the build day; exactly N months is not long-running, one day more is (TC-PIR-85)', () => {
+  assert.equal(addMonths('2026-05-20', 6), '2026-11-20')
+  assert.equal(addMonths('2026-08-31', 6), '2027-02-28', 'the month’s last day when it is shorter')
+  assert.equal(addMonths('2027-08-31', 6), '2028-02-29', 'a leap year')
+  assert.equal(addMonths('2026-11-15', 14), '2028-01-15')
+  assert.equal(isLongRunning('2026-05-20', 6, '2026-11-20'), false, 'exactly 6 months')
+  assert.equal(isLongRunning('2026-05-20', 6, '2026-11-21'), true, 'one day more')
+  // Through longRunning: Tools (default 6) and Audits (own 3 and 12), today 2026-11-26.
+  const at = (id, epic, created) => feature(id, epic, { createdDate: `${created}T23:30:00Z`, iterationPath: 'p' })
+  const world = [tools, audits, at(401, tools, '2026-05-26'), at(402, tools, '2026-05-25'), at(403, audits, '2026-08-26'), at(404, audits, '2026-08-25')]
+  const run = (own) => longRunning({ items: world, streamEpics: { DP: [100, 110] }, streams: ['DP'], settings: { ...defaultMeetingSettings(), longRunningMonths: own }, span, spanWhy: '', today, moveOf: () => '' }).rows.map((row) => [row.id, row.threshold])
+  assert.deepEqual(run({}), [[402, 6]], 'the default 6: 401 is exactly 6 months old, 402 one day more; Audits’ Features are 3 months old')
+  assert.deepEqual(run({ 110: 3 }), [[402, 6], [404, 3]], 'Audits’ own 3 months: 403 exactly, 404 one day more')
+  assert.deepEqual(run({ 110: 12, 100: 1 }), [[402, 1], [401, 1]], 'per Epic: Tools 1, Audits 12')
+})
+
+test('PIR-85: settings — default 6 months, months written under their own keys, an older file with PI values loads with the defaults and the note (TC-PIR-86)', () => {
+  const defaults = defaultMeetingSettings()
+  assert.equal(defaults.longRunningMonthsDefault, 6)
+  assert.deepEqual(defaults.longRunningMonths, {})
+  // Written under the new keys only; the file stays schema 2.
+  const saved = serializePiFormSetup({ ...builtInFormSetup(), meeting: { ...defaults, longRunningMonthsDefault: 9, longRunningMonths: { 110: 12 } } })
+  assert.match(saved, /"schema": 2/)
+  assert.deepEqual(JSON.parse(saved).meeting, { longRunningMonthsDefault: 9, longRunningMonths: { 110: 12 } })
+  assert.doesNotMatch(saved, /"longRunning"|"longRunningDefault"/)
+  assert.deepEqual(parsePiFormSetup(saved).meeting, { ...defaults, longRunningMonthsDefault: 9, longRunningMonths: { 110: 12 } })
+  assert.throws(() => parsePiFormSetup(saved.replace('"110": 12', '"110": 121')), /Long-running after \(months\), Epic #110: a whole number from 1 to 120/)
+  // An older file (PIR-57: PIs) loads: the PI values are not converted — the defaults apply and the note is set.
+  const older = JSON.stringify({ schema: 2, kind: builtInFormSetup().kind, fields: builtInFormSetup().fields, meeting: { streams: ['DP'], longRunningDefault: 3, longRunning: { 110: 1 }, accent: '#1b5e20' } })
+  const loaded = parsePiFormSetup(older).meeting
+  assert.deepEqual(loaded, { ...defaults, streams: ['DP'], accent: '#1b5e20', oldPiLimits: true })
+  assert.match(oldPiLimitsNote, /now in months \(default 6\).*set them again/)
+  // Even an old value the new rules would refuse still loads (it is not read).
+  assert.equal(parseMeetingSettings({ longRunningDefault: 400 }).oldPiLimits, true)
+  // Saving drops the old keys and writes the new ones only; the note is gone after the save.
+  const resaved = serializePiFormSetup({ ...builtInFormSetup(), meeting: { ...loaded, oldPiLimits: undefined, longRunningMonths: { 110: 4 } } })
+  assert.deepEqual(JSON.parse(resaved).meeting, { streams: ['DP'], longRunningMonths: { 110: 4 }, accent: '#1b5e20' })
+  assert.equal(parsePiFormSetup(resaved).meeting.oldPiLimits, undefined)
+  // Clearing the old values is a change on its own (Save to Git is offered), and two files differ by it.
+  assert.deepEqual(meetingSettingsChanges(loaded, { ...loaded, oldPiLimits: undefined }), ['long-running after (months)'])
+  assert.equal(sameMeetingSettings(loaded, { ...loaded, oldPiLimits: undefined }), false)
 })
 
 test('PIR-51: topics for discussion — every point of a Discuss during Meeting review with who raised it (display name) and when (TC-PIR-52)', () => {
@@ -190,7 +242,7 @@ test('PIR-51: topics for discussion — every point of a Discuss during Meeting 
 test('PIR-58, PIR-59: the settings — defaults, strict reading, old files load, placeholders filled, contrast refused (TC-PIR-59)', () => {
   const defaults = defaultMeetingSettings()
   assert.deepEqual(parseMeetingSettings(undefined), defaults)
-  assert.equal(defaults.longRunningDefault, 2)
+  assert.equal(defaults.longRunningMonthsDefault, 6)
   assert.deepEqual(defaults.streams, [])
   assert.equal(defaults.epicOrder, 'id')
   assert.equal(serializeMeetingSettings(defaults), undefined, 'the defaults are not written')
@@ -199,13 +251,13 @@ test('PIR-58, PIR-59: the settings — defaults, strict reading, old files load,
   assert.match(old, /"schema": 1/)
   assert.equal(parsePiFormSetup(old).meeting, undefined)
   // Settings make it schema 2, and they read back the same.
-  const saved = serializePiFormSetup({ ...builtInFormSetup(), meeting: { ...defaults, streams: ['DP'], longRunning: { 110: 3 }, accent: '#1b5e20', titleTheme: 'dark', footer: 'Confidential · {team} · PI {PI}' } })
+  const saved = serializePiFormSetup({ ...builtInFormSetup(), meeting: { ...defaults, streams: ['DP'], longRunningMonths: { 110: 3 }, accent: '#1b5e20', titleTheme: 'dark', footer: 'Confidential · {team} · PI {PI}' } })
   assert.match(saved, /"schema": 2/)
-  assert.deepEqual(parsePiFormSetup(saved).meeting, { ...defaults, streams: ['DP'], longRunning: { 110: 3 }, accent: '#1b5e20', titleTheme: 'dark', footer: 'Confidential · {team} · PI {PI}' })
+  assert.deepEqual(parsePiFormSetup(saved).meeting, { ...defaults, streams: ['DP'], longRunningMonths: { 110: 3 }, accent: '#1b5e20', titleTheme: 'dark', footer: 'Confidential · {team} · PI {PI}' })
   assert.throws(() => parsePiFormSetup(old.replace('"fields"', '"meeting": {}, "fields"')), /schema 1 file has no meeting settings/)
   assert.throws(() => parsePiFormSetup(old.replace('"schema": 1', '"schema": 3')), /schema 1 or 2/)
   assert.throws(() => parsePiFormSetup(saved.replace('#1b5e20', 'red')), /not a colour written #rrggbb/)
-  assert.throws(() => parsePiFormSetup(saved.replace('"110": 3', '"110": 0')), /Epic #110: a whole number from 1 to 40/)
+  assert.throws(() => parsePiFormSetup(saved.replace('"110": 3', '"110": 0')), /Epic #110: a whole number from 1 to 120/)
   // A merge keeps the side that changed the meeting settings.
   const merged = parsePiFormSetup(mergePiFormText(old, saved, old, false))
   assert.equal(merged.meeting.accent, '#1b5e20')

@@ -29,7 +29,8 @@ const monthTitle = (month) => `${new Intl.DateTimeFormat('en-GB', { month: 'long
 const rita = { displayName: 'Rita Gomez', uniqueName: 'rita.gomez@example.com' }, ken = { displayName: 'Ken Ito', uniqueName: 'ken.ito@example.com' }
 const raw = (id, type, title, iterationPath, parent, fields = {}) => ({ id, rev: 1, fields: { 'System.TeamProject': 'Project', 'System.WorkItemType': type, 'System.Title': title, 'System.State': 'Active', 'System.AreaPath': 'Project\\Quality', 'System.IterationPath': iterationPath, ...(parent ? { 'System.Parent': parent } : {}), 'System.AssignedTo': rita, 'System.CreatedDate': `${dayFromToday(-80)}T08:00:00Z`, ...fields } })
 const pi = 'Project\\PI 2026.4'
-// Tools #100: 201 closed in the PI (ad-hoc), 202 carried forward twice in a row, 220 open for 400 days (long-running).
+// Tools #100: 201 closed in the PI (ad-hoc), 202 carried forward twice in a row, 220 open for 400 days (long-running,
+// PIR-85: more than Tools' 12 months), 221 open for 300 days (below Tools' 12 months, above the default 6).
 // Audits #110: 211, 212 (carried forward), 213.
 const world = () => [
   raw(100, 'Epic', 'Tools', 'Project'), raw(110, 'Epic', 'Audits', 'Project'),
@@ -37,6 +38,7 @@ const world = () => [
   raw(202, 'Feature', 'Fixture library refresh', pi, 100),
   raw(211, 'Feature', 'Supplier audit pack', pi, 110, { 'System.AssignedTo': ken }), raw(212, 'Feature', 'Calibration plan', pi, 110), raw(213, 'Feature', 'Audit checklist', pi, 110),
   raw(220, 'Feature', 'Platform 3.0 qualification', 'Project', 100, { 'System.CreatedDate': `${dayFromToday(-400)}T08:00:00Z` }),
+  raw(221, 'Feature', 'Legacy rig retirement', 'Project', 100, { 'System.CreatedDate': `${dayFromToday(-300)}T08:00:00Z` }),
   // Time Writing: Tools 40 h a month and 200 h in the PI's last month (a spike), Audits 20 h a month.
   ...months.flatMap((month, at) => [
     raw(900 + at * 2, 'Task', monthTitle(month), 'Project', 202, { 'Microsoft.VSTS.Scheduling.OriginalEstimate': 40, 'Microsoft.VSTS.Scheduling.CompletedWork': at === months.length - 1 ? 200 : 40 }),
@@ -134,7 +136,10 @@ test('TC-PIR-61: the Scrum Master sets up the meeting presentation (a low-contra
   await dialog.getByLabel('Title slide', { exact: true }).selectOption('dark')
   await dialog.getByLabel('Order Epics by').selectOption('features')
   await dialog.getByRole('checkbox', { name: 'Platform' }).check()
-  await dialog.getByLabel('Long-running after, Tools (#100)').fill('3')
+  // PIR-85: the limits are months — the default row (6) and Tools' own 12.
+  const limits = dialog.getByRole('table', { name: 'Long-running after (months) per Epic' })
+  assert.equal(await limits.getByLabel('Long-running after, default').inputValue(), '6')
+  await limits.getByLabel('Long-running after, Tools (#100)').fill('12')
   // WCAG AA: a light orange is refused with the reason; Save to Git does not save it.
   await dialog.getByLabel('Accent colour', { exact: true }).fill('#f2a600')
   await dialog.locator('.notice', { hasText: /contrast with white is 2\.\d\d:1, below the 4\.5:1 of WCAG AA/ }).waitFor()
@@ -148,8 +153,9 @@ test('TC-PIR-61: the Scrum Master sets up the meeting presentation (a low-contra
   await dialog.waitFor({ state: 'hidden' })
   await until(() => /"schema": 2/.test(gh.read('pi-review-form.json') ?? ''), 'the settings in Git')
   const saved = parsePiFormSetup(gh.read('pi-review-form.json')).meeting
-  assert.deepEqual({ ...saved }, { ...saved, streams: ['Platform'], longRunning: { 100: 3 }, epicOrder: 'features', footer: 'Confidential · {team} · PI {PI}', team: 'Quality', accent: '#1b5e20', titleTheme: 'dark' })
+  assert.deepEqual({ ...saved }, { ...saved, streams: ['Platform'], longRunningMonths: { 100: 12 }, epicOrder: 'features', footer: 'Confidential · {team} · PI {PI}', team: 'Quality', accent: '#1b5e20', titleTheme: 'dark' })
   await panel.getByText('Number of Features (most first)').waitFor()
+  await panel.getByText('6 months by default; Tools (#100): 12 months').waitFor()
   await shot(panel, 'pi-exec-5-settings-panel')
 
   // Conduct the meeting.
@@ -220,9 +226,11 @@ test('TC-PIR-61: the Scrum Master sets up the meeting presentation (a low-contra
   assert.match(await text(current(file)), /Tools 200 h, Audits 20 h/)
   assert.equal(await current(file).locator('svg circle[r="7"]').count(), 1)
   await shot(file, 'pi-exec-4-trends-spike')
-  // Long-running: 220 (open for 400 days; Tools' threshold 3 PIs).
+  // Long-running (PIR-85): 220 (open for 400 days; Tools' limit 12 months), not 221 (300 days).
   await go('Long-running Features')
-  assert.match(await text(current(file)), /220 Platform 3\.0 qualification Tools Active .* 3 /)
+  assert.match(await text(current(file)), /Not Closed \/ Done and created more than N months ago \(N per Epic, set in PI setup\)/)
+  assert.match(await text(current(file)), /220 Platform 3\.0 qualification Tools Active .* 12 months /)
+  assert.doesNotMatch(await text(current(file)), /Legacy rig retirement/)
   await shot(file, 'pi-exec-7-long-running')
   assert.deepEqual(requests, [], 'no request leaves the file')
   assert.deepEqual(problems, [])

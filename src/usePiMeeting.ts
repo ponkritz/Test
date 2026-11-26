@@ -85,7 +85,8 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
   function build() {
     if (why || !shown) return
     const at = new Date(), snapshot = [...rows], builtBy = viewer.env?.name?.trim() || 'Unknown'
-    // PIR-51…PIR-57: the executive inputs at the click — the previous PI's Features, the long-running candidates.
+    // PIR-51…PIR-57: the executive inputs at the click — the previous PI's Features, the long-running candidates (PIR-85:
+    // by months, so also without the PI's dates).
     const settings = setup.meeting ?? defaultMeetingSettings(), today = utcDay(at), ctx = context
     const pis = ctx ? piOptions(ctx.iterations ?? [], ctx.items) : []
     const here = pis.findIndex((entry) => piName(entry).toLowerCase() === name.toLowerCase())
@@ -94,7 +95,7 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
     const previousRows: Row[] = ctx && previousPath ? piFeatures(ctx.items, previousPath, { absenceEpicId: ctx.absenceEpicId, withStories: ctx.withStories }).map((item) => ({ item, epic: epicOf(ctx.items, item, byId) })) : []
     const { span } = piSpanOf(ctx?.iterations, name)
     const streamEpics = meetingStreamEpics(settings.streams, ctx?.releaseState.releaseSourceSettings)
-    const candidates = ctx && span ? longRunning({ items: ctx.items, streamEpics, streams: settings.streams, settings, span, spanWhy: '', today, moveOf: () => '' }).rows.map((row) => byId.get(row.id)).filter((item): item is AzureWorkItem => Boolean(item)) : []
+    const candidates = ctx ? longRunning({ items: ctx.items, streamEpics, streams: settings.streams, settings, span, spanWhy: '', today, moveOf: () => '' }).rows.map((row) => byId.get(row.id)).filter((item): item is AzureWorkItem => Boolean(item)) : []
     const file = meetingFileName(name, at), target = git
     setNote(null)
     runInBackground(meetingJobKey, `${meetingName} · ${name}`, async (progress) => {

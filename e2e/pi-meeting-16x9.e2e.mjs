@@ -56,7 +56,7 @@ const exec = {
     trendOf('Features closed (by sprint)', '', points([1, 2, 1, 3, 2, 9], ['Sprint 1 of the platform roll-out', 'Sprint 2', 'Sprint 3', 'Sprint 4', 'Sprint 5', 'Sprint 6'])),
   ],
   releases: ['DP', 'IOCC', 'Platform', 'Lab systems', 'Supplier portal', 'Fixtures'].map((stream, at) => ({ stream, releases: at === 2 ? null : 3 + at, classes: [['Major', 1], ['Minor', 2 + at], ['MLD', at]], unclassified: at, why: at === 2 ? `No Release Details data: ${sentence(20, at)}` : '', classWhy: '' })), releasesWhy: '',
-  long: { rows: Array.from({ length: 36 }, (_, at) => ({ id: 1000 + at, title: features[at].title, epic: features[at].epic, epicId: features[at].epicId, state: 'Active', created: '2025-01-10', streams: ['DP'], days: 680 - at, months: 22.3, years: 1.9, pis: 8.1, threshold: 2, move: at % 4 ? 'No' : 'Yes' })), byStream: [{ stream: 'DP', count: 36, why: '' }, { stream: 'IOCC', count: 0, why: sentence(14, 1) }], piDays: 84, why: '' },
+  long: { rows: Array.from({ length: 36 }, (_, at) => ({ id: 1000 + at, title: features[at].title, epic: features[at].epic, epicId: features[at].epicId, state: 'Active', created: '2025-01-10', streams: ['DP'], days: 680 - at, months: 22.3, years: 1.9, pis: 8.1, threshold: 6, move: at % 4 ? 'No' : 'Yes' })), byStream: [{ stream: 'DP', count: 36, why: '' }, { stream: 'IOCC', count: 0, why: sentence(14, 1) }], piDays: 84, why: '' },
 }
 const meeting = { pi: 'PI 26.4', builtAt: '26 Nov 2026, 14:30 CET', builtBy: 'Rita Gomez', start: '2026-09-01', features, exec, team: 'Quality',
   settings: { ...defaultMeetingSettings(), subtitle: `${sentence(40, 2)} {team} · {date}`, footer: `Confidential · {team} · PI {PI} · ${sentence(30, 4)}` } }

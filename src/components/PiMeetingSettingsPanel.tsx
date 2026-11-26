@@ -3,7 +3,7 @@ import { Modal, Notice, Panel, SettingsSummary, WriteBlocked } from './ui'
 import { ReleaseSettingsContext } from '../useStreamEpics'
 import { allStreams } from '../streams'
 import { meetingStreamEpics } from '../piMeetingSources'
-import { colourProblem, contrastRatio, defaultLongRunning, defaultMeetingSettings, epicOrderLabel, fillPlaceholders, isHexColour, maxFooter, maxLongRunning, maxSubtitle, maxTeam, maxTitle, meetingPlaceholders, meetingSettingsChanges, meetingSettingsProblems, type EpicOrder, type MeetingSettings, type TitleTheme } from '../piMeetingSettings'
+import { colourProblem, contrastRatio, defaultLongRunning, defaultMeetingSettings, epicOrderLabel, fillPlaceholders, isHexColour, maxFooter, maxLongRunning, maxSubtitle, maxTeam, maxTitle, meetingPlaceholders, meetingSettingsChanges, meetingSettingsProblems, monthsLabel, oldPiLimitsNote, type EpicOrder, type MeetingSettings, type TitleTheme } from '../piMeetingSettings'
 import type { PiFormStore } from '../usePiFormSetup'
 import type { AzureWorkItem } from '../domain'
 
@@ -11,7 +11,8 @@ import type { AzureWorkItem } from '../domain'
 // Meeting file (piMeetingSettings.ts), saved with the PI Review form setup in Git (pi-review-form.json, schema 2). A
 // summary of the saved values (UI-STANDARDS §3) and Edit meeting presentation… opening the form in a pop-up, disabled
 // with the reason for everyone without "PI Review: set up the review form" and in View as, with the sample, without Git
-// (the reasons of the PI Review form, PIR-31) — they read it only.
+// (the reasons of the PI Review form, PIR-31) — they read it only. PIR-85: the long-running limits are months; a file
+// still holding the PI-based ones of PIR-57 shows a one-line note (they are not used) until saved again.
 const example = { pi: 'PI 26.4', date: '26 Nov 2026', time: '14:30 CET', builtBy: 'Rita Gomez', team: '' }
 
 export function PiMeetingSettingsPanel({ store, block, by, items = [] }: { store: PiFormStore; block: string; by: string; items?: AzureWorkItem[] }) {
@@ -19,14 +20,15 @@ export function PiMeetingSettingsPanel({ store, block, by, items = [] }: { store
   const settings = store.setup.meeting ?? defaultMeetingSettings()
   const releaseSettings = useContext(ReleaseSettingsContext)
   const epicTitle = useMemo(() => { const titles = new Map(items.filter((item) => item.workItemType === 'Epic').map((item) => [item.id, item.title])); return (id: number) => titles.get(id) ? `${titles.get(id)} (#${id})` : `Epic #${id}` }, [items])
-  const own = Object.entries(settings.longRunning).sort((a, b) => Number(a[0]) - Number(b[0]))
+  const own = Object.entries(settings.longRunningMonths).sort((a, b) => Number(a[0]) - Number(b[0]))
   return <Panel className="admin-section pir-meeting-setup" eyebrow="PI REVIEW" title="Meeting presentation" info={<>
-    <p>How <strong>Conduct PI Meeting</strong> (PI Review) builds the PI Review Meeting file: the release-based streams whose releases and long-running Features it shows, when a Feature of those streams counts as long-running (a number of PIs per Epic), the title slide and the footer of every slide, the colours, and the order of the Epics on every per-Epic slide.</p>
+    <p>How <strong>Conduct PI Meeting</strong> (PI Review) builds the PI Review Meeting file: the release-based streams whose releases and long-running Features it shows, when a Feature of those streams counts as long-running (a number of months since the Created Date, per Epic), the title slide and the footer of every slide, the colours, and the order of the Epics on every per-Epic slide.</p>
     <p>Placeholders in the title, subtitle and footer: {meetingPlaceholders.join(' ')} — {'{PI}'} is the PI’s number (“26.4”), {'{team}'} the team name below (else the Azure DevOps project). Saved with the PI Review form in Git; a meeting built after saving uses it.</p>
   </>}>
+    {settings.oldPiLimits && <Notice tone="warning">{oldPiLimitsNote}</Notice>}
     <SettingsSummary rows={[
       ['Release-based streams', settings.streams.length ? settings.streams.join(', ') : 'None ticked (the Releases slide says “No release-based streams chosen”)'],
-      ['Long-running after (PIs)', `${settings.longRunningDefault} by default${own.length ? `; ${own.map(([epic, count]) => `${epicTitle(Number(epic))}: ${count}`).join('; ')}` : ''}`],
+      ['Long-running after (months)', `${monthsLabel(settings.longRunningMonthsDefault)} by default${own.length ? `; ${own.map(([epic, count]) => `${epicTitle(Number(epic))}: ${monthsLabel(count)}`).join('; ')}` : ''}`],
       ['Order Epics by', epicOrderLabel[settings.epicOrder]],
       ['Title slide', `${fillPlaceholders(settings.title, example)}${settings.subtitle ? ` · ${fillPlaceholders(settings.subtitle, example)}` : ''} (${settings.titleTheme})`],
       ['Footer', `${fillPlaceholders(settings.footer, example) || '(none)'} · n / N`],
@@ -41,7 +43,8 @@ export function PiMeetingSettingsPanel({ store, block, by, items = [] }: { store
 }
 
 function MeetingSettingsEditor({ settings, blocked, streamEpics, epicTitle, onSave, onClose }: { settings: MeetingSettings; blocked: string; streamEpics: (streams: string[]) => Record<string, number[]>; epicTitle: (id: number) => string; onSave: (next: MeetingSettings, changes: string[]) => Promise<void>; onClose: () => void }) {
-  const [draft, setDraft] = useState<MeetingSettings>(settings)
+  // PIR-85: the PI-based limits of an older file are dropped at this save (the note says so), so it can be saved as is.
+  const [draft, setDraft] = useState<MeetingSettings>(() => { const { oldPiLimits: _old, ...rest } = settings; return rest })
   const [busy, setBusy] = useState(false)
   const [tried, setTried] = useState(false)
   const [failure, setFailure] = useState('')
@@ -59,7 +62,7 @@ function MeetingSettingsEditor({ settings, blocked, streamEpics, epicTitle, onSa
     try { await onSave(draft, changes) } catch (error) { setFailure(error instanceof Error ? error.message : String(error)) } finally { setBusy(false) }
   }
   const why = blocked || (busy ? 'Saving to Git…' : !changes.length ? 'Nothing changed yet.' : tried && problems.length ? 'Fix the problems above first.' : '')
-  const setLong = (epic: number, value: string) => { const next = { ...draft.longRunning }; if (value === '') delete next[String(epic)]; else next[String(epic)] = Number(value); set({ longRunning: next }) }
+  const setLong = (epic: number, value: string) => { const next = { ...draft.longRunningMonths }; if (value === '') delete next[String(epic)]; else next[String(epic)] = Number(value); set({ longRunningMonths: next }) }
   return <Modal title="Edit the meeting presentation" eyebrow="SETTINGS · PI REVIEW MEETING" wide onClose={() => { if (!busy) onClose() }}>
     <div className="pir-meeting-editor">
       <section aria-label="Title slide and footer">
@@ -88,11 +91,13 @@ function MeetingSettingsEditor({ settings, blocked, streamEpics, epicTitle, onSa
           {streams.map((name) => <label key={name} className="check"><input type="checkbox" checked={draft.streams.includes(name)} onChange={(event) => set({ streams: event.target.checked ? streams.filter((entry) => entry === name || draft.streams.includes(entry)) : draft.streams.filter((entry) => entry !== name) })} />{name}</label>)}
           <small>Their releases (Releases in the PI) and their long-running Features are shown; none ticked: “No release-based streams chosen”.</small>
         </fieldset>
-        <h3>Long-running after (PIs)</h3>
-        <label>Default for the other Epics<input type="number" aria-label="Long-running after, default" required min={1} max={maxLongRunning} step={1} value={draft.longRunningDefault} onChange={(event) => set({ longRunningDefault: event.target.value === '' ? defaultLongRunning : Number(event.target.value) })} /><small>A Feature not Closed / Done and created more than this many PIs ago is long-running.</small></label>
-        {epics.length ? <div className="azure-table"><table aria-label="Long-running after (PIs) per Epic"><thead><tr><th>Epic</th><th>Long-running after (PIs)</th></tr></thead><tbody>
-          {epics.map((epic) => <tr key={epic}><td>{epicTitle(epic)}</td><td><input type="number" aria-label={`Long-running after, ${epicTitle(epic)}`} min={1} max={maxLongRunning} step={1} placeholder={`${draft.longRunningDefault} (default)`} value={draft.longRunning[String(epic)] ?? ''} onChange={(event) => setLong(epic, event.target.value)} /></td></tr>)}
-        </tbody></table></div> : <p className="muted">{draft.streams.length ? 'No Epics are mapped to the ticked streams (Admin → Streams → Stream mapping).' : 'Tick a stream to set a number per Epic.'}</p>}
+        <h3>Long-running after (months)</h3>
+        {settings.oldPiLimits && <Notice tone="warning">{oldPiLimitsNote}</Notice>}
+        <div className="azure-table pir-long-running"><table aria-label="Long-running after (months) per Epic"><thead><tr><th>Epic</th><th>Months</th></tr></thead><tbody>
+          <tr><td>Default (every other Epic)</td><td><input type="number" aria-label="Long-running after, default" required min={1} max={maxLongRunning} step={1} value={draft.longRunningMonthsDefault} onChange={(event) => set({ longRunningMonthsDefault: event.target.value === '' ? defaultLongRunning : Number(event.target.value) })} /></td></tr>
+          {epics.map((epic) => <tr key={epic}><td>{epicTitle(epic)}</td><td><input type="number" aria-label={`Long-running after, ${epicTitle(epic)}`} min={1} max={maxLongRunning} step={1} placeholder={`${draft.longRunningMonthsDefault} (default)`} value={draft.longRunningMonths[String(epic)] ?? ''} onChange={(event) => setLong(epic, event.target.value)} /></td></tr>)}
+        </tbody></table></div>
+        <small className="muted">A Feature not Closed / Done whose Created Date is more than this many calendar months before the build is long-running (created 20 May, 6 months: from 21 Nov). {epics.length ? 'Empty: the default.' : draft.streams.length ? 'No Epics are mapped to the ticked streams (Admin → Streams → Stream mapping).' : 'Tick a stream to set a number per Epic.'}</small>
       </section>
     </div>
     {tried && problems.length > 0 && <Notice tone="error">{problems.join(' ')}</Notice>}

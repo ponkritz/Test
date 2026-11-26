@@ -1275,6 +1275,7 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 .pir-meeting-editor section{display:grid;gap:10px;min-width:0}.pir-meeting-editor h3{margin:6px 0 0;font-size:14px;color:var(--heading)}
 .pir-meeting-editor label{display:grid;gap:3px}.pir-meeting-editor small{font-size:11px;color:var(--muted)}
 .pir-meeting-editor .form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.pir-meeting-editor .pir-long-running table{min-width:0;width:100%}.pir-meeting-editor .pir-long-running td:last-child,.pir-meeting-editor .pir-long-running th:last-child{width:8rem}.pir-meeting-editor .pir-long-running input{width:100%;box-sizing:border-box}
 .pir-streams{display:flex;flex-wrap:wrap;gap:4px 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0}.pir-streams legend{font-size:12px;font-weight:600;padding:0 4px}.pir-streams .check{display:inline-flex;margin:0;font-size:13px;color:var(--text)}.pir-streams small{flex-basis:100%}
 .pir-meeting-preview{display:grid;gap:6px;aspect-ratio:16/9;max-width:480px;overflow:hidden;padding:18px 20px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#0b5394}
 .pir-meeting-preview.dark{color:#fff}

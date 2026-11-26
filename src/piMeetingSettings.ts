@@ -3,7 +3,11 @@
 // defaults below) and edited in Admin → Feature & PI setup → PI Review form → Meeting presentation by the holders of
 // "PI Review: set up the review form" (others read only):
 // - the release-based streams whose releases and long-running Features the meeting shows (none ticked by default);
-// - "Long-running after (PIs)": a number of PIs per Epic of those streams, and a default for the others (2);
+// - "Long-running after (months)" (PIR-85): a number of calendar months per Epic of those streams, and a default for
+//   the others (6). Saved as meeting.longRunningMonths / longRunningMonthsDefault; the PI-based values of PIR-57
+//   (meeting.longRunning / longRunningDefault) are not converted: a file holding them loads with the defaults and says
+//   so (oldPiLimits), and they are dropped at the next save. The file stays schema 2 (an older app refuses any other
+//   schema; it ignores the new keys and keeps its own PI default);
 // - the title slide (Title, Subtitle) and the footer text, with the placeholders {PI} {date} {time} {builtBy} {team};
 // - the accent colour (#rrggbb, refused when its contrast with white is below WCAG AA 4.5:1) and a light or dark title
 //   slide (dark: the accent fills the title slide with white text — the same contrast check);
@@ -14,9 +18,9 @@ export type EpicOrder = 'id' | 'features'
 export type TitleTheme = 'light' | 'dark'
 export interface MeetingSettings {
   streams: string[]
-  longRunningDefault: number
-  // Epic ID (as text) → N PIs.
-  longRunning: Record<string, number>
+  longRunningMonthsDefault: number
+  // Epic ID (as text) → N months.
+  longRunningMonths: Record<string, number>
   epicOrder: EpicOrder
   title: string
   subtitle: string
@@ -24,14 +28,16 @@ export interface MeetingSettings {
   team: string
   accent: string
   titleTheme: TitleTheme
+  // PIR-85: the file still held the PI-based long-running limits of PIR-57 (not used; set the months again). Never written.
+  oldPiLimits?: boolean
 }
 export const meetingPlaceholders = ['{PI}', '{date}', '{time}', '{builtBy}', '{team}'] as const
-export const defaultLongRunning = 2
-export const maxLongRunning = 40
+export const defaultLongRunning = 6
+export const maxLongRunning = 120
 export const defaultAccent = '#0b5394'
 export const maxTitle = 120, maxSubtitle = 200, maxFooter = 160, maxTeam = 60, maxStreams = 40, maxLongRunningEpics = 200
 export const defaultMeetingSettings = (): MeetingSettings => ({
-  streams: [], longRunningDefault: defaultLongRunning, longRunning: {}, epicOrder: 'id',
+  streams: [], longRunningMonthsDefault: defaultLongRunning, longRunningMonths: {}, epicOrder: 'id',
   title: 'PI Review Meeting — PI {PI}', subtitle: 'Built {date}, {time} by {builtBy}', footer: 'PI Review Meeting — PI {PI} · built {date}, {time}', team: '',
   accent: defaultAccent, titleTheme: 'light',
 })
@@ -83,12 +89,12 @@ export function meetingSettingsProblems(settings: MeetingSettings): string[] {
   if (settings.titleTheme !== 'light' && settings.titleTheme !== 'dark') problems.push('Title slide: light or dark.')
   if (settings.epicOrder !== 'id' && settings.epicOrder !== 'features') problems.push('Order Epics by: Epic ID or Number of Features.')
   if (settings.streams.length > maxStreams) problems.push(`At most ${maxStreams} release-based streams.`)
-  if (!isCount(settings.longRunningDefault)) problems.push(`Long-running after (PIs), default: a whole number from 1 to ${maxLongRunning}.`)
-  const epics = Object.entries(settings.longRunning)
-  if (epics.length > maxLongRunningEpics) problems.push(`Long-running after (PIs): at most ${maxLongRunningEpics} Epics.`)
+  if (!isCount(settings.longRunningMonthsDefault)) problems.push(`Long-running after (months), default: a whole number from 1 to ${maxLongRunning}.`)
+  const epics = Object.entries(settings.longRunningMonths)
+  if (epics.length > maxLongRunningEpics) problems.push(`Long-running after (months): at most ${maxLongRunningEpics} Epics.`)
   for (const [epic, count] of epics) {
-    if (!/^\d{1,9}$/.test(epic)) problems.push(`Long-running after (PIs): “${epic}” is not an Epic ID.`)
-    else if (!isCount(count)) problems.push(`Long-running after (PIs), Epic #${epic}: a whole number from 1 to ${maxLongRunning}.`)
+    if (!/^\d{1,9}$/.test(epic)) problems.push(`Long-running after (months): “${epic}” is not an Epic ID.`)
+    else if (!isCount(count)) problems.push(`Long-running after (months), Epic #${epic}: a whole number from 1 to ${maxLongRunning}.`)
   }
   return problems
 }
@@ -102,15 +108,18 @@ export function parseMeetingSettings(value: unknown, file = 'pi-review-form.json
   const text = (key: keyof MeetingSettings) => { const found = input[key]; if (found === undefined) return base[key] as string; if (typeof found !== 'string') throw new Error(`${file}: meeting.${key} is not a text.`); return found.trim() }
   const streams = input.streams === undefined ? [] : input.streams
   if (!Array.isArray(streams) || !streams.every((entry) => typeof entry === 'string')) throw new Error(`${file}: meeting.streams is not a list of stream names.`)
-  const longRunning = input.longRunning === undefined ? {} : record(input.longRunning)
-  if (!longRunning) throw new Error(`${file}: meeting.longRunning is not a map of Epic IDs to PIs.`)
+  const longRunning = input.longRunningMonths === undefined ? {} : record(input.longRunningMonths)
+  if (!longRunning) throw new Error(`${file}: meeting.longRunningMonths is not a map of Epic IDs to months.`)
+  // PIR-85: the PI-based limits of PIR-57 are not read (a number of PIs is not a number of months): the defaults apply.
+  const oldPiLimits = input.longRunningDefault !== undefined || input.longRunning !== undefined
   const settings: MeetingSettings = {
     streams: [...new Set((streams as string[]).map((entry) => entry.trim()).filter(Boolean))],
-    longRunningDefault: input.longRunningDefault === undefined ? base.longRunningDefault : input.longRunningDefault as number,
-    longRunning: Object.fromEntries(Object.entries(longRunning).map(([epic, count]) => [epic.trim(), count as number])),
+    longRunningMonthsDefault: input.longRunningMonthsDefault === undefined ? base.longRunningMonthsDefault : input.longRunningMonthsDefault as number,
+    longRunningMonths: Object.fromEntries(Object.entries(longRunning).map(([epic, count]) => [epic.trim(), count as number])),
     epicOrder: (input.epicOrder ?? base.epicOrder) as EpicOrder,
     title: text('title'), subtitle: text('subtitle'), footer: text('footer'), team: text('team'),
     accent: text('accent').toLowerCase(), titleTheme: (input.titleTheme ?? base.titleTheme) as TitleTheme,
+    ...(oldPiLimits ? { oldPiLimits: true } : {}),
   }
   const problems = meetingSettingsProblems(settings)
   if (problems.length) throw new Error(`${file}: the Meeting presentation settings cannot be used: ${problems.join(' ')}`)
@@ -120,19 +129,31 @@ export function parseMeetingSettings(value: unknown, file = 'pi-review-form.json
 export function serializeMeetingSettings(settings: MeetingSettings): Record<string, unknown> | undefined {
   const base = defaultMeetingSettings(), out: Record<string, unknown> = {}
   if (settings.streams.length) out.streams = [...settings.streams]
-  if (settings.longRunningDefault !== base.longRunningDefault) out.longRunningDefault = settings.longRunningDefault
-  if (Object.keys(settings.longRunning).length) out.longRunning = Object.fromEntries(Object.entries(settings.longRunning).sort((a, b) => Number(a[0]) - Number(b[0])))
+  if (settings.longRunningMonthsDefault !== base.longRunningMonthsDefault) out.longRunningMonthsDefault = settings.longRunningMonthsDefault
+  if (Object.keys(settings.longRunningMonths).length) out.longRunningMonths = Object.fromEntries(Object.entries(settings.longRunningMonths).sort((a, b) => Number(a[0]) - Number(b[0])))
   for (const key of ['epicOrder', 'title', 'subtitle', 'footer', 'team', 'accent', 'titleTheme'] as const) if (settings[key] !== base[key]) out[key] = settings[key]
   return Object.keys(out).length ? out : undefined
 }
-export const sameMeetingSettings = (a: MeetingSettings | undefined, b: MeetingSettings | undefined) => JSON.stringify(serializeMeetingSettings(a ?? defaultMeetingSettings()) ?? null) === JSON.stringify(serializeMeetingSettings(b ?? defaultMeetingSettings()) ?? null)
-// N of an Epic: its own value, else the default.
-export const longRunningOf = (settings: Pick<MeetingSettings, 'longRunning' | 'longRunningDefault'>, epicId: number | undefined) => (epicId != null ? settings.longRunning[String(epicId)] : undefined) ?? settings.longRunningDefault
+export const sameMeetingSettings = (a: MeetingSettings | undefined, b: MeetingSettings | undefined) => Boolean(a?.oldPiLimits) === Boolean(b?.oldPiLimits) && JSON.stringify(serializeMeetingSettings(a ?? defaultMeetingSettings()) ?? null) === JSON.stringify(serializeMeetingSettings(b ?? defaultMeetingSettings()) ?? null)
+// N months of an Epic: its own value, else the default.
+export const longRunningOf = (settings: Pick<MeetingSettings, 'longRunningMonths' | 'longRunningMonthsDefault'>, epicId: number | undefined) => (epicId != null ? settings.longRunningMonths[String(epicId)] : undefined) ?? settings.longRunningMonthsDefault
+// PIR-85: the date N calendar months after a day (YYYY-MM-DD; the month's last day when it is shorter: 31 Aug + 6 → 28 Feb).
+export function addMonths(date: string, months: number): string {
+  const [year, month, dayOf] = date.split('-').map(Number), total = month - 1 + months
+  const toYear = year + Math.floor(total / 12), toMonth = ((total % 12) + 12) % 12
+  const last = new Date(Date.UTC(toYear, toMonth + 1, 0)).getUTCDate()
+  return `${String(toYear).padStart(4, '0')}-${String(toMonth + 1).padStart(2, '0')}-${String(Math.min(dayOf, last)).padStart(2, '0')}`
+}
+// PIR-85: long-running when the Created Date plus N calendar months is before the build day (exactly N months is not).
+export const isLongRunning = (created: string, months: number, today: string) => addMonths(created, months) < today
+export const monthsLabel = (months: number) => `${months} month${months === 1 ? '' : 's'}`
+// PIR-85: the one-line note while a file still holds the PI-based limits.
+export const oldPiLimitsNote = 'The long-running limits are now in months (default 6): the limits saved in PIs by an earlier version are not used — set them again here if they were set.'
 // What changed, for the commit message.
 export function meetingSettingsChanges(before: MeetingSettings, after: MeetingSettings): string[] {
   const changes: string[] = []
   if (before.streams.join('|') !== after.streams.join('|')) changes.push('release-based streams')
-  if (before.longRunningDefault !== after.longRunningDefault || JSON.stringify(before.longRunning) !== JSON.stringify(after.longRunning)) changes.push('long-running after (PIs)')
+  if (before.longRunningMonthsDefault !== after.longRunningMonthsDefault || JSON.stringify(before.longRunningMonths) !== JSON.stringify(after.longRunningMonths) || Boolean(before.oldPiLimits) !== Boolean(after.oldPiLimits)) changes.push('long-running after (months)')
   if (before.epicOrder !== after.epicOrder) changes.push('Epic order')
   if (before.title !== after.title || before.subtitle !== after.subtitle || before.team !== after.team) changes.push('title slide')
   if (before.footer !== after.footer) changes.push('footer')

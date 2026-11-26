@@ -9,7 +9,7 @@ import { personMonths, totals } from './dashboard.ts'
 import { defaultCapacitySettings, type CapacitySettings } from './capacity.ts'
 import { commentsFrom, latestReviewFor, reviewSplit, type Discussion } from './piReview.ts'
 import { piName } from './myWork.ts'
-import { longRunningOf, type EpicOrder, type MeetingSettings } from './piMeetingSettings.ts'
+import { isLongRunning, longRunningOf, type EpicOrder, type MeetingSettings } from './piMeetingSettings.ts'
 import type { PiFormSetup } from './piReviewSetup.ts'
 import type { AzureIteration } from './azureRead.ts'
 import type { AzureWorkItem } from './domain'
@@ -212,17 +212,17 @@ export function piReleases(inputs: readonly ReleaseInput[], span: PiSpan | undef
   })
 }
 
-// ---- PIR-57: long-running Features of the ticked streams ----
+// ---- PIR-57, PIR-85: long-running Features of the ticked streams ----
 export interface LongRunning { id: number; title: string; epic: string; epicId?: number; state: string; created: string; streams: string[]; days: number; months: number; years: number; pis: number | null; threshold: number; move: string }
 export interface LongRunningFigures { rows: LongRunning[]; byStream: { stream: string; count: number; why: string }[]; piDays: number | null; why: string }
 const closedOrRemoved = (state: string) => isClosedState(state) || lower(state) === 'removed'
-// Features under the Epics of the ticked streams, not Closed / Done (nor Removed), created more than N PIs before the
-// build (N per Epic, else the default). Age from the Created Date to the build day, in months (30.44 days), years
-// (365.25 days) and PIs (the meeting PI's length in days). Oldest first.
-export function longRunning(input: { items: readonly AzureWorkItem[]; streamEpics: Record<string, number[]>; streams: readonly string[]; settings: Pick<MeetingSettings, 'longRunning' | 'longRunningDefault'>; span?: PiSpan; spanWhy: string; today: string; moveOf: (item: AzureWorkItem) => string }): LongRunningFigures {
+// Features under the Epics of the ticked streams, not Closed / Done (nor Removed), whose Created Date plus N calendar
+// months is before the build day (PIR-85; N months per Epic, else the default 6; exactly N months is not yet). Age from
+// the Created Date to the build day, in months (30.44 days), years (365.25 days) and PIs (the meeting PI's length in
+// days; "—" when the PI's dates are not known — which Features run long does not depend on them). Oldest first.
+export function longRunning(input: { items: readonly AzureWorkItem[]; streamEpics: Record<string, number[]>; streams: readonly string[]; settings: Pick<MeetingSettings, 'longRunningMonths' | 'longRunningMonthsDefault'>; span?: PiSpan; spanWhy: string; today: string; moveOf: (item: AzureWorkItem) => string }): LongRunningFigures {
   if (!input.streams.length) return { rows: [], byStream: [], piDays: null, why: 'No release-based streams chosen (Admin → Feature & PI setup → PI Review form → Meeting presentation).' }
   const piDays = input.span ? spanDays(input.span) : null
-  if (!piDays) return { rows: [], byStream: input.streams.map((stream) => ({ stream, count: 0, why: input.spanWhy })), piDays: null, why: `${input.spanWhy} The age in PIs, and so which Features run long, cannot be worked out.` }
   const byId = new Map(input.items.map((item) => [item.id, item]))
   const epicOfItem = (item: AzureWorkItem) => { const seen = new Set<number>(); for (let at = item.parentId == null ? undefined : byId.get(item.parentId); at && !seen.has(at.id); at = at.parentId == null ? undefined : byId.get(at.parentId)) { if (at.workItemType === 'Epic') return at; seen.add(at.id) } return undefined }
   const found = new Map<number, LongRunning>()
@@ -237,8 +237,8 @@ export function longRunning(input: { items: readonly AzureWorkItem[]; streamEpic
       const created = day(item.createdDate)
       if (!created) continue
       const days = Math.max(0, dayNumber(input.today) - dayNumber(created))
-      const pis = Math.round(days / piDays * 10) / 10, threshold = longRunningOf(input.settings, epic.id)
-      if (!(days / piDays > threshold)) continue
+      const pis = piDays ? Math.round(days / piDays * 10) / 10 : null, threshold = longRunningOf(input.settings, epic.id)
+      if (!isLongRunning(created, threshold, input.today)) continue
       count += 1
       const known = found.get(item.id)
       if (known) { known.streams.push(stream); continue }
