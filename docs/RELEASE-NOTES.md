@@ -2,6 +2,16 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v14.3.0 — 2026-11-26
+
+**Added**
+- **Executive slides in the PI Review Meeting** — after the Summary: the Executive summary per Epic (Closed in the PI by Closed Date inside the PI's dates, Carried forward from the headed review, ad-hoc Features; a stacked bar per Epic), Review completion per Epic linked to the Not reviewed list, the PI-over-PI trend, Repeat carry-overs as a risk, Topics for discussion with who raised them, Releases in the PI with Release Classification counts for the ticked streams, Hours per Epic with Allocation % and Utilization from the Dashboard's own calculation, Trends with peaks and spikes (above 1.5 × the PI's average), and Long-running Features of the ticked streams (N PIs per Epic, default 2). Values that cannot be worked out show "—" with the reason; charts are inline SVG; tables re-sort by their headers while presenting (PIR-51…PIR-57, PIR-60…PIR-62).
+- **Meeting presentation settings** — Admin → Feature & PI setup → PI Review form: title slide template, footer text with the slide number n / N, accent colour with a WCAG AA contrast check, light or dark title slide, Order Epics by, release-based streams and long-running thresholds per Epic; saved with the PI Review form in Git (schema 2; older files still load) (PIR-58, PIR-59, PIR-62).
+
+DF-525…DF-530, SM-320…SM-322, LIM-215…LIM-219; TC-PIR-52…TC-PIR-61.
+
+PR #458.
+
 ## v14.2.0 — 2026-11-26
 
 **Changed — capacity and planned figures change for months with planned leave**
