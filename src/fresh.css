@@ -1345,5 +1345,17 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
    width the list drops State so it fits without scrolling sideways. */
 .modal-full>:not(.modal-heading)>.pir-bulk-scroll{display:block}.pir-bulk-scroll>*+*{margin-top:12px}.pir-bulk-list{overflow:visible}.pir-bulk-list table{min-width:0}.pir-bulk-list td{overflow-wrap:anywhere}.pir-bulk-list td:first-child{white-space:nowrap;overflow-wrap:normal}
 @media(max-width:640px){.pir-bulk-list th:nth-child(3),.pir-bulk-list td:nth-child(3){display:none}.pir-bulk-list th,.pir-bulk-list td{padding:8px 6px}}
+/* PIR-82…PIR-84: the per-Feature grid of the bulk review — the shared paragraphs in two columns on a wide screen, the
+   grid scrolling sideways in its box when it is wider (its first two columns kept narrow), the row "All Features" with
+   Apply to all / Fill down, the active row marked (its Preview below), the Result pill with its detail. */
+.pir-bulk-shared{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px 16px;align-items:start}.pir-bulk-shared h3{grid-column:1/-1;margin:0;font-size:14px;color:var(--heading)}.pir-bulk-shared>.checkbox-label{grid-column:1/-1}
+.pir-bulk-shared-field{display:grid;gap:6px}.pir-bulk-shared-field textarea{width:100%}
+.pir-bulk-grid{overflow-x:auto}.pir-bulk-grid table{min-width:960px}.pir-bulk-grid td{vertical-align:top}.pir-bulk-grid td:nth-child(2){min-width:160px;overflow-wrap:anywhere}
+.pir-bulk-grid select,.pir-bulk-grid input{min-width:7.5em;width:100%}.pir-bulk-grid select{min-width:10em}.pir-bulk-scroll>small.pir-next-pi{display:block}.pir-bulk-grid textarea{min-width:14em;width:100%}
+.pir-bulk-all th,.pir-bulk-all td{background:var(--surface-2);font-weight:400;vertical-align:top}.pir-bulk-all th small{display:block;font-weight:400}
+.pir-bulk-all-cell{display:grid;gap:4px}.pir-bulk-all-cell .button-row{gap:6px;flex-wrap:wrap}
+.pir-bulk-grid tbody tr.pir-bulk-active td{background:var(--surface-2)}.pir-bulk-grid tbody tr.pir-bulk-active td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.pir-bulk-result{min-width:180px}.pir-bulk-result small{display:block;margin-top:4px}.pir-bulk-result .danger-text{color:var(--danger-text)}.pir-bulk-grid textarea[aria-invalid="true"]{border-color:var(--danger-line)}
+.pir-bulk-preview{position:static;max-width:760px}
 /* EPS-11: the Product Owner of an Epic (Setup per Epic) — one person picker, as wide as a name and its email. */
 .efe-owner .efe-inline .search-select{width:min(100%,360px)}.efe-owner .efe-inline .search-select input{width:100%}

@@ -30,7 +30,22 @@ const node = (path, children = [], attributes) => ({ name: path.split('\\').at(-
 
 // The fake dev.azure.com: the Time Writing fetch, the iterations (PI 2026.4 current, PI 2026.5 next), the Discussions,
 // a comment POST (failing once with 500 when failNextPost is set) and the state PATCH. `log` lists the writes in order.
+// PIR-84: the Discussion requests (reads and writes) are counted while in flight (inFlight, most); with state.gate set the
+// writes wait for it (held: how many wait), so a test sees how many run at once.
 function fakeAzure(state) {
+  const handle = answer(state)
+  return async (route) => {
+    const request = route.request(), counted = /\/comments(?:\/\d+)?$/.test(new URL(request.url()).pathname)
+    if (!counted) return handle(route)
+    state.inFlight = (state.inFlight ?? 0) + 1
+    state.most = Math.max(state.most ?? 0, state.inFlight)
+    try {
+      if (state.gate && request.method() !== 'GET') { state.held = (state.held ?? 0) + 1; await state.gate; state.held -= 1 }
+      return await handle(route)
+    } finally { state.inFlight -= 1 }
+  }
+}
+function answer(state) {
   return (route) => {
     const request = route.request(), url = new URL(request.url()), path = decodeURIComponent(url.pathname)
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
@@ -68,6 +83,8 @@ function fakeAzure(state) {
       const id = Number(comments[1]), list = state.comments[id] ??= []
       if (request.method() === 'POST') {
         if (state.failNextPost) { state.failNextPost = false; state.log.push(`POST ${id} failed`); return json({ message: 'Service unavailable' }, 500) }
+        // PIR-84: the next post to these Features fails with 503 (once each).
+        if (state.unavailable?.includes(id)) { state.unavailable = state.unavailable.filter((entry) => entry !== id); state.log.push(`POST ${id} 503`); return json({ message: 'Service unavailable' }, 503) }
         const body = JSON.parse(request.postData() ?? '{}')
         state.posts.push({ id, body })
         state.log.push(`POST ${id}`)
@@ -677,6 +694,8 @@ test('TC-PIR-37: PI Review reads my own Features’ Discussions when it opens �
 // E2E_SHOTS_WIDTH px, 1440 by default — run once more with 390 for a phone); the assertions never depend on them.
 const bulkShots = process.env.E2E_SHOTS
 const shotWidth = Number(process.env.E2E_SHOTS_WIDTH) || 1440
+// PIR-84: the Result of each row of the grid (Post / Replace / Unchanged / Blocked).
+const resultsOf = (list) => list.locator('tbody tr td.pir-bulk-result .pill').allInnerTexts()
 const bulkWorld = () => [...world(), raw(206, 'Feature', 'Audit pack refresh', 'Project\\PI 2026.4', 100), raw(207, 'Feature', 'Sensor bench move', 'Project\\PI 2026.4', 100)]
 async function bulkShot(page, name) {
   if (!bulkShots) return
@@ -712,17 +731,20 @@ test('TC-PIR-38: Write review for several Features — tick three (one with my r
   await bar.getByRole('button', { name: 'Update review for 3…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review of 3 Features' })
   await dialog.waitFor()
-  assert.match(await text(dialog.locator('.pir-review-note').first()), /^The same review is posted to each Feature below \(PI 2026\.4\), as you \(your PAT\)\. 1 Feature already has your review of this PI: it is replaced\.$/)
+  assert.match(await text(dialog.locator('.pir-review-note').first()), /^Each Feature below gets its own review \(PI 2026\.4\), as you \(your PAT\): 2 new · 1 unchanged \(not written\)\./)
   const list = dialog.getByRole('table', { name: 'Features to review' })
   assert.deepEqual(await list.locator('tbody tr td:first-child').allInnerTexts(), ['#201', '#205', '#206'])
-  assert.match(await text(list.locator('tbody tr').nth(1)), /Replaces your review of /)
-  assert.match(await text(list.locator('tbody tr').nth(0)), /New comment$/)
-  // The single form's fields and defaults: No pre-selected, nothing prefilled; Moves to the next PI; the Preview.
-  assert.equal(await dialog.getByRole('radio', { name: 'No', exact: true }).isChecked(), true)
+  assert.deepEqual(await resultsOf(list), ['Post', 'Unchanged', 'Post'], 'my review untouched: nothing to write')
+  assert.match(await text(list.locator('tbody tr').nth(1)), /Your review · /)
+  // PIR-83: one text for all — the shared text instead of each Feature's own; the advice applied to all rows.
   assert.equal(await dialog.getByRole('textbox', { name: /^Learnings/ }).inputValue(), '')
   await dialog.getByRole('textbox', { name: /^Learnings/ }).fill('Book the rig early')
   await dialog.getByRole('textbox', { name: /^Struggles/ }).fill('Parts late')
-  await dialog.getByRole('radio', { name: 'Offline Review' }).check()
+  await dialog.getByRole('radiogroup', { name: 'Learnings: whose text' }).getByText('Use the shared text').click()
+  assert.deepEqual(await resultsOf(list), ['Post', 'Replace', 'Post'])
+  assert.deepEqual(await list.getByRole('combobox', { name: /^Move to next PI of #/ }).evaluateAll((boxes) => boxes.map((box) => box.value)), ['No', 'No', 'No'], 'No pre-selected, as the single form')
+  await list.getByRole('combobox', { name: 'Review meeting for all' }).selectOption('Offline Review')
+  await list.getByRole('button', { name: 'Apply Review meeting to all' }).click()
   await dialog.locator('.pir-review-preview', { hasText: 'Book the rig early' }).waitFor()
   if (bulkShots) await dialog.locator('.modal-scroll').evaluate((box) => { box.scrollTop = 0 })
   await bulkShot(page, 'my-pi-review-bulk-form')
@@ -757,7 +779,7 @@ test('TC-PIR-38: Write review for several Features — tick three (one with my r
 // mine deleted on #208): the pop-up reads the ticked Features' Discussions again when it opens, so it replaces and
 // posts by what Azure DevOps holds then, and nothing fails.
 const bulkOwnReview = (id, reviewedPi, date) => ({ id, text: buildReviewComment({ learnings: 'Calibrate first', struggles: 'Parts late', move: 'No', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi }), createdBy: rita, createdDate: date })
-const postingOf = async (list) => (await list.locator('tbody tr td:last-child').allInnerTexts()).map((value) => value.startsWith('Replaces') ? 'replace' : value)
+const postingOf = async (list) => (await resultsOf(list)).map((value) => value === 'Replace' ? 'replace' : value === 'Post' ? 'New comment' : value)
 async function bulkUpdate(page, ids, learnings, state) {
   for (const id of ids) await page.getByRole('checkbox', { name: `Select Feature ${id}`, exact: true }).check()
   const bar = page.getByRole('region', { name: 'Selected Features' })
@@ -774,11 +796,14 @@ async function bulkUpdate(page, ids, learnings, state) {
   const dialog = page.getByRole('dialog', { name: `Review of ${ids.length} Features` })
   await dialog.waitFor()
   const list = dialog.getByRole('table', { name: 'Features to review' })
-  const posting = await postingOf(list)
   if (release) await bulkShot(page, 'my-pi-review-bulk-reread')
+  // One text for all (PIR-83: Use the shared text), the advice applied to every row.
   await dialog.getByRole('textbox', { name: /^Learnings/ }).fill(learnings)
   await dialog.getByRole('textbox', { name: /^Struggles/ }).fill('Parts late')
-  await dialog.getByRole('radio', { name: 'Offline Review' }).check()
+  await dialog.getByRole('radiogroup', { name: 'Learnings: whose text' }).getByText('Use the shared text').click()
+  await list.getByRole('combobox', { name: 'Review meeting for all' }).selectOption('Offline Review')
+  await list.getByRole('button', { name: 'Apply Review meeting to all' }).click()
+  const posting = await postingOf(list)
   await dialog.getByRole('button', { name: `Post to ${ids.length} Features` }).click()
   await page.getByRole('dialog', { name: `Post the review to ${ids.length} Features?` }).getByRole('button', { name: `Post review to ${ids.length} Features` }).click()
   await dialog.waitFor({ state: 'detached' })
@@ -812,5 +837,112 @@ test('TC-PIR-80: Update review for (n) where comments are in place already — m
   await jobDone(page, 'PI review for 6 Features', 'Posted 0 · Replaced 6 (#201, #205, #206, #207, #208, #209) · Failed 0.')
   assert.equal(state.posts.length, 3)
   assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// PIR-82…PIR-84 (product owner, 26 Nov 2026: the bulk review redesign): five ticked Features — two with my review of the
+// PI, one with my old-format comment, one with Ben's review, one with none. The grid starts each row from its review; the
+// paragraphs once at the top (each Feature keeps its own, the shared text goes to the one without); Move to next PI and
+// its Reason per row (each its own; the Reason optional with Yes), the advice applied to all, fill down from the active row and
+// Ctrl+D; the Result column previews Unchanged (my review untouched) / Replace / Post. Saved: 3 writes at a time (the
+// fake holds them to count), the untouched review not written, a 503 on one Feature not stopping the others, and Retry
+// failed in Background jobs writing only that one, with the same comment. Screenshots with E2E_SHOTS (bulk-grid-*).
+test('TC-PIR-84: Update review for 5 — the per-Feature grid starts from each review, own reasons per row, Apply to all and fill down, the preview (Unchanged / Replace / Post), 3 writes at a time, Retry failed after a 503', async () => {
+  const items = [...world(), raw(206, 'Feature', 'Audit pack refresh', 'Project\\PI 2026.4', 100), raw(207, 'Feature', 'Sensor bench move', 'Project\\PI 2026.4', 100), raw(209, 'Feature', 'Bench lights', 'Project\\PI 2026.4', 100)]
+  const comments = {
+    201: [bulkOwnReview(61, 'PI 2026.4', '2026-11-20T10:00:00Z')],
+    205: [bulkOwnReview(62, 'PI 2026.4', '2026-11-20T10:05:00Z')],
+    206: [{ id: 63, text: '<div>Struggles: parts late</div><div>Learnings: calibrate the rig</div><div>Moving to next PI: No</div>', createdBy: rita, createdDate: '2026-11-19T09:00:00Z' }],
+    207: [{ ...bulkOwnReview(64, 'PI 2026.4', '2026-11-20T11:00:00Z'), createdBy: ben }],
+    209: [],
+  }
+  const ids = ['201', '205', '206', '207', '209']
+  const { page, context, errors, state } = await open({ world: items, comments, ...(bulkShots ? { width: shotWidth, height: 900, scale: 2 } : {}) })
+  await navigate(page, 'My PI Review')
+  for (const id of ['201', '205']) await rowOf(page, id).locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  for (const id of ['206', '207', '209']) await rowOf(page, id).locator('.pill', { hasText: 'Not reviewed' }).waitFor()
+  for (const id of ids) await page.getByRole('checkbox', { name: `Select Feature ${id}`, exact: true }).check()
+  await page.getByRole('region', { name: 'Selected Features' }).getByRole('button', { name: 'Update review for 5…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review of 5 Features' })
+  await dialog.waitFor()
+  const list = dialog.getByRole('table', { name: 'Features to review' })
+  const rowById = (id) => list.locator('tbody tr').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^#${id}$`) }) })
+  // PIR-83: each row starts from that Feature's review — mine, my old-format comment, Ben's, or the form's defaults.
+  assert.deepEqual((await list.locator('tbody tr td:nth-child(3)').allInnerTexts()).map((value) => value.replace(/ · .*/, '')), ['Your review', 'Your review', 'Your old-format comment', 'Ben Okafor’s review', 'Form defaults'])
+  const moves = () => list.getByRole('combobox', { name: /^Move to next PI of #/ }).evaluateAll((boxes) => boxes.map((box) => box.value))
+  const advice = () => list.getByRole('combobox', { name: /^Review meeting of #/ }).evaluateAll((boxes) => boxes.map((box) => box.value))
+  assert.deepEqual(await moves(), ['No', 'No', 'No', 'No', 'No'])
+  assert.deepEqual(await advice(), ['Offline Review', 'Offline Review', '', 'Offline Review', ''], 'the advice of each review; none for the old format and the defaults')
+  // The shared paragraphs: each Feature keeps its own (default, as four start from a comment) — the text goes to #209.
+  assert.equal(await dialog.getByRole('radiogroup', { name: 'Learnings: whose text' }).getByRole('radio', { name: 'Keep each Feature’s own' }).isChecked(), true)
+  assert.match(await text(dialog.locator('.pir-bulk-shared-field', { hasText: 'Learnings' }).first()), /4 Features keep their own Learnings; the text above goes to the other 1\./)
+  assert.deepEqual(await resultsOf(list), ['Unchanged', 'Unchanged', 'Post', 'Post', 'Post'])
+  assert.match(await text(rowById(206).locator('td.pir-bulk-result')), /New \(old-format comment stays — use Convert… to replace it\)/)
+  assert.match(await text(rowById(207).locator('td.pir-bulk-result')), /New comment \(Ben Okafor’s review stays\)/)
+  await dialog.getByRole('textbox', { name: /^Learnings/ }).fill('Book the rig early')
+  await dialog.getByRole('textbox', { name: /^Struggles/ }).fill('Parts late')
+  // Apply to all: the advice of the row "All Features" in every row (#201 already Offline Review: still unchanged).
+  await list.getByRole('combobox', { name: 'Review meeting for all' }).selectOption('Offline Review')
+  await list.getByRole('button', { name: 'Apply Review meeting to all' }).click()
+  assert.deepEqual(await advice(), ids.map(() => 'Offline Review'))
+  // Per row: Move to next PI Yes, each with its own reason.
+  for (const [id, reason] of [['205', 'Vendor parts in January'], ['206', 'Audit left'], ['207', 'Bench move in January']]) {
+    await list.getByRole('combobox', { name: `Move to next PI of #${id}` }).selectOption('Yes')
+    await list.getByRole('textbox', { name: `Reason of #${id}` }).fill(reason)
+  }
+  // Fill down from the active row (#207, just typed in) to the rows below; Ctrl+D copies the row above (Move of #209).
+  await list.getByRole('button', { name: 'Fill down Reason from #207' }).click()
+  await list.getByRole('combobox', { name: 'Move to next PI of #209' }).press('Control+d')
+  assert.deepEqual(await moves(), ['No', 'Yes', 'Yes', 'Yes', 'Yes'])
+  assert.equal(await list.getByRole('textbox', { name: 'Reason of #209' }).inputValue(), 'Bench move in January')
+  // The Reason is optional with Yes (as in the single form): an empty one is no problem.
+  await list.getByRole('textbox', { name: 'Reason of #209' }).fill('')
+  assert.equal(await dialog.locator('.notice', { hasText: 'Enter the Reason' }).count(), 0)
+  await list.getByRole('textbox', { name: 'Reason of #209' }).fill('Two tests left')
+  assert.deepEqual(await resultsOf(list), ['Unchanged', 'Replace', 'Post', 'Post', 'Post'])
+  // The Preview shows the active row's comment.
+  await rowById(209).locator('td:nth-child(2)').click()
+  await dialog.locator('.pir-bulk-preview', { hasText: 'Two tests left' }).waitFor()
+  assert.match(await text(dialog.locator('.pir-bulk-preview')), /Preview of #209[\s\S]*Feature Review for PI 2026\.4[\s\S]*Book the rig early/)
+  if (bulkShots) await dialog.locator('.modal-scroll').evaluate((box) => { box.scrollTop = 0 })
+  await bulkShot(page, 'bulk-grid-form')
+  if (bulkShots) await dialog.locator('.pir-bulk-preview').evaluate((box) => box.scrollIntoView({ block: 'end' }))
+  await bulkShot(page, 'bulk-grid-preview')
+  await dialog.getByRole('button', { name: 'Post to 4 Features' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Post the review to 4 Features?' })
+  assert.match(await text(confirm), /A new comment in the Discussion of 3 Features: #206, #207, #209\.\s*Your review comment replaced on 1 Feature: #205\.\s*Not written \(unchanged\): #201\./)
+  // The writes are held to count them: three wait at once, the fourth only after one is answered.
+  state.most = 0
+  let release
+  state.gate = new Promise((resolve) => { release = resolve })
+  state.unavailable = [207]
+  await confirm.getByRole('button', { name: 'Post review to 4 Features' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await until(async () => state.held === 3, 'three writes in flight')
+  assert.equal(state.most, 3)
+  state.gate = undefined
+  release()
+  await jobDone(page, 'PI review for 4 Features', 'Posted 2 (#206, #209) · Replaced 1 (#205) · Unchanged 1 (#201) not written · Failed 1 (#207). #207: Azure DevOps did not add the comment (503)')
+  assert.ok(state.most <= 3, `at most 3 requests in flight (${state.most})`)
+  // The bodies: each its own review — its own paragraphs or the shared text, its own reason; nothing for #201.
+  const review = (values) => buildReviewComment({ learnings: 'Calibrate first', struggles: 'Parts late', move: 'Yes', moveReason: '', movePi: 'PI 2026.5', mode: 'Offline Review', remarks: '', reviewedPi: 'PI 2026.4', ...values })
+  assert.deepEqual(state.edits.map((entry) => [entry.id, entry.commentId, entry.body.text]), [[205, 62, review({ moveReason: 'Vendor parts in January' })]])
+  assert.deepEqual(state.posts.map((entry) => entry.id).sort(), [206, 209])
+  assert.equal(state.posts.find((entry) => entry.id === 206).body.text, review({ learnings: 'calibrate the rig', struggles: 'parts late', moveReason: 'Audit left' }))
+  assert.equal(state.posts.find((entry) => entry.id === 209).body.text, review({ learnings: 'Book the rig early', moveReason: 'Two tests left' }))
+  assert.equal(state.log.filter((line) => line.startsWith('POST 201') || line.startsWith('PATCH comment 61')).length, 0)
+  if (bulkShots) { await page.locator('.jobs-button').click(); await page.getByRole('dialog', { name: 'Background jobs' }).waitFor() }
+  await bulkShot(page, 'bulk-grid-job')
+  if (bulkShots) await page.getByRole('dialog', { name: 'Background jobs' }).getByRole('button', { name: 'Close', exact: true }).click()
+  // Retry failed: only #207, with the same comment (Ben's text as its start, my reason).
+  await page.locator('.jobs-button').click()
+  const panel = page.getByRole('dialog', { name: 'Background jobs' })
+  await panel.locator('li.job', { hasText: 'PI review for 4 Features' }).getByRole('button', { name: 'Retry failed (1)' }).click()
+  await panel.getByRole('button', { name: 'Close', exact: true }).click()
+  await jobDone(page, 'PI review for 1 Feature', 'Posted 1 (#207) · Replaced 0 · Failed 0.')
+  assert.equal(state.posts.find((entry) => entry.id === 207).body.text, review({ moveReason: 'Bench move in January' }))
+  assert.equal(state.posts.length, 3)
+  for (const id of ids) await rowOf(page, id).locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
+  assert.deepEqual(errors.filter((line) => !/503/.test(line)), [])
   await context.close()
 })

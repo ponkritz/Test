@@ -6,7 +6,8 @@ import { isMine, type Me } from '../myWork'
 import { PersonPicker } from '../components/PersonPicker'
 import { discussionOf, discussionStuck, discussionStuckAfterMs, discussionsVersion, moveLabel, oneLine, piFeatures, piLabel, reviewHeadingNote, reviewModeLabel, samePi, subscribeDiscussions, type ReviewSplit } from '../piReview'
 import { discussionReadBlock, readDiscussionInto, myReviewOf, otherPersonBlock, otherPiHint, personOf, reviewCountOf, reviewPageBlock, reviewPeriodOf, reviewPostBlock, type ReviewCount, type ReviewPeriod } from '../piReviewPost'
-import { BulkReviewDialog, ReviewAction, ReviewDialog } from './PiReviewForm'
+import { ReviewAction, ReviewDialog } from './PiReviewForm'
+import { BulkReviewDialog } from './BulkReviewDialog'
 import { PiSetupGear } from '../components/PiFormSetupPanel'
 import { formSetupOf, useBulkReview, useDiscussionsReadState, useOwnReview, useReviewViewer, useReviewWriter } from '../piReviewWriter'
 import { bulkBlock, inBulkJob } from '../piReviewBulk'
@@ -185,7 +186,7 @@ export function MyPiReviewPage({ azure, my }: { azure: AzureWorkspace; my: MyWor
           status={`${reviewed} of ${rows.length} reviewed${shownRows.length !== rows.length ? ` · ${shownRows.length} shown` : ''}`} defaultSort={{ id: 'id' }}
           empty={<EmptyState title={!pi ? 'Choose a PI.' : asOwner ? owns.length ? `No Features of ${who ? `${who}’s` : 'your'} Epics in ${piLabel(pi)}.` : `${who || 'You'} ${who ? 'is' : 'are'} not the Product Owner of any Epic${ownerEmail ? '' : ' (no work email known)'}.` : `No Features assigned to ${who || 'you'} in ${piLabel(pi)}.`} detail={!pi ? 'Pick the PI in the PI list.' : asOwner && !owns.length ? 'The Product Owner of an Epic is set in Admin → Feature & PI setup → Setup per Epic (matched by work email).' : who ? 'Choose another PI or person, or Reset filters.' : 'Choose another PI, or fetch the data again.'} />} />
       </TablePanel>}
-    {bulk.writing && <BulkReviewDialog key={`bulk:${bulk.writing.targets.map((target) => target.item.key).join(',')}`} writing={bulk.writing} blocked={pageBlock} onPost={(form, text) => { setSelected([]); bulk.post(form, text) }} onClose={bulk.cancel} />}
+    {bulk.writing && <BulkReviewDialog key={`bulk:${bulk.writing.targets.map((target) => target.item.key).join(',')}`} writing={bulk.writing} blocked={pageBlock} blockOf={tickBlock} onPost={(jobs, skipped) => { setSelected([]); bulk.post(jobs, skipped) }} onClose={bulk.cancel} />}
     {writer.writing && <ReviewDialog key={`review:${writer.writing.item.key}`} writing={writer.writing} blocked={reviewPostBlock(poster, writer.writing.item)} onPost={writer.post} onPostNew={writer.postNew} onClose={writer.cancel} />}
   </Page>
 }

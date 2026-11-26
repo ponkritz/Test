@@ -29,9 +29,11 @@ test('PIR-48: every review the app writes starts with “Feature Review for <rev
   assert.match(buildReviewComment({ ...bulk.initial, learnings: 'a', struggles: 'b', mode: 'Offline Review' }), /^<p>Feature Review for PI 26\.4<\/p>/)
   // Every writer posts buildReviewComment — the Review… / Edit review… pop-up, the bulk pop-up and the Close pop-up —
   // and nothing else builds the comment's HTML.
-  assert.equal((source('src/pages/PiReviewForm.tsx').match(/buildReviewComment\(form, setup\)/g) ?? []).length, 2)
+  assert.equal((source('src/pages/PiReviewForm.tsx').match(/buildReviewComment\(form, setup\)/g) ?? []).length, 1)
+  // PIR-84: the bulk pop-up's rows each build theirs the same way (rowResultOf), for the preview and the post.
+  assert.equal((source('src/piReviewBulk.ts').match(/buildReviewComment\(form, setup\)/g) ?? []).length, 1)
   assert.match(source('src/components/CloseItemsDialog.tsx'), /postAndAudit\(viewer\.env, reviewed, start\.form, buildReviewComment\(start\.form, setup\), start\.pi\)/)
-  for (const file of ['src/pages/PiReviewForm.tsx', 'src/components/CloseItemsDialog.tsx', 'src/piReviewWriter.ts', 'src/piReviewBulk.ts']) assert.doesNotMatch(source(file), /reviewCommentHtml\(/, file)
+  for (const file of ['src/pages/PiReviewForm.tsx', 'src/pages/BulkReviewDialog.tsx', 'src/components/CloseItemsDialog.tsx', 'src/piReviewWriter.ts', 'src/piReviewBulk.ts']) assert.doesNotMatch(source(file), /reviewCommentHtml\(/, file)
   // Without a reviewed PI there is no heading — the form refuses it, except the Close pop-up (LIM-200).
   assert.ok(buildReviewComment({ ...form, reviewedPi: '' }).startsWith('<ul>'))
   assert.match(reviewFormProblems({ ...form, reviewedPi: '' }).join(' '), /reviewed PI is not known/)

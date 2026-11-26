@@ -10,7 +10,7 @@ import { ReadOnlyContext, useCan } from './useCan'
 import type { WorkItemComment } from './azureDevOps'
 import type { AzureWorkItem } from './domain'
 import { builtInFormSetup, builtInSetup, type PiFormSetup } from './piReviewSetup'
-import { bulkSummary, bulkTargets, markBulk, nextPiFor, ownReviewIn, reviewedPiOf, runBulkReview, startBulkForm, type BulkWriting, type PiIterations } from './piReviewBulk'
+import { bulkSummary, failedJobs, markBulk, nextPiFor, ownReviewIn, reviewedPiOf, rowStartOf, runBulkReview, startBulkForm, type BulkJob, type BulkOutcome, type BulkWriting, type PiIterations } from './piReviewBulk'
 export type { BulkWriting, PiIterations } from './piReviewBulk'
 import { oldFormatForm, oldFormatOf } from './piReviewOldFormat'
 
@@ -206,16 +206,20 @@ export function useDiscussionsReadState(config: AzureConfig | null, pat: string,
   return { pending: features.filter((item) => { const state = discussionOf(item.key)?.state; return state !== 'done' && state !== 'error' }).length, settled: false }
 }
 
-// PIR-37: Post for several Features — ONE Background jobs entry "PI review for {n} Features": per Feature, one after
-// another, the Discussion read again, then a new comment (postAndAudit, as Write review…) or my review replaced
-// (editAndAudit, as Edit review…), then read again so the table shows it; a failure on one never stops the others; the
-// job ends with what was posted, replaced and failed, with the reasons. One bulk job at a time (no double post); a
-// Feature whose single post or edit is running fails with that reason. me / others / iterations: as useOwnReview.
+// PIR-37: Post for several Features — ONE Background jobs entry "PI review for {n} Features": per Feature the Discussion
+// read again, then a new comment (postAndAudit, as Write review…) or my review replaced (editAndAudit, as Edit review…),
+// then read again so the table shows it; a failure on one never stops the others; the job ends with what was posted,
+// replaced and failed, with the reasons. One bulk job at a time (no double post); a Feature whose single post or edit is
+// running fails with that reason. me / others / iterations: as useOwnReview.
 // KB-155, PIR-80: start — the pop-up reads the ticked Features' Discussions again first (3 at a time, waiting when
 // Azure DevOps asks to slow down, as the page's read) and decides which get my review replaced from what Azure DevOps
 // holds then — not from the Discussions as read when the page opened, which may be older than a review written or
 // deleted since (in Azure DevOps, another tab): those made the job refuse the Feature. opening: the Features being
 // read for the pop-up (null when none).
+// PIR-83: each row starts from that Feature's review (rowStartOf: mine, else the latest of the PI, else my old-format
+// comment, else the defaults). PIR-84: post — the rows to write (each its own review) 3 at a time with the rate-limit
+// handling of the reads; skipped: the rows not written (Unchanged, Blocked), named in the result; Retry failed in the
+// finished entry runs the failed rows again with the same values, as a new job.
 export function useBulkReview(pi: string, iterations: PiIterations & { problem?: string }, { others = false, me }: { others?: boolean; me?: { email?: string; name?: string } } = {}) {
   const env = useContext(ReviewEnvContext)
   const [writing, setWriting] = useState<BulkWriting | null>(null)
@@ -227,32 +231,37 @@ export function useBulkReview(pi: string, iterations: PiIterations & { problem?:
     setOpening(items)
     try { await readDiscussions(items.map((item) => item.id), (id) => readDiscussionInto(config, env.pat, byId.get(id)!, { fresh: true }), { rateWait: rateLimitWait }) } finally { setOpening(null) }
     const setup = formSetupOf(env), viewer = viewerOf(env)
-    setWriting(startBulkForm(bulkTargets(items, (item) => ownReviewIn(discussionOf(item.key), reviewedPiOf(item, pi), viewer, setup, others)), pi, env.items, setup, iterations))
+    setWriting(startBulkForm(items.map((item) => ({ item })), pi, env.items, setup, iterations, new Date(), (item, movePi) => rowStartOf(discussionOf(item.key), reviewedPiOf(item, pi), viewer, setup, movePi, others)))
   }
-  function post(form: ReviewForm, text: string) {
-    if (!env?.config || !writing || writing.problem) return
-    const { targets, pi: reviewed } = writing, config = env.config, setup = formSetupOf(env)
-    const viewer = viewerOf(env)
-    const label = `PI review for ${targets.length} Feature${targets.length === 1 ? '' : 's'}`
-    setWriting(null)
-    const keys = targets.map(({ item }) => item.key)
+  function run(jobs: readonly BulkJob[], skipped: readonly BulkOutcome[], reviewed: string) {
+    if (!env?.config || !jobs.length) return
+    const config = env.config, setup = formSetupOf(env), viewer = viewerOf(env)
+    const label = `PI review for ${jobs.length} Feature${jobs.length === 1 ? '' : 's'}`
+    const keys = jobs.map(({ target }) => target.item.key)
     const started = runInBackground('pireview:bulk', label, async (progress) => {
       markBulk(keys, true)
       try {
-        const outcomes = await runBulkReview(targets, {
+        const outcomes = await runBulkReview(jobs, {
           busy: (item) => isRunning(`pireview:post:${item.key}`) || isRunning(`pireview:edit:${item.key}`) ? `A review of #${item.id} is being written already (see the top bar). Nothing was posted to it here.` : '',
           ownNow: async (item) => {
             await readDiscussionInto(config, env.pat, item, { fresh: true })
             return ownReviewIn(discussionOf(item.key), reviewed, viewer, setup, others)?.comment
           },
-          post: (item) => postAndAudit(env, item, form, text, reviewed),
-          edit: (item, commentId) => editAndAudit(env, item, commentId, form, text, reviewed),
+          post: (item, form, text) => postAndAudit(env, item, form, text, reviewed),
+          edit: (item, commentId, form, text) => editAndAudit(env, item, commentId, form, text, reviewed),
           reread: (item) => readDiscussionInto(config, env.pat, item, { fresh: true }),
-        }, (line) => progress(`${line} ${reviewSummary(form)}.`))
-        return bulkSummary(outcomes)
+        }, progress, { rateWait: rateLimitWait })
+        const again = failedJobs(jobs, outcomes)
+        return { ...bulkSummary([...outcomes, ...skipped]), ...(again.length ? { action: { label: `Retry failed (${again.length})`, run: () => run(again, [], reviewed) } } : {}) }
       } finally { markBulk(keys, false) }
     })
     if (!started) recordJob('pireview:bulk:busy', label, { text: 'A PI review for several Features is being posted already: wait for it to finish, then write again. Nothing was posted.', failed: true })
+  }
+  function post(jobs: readonly BulkJob[], skipped: readonly BulkOutcome[] = []) {
+    if (!writing || writing.problem) return
+    const reviewed = writing.pi
+    setWriting(null)
+    run(jobs, skipped, reviewed)
   }
   return { writing, opening, start, post, cancel: () => setWriting(null) }
 }
