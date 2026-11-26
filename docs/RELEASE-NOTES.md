@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v14.0.0 — 2026-11-26
+
+**Changed**
+- **Every PI review is headed "Feature Review for PI …"** — each review the app posts to a Feature's Discussion — Review… on PI Review and My PI Review, Edit review…, the Close pop-up and Update review for N… — now starts with **"Feature Review for PI 26.4"** (the reviewed PI, as the Learnings and Struggles headings name it), shown first in the Preview too. Review… asks for a PI with a number; a Feature closed while in no PI gets its review without the heading (PIR-48).
+- **Only a headed comment is a PI review, for its PI only** — a comment counts as a review only when it starts with that heading (Azure DevOps formatting, bullets, bold, spaces and a colon after it are fine; the words and a PI number are needed), and only for the PI it names: "Feature Review for PI 26.4" does not count for PI 26.5. PI Review's columns and drawer (**Latest review**, **Not reviewed**), My PI Review's **Reviewed** and "n of m reviewed", Edit review…, the bulk "replace mine" and the PI Review Meeting all follow it; the PI's dates, the Closed Date and the "no dates: every review counts" warning no longer decide (PIR-26 retired). "PI Review starts from" still applies (PIR-49).
+- **Breaking: older reviews no longer count** — a review posted without the heading, also one posted since 21 Sep 2026, no longer counts: its Feature shows **Not reviewed** until it is reviewed again (or the line "Feature Review for PI …" is added to it in Azure DevOps). The product owner's decision; the pages say "Only comments headed “Feature Review for PI …” count" where Not reviewed and the review columns are explained. Teams should review those Features again (PIR-50). Major because it changes what the existing review comments mean and how reviews must be written.
+
+DF-510, DF-511, DF-512, DF-318; SM-305, SM-306; LIM-200, LIM-201, LIM-202, LIM-99, LIM-172; TC-PIR-48, TC-PIR-49, TC-PIR-50, TC-PIR-51, TC-PIR-27; PIR-07, PIR-09, PIR-10, PIR-14, PIR-17, PIR-18, PIR-26, PIR-28, PIR-34, PIR-36, PIR-42.
+
+PR #455.
+
 ## v13.2.0 — 2026-11-26
 
 **Added**
