@@ -1311,3 +1311,6 @@ tbody tr.tvl-hl-red td{background:var(--hl-red-bg)}tbody tr.tvl-hl-red td:first-
 
 /* GIT-30: the forced Load everything from Git stays above every other pop-up. */
 .modal-backdrop:has(.streams-update){z-index:1001}.streams-update p{margin:0 0 10px}.streams-update ul{margin:6px 0 6px 18px;padding:0}
+
+/* GIT-33: at phone width the Background jobs list opens over the page (the top-bar actions scroll sideways and clipped it). */
+@media(max-width:700px){.jobs-panel{position:fixed;left:16px;right:16px;top:72px;width:auto;max-height:70vh}}

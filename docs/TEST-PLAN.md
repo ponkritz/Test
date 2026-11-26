@@ -1255,6 +1255,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-GIT-27 Continue without loading only during a GitHub outage** — Req GIT-32, GIT-31 — L1 `other-views.test.mjs` ("GIT-32: Continue without loading only in a GitHub outage — every failure a server error or no answer (TC-GIT-27)"); E2E `own-other-views.e2e.mjs` ("TC-GIT-26: a failed load names what failed and shows the Git storage setup in the pop-up — no skip for a setup error; Continue without loading only in a GitHub outage (GIT-32); a saved connection and Retry load everything": a refused token (401) shows the setup and no skip; GitHub answering 500 shows "GitHub is not answering (an outage)" and Continue without loading, which closes the pop-up; it is back at the next start and Load everything closes it); browser check: with the network off, the pop-up offers Continue without loading; with a wrong token it does not.
 
+**TC-GIT-28 Load everything runs as a background job** — Req GIT-33, GIT-35 — **UAT** — L1 `other-views.test.mjs` ("GIT-33…GIT-35: Load everything as one background job — listed in Jobs done, one at a time, the version recorded only when every part loaded (TC-GIT-28, TC-GIT-29, TC-GIT-30)") ; E2E `own-other-views.e2e.mjs` ("TC-GIT-28: Load everything runs as a background job — the pop-up closes at once and stays closed while it runs, the job ends Done in Jobs done; the Admin button runs the same job, one at a time (TC-GIT-29, TC-GIT-30)") ; browser check: in the forced pop-up press Load everything from Git — the pop-up closes at once, the top bar shows "1 running" and Background jobs lists "Load everything from Git · Running" with the part being loaded; the app can be used; the job ends Done with what was loaded and the pop-up does not come back.
+
+**TC-GIT-29 One Load everything at a time; the Admin button runs the same job** — Req GIT-33, GIT-34 — L1 `other-views.test.mjs` ("GIT-33…GIT-35: Load everything as one background job — listed in Jobs done, one at a time, the version recorded only when every part loaded (TC-GIT-28, TC-GIT-29, TC-GIT-30)") ; E2E `own-other-views.e2e.mjs` ("TC-GIT-28: …": the Admin button disabled "Loading in the background…" while the job runs; afterwards it starts the same job, the panel shows its result) ; browser check: while the job runs Admin → Data & sharing → Load from Git shows the button disabled with the line pointing to Background jobs; afterwards Load everything from Git adds a second job and the panel shows Loaded: ….
+
+**TC-GIT-30 A failed background load brings the pop-up back** — Req GIT-35, GIT-31, GIT-32 — L1 `other-views.test.mjs` ("GIT-33…GIT-35: Load everything as one background job — listed in Jobs done, one at a time, the version recorded only when every part loaded (TC-GIT-28, TC-GIT-29, TC-GIT-30)") ; E2E `own-other-views.e2e.mjs` ("TC-GIT-26: …": the job needs a look and the pop-up comes back with what failed, the Git storage setup and Retry; Retry starts a new job) ; browser check: with GitHub refusing the token, Load everything from Git closes the pop-up, the job ends Needs a look naming Connection setup, and the pop-up comes back in its failed state; Retry closes it again and starts a new job.
+
 **TC-GIT-02 Connect, create, save, load** — Req GIT-02…04, GIT-06, GIT-08, GIT-12 — **UAT**
 - Pre: TD-03.
 - Steps:
@@ -3336,6 +3342,9 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | GIT-30 | TC-GIT-25, TC-CON-79 |
 | GIT-31 | TC-GIT-26 |
 | GIT-32 | TC-GIT-27 |
+| GIT-33 | TC-GIT-28, TC-GIT-29 |
+| GIT-34 | TC-GIT-29 |
+| GIT-35 | TC-GIT-28, TC-GIT-30 |
 | SET-20 | TC-SET-10, TC-CON-79 |
 | LST-01 | TC-LST-01, TC-LST-03 |
 | LST-02 | TC-LST-01, TC-LST-08 |
@@ -3377,7 +3386,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-09 | TC-OV-11…15, TC-CAP-01, TC-CAP-02, TC-CAP-03, TC-CAP-08, TC-CAP-10, TC-CAP-11, TC-CAP-12, TC-CAP-13, TC-CAP-14, TC-CAP-15, TC-CAP-16, TC-CAP-17, TC-CAP-18, TC-CAP-19, TC-CAP-20, TC-CAP-21, TC-CAP-22, TC-CAP-23, TC-CAP-24, TC-CAP-25, TC-CAP-26, TC-CAP-27, TC-QV-17, TC-CON-21, TC-QV-10, TC-QV-11, TC-QV-21, TC-CHT-17, TC-CHT-19 |
 | UC-10 | TC-OV-11 (Months, Streams), TC-OV-13 |
 | UC-11 | TC-BAS-01…04 |
-| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27 |
+| UC-12 | TC-GIT-01…04, TC-GIT-05, TC-GIT-06, TC-GIT-07, TC-GIT-08, TC-ACC-03…05, TC-GIT-09, TC-GIT-10, TC-GIT-11, TC-GIT-12, TC-GIT-13, TC-GIT-14, TC-GIT-15, TC-GIT-16, TC-GIT-17, TC-GIT-18, TC-GIT-19, TC-GIT-20, TC-GIT-21, TC-GIT-22, TC-CON-62, TC-GIT-23, TC-GIT-24, TC-GIT-25, TC-GIT-26, TC-GIT-27, TC-GIT-28, TC-GIT-29, TC-GIT-30 |
 | UC-13 | TC-SNP-01…03 |
 | UC-14 | TC-SET-01…07, TC-CAP-02, TC-CAP-03, TC-NAV-34, TC-CAP-07, TC-CAP-09, TC-CAP-30, TC-CAP-31, TC-CAP-32, TC-CAP-33, TC-CAP-34, TC-UI-15…17 |, TC-UI-20, TC-SET-09, TC-SET-10 |
 | UC-15 | TC-STO-01…04, TC-SNP-04 |
