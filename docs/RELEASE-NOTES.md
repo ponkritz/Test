@@ -2,6 +2,17 @@
 
 Version history of the I&D Quality Demand Planning app, newest first. Every merged change gets a version and its entry here (CI-09; [CONFIGURATION-MANAGEMENT.md](CONFIGURATION-MANAGEMENT.md) §4). Since v7.43.0 the pull request adds a change note in [`docs/changes/`](changes/README.md) instead, and after the merge CI writes the version into `package.json` and the entry (with the PR number) at the top of this file in a release commit (CI-11): **major** for a change that breaks existing data, shared setup files or the way users work; **minor** for a new or changed feature; **patch** for a fix, a dependency update or documentation only. `pnpm test` fails when the newest version here is not the version in `package.json`. CI tags each version `vX.Y.Z` on its merge commit and publishes its GitHub release with the installers and this entry (CI-10); the build number of a version is the CI build of that merge (shown in the app under Force Update, and in `latest.json`). Open bugs and accepted limitations of every version are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md); the third-party components of every version are in [SWBOM.md](SWBOM.md).
 
+## v14.11.0 — 2026-11-27
+
+**Added**
+- **Page type tick boxes** — ＋ Add page…, Edit and Tool Validations ＋ Add tab… choose the page type with four tick boxes: Table (Build your own), Table (Query), Insights, Dashboard. Only Dashboard alone, one table source, or one table source with Insights can be ticked; the other choices are disabled with the reason, and the form shows the resulting type in words (PGB-22, PGB-01, PGB-05).
+- **Table (Query) pages** — a table of the rows and columns of a saved Azure DevOps query, picked as in the dashboards' Add Azure query…; only its reference is saved in the page's file in Git, never a PAT or rows. Each viewer reads the rows with their own PAT when the page opens and with ↻ Refresh; search, sort, Columns, Export and Group by / Filter by column work; the rows are read only. A viewer without a PAT sees the reason. With Insights, the charts read the same rows (PGB-23, PGB-24, PGB-25).
+- **Fixed table source** — Edit keeps a page's table source (Build your own or Query); Insights can still be switched on and off. A page file's source is validated when read; an invalid one shows the page read only with the reason (PGB-26, PGB-27; LIM-252, LIM-253).
+
+DF-567…DF-570, SM-356…SM-358; TC-PGB-17…TC-PGB-20.
+
+PR #4.
+
 ## v14.10.0 — 2026-11-27
 
 **Added**
