@@ -2614,6 +2614,18 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PIR-86 Long-running settings in months; an older file with PI values** — Req PIR-85, PIR-58 — L1 `pi-meeting-exec.test.mjs` ("PIR-85: settings — default 6 months, months written under their own keys, an older file with PI values loads with the defaults and the note (TC-PIR-86)": the default 6, written as `longRunningMonths` / `longRunningMonthsDefault` only and still schema 2, 121 months refused, a schema 2 file with `longRunning` / `longRunningDefault` loads with the default 6 and the note — not converted, even a value the new rules would refuse — the next save writes the new keys only and clears the note, clearing is a change of its own) ; browser check: Admin → Feature & PI setup → PI Review form → Meeting presentation with an older file shows the one-line note in the panel and the pop-up; Save to Git removes it.
 
+**TC-PIR-87 A Feature in the team of its Epic; the sections in order, Other Features last** — Req PIR-86, PIR-88 — L1 `pi-meeting-teams.test.mjs` ("PIR-86, PIR-88: a Feature belongs to the team of its Epic — the sections in the teams’ order, Other Features last and only if any (TC-PIR-87)": Platform Services (PLS, Audits) and Quality Tools (QTL, Tools), Plans and a Feature without Epic in Other Features; another order followed; no Other Features when every Feature is in a team; a team without Features still has its section; the slide list — Agenda after the Title, the executive slides before the sections, each section a divider, its Discuss during Meeting and its reviewed Features, the eyebrows "PLS · DISCUSS DURING MEETING · 1 OF 1", the divider's tiles and Epics, one Features not reviewed list after the sections) ; E2E `pi-meeting-executive.e2e.mjs` (TC-PIR-92).
+
+**TC-PIR-88 The Agenda slide and its placeholders** — Req PIR-87 — L1 `pi-meeting-teams.test.mjs` ("PIR-87: the Agenda slide — the sentence with its placeholders, then the teams in order as \"Name (SHORT)\" (TC-PIR-88)": the default sentence with {PI} = 26.4, every placeholder, "Name (SHORT)" and a name alone, a hostile team name and sentence escaped, an empty sentence, an unknown placeholder refused, 20 teams over "Agenda (n of N)") ; E2E `pi-meeting-executive.e2e.mjs` (TC-PIR-92: the Agenda slide 2 with the sentence for PI 2026.4 and the two teams in order).
+
+**TC-PIR-89 The presenting teams setting, read tolerantly** — Req PIR-86, PIR-90 — L1 `pi-meeting-teams.test.mjs` ("PIR-86, PIR-90: the setting — written with the PI form setup (schema 2), read tolerantly: a malformed team is left out with a note, never refused (TC-PIR-89)": written in order with "short" only when set, the default Agenda sentence not written, no teams stays schema 1; eleven malformed entries each left out with why, a non-list, more than 20; a file with a malformed team and Agenda sentence loads with the note, the next save writes only the good teams; clearing the note is a change; the editor's checks of one team and of the list; the other settings still strict) ; E2E `pi-meeting-executive.e2e.mjs` (TC-PIR-92: the malformed team of Git named in the panel's note, gone after Save to Git).
+
+**TC-PIR-90 Edit presenting teams… in the Meeting presentation panel** — Req PIR-89, PIR-86 — E2E `pi-meeting-executive.e2e.mjs` (TC-PIR-92: Edit presenting teams…, ＋ Add team… twice, the Audits Epic disabled for the second team "in Platform Services (PLS) (an Epic belongs to one team only)", ↑ moves a team, Save to Git as schema 2 in `meeting.teams`, the summary "1. Quality Tools (QTL) (1 Epic) · 2. Platform Services (PLS) (1 Epic)") ; browser check (1440 px, light and dark): the pop-up and the one-team pop-up; a person without "PI Review: set up the review form" (and View as) sees Edit presenting teams… disabled with the reason.
+
+**TC-PIR-91 Without presenting teams the deck is unchanged** — Req PIR-86, PIR-88 — L1 `pi-meeting-teams.test.mjs` ("PIR-86, PIR-88: without presenting teams the deck is exactly as before — the same slides, no Agenda, no sections (TC-PIR-91)": no Agenda or team slide, an older file and a changed Agenda sentence build the same slides, no settings at all the same; with teams every Feature slide once, plus the Agenda and the dividers); `pi-meeting.test.mjs` (TC-PIR-43: the slide order); `pi-meeting-exec.test.mjs` (TC-PIR-60: the kinds of a deck without teams) ; E2E `pi-meeting-executive.e2e.mjs` (TC-PIR-61: the executive deck without teams, Discuss during Meeting right after Long-running Features).
+
+**TC-PIR-92 The Scrum Master sets up the presenting teams and conducts the meeting** — Req PIR-86, PIR-87, PIR-88, PIR-89, PIR-90 — **UAT** — E2E `pi-meeting-executive.e2e.mjs` ("TC-PIR-92: the Scrum Master sets up the presenting teams (an Epic of another team cannot be ticked, the order changed, Save to Git) and conducts the meeting — the Agenda after the title, one section per team in order, Other Features last": Git holds a team without Epics — named in a note and left out; Quality Tools (QTL, Tools #100) and Platform Services (PLS, Audits #110) added, Audits disabled for the second, Quality Tools moved first, saved; Conduct PI Meeting: Title, Agenda, Summary …, the executive slides, Quality Tools with #201 (Discuss) and #202, Platform Services with #212, Other Features (Plans), Features not reviewed, Learnings, Struggles; the divider "PRESENTING TEAM · 2 OF 2" with 3 Features, 1 reviewed, 2 not reviewed and Epics: Audits (#110); no request leaves the file; also at 4× slower CPU) ; browser check (1440 px, light): the Agenda and a divider slide, printed one a page.
+
 **TC-CON-71 "PI Review: set up the review form"** — Req CON-114, PIR-31, CON-94, CON-101 — L1 `pi-review-setup.test.mjs` ("CON-114, PIR-31: who may change the form setup, and why not (TC-CON-71)": Scrum Master and Tool Owner in the starting matrix, not Admin; permissions 8; an older file gets it as the starting matrix does; Not set stays after saving; none without a roles file); `access.test.mjs` (an older file's Scrum Master gets it).
 
 **TC-CON-73 An older access.json with the QE Mapping area is read, not refused** — Req CON-117 — L1 `access.test.mjs` ("CON-117: an older access.json that lists the removed QE Mapping area and its action is read, not refused — the keys are dropped (TC-CON-73)": an area, an action and a denial of `qemapping` are dropped, every other right kept, the file saved again without them, a file whose only split key was `qemapping.edit` still read as split); E2E `shell.e2e.mjs` ("TC-CON-58", "TC-NAV-53": policies that still list `qemapping` open without an error).
@@ -3585,6 +3597,11 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PIR-83 | TC-PIR-83, TC-PIR-84 |
 | PIR-84 | TC-PIR-84 |
 | PIR-85 | TC-PIR-58, TC-PIR-61, TC-PIR-85, TC-PIR-86 |
+| PIR-86 | TC-PIR-87, TC-PIR-89, TC-PIR-90, TC-PIR-91, TC-PIR-92 |
+| PIR-87 | TC-PIR-88, TC-PIR-92 |
+| PIR-88 | TC-PIR-87, TC-PIR-91, TC-PIR-92 |
+| PIR-89 | TC-PIR-90, TC-PIR-92 |
+| PIR-90 | TC-PIR-89, TC-PIR-92 |
 | CON-115 | TC-LST-07, TC-LST-10 |
 | CON-116 | TC-CON-72 |
 | CON-117 | TC-CON-73 |
@@ -3700,7 +3717,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
 | UC-38 | TC-PGB-01…20, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
-| UC-40 | TC-PIR-01…61, TC-PIR-64…68, TC-PIR-75…79, TC-PIR-81…86, TC-EPS-10, TC-UI-27 |
+| UC-40 | TC-PIR-01…61, TC-PIR-64…68, TC-PIR-75…79, TC-PIR-81…92, TC-EPS-10, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
 
 ## 8. Result record
