@@ -92,7 +92,7 @@ test('TC-PGB-01: a Tool Owner adds the group Quality with the Table page “Supp
   // ＋ Add page…: type Table, name, icon, ＋ New group… "Quality".
   await page.getByRole('button', { name: '＋ Add page…' }).click()
   const add = page.getByRole('dialog', { name: 'Add a page' })
-  await add.getByRole('radio', { name: 'Table', exact: true }).check()
+  await add.getByRole('checkbox', { name: 'Table (Build your own)' }).check()
   await add.getByLabel('Page name', { exact: true }).fill('Supplier issues')
   await add.getByLabel('Description (optional)').fill('Issues raised with suppliers')
   await add.getByLabel('Icon').selectOption('⚑')
@@ -187,7 +187,7 @@ test('TC-PGB-09: a group co-owner adds a Table + Insights page to Quality and se
   await page.getByRole('button', { name: '＋ Add page…' }).click()
   const add = page.getByRole('dialog', { name: 'Add a page' })
   assert.deepEqual(await add.getByLabel('Menu group').locator('option').allInnerTexts(), ['Quality'])
-  await add.getByRole('radio', { name: 'Table + Insights' }).check()
+  await add.getByRole('checkbox', { name: 'Insights', exact: true }).check()
   await add.getByLabel('Page name', { exact: true }).fill('Audit findings')
   await pickOwners(add, 'Page co-owners (optional)', ['auditor@example.com'])
   await add.getByRole('button', { name: 'Add page' }).click()
