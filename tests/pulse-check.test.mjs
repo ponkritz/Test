@@ -1,0 +1,81 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { previousMonth, releaseComparison, workFlow } from '../src/pulseCheck.ts'
+
+const base = { organization: 'org', project: 'Quality', state: 'Active', assignedTo: 'Ana Costa', areaPath: 'Quality', iterationPath: 'Quality', tags: '', url: '', syncedAt: '' }
+const item = (id, workItemType, extra = {}) => ({ ...base, key: `org/quality/${id}`, id, workItemType, title: `Item ${id}`, ...extra })
+
+test('previous month: across the year boundary', () => {
+  assert.equal(previousMonth('2026-10'), '2026-09')
+  assert.equal(previousMonth('2026-01'), '2025-12')
+})
+
+test('releases compared: streams of either month, zero when missing', () => {
+  const stream = (name, releases, documents) => ({ id: name, name, fetchedAt: '', releases: Array.from({ length: releases }, (_, i) => ({ name, release: `${i}`, documents: 1 })), documents, titles: [] })
+  assert.deepEqual(releaseComparison([stream('DP', 2, 5)], [stream('CP', 1, 3), stream('DP', 1, 1)]), [
+    { name: 'CP', releases: 0, documents: 0, previousReleases: 1, previousDocuments: 3 },
+    { name: 'DP', releases: 2, documents: 5, previousReleases: 1, previousDocuments: 1 },
+  ])
+})
+
+test('work flow: Features and User Stories opened and closed in the month, per Epic; absence, Removed and other months left out', () => {
+  const items = [
+    item(1, 'Epic', { title: 'CP' }), item(2, 'Epic', { title: 'Absence' }),
+    item(10, 'Feature', { parentId: 1, createdDate: '2026-09-03T10:00:00Z' }),
+    item(11, 'User Story', { parentId: 10, createdDate: '2026-08-01T10:00:00Z', state: 'Closed', closedDate: '2026-09-20T10:00:00Z' }),
+    item(12, 'User Story', { parentId: 10, createdDate: '2026-09-05T10:00:00Z', state: 'Closed', closedDate: '2026-09-25T10:00:00Z' }),
+    item(13, 'User Story', { parentId: 10, state: 'Done', changedDate: '2026-09-10T10:00:00Z', createdDate: '2026-07-01T00:00:00Z' }),
+    item(14, 'User Story', { parentId: 10, state: 'Removed', createdDate: '2026-09-05T10:00:00Z' }),
+    item(20, 'Feature', { parentId: 2, createdDate: '2026-09-01T10:00:00Z' }),
+    item(30, 'Feature', { createdDate: '2026-09-02T10:00:00Z', assignedTo: 'Ben Okafor' }),
+    item(31, 'Task', { parentId: 10, createdDate: '2026-09-02T10:00:00Z' }),
+    item(40, 'Feature', { parentId: 1, createdDate: '2026-10-01T10:00:00Z' }),
+  ]
+  const flow = workFlow(items, '2026-09', 2, 'UTC')
+  assert.deepEqual(flow.streams.map((stream) => [stream.title, stream.counts]), [
+    ['CP', { 'Feature': { created: 1, closed: 0 }, 'User Story': { created: 1, closed: 3 } }],
+    ['No Epic', { 'Feature': { created: 1, closed: 0 }, 'User Story': { created: 0, closed: 0 } }],
+  ])
+  assert.deepEqual(flow.totals, { 'Feature': { created: 2, closed: 0 }, 'User Story': { created: 1, closed: 3 } })
+  assert.deepEqual(flow.items.map(({ item, change }) => `${change} ${item.id}`), ['closed 11', 'closed 12', 'closed 13', 'created 10', 'created 12', 'created 30'])
+  assert.deepEqual(workFlow(items, '2026-09', 2, 'UTC', (entry) => entry.assignedTo === 'Ben Okafor').totals.Feature, { created: 1, closed: 0 }, 'include narrows to a person')
+})
+
+import { ongoingWork } from '../src/pulseCheck.ts'
+import { timeWritingMonth } from '../src/azureInsights.ts'
+test('ongoing activities: in-progress Features and User Stories per stream, booked hours this month, overdue', () => {
+  const items = [
+    item(1, 'Epic', { title: 'CP' }), item(2, 'Epic', { title: 'Absence' }),
+    item(10, 'Feature', { parentId: 1, state: 'Active', targetDate: '2026-10-01T00:00:00Z' }),
+    item(11, 'User Story', { parentId: 10, state: 'In Progress' }), item(12, 'User Story', { parentId: 10, state: 'New' }),
+    item(13, 'Task', { parentId: 11, title: 'October 2026 | X', completedWork: 6 }), item(14, 'Task', { parentId: 11, title: 'September 2026 | X', completedWork: 9 }),
+    item(20, 'Feature', { parentId: 2, state: 'Active' }), item(30, 'Feature', { state: 'Closed' }),
+  ]
+  const work = ongoingWork(items, '2026-10', '2026-10-22', timeWritingMonth, 2)
+  assert.deepEqual(work.items.map(({ item, booked, overdue }) => [item.id, booked, overdue]), [[10, 6, true], [11, 6, false]])
+  assert.deepEqual([work.features, work.stories, work.overdue, work.streams], [1, 1, 1, ['CP']])
+})
+
+test('Pulse Check periods: calendar quarter, half-year and year against the period before; each release once (QV-50, TC-QV-31)', async () => {
+  const { periodContaining, previousPeriod, recentPeriods, periodStreams, periodComparison, periodWorkFlow } = await import('../src/pulsePeriods.ts')
+  assert.deepEqual(periodContaining('quarter', '2026-08'), { kind: 'quarter', key: '2026-Q3', label: 'Q3 2026', months: ['2026-07', '2026-08', '2026-09'] })
+  assert.equal(periodContaining('half', '2026-08').label, 'H2 2026')
+  assert.equal(periodContaining('year', '2026-08').months.length, 12)
+  assert.equal(previousPeriod(periodContaining('quarter', '2027-02')).label, 'Q4 2026', 'Q1 → Q4 of the year before')
+  assert.equal(previousPeriod(periodContaining('half', '2026-03')).label, 'H2 2025')
+  assert.deepEqual(recentPeriods('quarter', '2026-11', 3).map((entry) => entry.label), ['Q4 2026', 'Q3 2026', 'Q2 2026'])
+  // The same release in two months of the quarter counts once; documents add up; DP's supported releases once each.
+  const july = [{ name: 'CP', releases: [{ name: 'Cupid', release: '26.6', documents: 2 }], documents: 2 }, { name: 'DP', releases: [], documents: 0, supportedEntries: [{ key: 'a', label: 'RSGMS 3.0' }] }]
+  const august = [{ name: 'CP', releases: [{ name: 'cupid', release: '26.6', documents: 1 }, { name: 'Pluto', release: '27.1', documents: 3 }], documents: 4 }, { name: 'DP', releases: [], documents: 0, supportedEntries: [{ key: 'a', label: 'RSGMS 3.0' }, { key: 'b', label: 'Dose 2.1' }] }]
+  const quarter = periodStreams([july, august], [[{ name: 'S&S IT', releases: ['Remote 1.6'] }], [{ name: 'S&S IT', releases: ['Remote 1.6', 'Remote 1.7'] }]])
+  assert.deepEqual(quarter.find((stream) => stream.name === 'CP'), { name: 'CP', releases: ['Cupid 26.6', 'Pluto 27.1'], documents: 6 })
+  assert.deepEqual(quarter.find((stream) => stream.name === 'DP').supported, ['Dose 2.1', 'RSGMS 3.0'])
+  assert.equal(quarter.find((stream) => stream.name === 'S&S IT').releases.length, 2, 'Windchill releases once each')
+  const rows = periodComparison(quarter, periodStreams([july]))
+  assert.deepEqual(rows.find((row) => row.name === 'CP'), { name: 'CP', releases: 2, previousReleases: 1, documents: 6, previousDocuments: 2, list: ['Cupid 26.6', 'Pluto 27.1'] })
+  assert.equal(rows.find((row) => row.name === 'DP').supported, 2)
+  // Work opened and closed over the months of the period, summed per stream.
+  const epic = item(1, 'Epic', { title: 'Stream A' })
+  const flow = periodWorkFlow([epic, item(2, 'Feature', { parentId: 1, createdDate: '2026-07-03T10:00:00Z' }), item(3, 'Feature', { parentId: 1, createdDate: '2026-08-03T10:00:00Z', state: 'Closed', closedDate: '2026-09-02T10:00:00Z' })], ['2026-07', '2026-08', '2026-09'])
+  assert.deepEqual(flow.totals.Feature, { created: 2, closed: 1 })
+})

@@ -1,0 +1,231 @@
+import type { NamingPattern } from './namingPatterns.ts'
+import { myPatternsVersion } from './myNamingPatterns.ts'
+import type { AppState, AzureWorkItem } from './domain'
+import type { AzureConnectionProfileSummary } from './azureCredentials.ts'
+import { releaseFor, releaseOf } from './releasePath.ts'
+import { allStreams, defaultStreams, profileForStream, profilesForStream, streamArea, streamOfProfile, streamsVersion, toolQueries, type ReleaseRule } from './streams.ts'
+import { statusLabelOf, statusText, toolMasterList, toolMasterVersion, toolMonthReport, toolMonthStatus, toolQueryIndex, type MasterTool } from './toolQueries.ts'
+import { cpMonthReport, cpNameIndex, cpSignatures, fieldReader } from './cpReporting.ts'
+import { countStreams, normalizeReleaseSourceSettings, releaseRegister, streamPatterns, viewMonthOf, type EnteredCounts } from './releaseSource.ts'
+import { viewSource } from './viewSources.ts'
+import { dpMilestoneLabel, dpMonthCounts, type SupportedRelease } from './dpMilestones.ts'
+import { ioccDocumentNames, ioccMonthCounts } from './ioccMilestones.ts'
+
+// Overview "Releases this month": for each read-only view whose documents carry releases in their paths (DP, CP,
+// IOCC, …), the releases with documents approved (else changed) in the month, in UTC (NAV-51) — the same
+// month rule as the views — with the document count; plus the totals across streams.
+export interface StreamRelease { type?: string; name: string; release: string; documents: number; approvalDate?: string }
+export interface StreamDocument { id: number; title: string; url: string; release: string; approvalDate?: string }
+// supported: DP only — its releases are the Completed Releases and supported the Supported Releases (dpMilestones);
+// DP counts no documents.
+// supported: DP's Supported Releases (unique releases with a milestone Done in the month), supportedReleases their list,
+// milestones the milestones Done behind them.
+// supportedEntries: the Supported Releases of a stream counted like DP (DP, IOCC), each once: key and label.
+export interface SupportedEntry { key: string; label: string }
+// QV-58: noData — CP, DP or IOCC has no data for the month (not set up, or its view not fetched); entered — the counts an
+// Admin entered for that month, used instead (completedCount, supportedCount).
+export interface ReleaseStream { noData?: string; entered?: EnteredCounts; id: string; name: string; fetchedAt: string; releases: StreamRelease[]; documents: number; titles: StreamDocument[]; notSetUp?: boolean; supported?: number; supportedReleases?: SupportedRelease[]; supportedEntries?: SupportedEntry[]; milestones?: number }
+
+// One view's releases in the month, read with its stream's rule (streams.ts; others use the general path rule).
+function streamOf(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profile: AzureConnectionProfileSummary, releaseConnections: number, month: string, timeZone?: string, rule: ReleaseRule = 'path', patterns: NamingPattern[] = [], area?: string[]): ReleaseStream {
+  const source = viewSource(state, profile.id, profile.role, profile.query, releaseConnections)
+  const inMonth = (source?.items ?? []).filter((item) => viewMonthOf(item, timeZone) === month)
+  const label = (found: { group?: string; name: string; release: string }) => `${[found.name, found.release].filter(Boolean).join(' ')}${found.group ? ` (${found.group})` : ''}`
+  const releases = releaseRegister(inMonth, [], { rule, patterns, area }).map(({ group, name, release, documents, approvalDate }) => ({ ...(group ? { type: group } : {}), name, release, documents, ...(approvalDate ? { approvalDate } : {}) }))
+  // The month's documents of a release, by the query's Title, oldest approval first.
+  const titles = inMonth.flatMap((item) => { const found = releaseFor(item, rule, patterns, area); return found ? [{ id: item.id, title: item.title, url: item.url, release: rule === 'title' && found.name === item.title.replace(/\s+/g, ' ').trim() ? '' : label(found), ...(item.approvalDate ? { approvalDate: item.approvalDate } : {}) }] : [] })
+    .sort((a, b) => (a.approvalDate ?? '').localeCompare(b.approvalDate ?? '') || a.id - b.id)
+  return { id: profile.id, name: profile.viewName || profile.reason, fetchedAt: source?.fetchedAt ?? '', releases, documents: releases.reduce((sum, entry) => sum + entry.documents, 0), titles }
+}
+
+// DP from its own query: Completed Releases = DT (DDT) Done in the month, Supported Releases = DT, SFV, PRD and RPE
+// Done in the month (dpMilestones); the milestones counted are listed as its titles.
+function dpStream(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profile: AzureConnectionProfileSummary, releaseConnections: number, month: string, timeZone?: string): ReleaseStream {
+  const source = viewSource(state, profile.id, profile.role, profile.query, releaseConnections)
+  const counts = dpMonthCounts(source?.items ?? [], month, timeZone)
+  const releases = counts.completed.map(({ name, release, date }) => ({ name, release, documents: 0, approvalDate: date }))
+  // One title per supported release, naming the milestones it passed in the month ("SFV · DT Done").
+  const titles = counts.supported.map(({ item, name, release, milestones, date }) => ({ id: item.id, title: [name, release].filter(Boolean).join(' ') || item.title, url: item.url, release: `${milestones.map((entry) => dpMilestoneLabel(entry.milestone)).join(' · ')} Done`, approvalDate: date }))
+  return { id: profile.id, name: 'DP', fetchedAt: source?.fetchedAt ?? '', releases, documents: 0, titles, supported: counts.supported.length, supportedReleases: counts.supported, supportedEntries: counts.supported.map((entry) => ({ key: entry.key, label: [entry.name, entry.release].filter(Boolean).join(' ') })), milestones: counts.milestones.length }
+}
+
+// IOCC from its own query (ioccMilestones): Completed Releases = Release Notes or Verification Report signed in the
+// month, Supported Releases = Release Plan, Release Notes or Verification Report signed in the month — each release
+// once; the signed documents are its titles.
+// name, area: a custom stream "Like IOCC" (STR-03) — its own naming patterns and the Area Path segment after its name.
+function ioccStream(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profile: AzureConnectionProfileSummary, releaseConnections: number, month: string, timeZone?: string, name = 'IOCC', area?: string[]): ReleaseStream {
+  const source = viewSource(state, profile.id, profile.role, profile.query, releaseConnections)
+  const counts = ioccMonthCounts(source?.items ?? [], month, timeZone, streamPatterns(state.releaseSourceSettings, name), area)
+  const label = (entry: { group: string; name: string; release: string }) => `${[entry.name, entry.release].filter(Boolean).join(' ')}${entry.group ? ` (${entry.group})` : ''}`
+  const releases = counts.completed.map((entry) => ({ ...(entry.group ? { type: entry.group } : {}), name: entry.name, release: entry.release, documents: entry.documents.length, approvalDate: entry.date }))
+  const titles = counts.documents.map(({ item, document, date }) => ({ id: item.id, title: item.title, url: item.url, release: `${ioccDocumentNames[document]} signed`, approvalDate: date }))
+  return { id: profile.id, name: 'IOCC', fetchedAt: source?.fetchedAt ?? '', releases, documents: counts.documents.length, titles, supported: counts.supported.length, supportedEntries: counts.supported.map((entry) => ({ key: entry.key, label: label(entry) })) }
+}
+
+// CP from its release-folder tree (cpReporting): Completed Releases = main Release Notes signed by QA/QE in the month,
+// Supported Releases = any QA/QE-signed document under the release in the month — each Release container once,
+// shared containers apart. Another CP connection (e.g. "CP Releases") gives the release names.
+// The CP tree and the release names do not depend on the month: read once per fetched data set (KB-27).
+type Columns = Parameters<typeof cpSignatures>[1]
+const treeCache = new WeakMap<object, Map<string, ReturnType<typeof cpSignatures>>>()
+const namesCache = new WeakMap<object, Map<string, ReturnType<typeof cpNameIndex>>>()
+function cached<T>(cache: WeakMap<object, Map<string, T>>, items: object, key: string, make: () => T) {
+  let byKey = cache.get(items)
+  if (!byKey) { byKey = new Map(); cache.set(items, byKey) }
+  if (!byKey.has(key)) byKey.set(key, make())
+  return byKey.get(key)!
+}
+const cpTree = (items: AzureWorkItem[], columns: Columns, timeZone?: string) => cached(treeCache, items, JSON.stringify([columns ?? null, timeZone ?? '']), () => cpSignatures(items, columns, undefined, timeZone))
+const cpNames = (items: AzureWorkItem[], columns: Columns) => cached(namesCache, items, JSON.stringify(columns ?? null), () => cpNameIndex(items, columns))
+export function cpReportFor(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string) {
+  const stream = defaultStreams.find((entry) => entry.rule === 'cp')!
+  const tree = profileForStream(stream, profiles)
+  if (!tree) return undefined
+  const others = profilesForStream(stream, profiles).filter((profile) => profile.id !== tree.id)
+  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
+  const source = viewSource(state, tree.id, tree.role, tree.query, releaseConnections)
+  // Names: the other CP connection whose rows carry Content (the CP_Releases query), else one with a Release field.
+  const candidates = others.flatMap((profile) => { const found = viewSource(state, profile.id, profile.role, profile.query, releaseConnections); return found && found !== source ? [{ profile, found, field: fieldReader('columns' in found ? found.columns : undefined) }] : [] })
+  const withField = (name: string) => candidates.map((entry) => ({ ...entry, count: entry.found.items.filter((item) => entry.field(item, name)).length })).filter((entry) => entry.count > 0).sort((a, b) => b.count - a.count)[0]
+  const chosen = withField('Content') ?? withField('Release')
+  const enrichment = chosen?.found, enrichmentName = chosen ? chosen.profile.viewName || chosen.profile.reason : undefined
+  const report = cpMonthReport(cpTree(source?.items ?? [], source && 'columns' in source ? source.columns : undefined, timeZone), month, enrichment ? cpNames(enrichment.items, 'columns' in enrichment ? enrichment.columns : undefined) : undefined)
+  return { profile: tree, source, enrichment, enrichmentName, report }
+}
+function cpStream(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string): ReleaseStream {
+  const found = cpReportFor(state, profiles, month, timeZone)!
+  const { report } = found
+  const label = (row: (typeof report.rows)[number]) => row.name.displayLabel
+  return {
+    id: found.profile.id, name: 'CP', fetchedAt: found.source?.fetchedAt ?? '',
+    releases: report.rows.filter((row) => row.completed).map((row) => ({ name: label(row), release: '', documents: row.signedDocuments, ...(row.releaseNotesDate ? { approvalDate: row.releaseNotesDate } : {}) })),
+    documents: report.signedDocuments,
+    titles: report.rows.map((row) => ({ id: row.container.id, title: label(row), url: row.container.url, release: `${row.completed ? 'Completed · ' : ''}${row.signedDocuments} QA/QE-signed document${row.signedDocuments === 1 ? '' : 's'}`, ...(row.signatures[0] ? { approvalDate: row.signatures.map((entry) => entry.date).sort()[0] } : {}) })),
+    supported: report.supported, supportedEntries: report.rows.map((row) => ({ key: String(row.container.id), label: label(row) })),
+  }
+}
+
+// TVL-19…TVL-22: Tool Validations from its two queries (toolQueries): Completed = the tools whose completion date
+// (the chosen field, default Changed Date) is in the month; Supported = the tools with a qualifying Quality signature
+// in the month on a document whose Parent is the tool (CP's logic). Undefined with one query (counted as before).
+// The index is read once per fetched data set and settings (KB-27).
+const toolIndexCache = new WeakMap<object, WeakMap<object, Map<string, ReturnType<typeof toolQueryIndex>>>>()
+const noDocuments: AzureWorkItem[] = []
+export function toolReportFor(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string) {
+  const stream = defaultStreams.find((entry) => entry.rule === 'tool')!
+  const queries = toolQueries(stream, profiles)
+  if (!queries.tools || !queries.documents) return undefined
+  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
+  const tools = viewSource(state, queries.tools.id, queries.tools.role, queries.tools.query, releaseConnections)
+  const documents = viewSource(state, queries.documents.id, queries.documents.role, queries.documents.query, releaseConnections)
+  const settings = normalizeReleaseSourceSettings(state.releaseSourceSettings).toolValidations
+  const patterns = streamPatterns(state.releaseSourceSettings, stream.name)
+  const toolItems = tools?.items ?? noDocuments, documentItems = documents?.items ?? noDocuments
+  const toolColumns = tools && 'columns' in tools ? tools.columns : undefined, documentColumns = documents && 'columns' in documents ? documents.columns : undefined
+  let byDocuments = toolIndexCache.get(toolItems)
+  if (!byDocuments) { byDocuments = new WeakMap(); toolIndexCache.set(toolItems, byDocuments) }
+  let byKey = byDocuments.get(documentItems)
+  if (!byKey) { byKey = new Map(); byDocuments.set(documentItems, byKey) }
+  const key = JSON.stringify([settings?.completionField ?? '', timeZone ?? '', patterns, toolColumns ?? null, documentColumns ?? null])
+  let index = byKey.get(key)
+  if (!index) { index = toolQueryIndex(toolItems, toolColumns, documentItems, documentColumns, { completionField: settings?.completionField, patterns, timeZone }); byKey.set(key, index) }
+  return { tools: queries.tools, documents: queries.documents, how: queries.how, toolSource: tools, documentSource: documents, report: toolMonthReport(index, month) }
+}
+// TVL-36: Tool Validations in Pulse Check, the Monthly pack and the cumulative chart count the master list's tools by
+// their Current Month Status (toolMonthStatus — the same rule as the Master list column and its count cards):
+// Completed = the tools Completed, Supported = the tools Supported; the drill-down lists those tools (name and version,
+// ID, status). `master`: the master list (default: this app's, toolMasterList()).
+export function toolStream(found: Pick<NonNullable<ReturnType<typeof toolReportFor>>, 'tools' | 'toolSource' | 'report'>, name: string, master: readonly MasterTool[] | undefined = toolMasterList()): ReleaseStream {
+  const { report } = found
+  const status = toolMonthStatus(master, { report })
+  return {
+    id: found.tools.id, name, fetchedAt: found.toolSource?.fetchedAt ?? '',
+    releases: status.completed.map((row) => ({ name: statusLabelOf(row), release: '', documents: row.documents, ...(row.date ? { approvalDate: row.date } : {}) })),
+    documents: report.signedDocuments,
+    titles: status.listed.map((row) => ({ id: row.id ?? 0, title: statusLabelOf(row), url: row.url ?? '', release: [row.id != null ? `ID ${row.id}` : '', statusText(row)].filter(Boolean).join(' · '), ...(row.date ? { approvalDate: row.date } : {}) })),
+    supported: status.supported.length, supportedEntries: status.supported.map((row) => ({ key: `tool:${row.id ?? row.key}`, label: statusLabelOf(row) })),
+  }
+}
+
+// Pulse Check: the default Azure streams in their order (DP, CP, IOCC, Content, Tool Validations), each from the
+// connection named like it, also before it is fetched; a stream without a connection is listed as not set up.
+// The streams of a month are worked out once per data set (KB-27): the store replaces its arrays on every change, so
+// the same profiles, sources and month always give the same streams. Callers only read the result.
+const none = {}
+const streamCache = new WeakMap<object, WeakMap<object, WeakMap<object, WeakMap<object, Map<string, ReleaseStream[]>>>>>()
+export function defaultStreamReleases(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string): ReleaseStream[] {
+  let bySources = streamCache.get(profiles)
+  if (!bySources) { bySources = new WeakMap(); streamCache.set(profiles, bySources) }
+  let byRelease = bySources.get(state.azureSources ?? none)
+  if (!byRelease) { byRelease = new WeakMap(); bySources.set(state.azureSources ?? none, byRelease) }
+  let bySettings = byRelease.get(state.releaseSource ?? none)
+  if (!bySettings) { bySettings = new WeakMap(); byRelease.set(state.releaseSource ?? none, bySettings) }
+  // QV-55: changed naming patterns (a new settings object) work the streams out again.
+  let byMonth = bySettings.get(state.releaseSourceSettings ?? none)
+  if (!byMonth) { byMonth = new Map(); bySettings.set(state.releaseSourceSettings ?? none, byMonth) }
+  // QV-60: my own naming patterns changing works the streams out again; STR-02: so does a custom stream added or changed.
+  // TVL-36: so does the master list of Tool Validations.
+  const key = `${month}\u0000${timeZone ?? ''}\u0000${myPatternsVersion()}\u0000${streamsVersion()}\u0000${toolMasterVersion()}`
+  const cached = byMonth.get(key)
+  if (cached) return cached
+  const streams = computeStreams(state, profiles, month, timeZone)
+  byMonth.set(key, streams)
+  return streams
+}
+function computeStreams(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string): ReleaseStream[] {
+  const overrides = normalizeReleaseSourceSettings(state.releaseSourceSettings).countOverrides ?? {}
+  return computeStreamsOnly(state, profiles, month, timeZone).map((stream) => {
+    if (!(countStreams as readonly string[]).includes(stream.name)) return stream
+    const noData = stream.notSetUp ? 'not set up' : !stream.fetchedAt ? 'not fetched yet' : ''
+    if (!noData) return stream
+    const entered = overrides[stream.name]?.[month]
+    return { ...stream, noData, ...(entered ? { entered } : {}) }
+  })
+}
+// QV-58: the Completed and Supported counts of a stream in a month — its data, else the counts an Admin entered.
+export const completedCount = (stream: Pick<ReleaseStream, 'releases' | 'entered' | 'noData'>) => stream.noData && stream.entered?.completed != null ? stream.entered.completed : stream.releases.length
+export const supportedCount = (stream: Pick<ReleaseStream, 'supported' | 'entered' | 'noData'>) => stream.noData && stream.entered?.supported != null ? stream.entered.supported : stream.supported
+function computeStreamsOnly(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string): ReleaseStream[] {
+  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
+  // STR-02: the built-in streams, then the custom ones. A custom stream "Like DP" reads its releases with DP's path rule
+  // only (DP's milestones and data sets are DP's own); "Like IOCC" counts Completed and Supported as IOCC does.
+  return allStreams().filter((stream) => stream.source === 'azure').map((stream) => {
+    const profile = profileForStream(stream, profiles)
+    if (stream.rule === 'dp' && profile && !stream.custom) return { ...dpStream(state, profile, releaseConnections, month, timeZone), name: stream.name }
+    if (stream.rule === 'iocc' && profile) return { ...ioccStream(state, profile, releaseConnections, month, timeZone, stream.name, streamArea(stream)), name: stream.name }
+    if (stream.rule === 'cp' && profile) return cpStream(state, profiles, month, timeZone)
+    if (stream.rule === 'tool' && !stream.custom && profile) { const two = toolReportFor(state, profiles, month, timeZone); if (two) return toolStream(two, stream.name) }
+    return profile ? { ...streamOf(state, profile, releaseConnections, month, timeZone, stream.rule, streamPatterns(state.releaseSourceSettings, stream.name), streamArea(stream)), name: stream.name } : { id: `stream:${stream.name}`, name: stream.name, fetchedAt: '', releases: [], documents: 0, titles: [], notSetUp: true }
+  })
+}
+
+// only: the views to show, each even before it is fetched or when its paths carry no release; without it, every
+// view whose documents carry releases.
+export function releaseStreams(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], month: string, timeZone?: string, only?: string[]): ReleaseStream[] {
+  const releaseConnections = profiles.filter((profile) => profile.role === 'release-source').length
+  const streams: ReleaseStream[] = []
+  for (const profile of profiles) {
+    if (profile.role === 'time-tracking' || (only && !only.includes(profile.id))) continue
+    const source = viewSource(state, profile.id, profile.role, profile.query, releaseConnections)
+    if (!only && (!source || !source.items.some((item) => releaseOf(item)))) continue
+    { const stream = streamOfProfile(profile); streams.push(streamOf(state, profile, releaseConnections, month, timeZone, stream?.rule, [], streamArea(stream))) }
+  }
+  return streams.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// Dashboard: releases and documents per stream and month over a period — the default streams in their order, each
+// month counted as Pulse Check counts it (releases with documents approved, else changed, in the month; DP: Completed
+// and Supported Releases from its query). Streams that are not set up are listed with no counts.
+export interface StreamCounts { id: string; name: string; notSetUp: boolean; months: { month: string; releases: number; documents: number; supported?: number }[]; releases: number; documents: number; supported?: number }
+export function streamCounts(state: Pick<AppState, 'azureSources' | 'releaseSource'> & Partial<Pick<AppState, 'releaseSourceSettings'>>, profiles: AzureConnectionProfileSummary[], months: string[], timeZone?: string): StreamCounts[] {
+  const perMonth = months.map((month) => defaultStreamReleases(state, profiles, month, timeZone))
+  return (perMonth[0] ?? defaultStreamReleases(state, profiles, months[0] ?? '', timeZone)).map((stream, index) => {
+    const entries = months.map((month, at) => { const found = perMonth[at][index]; const supported = found ? supportedCount(found) : undefined; return { month, releases: found ? completedCount(found) : 0, documents: found?.documents ?? 0, ...(supported != null ? { supported } : {}) } })
+    // DP: the period's Supported Releases are unique too — a release supported in two months counts once.
+    // QV-58: months without data add the Supported count an Admin entered for them.
+    const enteredSupported = perMonth.reduce((sum, streams) => { const found = streams[index]; return sum + (found?.noData && found.entered?.supported != null ? found.entered.supported : 0) }, 0)
+    const hasSupported = stream.supported != null || perMonth.some((streams) => streams[index]?.entered?.supported != null)
+    const supported = hasSupported ? { supported: new Set(perMonth.flatMap((streams) => streams[index]?.supportedEntries?.map((entry) => entry.key) ?? [])).size + enteredSupported } : {}
+    return { id: stream.id, name: stream.name, notSetUp: Boolean(stream.notSetUp), months: entries, releases: entries.reduce((sum, entry) => sum + entry.releases, 0), documents: entries.reduce((sum, entry) => sum + entry.documents, 0), ...supported }
+  })
+}

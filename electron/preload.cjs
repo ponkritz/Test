@@ -1,0 +1,34 @@
+const { contextBridge, ipcRenderer } = require('electron')
+
+contextBridge.exposeInMainWorld('azureDevOps', {
+  request: (request) => ipcRenderer.invoke('azure-devops:request', request),
+})
+contextBridge.exposeInMainWorld('windchill', { test: (request) => ipcRenderer.invoke('windchill:test', request), query: (request) => ipcRenderer.invoke('windchill:query', request), signIn: (request) => ipcRenderer.invoke('windchill:sign-in', request), signOut: () => ipcRenderer.invoke('windchill:sign-out') })
+contextBridge.exposeInMainWorld('sharePointFile', { read: (request) => ipcRenderer.invoke('sharepoint-file:read', request), signIn: (request) => ipcRenderer.invoke('sharepoint-file:sign-in', request), signOut: () => ipcRenderer.invoke('sharepoint-file:sign-out') })
+contextBridge.exposeInMainWorld('desktopZoom', {
+  get: () => ipcRenderer.invoke('zoom:get'),
+  set: (factor) => ipcRenderer.invoke('zoom:set', factor),
+  onKey: (listener) => {
+    const handler = (_event, direction) => listener(direction)
+    ipcRenderer.on('zoom:key', handler)
+    return () => ipcRenderer.removeListener('zoom:key', handler)
+  },
+})
+contextBridge.exposeInMainWorld('appUpdates', { reloadIgnoringCache: () => ipcRenderer.invoke('app-update:reload') })
+contextBridge.exposeInMainWorld('desktopUpdate', {
+  check: () => ipcRenderer.invoke('desktop-update:check'),
+  install: () => ipcRenderer.invoke('desktop-update:install'),
+  onProgress: (listener) => {
+    const handler = (_event, progress) => listener(progress)
+    ipcRenderer.on('desktop-update:progress', handler)
+    return () => ipcRenderer.removeListener('desktop-update:progress', handler)
+  },
+})
+// OND-69: Export PDF… (the print view saved as a PDF file); OND-76: the standalone HTML file of a page (chosen in the
+// save dialog, remembered per page by the app, overwritten by each publish).
+contextBridge.exposeInMainWorld('desktopFiles', {
+  savePdf: (request) => ipcRenderer.invoke('pdf-export:save', request),
+  publishTarget: (pageId) => ipcRenderer.invoke('html-publish:target', pageId),
+  choosePublishTarget: (pageId, defaultName) => ipcRenderer.invoke('html-publish:choose', pageId, defaultName),
+  publishHtml: (pageId, html) => ipcRenderer.invoke('html-publish:write', pageId, html),
+})

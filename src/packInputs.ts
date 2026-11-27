@@ -1,0 +1,52 @@
+import { defaultProfile, groupUtilization } from './calculationProfiles.ts'
+import type { AppState, AzureWorkItem } from './domain.ts'
+import type { AzureConnectionProfileSummary } from './azureCredentials.ts'
+import type { StreamMonth, Utilization } from './monthlyPack.ts'
+import { completedCount, defaultStreamReleases, supportedCount } from './releaseOverview.ts'
+import { windchillOptionsForView, windchillStreamExports } from './streams.ts'
+import { windchillSupported } from './windchillReleases.ts'
+import { capacityModel, type CapacitySettings } from './capacity.ts'
+import { yearMonths } from './monthlyPack.ts'
+
+// The data the Monthly pack reads for a month, used by Pulse Check → Monthly pack so
+// both show the same figures: the streams' releases and supported counts (Azure streams per their Pulse Check rules,
+// Windchill exports per their month), and the actual utilisation of the month, of January to the month, and of the
+// QE role in the month.
+export interface WindchillData { views: { id: string; name: string; exportFile?: string; columns: string[]; logic?: 'standard' | 'ecp'; projectLevel?: number }[]; sources: { viewId: string; columns: string[]; rows: Record<string, unknown>[] }[] }
+const label = (entry: { name: string; release: string; type?: string }) => `${[entry.name, entry.release].filter(Boolean).join(' ')}${entry.type ? ` (${entry.type})` : ''}`
+const ratio = (work: number, available: number) => available > 0 ? Math.round(work / available * 1000) / 10 : null
+
+export function packStreamsOf(state: Pick<AppState, 'azureSources' | 'releaseSource'>, profiles: AzureConnectionProfileSummary[], windchill: WindchillData, at: string): StreamMonth[] {
+  return [
+    // QV-58: a CP / DP / IOCC month without data takes the counts an Admin entered (marked as entered).
+    ...defaultStreamReleases(state, profiles, at).map((stream) => {
+      const completed = completedCount(stream), entered = Boolean(stream.noData && stream.entered)
+      return { name: stream.name, releases: entered ? (completed ? [`${completed} completed release${completed === 1 ? '' : 's'} (entered)`] : []) : stream.releases.map(label), supported: supportedCount(stream) ?? completed }
+    }),
+    // S&S IT, then each ECP export on its own (CON-87).
+    ...windchillStreamExports(windchill.views).map(({ name, view }) => {
+      const source = view ? windchill.sources.find((entry) => entry.viewId === view.id) : undefined
+      const releases = source && view ? windchillSupported(source.rows, source.columns.length ? source.columns : view.columns, at, windchillOptionsForView(view)) : []
+      return { name, releases, supported: releases.length }
+    }),
+  ]
+}
+
+// The same utilisation from person-month rows already computed (dashboard.ts personMonths): the people with Tasks in
+// the month, booked hours over available hours; rows carry the model's figures rounded to the cent.
+export function rowsUtilization(rows: { month: string; person: string; actual: number; capacity: number; tasks: number }[], month: string, settings: CapacitySettings): Utilization {
+  const months = new Set(yearMonths(month))
+  const sum = (list: { actual: number; capacity: number }[]) => ratio(list.reduce((total, row) => total + row.actual, 0), list.reduce((total, row) => total + row.capacity, 0))
+  const withTasks = rows.filter((row) => row.tasks > 0 && row.person !== 'Unassigned')
+  const now = withTasks.filter((row) => row.month === month)
+  return { month: sum(now), ytd: sum(withTasks.filter((row) => months.has(row.month))), qeMonth: sum(now.filter((row) => settings.profiles?.[row.person]?.role === 'QE')) }
+}
+
+export function packUtilization(items: AzureWorkItem[], month: string, settings: CapacitySettings): Utilization {
+  const people = (at: string) => { try { return capacityModel(items, at, settings).people.filter((person) => person.name !== 'Unassigned' && person.utilization != null) } catch { return [] } }
+  // CAP-55: a profile with a typed formula runs it on the people's figures added up.
+  const profile = defaultProfile(settings)
+  const sum = (list: Parameters<typeof groupUtilization>[0]) => { const value = groupUtilization(list, profile, ratio).actual; return value == null ? null : Math.round(value * 10) / 10 }
+  const now = people(month)
+  return { month: sum(now), ytd: sum(yearMonths(month).flatMap(people)), qeMonth: sum(now.filter((person) => settings.profiles?.[person.name]?.role === 'QE')) }
+}

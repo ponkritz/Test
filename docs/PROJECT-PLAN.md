@@ -1,0 +1,59 @@
+# Project Plan
+
+## Objective
+
+Deliver a centrally governed demand-planning tool for 20–25 Quality Engineering users, replacing monthly spreadsheet handling.
+
+## Delivery plan
+
+| Phase | Duration | Outcome |
+|---|---:|---|
+| Release 1 build | 3–5 working days | Desktop UI, activities, effort, baselines, locks, dashboards and admin controls |
+| Release 1 test | 5 working days | Functional test, role/lock checks and stakeholder review |
+| Production connection | 3–5 working days after approvals | Entra authentication, SharePoint adapter and access groups |
+| Reporting | 3–5 working days | Governed PDF/image/PPT monthly pack and snapshot evidence |
+| Release integrations | 5–10 working days | Validated TFS/Windchill mappings and YoY release analytics |
+| AI insights | 3–5 working days | Traceable summaries, anomaly prompts and insight review workflow |
+
+The 3–5 day target is viable for a testable Release 1, not for every production integration. Approval lead time for identity, signing and distribution is outside development effort.
+
+## Dependencies
+
+- Entra public-client registration with delegated SharePoint/Graph permissions
+- Confirmed SharePoint schemas and security groups
+- TFS and Windchill export samples
+- Philips code-signing and approved executable distribution route
+
+## Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| In-house tool maintained by one person; departure creates continuity risk | Secondary maintainer, PR review, runbook, recorded handover, tagged releases and restore rehearsal |
+| Users do not update regularly | Focused monthly workbench, reminders later, update completeness signals and short entry flow |
+| Planning or actuals changed after deadline | Separate period locks, reasoned temporary extensions and immutable audit events |
+| Unsigned executable is blocked | Enterprise signing certificate and software-center/approved SharePoint distribution |
+| AI creates unsupported conclusions | Source-linked insights, human review, no automated control decisions |
+
+## Operating ownership
+
+- Application Owner: service continuity and access model
+- Admin: configuration, roles and period controls
+- Process Owner: master values, deadline exceptions and data quality
+- Contributor: owned activities and monthly actuals
+- Viewer: dashboards and exports
+
+## Backlog
+
+The [Code Review Backlog](CODE-REVIEW-BACKLOG.md) lists P1 fixes and records requirement and behavior contradictions under **Potential Bug** (imported from `ponkritz/DemandPlanning`; to be confirmed against this repository).
+
+Deferred on request; to be decided again when needed:
+
+- **Baseline rules with nothing saved** (design defaults review DEF-16, OI-12): whether the example rules apply or none — to be decided later.
+- **Dates typed as text in imports** (DEF-20, DEF-51): the history import reads "05/10/2026" as day/month, the Windchill import as month/day; the owner checks the real files before one rule is chosen.
+- **PI Review Discussions stored in Git** (OI-19, PIR-02, PIR-05, PIR-06; parked by the product owner on 25 Nov 2026 — the data is also wanted for another analysis): after Read all Discussions keep each Feature's latest review (text, author, date, split fields, comment count) in the Git data repository, loaded first and refreshed only for the Features that changed; the file format and the privacy of comment text and names in Git are to be designed.
+- **Windchill export removal marker and Delete for stream exports** (OI-20, OI-21; parked by the product owner on 25 Nov 2026): a marker so other browsers drop a deleted Windchill export, and Delete this export… for the S&S IT / ECP exports in Release Details.
+
+- **SharePoint central storage and SharePoint snapshots** (SNP-01…03, IF-04; moved here on 2026-11-23 because SharePoint is not functional). The app no longer keeps its data in a SharePoint file or signs in to Microsoft; LTE / PI Review snapshots are saved to the private Git data repository (`philips-internal/InD_DemandPlanningStorage`, folder `lte-snapshots/`) instead (SNP-04…08), and the shared setup already lives there. To bring SharePoint back: an Entra app registration with a site-scoped permission (`Sites.Selected`, PT-13), atomic first creation and etag checks (CR-P1-05/06), and no autosave with sample data. The KPI tracker still reads its workbook from SharePoint in the desktop app (KPT-02, unchanged).
+
+- **DP release matching and DHFI linking (Release Details → DP).** The DP page now shows only the DP connection's query with chosen columns (QV-22). Each DP row is matched again to its QMS-0025 Feature / User Story by SourceProgram + Title at 80%, with Create Feature when none matches (QV-29). Linking the DHFI documents and the Pedestal register stays off the page (OI-14). Pulse Check and the Dashboard count DP from its query by its milestones (QV-24, QV-25).
+

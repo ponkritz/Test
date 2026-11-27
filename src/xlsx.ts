@@ -1,0 +1,312 @@
+// A small Excel (.xlsx) reader and writer, without a library: an .xlsx file is a zip of XML parts. Reading takes every
+// sheet's cells as text — shared and inline strings, numbers, booleans, and dates (cells whose number format is a date
+// become YYYY-MM-DD, with the time when it has one). Writing makes a plain workbook of text, number and date cells, one
+// sheet per table; a sheet may also be hidden, keep its header in view and carry data validations (drop-down lists, date,
+// number and text-length checks, input messages) — the bulk-upload template of the On-Demand pages (OND-103, OND-104).
+// Also reads CSV (comma, semicolon or tab separated). Old binary .xls files are not supported.
+
+export interface WorkbookSheet { name: string; rows: string[][] }
+
+// ---- zip ----
+const u16 = (bytes: Uint8Array, at: number) => bytes[at] | (bytes[at + 1] << 8)
+const u32 = (bytes: Uint8Array, at: number) => (bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16) | (bytes[at + 3] << 24)) >>> 0
+
+// An entry may inflate to at most this many bytes: a tiny zip that inflates to gigabytes would otherwise freeze the tab.
+export const maxInflatedBytes = 100 * 1024 * 1024
+async function inflateRaw(data: Uint8Array, limit = maxInflatedBytes): Promise<Uint8Array> {
+  const reader = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader()
+  const parts: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.length
+    if (total > limit) { await reader.cancel(); throw new Error('The Excel file is too large to read in the browser (over 100 MB unpacked). Remove sheets or rows and upload it again.') }
+    parts.push(value)
+  }
+  const out = new Uint8Array(total); let at = 0
+  for (const part of parts) { out.set(part, at); at += part.length }
+  return out
+}
+
+export async function unzip(bytes: Uint8Array): Promise<Map<string, Uint8Array>> {
+  let end = -1
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 65557); at--) if (u32(bytes, at) === 0x06054b50) { end = at; break }
+  if (end < 0) throw new Error('This is not an Excel (.xlsx) file. Save it as .xlsx (Excel Workbook) or CSV and upload it again.')
+  const count = u16(bytes, end + 10)
+  let at = u32(bytes, end + 16)
+  const files = new Map<string, Uint8Array>()
+  // All entries together stay within the same limit as one (KB-04): many entries each just under it would not.
+  let unpacked = 0
+  for (let index = 0; index < count; index++) {
+    if (u32(bytes, at) !== 0x02014b50) throw new Error('The Excel file is damaged (zip directory).')
+    const method = u16(bytes, at + 10), size = u32(bytes, at + 20), nameLength = u16(bytes, at + 28), extra = u16(bytes, at + 30), comment = u16(bytes, at + 32), local = u32(bytes, at + 42)
+    const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength))
+    at += 46 + nameLength + extra + comment
+    if (u32(bytes, local) !== 0x04034b50) throw new Error('The Excel file is damaged (zip entry).')
+    const start = local + 30 + u16(bytes, local + 26) + u16(bytes, local + 28)
+    const data = bytes.subarray(start, start + size)
+    const left = maxInflatedBytes - unpacked
+    const file = method === 0 ? data : method === 8 ? await inflateRaw(data, left) : null
+    if (!file) continue
+    unpacked += file.length
+    if (unpacked > maxInflatedBytes) throw new Error('The Excel file is too large to read in the browser (over 100 MB unpacked). Remove sheets or rows and upload it again.')
+    files.set(name, file)
+  }
+  return files
+}
+
+const crcTable = (() => { const table = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0 } return table })()
+function crc32(data: Uint8Array) { let crc = 0xffffffff; for (const byte of data) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8); return (crc ^ 0xffffffff) >>> 0 }
+
+// A zip with stored (uncompressed) entries: valid for Excel and PowerPoint and simple to write.
+export function zip(files: [string, string][]): Uint8Array {
+  const encoder = new TextEncoder()
+  return zipBytes(files.map(([name, text]) => [name, encoder.encode(text)]))
+}
+export function zipBytes(files: [string, Uint8Array][]): Uint8Array {
+  const encoder = new TextEncoder()
+  const parts: Uint8Array[] = [], central: Uint8Array[] = []
+  let offset = 0
+  for (const [name, data] of files) {
+    const nameBytes = encoder.encode(name), crc = crc32(data)
+    const local = new Uint8Array(30 + nameBytes.length), view = new DataView(local.buffer)
+    view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true); view.setUint16(8, 0, true); view.setUint32(14, crc, true); view.setUint32(18, data.length, true); view.setUint32(22, data.length, true); view.setUint16(26, nameBytes.length, true)
+    local.set(nameBytes, 30)
+    const entry = new Uint8Array(46 + nameBytes.length), entryView = new DataView(entry.buffer)
+    entryView.setUint32(0, 0x02014b50, true); entryView.setUint16(4, 20, true); entryView.setUint16(6, 20, true); entryView.setUint32(16, crc, true); entryView.setUint32(20, data.length, true); entryView.setUint32(24, data.length, true); entryView.setUint16(28, nameBytes.length, true); entryView.setUint32(42, offset, true)
+    entry.set(nameBytes, 46)
+    parts.push(local, data); central.push(entry)
+    offset += local.length + data.length
+  }
+  const size = central.reduce((sum, entry) => sum + entry.length, 0)
+  const end = new Uint8Array(22), endView = new DataView(end.buffer)
+  endView.setUint32(0, 0x06054b50, true); endView.setUint16(8, files.length, true); endView.setUint16(10, files.length, true); endView.setUint32(12, size, true); endView.setUint32(16, offset, true)
+  const out = new Uint8Array(offset + size + 22)
+  let at = 0
+  for (const part of [...parts, ...central, end]) { out.set(part, at); at += part.length }
+  return out
+}
+
+// ---- XML (the few shapes an .xlsx uses) ----
+const unescapeXml = (text: string) => text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, code: string) => {
+  const lower = code.toLowerCase()
+  if (lower === 'amp') return '&'; if (lower === 'lt') return '<'; if (lower === 'gt') return '>'; if (lower === 'quot') return '"'; if (lower === 'apos') return "'"
+  const value = lower.startsWith('#x') ? parseInt(lower.slice(2), 16) : parseInt(lower.slice(1), 10)
+  return Number.isFinite(value) && value >= 0 && value <= 0x10ffff ? String.fromCodePoint(value) : ''
+})
+const escapeXml = (text: string) => text.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!).split('').filter((char) => { const code = char.charCodeAt(0); return code >= 32 || code === 9 || code === 10 || code === 13 }).join('')
+function attributes(tag: string) {
+  const found: Record<string, string> = {}
+  for (const match of tag.matchAll(/([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) found[match[1]] = unescapeXml(match[3] ?? match[4] ?? '')
+  return found
+}
+const local = (name: string) => name.includes(':') ? name.slice(name.indexOf(':') + 1) : name
+const textOf = (xml: string) => [...xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').matchAll(/<(?:\w+:)?t\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:\w+:)?t>)/g)].map((match) => unescapeXml(match[1] ?? '')).join('')
+
+// ---- reading ----
+const builtInDates = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47])
+function dateStyles(styles: string | undefined) {
+  if (!styles) return new Set<number>()
+  const custom = new Map<number, string>()
+  for (const match of styles.matchAll(/<(?:\w+:)?numFmt\b[^>]*>/g)) { const attrs = attributes(match[0]); custom.set(Number(attrs.numFmtId), attrs.formatCode ?? '') }
+  const isDate = (id: number) => builtInDates.has(id) || (custom.has(id) && /[dmyhs]/i.test(custom.get(id)!.replace(/"[^"]*"|\[[^\]]*\]|\\./g, '')) && !/^general$/i.test(custom.get(id)!))
+  const cellXfs = /<(?:\w+:)?cellXfs\b[^>]*>([\s\S]*?)<\/(?:\w+:)?cellXfs>/.exec(styles)?.[1] ?? ''
+  const dates = new Set<number>()
+  ;[...cellXfs.matchAll(/<(?:\w+:)?xf\b[^>]*>/g)].forEach((match, index) => { if (isDate(Number(attributes(match[0]).numFmtId))) dates.add(index) })
+  return dates
+}
+const pad = (value: number) => String(value).padStart(2, '0')
+export function excelDate(serial: number, date1904 = false) {
+  const days = serial + (date1904 ? 1462 : 0)
+  const ms = Math.round((days - 25569) * 86400000)
+  const date = new Date(ms)
+  const day = `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+  const minutes = date.getUTCHours() * 60 + date.getUTCMinutes()
+  return minutes ? `${day} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}` : day
+}
+const numberText = (raw: string) => { const value = Number(raw); return Number.isFinite(value) ? String(Number(value.toPrecision(15))) : raw }
+const columnIndex = (ref: string) => { let index = 0; for (const char of ref.replace(/\d+$/, '').toUpperCase()) index = index * 26 + (char.charCodeAt(0) - 64); return index - 1 }
+
+// Excel's own limits (KB-04): a cell address beyond them is a crafted or damaged file, and the empty cells padded in
+// before a far-away cell are counted, so a few cells cannot make the tab build billions of empty ones.
+export const maxSheetRows = 1048576, maxSheetColumns = 16384, maxSheetCells = 5_000_000
+const tooLarge = () => new Error('The Excel sheet is too large or damaged (a cell beyond Excel\'s limits, or over 5 million cells). Save only the needed rows and columns and upload it again.')
+function readSheet(xml: string, shared: string[], dates: Set<number>, date1904: boolean): string[][] {
+  const rows: string[][] = []
+  let cellCount = 0
+  const data = /<(?:\w+:)?sheetData\b[^>]*>([\s\S]*?)<\/(?:\w+:)?sheetData>/.exec(xml)?.[1] ?? ''
+  let nextRow = 0
+  for (const row of data.matchAll(/<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g)) {
+    const rowAttrs = attributes(row[1]), rowIndex = rowAttrs.r ? Number(rowAttrs.r) - 1 : nextRow
+    if (!Number.isSafeInteger(rowIndex) || rowIndex < 0 || rowIndex >= maxSheetRows) throw tooLarge()
+    nextRow = rowIndex + 1
+    const cells: string[] = []
+    let nextCell = 0
+    for (const cell of (row[2] ?? '').matchAll(/<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)) {
+      const attrs = attributes(cell[1]), body = cell[2] ?? ''
+      const index = attrs.r ? columnIndex(attrs.r) : nextCell
+      if (!Number.isSafeInteger(index) || index < 0 || index >= maxSheetColumns) throw tooLarge()
+      nextCell = index + 1
+      const raw = /<(?:\w+:)?v\b[^>]*>([\s\S]*?)<\/(?:\w+:)?v>/.exec(body)?.[1]
+      let value = ''
+      if (attrs.t === 's') value = shared[Number(raw)] ?? ''
+      else if (attrs.t === 'inlineStr') value = textOf(body)
+      else if (attrs.t === 'str' || attrs.t === 'e') value = unescapeXml(raw ?? '')
+      else if (attrs.t === 'b') value = raw === '1' ? 'TRUE' : raw === '0' ? 'FALSE' : ''
+      else if (raw != null && raw !== '') value = attrs.s != null && dates.has(Number(attrs.s)) && Number.isFinite(Number(raw)) ? excelDate(Number(raw), date1904) : numberText(unescapeXml(raw))
+      if (value !== '') { cellCount += Math.max(1, index + 1 - cells.length); if (cellCount > maxSheetCells) throw tooLarge(); while (cells.length < index) cells.push(''); cells[index] = value }
+    }
+    cellCount += Math.max(0, rowIndex - rows.length)
+    if (cellCount > maxSheetCells) throw tooLarge()
+    while (rows.length < rowIndex) rows.push([])
+    rows[rowIndex] = cells
+  }
+  return rows
+}
+
+export async function readXlsx(bytes: Uint8Array): Promise<WorkbookSheet[]> {
+  const files = await unzip(bytes)
+  const text = (name: string) => { const data = files.get(name) ?? files.get(name.replace(/^\//, '')); return data ? new TextDecoder().decode(data) : undefined }
+  const workbook = text('xl/workbook.xml')
+  if (!workbook) throw new Error('This file has no Excel workbook in it. Save it as .xlsx (Excel Workbook) or CSV and upload it again.')
+  const rels = new Map<string, string>()
+  for (const match of (text('xl/_rels/workbook.xml.rels') ?? '').matchAll(/<(?:\w+:)?Relationship\b[^>]*>/g)) { const attrs = attributes(match[0]); rels.set(attrs.Id, attrs.Target) }
+  const shared = [...(text('xl/sharedStrings.xml') ?? '').matchAll(/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((match) => textOf(match[1]))
+  const dates = dateStyles(text('xl/styles.xml'))
+  const date1904 = /<(?:\w+:)?workbookPr\b[^>]*date1904\s*=\s*"(1|true)"/i.test(workbook)
+  const sheets: WorkbookSheet[] = []
+  for (const match of workbook.matchAll(/<(?:\w+:)?sheet\b[^>]*>/g)) {
+    const attrs = attributes(match[0])
+    const id = Object.entries(attrs).find(([key]) => local(key) === 'id' && key.includes(':'))?.[1] ?? ''
+    const target = rels.get(id)
+    if (!target) continue
+    const path = target.startsWith('/') ? target.slice(1) : `xl/${target.replace(/^\.\//, '')}`
+    const xml = text(path)
+    if (xml == null) continue
+    sheets.push({ name: attrs.name || `Sheet${sheets.length + 1}`, rows: readSheet(xml, shared, dates, date1904) })
+  }
+  if (!sheets.length) throw new Error('No sheets were found in this Excel file.')
+  return sheets
+}
+
+// ---- CSV ----
+export function readCsv(text: string): string[][] {
+  const body = text.replace(/^﻿/, '')
+  const first = body.split(/\r?\n/, 1)[0] ?? ''
+  const count = (char: string) => first.split(char).length - 1
+  const delimiter = [',', ';', '\t'].sort((a, b) => count(b) - count(a))[0]
+  const rows: string[][] = []
+  let row: string[] = [], field = '', quoted = false
+  for (let index = 0; index < body.length; index++) {
+    const char = body[index]
+    if (quoted) {
+      if (char === '"' && body[index + 1] === '"') { field += '"'; index++ }
+      else if (char === '"') quoted = false
+      else field += char
+    } else if (char === '"' && field === '') quoted = true
+    else if (char === delimiter) { row.push(field); field = '' }
+    else if (char === '\n' || char === '\r') { if (char === '\r' && body[index + 1] === '\n') index++; row.push(field); rows.push(row); row = []; field = '' }
+    else field += char
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row) }
+  return rows
+}
+
+// ---- writing ----
+export const columnLetter = (index: number) => { let name = ''; for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + ((n - 1) % 26)) + name; return name }
+export function sheetName(name: string, used: Set<string>) {
+  const base = (name.replace(/[[\]:*?/\\]/g, ' ').trim() || 'Sheet').slice(0, 31)
+  let candidate = base, n = 2
+  while (used.has(candidate.toLowerCase())) { const suffix = ` (${n++})`; candidate = base.slice(0, 31 - suffix.length) + suffix }
+  used.add(candidate.toLowerCase())
+  return candidate
+}
+// A cell of a written sheet (UI-11): text, a number, or a date — a date is written as a real Excel date-time (a serial
+// number with a date format), from the viewer's wall-clock time, so Excel can show it as a long date and time.
+export type XlsxCell = string | number | { date: Date; time?: boolean } | null | undefined
+// OND-103…OND-105: a sheet may be hidden (state="hidden", e.g. the lists of a template's dropdowns), keep its first row in
+// view (freeze), give its columns widths (in characters), mark header cells ('required': bold on a light fill, 'muted':
+// bold grey, for a column not to edit) and carry data validations (<dataValidations>, ECMA-376 Part 1 §18.3.1.32).
+export interface XlsxValidation {
+  // The cells, e.g. "C2:C2001"; several ranges separated by a space.
+  sqref: string
+  // list: a drop-down — items (written inline, "A,B") or source (a range such as 'Lists'!$A$2:$A$9); date / decimal /
+  // textLength: a value between (or up to) the bounds; none: only the input message (prompt).
+  type: 'list' | 'date' | 'decimal' | 'textLength' | 'none'
+  items?: string[]; source?: string
+  operator?: 'between' | 'lessThanOrEqual'
+  formula1?: string | number; formula2?: string | number
+  // false: any value is accepted (a list then only offers its items).
+  strict?: boolean
+  promptTitle?: string; prompt?: string; errorTitle?: string; error?: string
+}
+export interface XlsxSheet { name: string; rows: XlsxCell[][]; hidden?: boolean; freeze?: boolean; widths?: number[]; headerMarks?: ('required' | 'muted' | '')[]; validations?: XlsxValidation[] }
+// The longest list source Excel takes in a data validation (its formula1), in characters.
+export const maxListFormula = 255
+// An inline list for a data validation: the items between double quotes, separated by commas, a quote inside an item
+// doubled. Null when it cannot be inline — an item holds a comma (Excel would split it) or a line break, the list is
+// empty, or the formula is longer than Excel's 255 characters: the list then goes on a (hidden) sheet as a range.
+export function inlineList(items: string[]): string | null {
+  if (!items.length || items.some((item) => item.includes(',') || /[\r\n]/.test(item))) return null
+  const formula = `"${items.map((item) => item.replaceAll('"', '""')).join(',')}"`
+  return formula.length > maxListFormula ? null : formula
+}
+// A sheet name as a formula writes it: always quoted, a quote inside doubled ('It''s'!$A$1).
+export const sheetRef = (name: string) => `'${name.replaceAll("'", "''")}'`
+export const excelSerial = (date: Date) => (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds()) - Date.UTC(1899, 11, 30)) / 86_400_000
+const dateTimeFormats: Record<string, string> = { 'yyyy-mm-dd hh:mm': 'yyyy-mm-dd hh:mm', 'dd-mmm-yyyy hh:mm': 'dd-mmm-yyyy hh:mm', 'dd/mm/yyyy hh:mm': 'dd/mm/yyyy hh:mm', 'mm/dd/yyyy hh:mm': 'mm/dd/yyyy hh:mm' }
+// One <dataValidation> (OND-104): its type and operator, allowBlank, the input message (prompt, at most 255 characters,
+// its title at most 32), the error message when the rule is strict, the cells, then formula1 / formula2. All text is
+// escaped for XML; a list without items (and no range) is left out.
+const cut = (text: string | undefined, max: number) => (text ?? '').slice(0, max)
+function validationXml(rule: XlsxValidation) {
+  const list = rule.type === 'list' ? rule.source ?? inlineList(rule.items ?? []) : null
+  if (rule.type === 'list' && !list) return ''
+  const strict = rule.strict !== false && rule.type !== 'none'
+  const attrs = [
+    rule.type === 'none' ? '' : `type="${rule.type}"`,
+    rule.type !== 'list' && rule.type !== 'none' && rule.operator && rule.operator !== 'between' ? `operator="${rule.operator}"` : '',
+    'allowBlank="1"',
+    rule.prompt ? 'showInputMessage="1"' : '',
+    strict ? 'showErrorMessage="1"' : '',
+    rule.errorTitle && strict ? `errorTitle="${escapeXml(cut(rule.errorTitle, 32))}"` : '',
+    rule.error && strict ? `error="${escapeXml(cut(rule.error, 255))}"` : '',
+    rule.promptTitle && rule.prompt ? `promptTitle="${escapeXml(cut(rule.promptTitle, 32))}"` : '',
+    rule.prompt ? `prompt="${escapeXml(cut(rule.prompt, 255))}"` : '',
+    `sqref="${escapeXml(rule.sqref)}"`,
+  ].filter(Boolean).join(' ')
+  const formula = (value: string | number | undefined) => value == null ? '' : escapeXml(String(value))
+  const body = rule.type === 'list' ? `<formula1>${escapeXml(list!)}</formula1>` : rule.type === 'none' ? '' : `<formula1>${formula(rule.formula1)}</formula1>${rule.formula2 != null && (rule.operator ?? 'between') === 'between' ? `<formula2>${formula(rule.formula2)}</formula2>` : ''}`
+  return body ? `<dataValidation ${attrs}>${body}</dataValidation>` : `<dataValidation ${attrs}/>`
+}
+export function writeXlsx(sheets: (WorkbookSheet | XlsxSheet)[], dateFormat = 'yyyy-mm-dd hh:mm'): Uint8Array {
+  const dateTime = dateTimeFormats[dateFormat] ?? dateTimeFormats['yyyy-mm-dd hh:mm'], dateOnly = dateTime.replace(/\s*hh:mm$/, '')
+  // Styles: 1 bold (a header), 4 a required header (bold on a light fill), 5 a column not to edit (bold grey).
+  const cellXml = (value: XlsxCell, ref: string, header: boolean, mark: '' | 'required' | 'muted' = '') => {
+    if (value === '' || value == null) return ''
+    const style = header ? ` s="${mark === 'required' ? 4 : mark === 'muted' ? 5 : 1}"` : ''
+    if (typeof value === 'number') return Number.isFinite(value) ? `<c r="${ref}"${style}><v>${value}</v></c>` : ''
+    if (typeof value === 'object') return Number.isNaN(value.date.getTime()) ? '' : `<c r="${ref}" s="${value.time === false ? 3 : 2}"><v>${excelSerial(value.date)}</v></c>`
+    return `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`
+  }
+  const used = new Set<string>()
+  const named = (sheets.length ? sheets : [{ name: 'Sheet1', rows: [] }]).map((sheet) => ({ ...sheet, name: sheetName(sheet.name, used) }))
+  const sheetXml = (sheet: XlsxSheet | WorkbookSheet) => {
+    const { rows } = sheet, extra = sheet as XlsxSheet
+    // The parts in the order the schema asks for: sheetViews, cols, sheetData, dataValidations.
+    const views = extra.freeze ? '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>' : ''
+    const cols = extra.widths?.length ? `<cols>${extra.widths.map((width, c) => `<col min="${c + 1}" max="${c + 1}" width="${Math.max(4, Math.min(120, Math.round(width)))}" customWidth="1"/>`).join('')}</cols>` : ''
+    const rules = (extra.validations ?? []).map(validationXml).filter(Boolean)
+    const validations = rules.length ? `<dataValidations count="${rules.length}">${rules.join('')}</dataValidations>` : ''
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${views}${cols}<sheetData>${rows.map((row, r) => `<row r="${r + 1}">${row.map((value, c) => cellXml(value, `${columnLetter(c)}${r + 1}`, r === 0, r === 0 ? extra.headerMarks?.[c] ?? '' : '')).join('')}</row>`).join('')}</sheetData>${validations}</worksheet>`
+  }
+  return zip([
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${named.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`],
+    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${named.map((sheet, i) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${i + 1}"${(sheet as XlsxSheet).hidden ? ' state="hidden"' : ''} r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${named.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${named.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ['xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="${escapeXml(dateTime)}"/><numFmt numFmtId="165" formatCode="${escapeXml(dateOnly)}"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF595959"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`],
+    ...named.map((sheet, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sheet)]),
+  ])
+}

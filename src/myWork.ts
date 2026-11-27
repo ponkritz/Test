@@ -1,0 +1,392 @@
+import { finishedStates } from './workStates.ts'
+import { utcToday } from './businessTime.ts'
+import type { AzureWorkItem } from './domain'
+import { isTimeWritingStory, isTrainingWork, planMonthStory, timeWritingMonth, timeWritingStoryIds } from './azureInsights.ts'
+
+// "Me" is matched by Azure email (Assigned To unique name) when known, otherwise by display name.
+export interface Me { email?: string; name?: string }
+// Not pending: finished (owner decision 10) or gone (Removed, Cut).
+const finished = new Set<string>([...finishedStates, 'removed', 'cut'])
+export const isPending = (item: Pick<AzureWorkItem, 'state'>) => !finished.has(item.state.trim().toLowerCase())
+export function isMine(item: Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>, me: Me) {
+  const email = me.email?.trim().toLowerCase(), name = me.name?.trim().toLowerCase()
+  if (email && item.assignedToEmail) return item.assignedToEmail === email
+  return Boolean(name && item.assignedTo.trim().toLowerCase() === name)
+}
+
+export const workTypes = ['Feature', 'User Story', 'Bug', 'Task'] as const
+
+// ATM-31: the buckets (type chips) of My Tasks [Board]. The Time Writing User Story (a story holding month Tasks, or one
+// whose title says "Time Writing", timeWritingStoryIds) has a bucket of its own, "Auto Time Writing US", and is no longer
+// counted or listed under User Story; All holds every bucket and Other every type not named.
+export const timeWritingBucket = 'Auto Time Writing US'
+export const workBuckets = ['Feature', 'User Story', timeWritingBucket, 'Bug', 'Task'] as const
+export type WorkBucket = typeof workBuckets[number] | 'Other'
+export function workBucketOf(item: Pick<AzureWorkItem, 'id' | 'workItemType'>, storyIds: ReadonlySet<number>): WorkBucket {
+  if (item.workItemType === 'User Story' && storyIds.has(item.id)) return timeWritingBucket
+  return (workTypes as readonly string[]).includes(item.workItemType) ? item.workItemType as WorkBucket : 'Other'
+}
+// Pending rows per bucket; the buckets add up to the pending total.
+export function bucketCounts(rows: { item: Pick<AzureWorkItem, 'id' | 'workItemType'> }[], storyIds: ReadonlySet<number>): Record<WorkBucket, number> {
+  const counts = Object.fromEntries([...workBuckets, 'Other'].map((bucket) => [bucket, 0])) as Record<WorkBucket, number>
+  for (const { item } of rows) counts[workBucketOf(item, storyIds)]++
+  return counts
+}
+export const inBucket = (item: Pick<AzureWorkItem, 'id' | 'workItemType'>, bucket: string, storyIds: ReadonlySet<number>) => bucket === 'All' || workBucketOf(item, storyIds) === bucket
+// What a Time Writing User Story opens to (ATM-31): its Month Tasks (every item under it, any assignee), Removed left
+// out, ascending ID.
+export function storyChildren(items: AzureWorkItem[], story: Pick<AzureWorkItem, 'id' | 'organization' | 'project'>) {
+  return items.filter((item) => item.parentId === story.id && item.id !== story.id && item.state.trim().toLowerCase() !== 'removed' && item.organization === story.organization && item.project === story.project).sort((a, b) => a.id - b.id)
+}
+
+function ancestry(items: AzureWorkItem[]) {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  return (item: AzureWorkItem) => {
+    const chain: AzureWorkItem[] = []; const seen = new Set([item.id]); let current = item.parentId == null ? undefined : byId.get(item.parentId)
+    while (current && !seen.has(current.id)) { chain.push(current); seen.add(current.id); current = current.parentId == null ? undefined : byId.get(current.parentId) }
+    return chain
+  }
+}
+
+// Pending (not finished) items assigned to me, excluding absence, grouped by type and ordered Feature → Story → Bug → Task, oldest first.
+export function myPendingWork(items: AzureWorkItem[], me: Me, absenceEpicId?: number) {
+  const chainOf = ancestry(items)
+  const pending = items.filter((item) => isPending(item) && isMine(item, me) && item.workItemType !== 'Epic').map((item) => {
+    const chain = chainOf(item)
+    if (absenceEpicId != null && chain.some((entry) => entry.workItemType === 'Epic' && entry.id === absenceEpicId)) return null
+    return { item, feature: chain.find((entry) => entry.workItemType === 'Feature'), epic: chain.find((entry) => entry.workItemType === 'Epic') }
+  }).filter((row): row is NonNullable<typeof row> => row != null)
+  const rank = (type: string) => { const index = (workTypes as readonly string[]).indexOf(type); return index < 0 ? workTypes.length : index }
+  return pending.sort((a, b) => rank(a.item.workItemType) - rank(b.item.workItemType) || a.item.id - b.item.id)
+}
+
+// Search on My Tasks [Board]: every word must appear (any case) in the ID, title, type, state, Feature, Epic, Area Path,
+// Iteration Path or tags. A blank search matches everything.
+export function matchesWork(row: { item: AzureWorkItem; feature?: AzureWorkItem; epic?: AzureWorkItem }, query: string) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean).map((word) => word.replace(/^#(?=\d)/, ''))
+  if (!words.length) return true
+  const { item, feature, epic } = row
+  const text = [item.id, item.title, item.workItemType, item.state, feature?.title, epic?.title, item.areaPath, item.iterationPath, item.tags].filter((value) => value != null && value !== '').join(' ').toLowerCase()
+  return words.every((word) => text.includes(word))
+}
+
+// Features that need my month Time Writing task: pending, outside the absence Epic, and either assigned to me or
+// holding a pending item of mine. Status comes from the cached backlog; creation re-checks Azure before writing.
+// Shared activities: a pending Feature owned by someone else is also mine to write time on when I had a month Task
+// under it (any month) or its Description @mentions me (my name, letter case ignored).
+export interface MonthTaskCandidate { feature: AzureWorkItem; storyTitle: string; taskTitle: string; status: 'exists' | 'needs-task' | 'needs-story' | 'conflict'; shared?: { owner: string; reason: 'earlier-task' | 'mention' }; leave?: boolean; story?: AzureWorkItem; kind?: AbsenceStoryType }
+// The stories a person keeps under their own Feature of the Team Holidays and Training Epic (ATM-27), one per type, titled
+// "<Name> | <Type> | Time Writing". A story's type is read from its title ("training" or a Training / NPRA tag: CAP-32).
+export const absenceStoryTypes = ['PTO', 'Training', 'Sick Leave', 'Unplanned Leave'] as const
+export type AbsenceStoryType = typeof absenceStoryTypes[number]
+export function absenceStoryType(story: Pick<AzureWorkItem, 'title' | 'workItemType' | 'tags'>): AbsenceStoryType | undefined {
+  if (isTrainingWork(story)) return 'Training'
+  const title = story.title.toLowerCase()
+  if (/\bunplanned\b|\bemergency\b/.test(title)) return 'Unplanned Leave'
+  if (/\bsick\b|\bmedical\b/.test(title)) return 'Sick Leave'
+  if (/\bpto\b|\bvacation\b|\bannual leave\b|\bplanned leave\b/.test(title)) return 'PTO'
+  return undefined
+}
+export const absenceStoryTitle = (name: string, type: AbsenceStoryType) => `${name.trim()} | ${type} | Time Writing`
+const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" }
+// The Description as plain text: tags dropped, the common entities decoded, spaces collapsed.
+const plainText = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/g, (_, name: string) => entities[name]).replace(/\s+/g, ' ')
+// Azure DevOps writes an @mention as a link "@Display Name"; a typed "@Display Name" counts the same.
+export function mentions(description: string | undefined, me: Me) {
+  const name = me.name?.trim().toLowerCase()
+  if (!description || !name) return false
+  const text = plainText(description).toLowerCase(), wanted = `@${name}`
+  for (let at = text.indexOf(wanted); at >= 0; at = text.indexOf(wanted, at + 1)) if (!/[\p{L}\p{N}]/u.test(text[at + wanted.length] ?? '')) return true
+  return false
+}
+// Leave (ATM-24): my PTO / Sick Leave / Unplanned Leave Features under the Team Holidays and Training Epic — assigned
+// to me or holding a User Story of mine, not finished, not training — offered apart in Bulk actions, never counted as a
+// missing month Task (leave is not every month). Same story and Task rules as work.
+export function leaveTaskCandidates(items: AzureWorkItem[], me: Me, monthLabel: string, absenceEpicId?: number): MonthTaskCandidate[] {
+  if (absenceEpicId == null) return []
+  const chainOf = ancestry(items)
+  const underEpic = (item: AzureWorkItem) => chainOf(item).some((entry) => entry.workItemType === 'Epic' && entry.id === absenceEpicId)
+  const featureIds = new Set<number>()
+  for (const item of items) {
+    if (!isMine(item, me) || item.state.trim().toLowerCase() === 'removed' || !underEpic(item) || timeWritingMonth(item.title)) continue
+    const feature = item.workItemType === 'Feature' ? item : item.workItemType === 'User Story' ? chainOf(item).find((entry) => entry.workItemType === 'Feature') : undefined
+    if (feature && isPending(feature)) featureIds.add(feature.id)
+  }
+  // ATM-26: a person's Feature under the Epic holds one story per type (PTO, Training, Sick Leave, Unplanned Leave): one
+  // row per open story of theirs, the month Task going under that story. ATM-27: each type without a story of theirs
+  // gets a row that creates "<Name> | <Type> | Time Writing" and its month Task. Training rows sit in the same list.
+  const month = timeWritingMonth(monthLabel) ?? ''
+  const rows: MonthTaskCandidate[] = []
+  const legacy = new Set<number>()
+  for (const feature of items.filter((item) => featureIds.has(item.id)).sort((a, b) => a.title.localeCompare(b.title))) {
+    const live = items.filter((story) => story.parentId === feature.id && story.workItemType === 'User Story' && isMine(story, me) && story.state.trim().toLowerCase() !== 'removed')
+    // A Feature named after one type (an older layout: "Ana Costa - PTO", "Training") is offered only that type, and a
+    // story under it without a type of its own is of that type.
+    const own = absenceStoryType({ ...feature, workItemType: 'User Story' })
+    const kindOf = (story: AzureWorkItem) => absenceStoryType(story) ?? own
+    for (const story of live.filter(isPending).sort((a, b) => a.title.localeCompare(b.title))) {
+      const has = items.some((task) => task.parentId === story.id && task.workItemType === 'Task' && task.state.trim().toLowerCase() !== 'removed' && isMine(task, me) && timeWritingMonth(task.title) === month)
+      const kind = kindOf(story)
+      rows.push({ feature, story, storyTitle: story.title, taskTitle: `${monthLabel} | ${story.title.trim()}`, status: has ? 'exists' : 'needs-task', leave: true, ...(kind ? { kind } : {}) })
+    }
+    const name = me.name?.trim() || (isMine(feature, me) ? feature.assignedTo.trim() : '') || live[0]?.assignedTo.trim() || ''
+    if (!name) { if (!live.length) legacy.add(feature.id); continue }
+    const present = new Set(live.filter(isPending).map(kindOf))
+    for (const kind of own ? [own] : absenceStoryTypes) if (!present.has(kind)) {
+      const storyTitle = absenceStoryTitle(name, kind)
+      rows.push({ feature, storyTitle, taskTitle: `${monthLabel} | ${storyTitle}`, status: 'needs-story', leave: true, kind })
+    }
+  }
+  // A Feature without a name to build the titles from keeps one row by the Time Writing rules (ATM-24/25).
+  for (const row of monthRows(items, me, monthLabel, legacy, new Map())) rows.push({ ...row, leave: true })
+  return rows
+}
+export function monthTaskCandidates(items: AzureWorkItem[], me: Me, monthLabel: string, absenceEpicId?: number): MonthTaskCandidate[] {
+  const chainOf = ancestry(items)
+  // The Team Holidays and Training Epic is left out: its leave and training stories have their own list (ATM-24, ATM-27).
+  const inAbsence = (item: AzureWorkItem) => absenceEpicId != null && chainOf(item).some((entry) => entry.workItemType === 'Epic' && entry.id === absenceEpicId)
+  const storyIds = timeWritingStoryIds(items)
+  const featureIds = new Set<number>()
+  // ATM-23: a Feature in my name, or an active Feature holding a User Story in my name — in any state but Removed, my own
+  // Time Writing story included, as on a Feature shared by two people who each keep their own stories — or a pending
+  // Task / Bug of mine (month Tasks count through "earlier-task" below).
+  for (const item of items) {
+    if (!isMine(item, me) || inAbsence(item) || item.state.trim().toLowerCase() === 'removed' || timeWritingMonth(item.title)) continue
+    if (item.workItemType === 'Feature') { if (isPending(item)) featureIds.add(item.id); continue }
+    if (item.workItemType !== 'User Story' && (!isPending(item) || storyIds.has(item.id))) continue
+    const feature = chainOf(item).find((entry) => entry.workItemType === 'Feature'); if (feature && isPending(feature)) featureIds.add(feature.id)
+  }
+  const shared = new Map<number, 'earlier-task' | 'mention'>()
+  for (const item of items) {
+    if (item.workItemType !== 'Task' || !isMine(item, me) || !timeWritingMonth(item.title)) continue
+    const feature = chainOf(item).find((entry) => entry.workItemType === 'Feature')
+    if (feature && !featureIds.has(feature.id) && isPending(feature) && !inAbsence(item)) shared.set(feature.id, 'earlier-task')
+  }
+  for (const feature of items) if (feature.workItemType === 'Feature' && !featureIds.has(feature.id) && !shared.has(feature.id) && isPending(feature) && !inAbsence(feature) && mentions(feature.description, me)) shared.set(feature.id, 'mention')
+  for (const id of shared.keys()) featureIds.add(id)
+  return monthRows(items, me, monthLabel, featureIds, shared)
+}
+function monthRows(items: AzureWorkItem[], me: Me, monthLabel: string, featureIds: Set<number>, shared: Map<number, 'earlier-task' | 'mention'>): MonthTaskCandidate[] {
+  const month = timeWritingMonth(monthLabel) ?? ''
+  const childrenOf = (id: number) => items.filter((item) => item.parentId === id)
+  return items.filter((item) => featureIds.has(item.id)).sort((a, b) => a.title.localeCompare(b.title)).map((feature) => {
+    const storyTitle = `${feature.title.trim()} - Time Writing`, taskTitle = `${monthLabel} | ${feature.title.trim()}`
+    const children = childrenOf(feature.id)
+    const plan = planMonthStory(children.filter((item) => item.workItemType === 'User Story').map((story) => ({ story, tasks: childrenOf(story.id) })), children.filter((item) => item.workItemType === 'Task'), month, storyTitle, (task) => isMine(task, me))
+    const status = plan.status === 'exists' ? 'exists' as const : plan.status === 'use' ? 'needs-task' as const : plan.status === 'create' ? 'needs-story' as const : 'conflict' as const
+    const reason = shared.get(feature.id)
+    return { feature, storyTitle: plan.status === 'use' ? plan.story.title : storyTitle, taskTitle, status, ...(reason ? { shared: { owner: feature.assignedTo.trim() || 'nobody', reason } } : {}) }
+  })
+}
+
+// Dated iterations from Azure (path + start/finish), as read for the Sprint picker.
+export interface DatedIteration { path: string; attributes?: { startDate?: string; finishDate?: string } }
+// A Sprint is past when its finish date is before today (UTC, NAV-51). Undated or unknown iterations are not past.
+export function isPastSprint(path: string, iterations: DatedIteration[], date = new Date()) {
+  const sprint = iterations.find((item) => item.path.trim().toLowerCase() === path.trim().toLowerCase())
+  const finish = sprint?.attributes?.finishDate?.slice(0, 10)
+  return Boolean(finish && /^\d{4}-\d{2}-\d{2}$/.test(finish) && finish < utcToday(date))
+}
+
+// Move to the current Sprint applies only to my pending User Stories sitting in a past Sprint. Stories already in the
+// current or a future Sprint, in an undated iteration (e.g. only the PI) and all other work item types are left alone.
+// states: which of them to move — New, Active, or both (other pending states are left alone).
+export type MoveStates = 'new' | 'active' | 'both'
+export const matchesMoveStates = (state: string, states: MoveStates) => { const value = state.trim().toLowerCase(); return states === 'both' ? value === 'new' || value === 'active' : value === states }
+// Time Writing stories are not tied to a PI or Sprint, so they are never moved.
+export function moveCandidates(items: AzureWorkItem[], me: Me, target: string, iterations: DatedIteration[], absenceEpicId?: number, date = new Date(), states: MoveStates = 'both') {
+  return myPendingWork(items, me, absenceEpicId).filter(({ item }) => item.workItemType === 'User Story' && !isTimeWritingStory(item) && matchesMoveStates(item.state, states) && item.iterationPath.trim().toLowerCase() !== target.trim().toLowerCase() && isPastSprint(item.iterationPath, iterations, date))
+}
+
+// Everyone in the backlog with an Azure email (for choosing who a new work item is assigned to), sorted by name. A name
+// used with more than one email shows the email too, so the choice is never ambiguous.
+export function assignablePeople(items: AzureWorkItem[]) {
+  const byEmail = new Map<string, string>()
+  for (const item of items) if (item.assignedToEmail && item.assignedTo.trim() && !byEmail.has(item.assignedToEmail)) byEmail.set(item.assignedToEmail, item.assignedTo.trim())
+  const counts = new Map<string, number>()
+  for (const name of byEmail.values()) counts.set(name, (counts.get(name) ?? 0) + 1)
+  return [...byEmail.entries()].map(([email, name]) => ({ email, name: (counts.get(name) ?? 0) > 1 ? `${name} (${email})` : name })).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// State checks over the person's Features and User Stories (work under the absence Epic left out):
+//  - a Feature whose User Stories are all Closed should be Closed too;
+//  - a User Story whose Tasks are all Closed should be Closed too;
+//  - an Active Feature should have at least one Active User Story;
+//  - a New Feature with an Active User Story should be Active (ATM-28).
+// Only items with children of that kind are judged; Removed children are ignored.
+export type StateCheckKind = 'close-feature' | 'close-story' | 'feature-needs-active-story' | 'activate-feature' | 'feature-old-pi'
+export interface StateCheck { kind: StateCheckKind; item: AzureWorkItem; children: AzureWorkItem[]; targetPi?: string }
+// ATM-30: the PI part of an Iteration Path — up to and including the first segment named PI or Program Increment
+// ("Quality\\PI 2026.4\\Sprint 2" → "Quality\\PI 2026.4"); undefined when the path has none. PIR-25: "PI" may be
+// followed directly by its number ("PI26.4").
+export function piPathOf(iterationPath: string | undefined) {
+  const parts = (iterationPath ?? '').split('\\')
+  const at = parts.findIndex((part) => /\b(?:pi(?:\b|(?=\d))|program\s*increment\b)/i.test(part))
+  return at < 0 ? undefined : parts.slice(0, at + 1).join('\\')
+}
+export const piName = (path: string) => path.slice(path.lastIndexOf('\\') + 1)
+// PIR-02: true when PI a is later than PI b, compared by the PI's name with its numbers ("PI 2026.10" after "PI 2026.9").
+export const laterPi = (a: string, b: string) => piName(a).localeCompare(piName(b), undefined, { numeric: true, sensitivity: 'base' }) > 0
+const stateIs = (item: Pick<AzureWorkItem, 'state'>, state: string) => item.state.trim().toLowerCase() === state
+export function stateChecks(items: AzureWorkItem[], me: Me, absenceEpicId?: number): StateCheck[] {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const underAbsence = (item: AzureWorkItem) => { const seen = new Set<number>(); for (let current: AzureWorkItem | undefined = item; current && !seen.has(current.id); current = current.parentId == null ? undefined : byId.get(current.parentId)) { if (current.id === absenceEpicId) return true; seen.add(current.id) } return false }
+  const children = new Map<number, AzureWorkItem[]>()
+  for (const item of items) if (item.parentId != null && !stateIs(item, 'removed')) children.set(item.parentId, [...(children.get(item.parentId) ?? []), item])
+  const checks: StateCheck[] = []
+  for (const item of items.filter((entry) => isMine(entry, me) && !stateIs(entry, 'closed') && !stateIs(entry, 'removed') && !underAbsence(entry)).sort((a, b) => a.id - b.id)) {
+    if (item.workItemType === 'Feature') {
+      const stories = (children.get(item.id) ?? []).filter((child) => child.workItemType === 'User Story')
+      if (stories.length && stories.every((story) => stateIs(story, 'closed'))) checks.push({ kind: 'close-feature', item, children: stories })
+      else if (stateIs(item, 'active') && !stories.some((story) => stateIs(story, 'active'))) checks.push({ kind: 'feature-needs-active-story', item, children: stories })
+      else if (stateIs(item, 'new') && stories.some((story) => stateIs(story, 'active'))) checks.push({ kind: 'activate-feature', item, children: stories.filter((story) => stateIs(story, 'active')) })
+      // ATM-30: an Active Feature left in an older PI while its Active User Stories sit in a later one.
+      if (stateIs(item, 'active')) {
+        const active = stories.filter((story) => stateIs(story, 'active'))
+        const target = active.map((story) => piPathOf(story.iterationPath)).filter((path): path is string => Boolean(path)).reduce<string | undefined>((latest, path) => !latest || laterPi(path, latest) ? path : latest, undefined)
+        const own = piPathOf(item.iterationPath)
+        if (target && (!own || laterPi(target, own))) checks.push({ kind: 'feature-old-pi', item, children: active.filter((story) => piPathOf(story.iterationPath)?.toLowerCase() === target.toLowerCase()), targetPi: target })
+      }
+    } else if (item.workItemType === 'User Story') {
+      const tasks = (children.get(item.id) ?? []).filter((child) => child.workItemType === 'Task')
+      if (tasks.length && tasks.every((task) => stateIs(task, 'closed'))) checks.push({ kind: 'close-story', item, children: tasks })
+    }
+  }
+  return checks
+}
+
+// What may be done to an item from My Tasks [Board]: a New Feature or User Story is set to Active; only an Active one
+// is Closed (nothing in any other state). Tasks and Bugs are closed directly.
+// ATM-28: a Feature becomes Active only when one of its User Stories (any, Removed ones aside) is Active.
+export const hasActiveStory = (items: Pick<AzureWorkItem, 'parentId' | 'workItemType' | 'state'>[], featureId: number) => items.some((entry) => entry.parentId === featureId && entry.workItemType === 'User Story' && stateIs(entry, 'active'))
+export const stagedTypes = ['Feature', 'User Story'] as const
+// items given: a New Feature is offered Active only when one of its User Stories is Active (ATM-28).
+export function nextStateFor(item: Pick<AzureWorkItem, 'workItemType' | 'state'> & { id?: number }, items?: Pick<AzureWorkItem, 'parentId' | 'workItemType' | 'state'>[]): { state: 'Active' | 'Closed'; label: string } | null {
+  if (!(stagedTypes as readonly string[]).includes(item.workItemType)) return { state: 'Closed', label: `Close ${item.workItemType}` }
+  if (stateIs(item, 'new') && item.workItemType === 'Feature' && items && item.id != null && !hasActiveStory(items, item.id)) return null
+  if (stateIs(item, 'new')) return { state: 'Active', label: `Set ${item.workItemType} to Active` }
+  if (stateIs(item, 'active')) return { state: 'Closed', label: `Close ${item.workItemType}` }
+  return null
+}
+
+// After a close, the follow-up question: closing a Feature offers to close its open User Stories (not Closed, not
+// Removed); closing the last open User Story of a Feature offers to close the Feature too (a Feature already Closed
+// or Removed is left alone). The states to write per item follow the staged rule: New → Active → Closed.
+export type CloseFollowUp = { kind: 'stories'; feature: AzureWorkItem; stories: AzureWorkItem[] } | { kind: 'feature'; feature: AzureWorkItem; story: AzureWorkItem } | null
+export function closeFollowUp(items: AzureWorkItem[], closed: Pick<AzureWorkItem, 'id' | 'workItemType' | 'parentId' | 'organization' | 'project'>): CloseFollowUp {
+  const live = items.filter((item) => !stateIs(item, 'removed') && item.organization === closed.organization && item.project === closed.project)
+  if (closed.workItemType === 'Feature') {
+    const feature = live.find((item) => item.id === closed.id)
+    const stories = live.filter((item) => item.parentId === closed.id && item.workItemType === 'User Story' && !stateIs(item, 'closed')).sort((a, b) => a.id - b.id)
+    return feature && stories.length ? { kind: 'stories', feature, stories } : null
+  }
+  if (closed.workItemType === 'User Story' && closed.parentId != null) {
+    const feature = live.find((item) => item.id === closed.parentId && item.workItemType === 'Feature')
+    const story = live.find((item) => item.id === closed.id)
+    if (!feature || !story || stateIs(feature, 'closed')) return null
+    const others = live.filter((item) => item.parentId === feature.id && item.workItemType === 'User Story' && item.id !== closed.id)
+    return others.every((entry) => stateIs(entry, 'closed')) ? { kind: 'feature', feature, story } : null
+  }
+  return null
+}
+export const closeStates = (item: Pick<AzureWorkItem, 'workItemType' | 'state'>): ('Active' | 'Closed')[] => !(stagedTypes as readonly string[]).includes(item.workItemType) ? ['Closed'] : stateIs(item, 'new') ? ['Active', 'Closed'] : stateIs(item, 'active') ? ['Closed'] : []
+export function followUpQuestion(follow: NonNullable<CloseFollowUp>) {
+  if (follow.kind === 'stories') return `Feature #${follow.feature.id} is Closed. Also close its ${follow.stories.length} open User Stor${follow.stories.length === 1 ? 'y' : 'ies'} in Azure DevOps?\n${follow.stories.map((story) => `#${story.id} ${story.title} (${story.state})`).join('\n')}`
+  return `#${follow.story.id} was the last open User Story of Feature #${follow.feature.id} “${follow.feature.title}” (${follow.feature.state}). Also close the Feature in Azure DevOps?`
+}
+
+// The work under a Feature on My Tasks [Board]: its direct children (User Stories, Bugs, Tasks; any state but Removed)
+// in ascending ID order, each with its own children the same way. Items of other people are included: the point is
+// to see the whole Feature.
+export interface FeatureChild { item: AzureWorkItem; children: AzureWorkItem[] }
+export function featureChildren(items: AzureWorkItem[], feature: Pick<AzureWorkItem, 'id' | 'organization' | 'project'>): FeatureChild[] {
+  const live = items.filter((item) => item.state.trim().toLowerCase() !== 'removed' && item.organization === feature.organization && item.project === feature.project)
+  const childrenOf = (id: number) => live.filter((item) => item.parentId === id && item.id !== id).sort((a, b) => a.id - b.id)
+  return childrenOf(feature.id).map((item) => ({ item, children: childrenOf(item.id) }))
+}
+
+// "Complete children" is offered only for a Feature without any optional User Story: a User Story under it (not
+// Removed) that is not its Time Writing story. Once one exists, the Feature's children were created and the action
+// is hidden; single stories are still added with ＋ User Story.
+export function hasOptionalStories(items: AzureWorkItem[], feature: Pick<AzureWorkItem, 'id' | 'organization' | 'project'>) {
+  const stories = items.filter((item) => item.workItemType === 'User Story' && item.parentId === feature.id && item.state.trim().toLowerCase() !== 'removed' && item.organization === feature.organization && item.project === feature.project)
+  if (!stories.length) return false
+  const timeWriting = timeWritingStoryIds(items)
+  return stories.some((story) => !timeWriting.has(story.id))
+}
+
+// The month labels after `monthLabel` up to the month of a Feature's Target date ("November 2026", …), at most `max`:
+// the month Tasks Bulk actions can create ahead, up to the Feature's closure. None when the Target date is not later.
+export function monthsUntilTarget(monthLabel: string, targetDate: string | undefined, max = 24): string[] {
+  const from = timeWritingMonth(monthLabel), to = /^\d{4}-\d{2}/.exec(targetDate ?? '')?.[0]
+  if (!from || !to || to <= from) return []
+  const labels: string[] = []
+  const date = new Date(`${from}-01T00:00:00Z`)
+  while (labels.length < max) {
+    date.setUTCMonth(date.getUTCMonth() + 1)
+    const key = date.toISOString().slice(0, 7)
+    if (key > to) break
+    labels.push(date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }))
+  }
+  return labels
+}
+
+// The QMS-0025 backlog shows the person browsing by default (BKL-21): the items assigned to them, every item above them
+// (for context: Epic, Feature, Story) and every item below them (the work under their Features and Stories).
+export function mineWithContext(items: AzureWorkItem[], me: Me): AzureWorkItem[] { return withContext(items, (item) => isMine(item, me)) }
+// BKL-46: the items a filter picks, every item above them for context and every item below them — below only for the
+// items for which `below` says so (Unassigned keeps only the context above, or every unassigned Epic would bring all).
+export function withContext(items: AzureWorkItem[], picked: (item: AzureWorkItem) => boolean, below: (item: AzureWorkItem) => boolean = () => true): AzureWorkItem[] {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const children = new Map<number, AzureWorkItem[]>()
+  for (const item of items) if (item.parentId != null) children.set(item.parentId, [...(children.get(item.parentId) ?? []), item])
+  const keep = new Set<number>()
+  const down = (item: AzureWorkItem) => { if (keep.has(item.id)) return; keep.add(item.id); for (const child of children.get(item.id) ?? []) down(child) }
+  for (const item of items) {
+    if (!picked(item)) continue
+    if (below(item)) down(item); else keep.add(item.id)
+    const seen = new Set([item.id]); let up = item.parentId == null ? undefined : byId.get(item.parentId)
+    while (up && !seen.has(up.id)) { keep.add(up.id); seen.add(up.id); up = up.parentId == null ? undefined : byId.get(up.parentId) }
+  }
+  return items.filter((item) => keep.has(item.id))
+}
+// The Feature a "＋ Time Writing Task" button works on (BKL-22): the row itself, or the Feature above a User Story.
+export function featureOf(items: AzureWorkItem[], item: AzureWorkItem): AzureWorkItem | undefined {
+  if (item.workItemType === 'Feature') return item
+  const byId = new Map(items.map((entry) => [entry.id, entry])); const seen = new Set<number>()
+  for (let up = item.parentId == null ? undefined : byId.get(item.parentId); up && !seen.has(up.id); up = up.parentId == null ? undefined : byId.get(up.parentId)) { if (up.workItemType === 'Feature') return up; seen.add(up.id) }
+  return undefined
+}
+
+// ATM-29: State checks as a tree — the items shown below a check's row (a Feature's User Stories, a User Story's Tasks;
+// Removed ones left out) and whether a row below may be set Active there (only the person's own New User Stories).
+export function stateCheckChildren(items: AzureWorkItem[], item: Pick<AzureWorkItem, 'id' | 'workItemType' | 'organization' | 'project'>) {
+  const type = item.workItemType === 'Feature' ? 'User Story' : item.workItemType === 'User Story' ? 'Task' : ''
+  return items.filter((child) => child.parentId === item.id && child.workItemType === type && child.organization === item.organization && child.project === item.project && !stateIs(child, 'removed')).sort((a, b) => a.id - b.id)
+}
+export const canActivateHere = (child: Pick<AzureWorkItem, 'workItemType' | 'state' | 'assignedTo' | 'assignedToEmail'>, me: Me) => child.workItemType === 'User Story' && stateIs(child, 'new') && isMine(child, me)
+
+// CAP-56: every name the person goes by on the board — the chosen / derived name and each Assigned To display name of
+// items carrying their work email (letter case ignored) — so their own figures are found whichever name Azure DevOps shows.
+export function myNames(items: Pick<AzureWorkItem, 'assignedTo' | 'assignedToEmail'>[], me: Me) {
+  const email = me.email?.trim().toLowerCase()
+  const names = new Set<string>(me.name?.trim() ? [me.name.trim()] : [])
+  if (email) for (const item of items) if (item.assignedTo && item.assignedToEmail?.trim().toLowerCase() === email) names.add(item.assignedTo)
+  return [...names]
+}
+
+
+// ACT-21: Time Writing lists in order of Feature number (ID, lowest first): a row's Feature is its own item when that is
+// a Feature, else the Feature above it; a row with no Feature above it comes after, by its own ID.
+export function byFeatureNumber<T extends { link?: AzureWorkItem }>(items: AzureWorkItem[]) {
+  const key = (row: T) => { const link = row.link; if (!link) return [1, Number.MAX_SAFE_INTEGER] as const; const feature = featureOf(items, link); return feature ? [0, feature.id] as const : [1, link.id] as const }
+  return (a: T, b: T) => { const [ga, ia] = key(a), [gb, ib] = key(b); return ga - gb || ia - ib }
+}
+
+// NAV-47: who My dashboard shows — the person viewed as, else your work email (and its name), else the name you chose
+// before an email was set; never another person chosen with the Person picker.
+export function selfOf(email: string, nameFromEmail: string | undefined, chosen: string, viewed?: Me): Me {
+  if (viewed) return viewed
+  if (email) return { email, ...(nameFromEmail ? { name: nameFromEmail } : {}) }
+  return chosen ? { name: chosen } : {}
+}

@@ -1,0 +1,730 @@
+import { useState, type ReactNode } from 'react'
+import { EmptyState, Info, Metric, Metrics, Notice, Page, Panel, Pill, TablePanel } from '../components/ui'
+import { EpicMixChart, ParetoChart } from '../components/WorkloadCharts'
+import { BuiltInChart, BuiltInGrid } from '../components/ChartSize'
+import { builtInCharts } from '../chartSize'
+import { useChartSizes } from '../useChartSize'
+import { AxisTitles, DataLabelsToggle } from '../components/chartLabels'
+import { useDataLabels } from '../useDataLabels'
+import { epicColors, shortFeatureTitle } from '../chartUtils'
+import { capacityContext, capacityModel, defaultStandardHours, monthlyHours, normalizeCapacitySettings, oldCalculation, sharedTimeScopeLabel, sharedTimeScopes, standardHoursTotal, type SharedTimeScope, type StandardHourLine, problemBreakdown, regions, resourceRoles, type Region, type ResourceRole } from '../capacity'
+import { applyFilter, bandOf, byPerson, byRole, byStream, change, concentration, groupBy, noFilter, narrowPeriod, offeredMonths, offeredQuarters, periodMonths, periodOf, periodQuarters, periodYears, persistentOverload, personMonths, plannedOverload, quarterOf, rebalancing, streamTotals, totals, type Bands, type Dimension, type Period, type PersonMonth, type DashboardFilter } from '../dashboard'
+import { MultiSelect } from '../components/MultiSelect'
+import { ProductOwnerFilter } from '../components/ProductOwnerFilter'
+import { useOwnerFilter } from '../useOwnerFilter'
+import { ownerStreamKeys } from '../epicOwners'
+import { timeWritingMonth } from '../azureInsights'
+import { anomalies, healthScore, monthForecast, planAccuracy, resilience, streamMomentum, type ForecastStatus, type AccuracyVerdict, type Momentum } from '../insights'
+import { streamCounts, type StreamCounts } from '../releaseOverview'
+import { formatDateTime, formatHours, formatPercent, monthName } from '../format'
+import { utcToday } from '../businessTime'
+import type { AzureWorkspace } from '../useAzureWorkspace'
+import type { MyWork } from '../useMyWork'
+import type { Page as PageId } from './registry'
+import type { PageProps } from './types'
+import type { PersonalViewsStore } from '../usePersonalViews'
+import { PageViewForEveryone } from '../components/ViewForEveryone'
+import { CustomizableSections } from '../components/PersonalLayout'
+import { UtilizationTable } from '../components/MonthOverview'
+import { defaultInsightThresholds, thresholdsOf } from '../insightThresholds'
+const T = (bands: Bands) => bands.thresholds ?? defaultInsightThresholds
+import { activeFigureLock, defaultProfile, groupUtilization, defaultTerms, lockedPeople, profileFormula, termsOf, withViewedProfile, type TermKey } from '../calculationProfiles'
+import { ProfilePicker } from '../components/CalculationProfilesPanel'
+import { usePageSettingsGear } from '../usePageSettingsGear'
+
+// Dashboard: demand (planned hours), recorded hours and capacity per person and month, over a period, with one
+// utilization model everywhere — the bands from Admin → Capacity & time (overloaded strictly above overloadedAt %, spare
+// below availableBelow %, balanced in between). Six tabs: Summary (chart, findings, rebalancing, monitor, horizon),
+// Insights (insights.ts), Months (utilization by month, plan or actual, and the month-on-month comparison), People
+// (by person, role or region), Streams (Epics: totals, assignments, mix by month, overrun and ad-hoc Pareto) and
+// Definitions. Hour differences are shown without colour; colour is reserved for utilization against capacity.
+// Team overview (MYD-10…MYD-12): the overview's six tiles each open the tab that explains them; delivery counts live on
+// Pulse Check only.
+const tabs = [['overview', 'Overview'], ['capacity', 'Capacity and workload'], ['streams', 'Streams'], ['quality', 'Plan quality'], ['utilization', 'Utilization'], ['old', 'Old Calculation'], ['definitions', 'Definitions']] as const
+type Tab = typeof tabs[number][0]
+interface Saved { tab: Tab; period: Period; filter: DashboardFilter }
+const storageKey = 'demand-planning-dashboard-v3'
+const list = <T extends string>(value: unknown, allowed?: readonly T[]) => Array.isArray(value) ? value.filter((entry): entry is T => typeof entry === 'string' && (!allowed || allowed.includes(entry as T))) : []
+// OV-15: the period starts on the year and quarter of the month picked in the header (Reset filters goes back to it).
+const defaultPeriod = (month: string): Period => ({ years: [Number(month.slice(0, 4))], quarters: [`${month.slice(0, 4)}-Q${quarterOf(month)}`], months: [] })
+const samePeriod = (a: Period, b: Period) => JSON.stringify(a) === JSON.stringify(b)
+// The choice is remembered in this browser; a period saved in the earlier format ({ year, … }) still loads (periodOf).
+// MYD-08: with personal views the choice follows the person (Git), else this browser keeps it.
+const load = (month: string, stored?: unknown): Saved => {
+  const fallback: Saved = { tab: 'overview', period: defaultPeriod(month), filter: noFilter }
+  try {
+    const saved = (stored && typeof stored === 'object' ? stored : JSON.parse(localStorage.getItem(storageKey) ?? 'null')) as Partial<Saved> | null
+    if (!saved) return fallback
+    return {
+      tab: tabs.some(([key]) => key === saved.tab) ? saved.tab! : 'overview',
+      period: periodOf(saved.period, fallback.period),
+      filter: { regions: list(saved.filter?.regions, regions), roles: list(saved.filter?.roles, resourceRoles), people: list(saved.filter?.people), streams: list(saved.filter?.streams) },
+    }
+  } catch { return fallback }
+}
+const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// Utilization against capacity in the Settings bands: ↑ red above the overloaded threshold, green balanced,
+// ↓ blue spare below the available threshold.
+export function Util({ value, bands }: { value: number | null | undefined; bands: Bands }) {
+  if (value == null) return <span className="muted">—</span>
+  const band = bandOf(value, bands)
+  return <span className={`util util-${band}`}>{band === 'over' ? '↑ ' : band === 'spare' ? '↓ ' : ''}{value.toFixed(1)}%</span>
+}
+const h = (value: number | undefined) => value == null ? '—' : formatHours(value)
+// A difference in hours or percent: direction and size, no colour (colour is for utilization only).
+const signed = (value: number | undefined, unit = 'h') => value == null ? <span className="muted">—</span> : <span className="delta">{value > 0 ? '+' : value < 0 ? '−' : ''}{formatHours(Math.abs(value))}{unit}</span>
+const short = (month: string) => new Intl.DateTimeFormat('en', { month: 'short', year: '2-digit' }).format(new Date(`${month}-01T00:00:00`))
+const statusLabel = { elapsed: 'Elapsed', partial: 'Partial', future: 'Future' } as const
+const pctText = (value: number | null | undefined) => value == null ? '—' : `${value}%`
+const signedPct = (value: number | null | undefined) => value == null ? '—' : `${value > 0 ? '+' : ''}${value}%`
+
+// Lists cut at a limit, with the rest a click away.
+function useMore<T>(items: T[], limit: number) {
+  const [all, setAll] = useState(false)
+  const shown = all ? items : items.slice(0, limit)
+  const more = items.length - shown.length
+  const button = more > 0 || all ? <button type="button" className="text-button" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all (+${more} more)`}</button> : null
+  return { shown, button }
+}
+function MoreTable<T>({ items, limit = 8, render, head }: { items: T[]; limit?: number; render: (item: T) => ReactNode; head: ReactNode }) {
+  const { shown, button } = useMore(items, limit)
+  return <><div className="azure-table"><table><thead>{head}</thead><tbody>{shown.map(render)}</tbody></table></div>{button}</>
+}
+
+export function DashboardPage({ month, azure, store, my, views, navigate, canSetDefault = false, canLock = false }: { month: string; azure: AzureWorkspace; navigate: (page: PageId) => void; store: PageProps['store']; setMonth?: (month: string) => void; my: MyWork; views?: PersonalViewsStore; canSetDefault?: boolean; canLock?: boolean }) {
+  // SET-32: ⚙ Settings for this page (page actions, last), for the people who may change one of its settings.
+  const settingsGear = usePageSettingsGear()
+  const shared = capacityContext(store.state)
+  // CAP-44: an Admin can view this page with another calculation profile (this page, this person only; not saved).
+  const [viewProfile, setViewProfile] = useState('')
+  const settings = canLock ? withViewedProfile(shared, viewProfile) : shared
+  // CAP-43 Lock figures (Admins): the month's person figures as shown now are kept with the capacity settings (shared
+  // in Git); unlocking needs a reason and keeps the entry as history. Both are audited.
+  const who = my.me.name || 'Admin'
+  const lockFigures = (lockMonth: string) => store.update((draft) => {
+    const current = normalizeCapacitySettings(draft.capacitySettings)
+    const model = capacityModel(azure.items, lockMonth, { ...withViewedProfile(capacityContext(draft), viewProfile), figureLocks: undefined })
+    const entry = { lockedOn: new Date().toISOString(), lockedBy: who, profileName: model.profile.name, formula: model.profile.formula, people: lockedPeople(model.people) }
+    draft.capacitySettings = normalizeCapacitySettings({ ...current, figureLocks: { ...current.figureLocks, [lockMonth]: [...(current.figureLocks?.[lockMonth] ?? []), entry].slice(-5) } })
+    draft.audits.unshift({ id: crypto.randomUUID(), timestamp: entry.lockedOn, actor: 'u-owner', action: 'Update', entity: 'CapacitySettings', entityId: `figures-${lockMonth}`, detail: `Figures of ${monthName(lockMonth)} locked by ${who} with profile ${model.profile.name}: ${model.people.length} people, ${formatHours(model.totals.utilized)}h total actual ÷ ${formatHours(model.totals.available)}h = ${formatPercent(model.totals.utilization)}` })
+    return draft
+  })
+  const unlockFigures = (lockMonth: string, why: string) => store.update((draft) => {
+    const current = normalizeCapacitySettings(draft.capacitySettings), list = current.figureLocks?.[lockMonth] ?? []
+    if (!list.length || list[list.length - 1].unlockedOn) return draft
+    const now = new Date().toISOString()
+    draft.capacitySettings = normalizeCapacitySettings({ ...current, figureLocks: { ...current.figureLocks, [lockMonth]: [...list.slice(0, -1), { ...list[list.length - 1], unlockedOn: now, unlockedBy: who, unlockReason: why }] } })
+    draft.audits.unshift({ id: crypto.randomUUID(), timestamp: now, actor: 'u-owner', action: 'Update', entity: 'CapacitySettings', entityId: `figures-${lockMonth}`, detail: `Figures of ${monthName(lockMonth)} unlocked by ${who}: ${why}`.slice(0, 2000) })
+    return draft
+  })
+  // CAP-36: the Standard Hours breakup is kept with the capacity settings (planning data, shared in Git).
+  const saveStandardHours = (lines: StandardHourLine[]) => store.update((draft) => {
+    const next = normalizeCapacitySettings({ ...normalizeCapacitySettings(draft.capacitySettings), standardHours: lines })
+    draft.capacitySettings = next
+    draft.audits.unshift({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), actor: 'u-owner', action: 'Update', entity: 'CapacitySettings', entityId: 'standard-hours', detail: `Standard Hours ${standardHoursTotal(next.standardHours)}h: ${(next.standardHours ?? []).map((line) => `${line.label} ${line.hours}h`).join(', ') || 'none'}` })
+    return draft
+  })
+  // CAP-37: the shared-time groups ('All', 'All-<Region>') left out of the Old Calculation, shared in Git.
+  const saveExcludedScopes = (scopes: SharedTimeScope[]) => store.update((draft) => {
+    draft.capacitySettings = normalizeCapacitySettings({ ...normalizeCapacitySettings(draft.capacitySettings), oldCalcExcludedScopes: scopes })
+    draft.audits.unshift({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), actor: 'u-owner', action: 'Update', entity: 'CapacitySettings', entityId: 'old-calculation-groups', detail: `Old Calculation counts ${sharedTimeScopes.filter((scope) => !scopes.includes(scope)).map(sharedTimeScopeLabel).join(', ') || 'no shared-time group'}` })
+    return draft
+  })
+  const bands: Bands = { overloadedAt: settings.overloadedAt, availableBelow: settings.availableBelow, thresholds: thresholdsOf(settings) }
+  const [saved, setSaved] = useState(() => load(month, views?.filter('dashboard', (value) => value)))
+  const update = (next: Partial<Saved>) => setSaved((current) => { const value = { ...current, ...next }; try { localStorage.setItem(storageKey, JSON.stringify(value)) } catch { /* convenience only */ } views?.setFilter('dashboard', value); return value })
+  const setFilter = (change: Partial<DashboardFilter>) => update({ filter: { ...saved.filter, ...change } })
+  const today = utcToday()
+  // OV-15: the years offered are those in the Time Writing data, this year, the header month's year and any chosen.
+  const years = [...new Set([...azure.items.map((item) => Number(timeWritingMonth(item.title)?.slice(0, 4))).filter((year) => year > 2000), ...saved.period.years, Number(today.slice(0, 4)), Number(month.slice(0, 4))])].sort((a, b) => a - b)
+  // OV-16: Year → Quarter → Month. Nothing ticked in Year = the current year; Quarter offers the quarters of the years
+  // that count, Month the months of the quarters that count; changing a level drops what no longer fits below it.
+  const currentYear = Number(today.slice(0, 4))
+  const months = periodMonths(saved.period, currentYear)
+  const countingYears = periodYears(saved.period, currentYear)
+  const quarterOptions = offeredQuarters(countingYears)
+  const monthOptions = offeredMonths(periodQuarters(saved.period, currentYear))
+  const several = countingYears.length > 1
+  const setPeriod = (period: Period) => update({ period: narrowPeriod(period, currentYear) })
+  const setYears = (value: string[]) => setPeriod({ ...saved.period, years: value.map(Number) })
+  const setQuarters = (value: string[]) => setPeriod({ ...saved.period, quarters: value })
+  const setMonths = (value: string[]) => setPeriod({ ...saved.period, months: value })
+  const periodChanged = !samePeriod(saved.period, defaultPeriod(month))
+  // The scope line: one month by name; whole years as "2026 (whole year)"; several years as the years and the months
+  // of each ("2025, 2026 · Q1"); else the months.
+  const wholeYears = months.length === countingYears.length * 12
+  const periodLabel = months.length === 1 ? monthName(months[0])
+    : wholeYears ? `${countingYears.join(', ')} (whole ${several ? 'years' : 'year'})`
+      : saved.period.months.length || !saved.period.quarters.length ? months.map(short).join(', ')
+        : periodQuarters(saved.period, currentYear).map((quarter) => `Q${quarter.slice(6)} ${quarter.slice(0, 4)}`).join(', ')
+  const everyone = personMonths(azure.items, months, today, settings)
+  // PIR-69: the Product Owner filter narrows the streams (Epics) to those whose Product Owner is chosen, with the
+  // Stream filter (both: the streams in both); remembered in this browser.
+  const owners = useOwnerFilter('dashboard')
+  const streamOptions = streamTotals(everyone)
+  const ownerStreams = ownerStreamKeys(owners.file, azure.items, streamOptions.map((stream) => stream.key), owners.value)
+  const streamsChosen = ownerStreams ? (saved.filter.streams.length ? saved.filter.streams.filter((key) => ownerStreams.includes(key)) : ownerStreams) : saved.filter.streams
+  const effective = { ...saved.filter, streams: ownerStreams && !streamsChosen.length ? ['@no-stream'] : streamsChosen }
+  const rows = applyFilter(everyone, effective)
+  const all = totals(rows)
+  const elapsed = totals(rows.filter((row) => row.status === 'elapsed'))
+  const thisMonth = today.slice(0, 7)
+  const forecast = months.includes(thisMonth) ? monthForecast(rows, thisMonth, today, bands) : null
+  const people = [...new Set(everyone.map((row) => row.person))].sort((a, b) => a.localeCompare(b))
+  const notNow = months.filter((entry) => entry >= thisMonth)
+  const overload = plannedOverload(rows, bands)
+  const filtered = Boolean(saved.filter.regions.length || saved.filter.roles.length || saved.filter.people.length || saved.filter.streams.length || owners.active)
+  const meName = my.me.name
+  // Streams tab charts: the work items with only the Tasks of the people left by the region, role and person filters
+  // (unassigned Tasks such as regional holidays stay); the stream filter does not apply there and the tab says so.
+  const chartPeople = new Set(applyFilter(everyone, { ...effective, streams: [] }).map((row) => row.person))
+  const chartItems = filtered ? azure.items.filter((item) => item.workItemType !== 'Task' || !item.assignedTo || chartPeople.has(item.assignedTo)) : azure.items
+  const filterNote = filtered ? `Filters: ${[saved.filter.regions.length && 'region', saved.filter.roles.length && 'role', saved.filter.people.length && 'team member', saved.filter.streams.length && 'stream', owners.active && 'Product Owner'].filter(Boolean).join(', ')}` : 'No filters'
+
+  return <Page actions={settingsGear ?? undefined}>
+    <div className="dash-filters" role="group" aria-label="Dashboard filters">
+      <MultiSelect label="Year" options={years.map((year) => [String(year), String(year)])} value={saved.period.years.map(String)} onChange={setYears} />
+      <MultiSelect label="Quarter" options={quarterOptions.map((quarter) => [quarter, several ? `Q${quarter.slice(6)} ${quarter.slice(0, 4)}` : `Q${quarter.slice(6)}`])} value={saved.period.quarters} onChange={setQuarters} />
+      <MultiSelect label="Month" options={monthOptions.map((entry) => [entry, several ? `${monthLabels[Number(entry.slice(5)) - 1]} ${entry.slice(0, 4)}` : monthLabels[Number(entry.slice(5)) - 1]])} value={saved.period.months} onChange={setMonths} />
+      <MultiSelect label="Region" options={regions.map((region) => [region, region])} value={saved.filter.regions} onChange={(value) => setFilter({ regions: value as Region[] })} />
+      <MultiSelect label="Role" options={resourceRoles.map((role) => [role, role])} value={saved.filter.roles} onChange={(value) => setFilter({ roles: value as ResourceRole[] })} />
+      <MultiSelect label="Team member" options={people.map((name) => [name, name === meName ? `${name} (me)` : name])} value={saved.filter.people} onChange={(value) => setFilter({ people: value })} />
+      <MultiSelect label="Stream" options={streamOptions.map((stream) => [stream.key, stream.title])} value={saved.filter.streams} onChange={(value) => setFilter({ streams: value })} />
+      <ProductOwnerFilter filter={owners} />
+      <button type="button" className="ghost" disabled={!filtered && !periodChanged} onClick={() => { update({ filter: noFilter, period: defaultPeriod(month) }); owners.change([]) }}>Reset filters</button>
+      {canLock && <ProfilePicker settings={shared} value={viewProfile} onChange={setViewProfile} />}
+    </div>
+    <PageViewForEveryone entryKey="dashboard" what="Team overview period, filters and tab" value={saved} onUse={(value) => setSaved(load(month, value))} />
+    <p className="muted dash-scope">{periodLabel} · {all.people} {all.people === 1 ? 'person' : 'people'} · {rows.length} person-months · {filterNote}{months.some((entry) => activeFigureLock(settings, entry)) && <> · <span role="note">🔒 Locked figures: {months.filter((entry) => activeFigureLock(settings, entry)).map((entry) => { const lock = activeFigureLock(settings, entry)!; return `${short(entry)} (${lock.profileName}, ${formatDateTime(lock.lockedOn)} by ${lock.lockedBy})` }).join(', ')}</span></>}{notNow.length > 0 && <> · <span className="warning-text">{notNow.length === 1 ? `${short(notNow[0])} is` : `${notNow.map(short).join(', ')} are`} not finished: {notNow.length === 1 ? 'its' : 'their'} ratios are not results</span></>} <Info label="Utilization colours">{profileFormula(defaultProfile(settings), settings)} Locked months keep the figures they were locked with. <span className="util util-over">↑ red</span> above {bands.overloadedAt}% (overloaded), <span className="util util-balanced">green</span> balanced, <span className="util util-spare">↓ blue</span> below {bands.availableBelow}% (spare). The thresholds come from Admin → Capacity & time and apply to every number on this page. Hour differences carry no colour: + and − only say the direction. Partial and future months do not establish spare capacity or results.</Info></p>
+    {!rows.length ? <EmptyState title="No Time Writing data for this selection." detail="Change the period or filters, refresh from Azure, or load the synthetic sample." /> : <>
+      <Metrics>
+        <Metric label="Planned utilization" value={<Util value={all.planUtil} bands={bands} />} hint={`${formatHours(all.plan)}h plan / ${formatHours(all.capacity)}h capacity`} />
+        <Metric label="Actual utilization" value={<Util value={all.actualUtil} bands={bands} />} hint={`${formatHours(all.actual)}h recorded`} />
+        <Metric label="Elapsed months: recorded vs planned" value={elapsed.ratio == null ? '—' : formatPercent(elapsed.ratio)} hint={elapsed.plan ? <>{signed(Math.round((elapsed.actual - elapsed.plan) * 100) / 100)} · {formatHours(elapsed.actual)}h of {formatHours(elapsed.plan)}h</> : 'No elapsed month with a plan in the period'} />
+        <Metric label={forecast ? `${short(thisMonth)}: projected vs plan` : 'This month: projected vs plan'} value={forecast && forecast.people.length ? signed(forecast.vsPlan) : '—'} hint={forecast && forecast.people.length ? `${formatHours(forecast.projected)}h projected · ${forecast.share}% of the month gone · ${forecast.counts['over-capacity']} heading over capacity` : 'The current month is not in the period'} tone={forecast && forecast.counts['over-capacity'] ? 'negative' : undefined} />
+        <Metric label="Planned overload" value={`${overload.over.length} / ${overload.people}`} hint={`People planned above ${bands.overloadedAt}% of capacity over the period`} tone={overload.over.length ? 'negative' : undefined} />
+        <Metric label="Unplanned capacity" value={signed(all.gap)} hint={all.gap >= 0 ? 'Capacity − plan over the period: not yet allocated' : 'Capacity − plan: the plan is above capacity'} />
+      </Metrics>
+      <div className="overview-tabs dash-tabs" role="tablist" aria-label="Dashboard sections">{tabs.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={saved.tab === key} className={`backlog-tab ${saved.tab === key ? 'backlog-tab-active' : ''}`} onClick={() => update({ tab: key })}>{label}</button>)}</div>
+      {saved.tab !== 'overview' && <nav className="dash-trail" aria-label="Where you are"><button type="button" className="text-button" onClick={() => update({ tab: 'overview' })}>Team overview</button> › <span>{tabs.find(([key]) => key === saved.tab)?.[1]}</span></nav>}
+      {saved.tab === 'overview' && <CustomizableSections page="team" views={views ?? noViews} canSetDefault={canSetDefault} sections={[
+        { id: 'tiles', label: 'Headline tiles', node: <OverviewTiles rows={rows} months={months} today={today} bands={bands} all={all} overload={overload} forecast={forecast} delivery={streamCounts(store.state, azure.connectionProfiles, months)} open={(tab) => update({ tab })} openPulse={() => navigate('pulse')} /> },
+        { id: 'demand', label: 'Demand against capacity and findings', node: <SummaryTab rows={rows} months={months} bands={bands} parts={['demand']} /> },
+      ]} />}
+      {saved.tab === 'capacity' && <><SummaryTab rows={rows} months={months} bands={bands} parts={['rebalancing', 'monitor']} /><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['forecast', 'unusual']} /><MonthsTab rows={rows} months={months} bands={bands} /><PeopleTab rows={rows} months={months} bands={bands} terms={termsOf(settings, defaultProfile(settings).id)} /></>}
+      {saved.tab === 'streams' && <><StreamsTab rows={rows} months={months} items={chartItems} settings={settings} streamFiltered={effective.streams.length > 0} /><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['momentum', 'resilience']} /></>}
+      {saved.tab === 'quality' && <><InsightsTab rows={rows} months={months} today={today} bands={bands} delivery={[]} parts={['health', 'accuracy']} /><SummaryTab rows={rows} months={months} bands={bands} parts={['horizon']} /></>}
+      {saved.tab === 'utilization' && <UtilizationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={effective} profiles={settings.profiles ?? {}} bands={bands} canLock={canLock} onLock={lockFigures} onUnlock={unlockFigures} />}
+      {saved.tab === 'old' && <OldCalculationTab items={azure.items} months={months} headerMonth={month} settings={settings} filter={effective} profiles={settings.profiles ?? {}} bands={bands} canEdit={canSetDefault} onSaveStandard={saveStandardHours} onSaveExcluded={saveExcludedScopes} />}
+      {saved.tab === 'definitions' && <DefinitionsTab terms={termsOf(settings, defaultProfile(settings).id)} hoursPerDay={settings.hoursPerDay} absenceEpicId={settings.absenceEpicId} bands={bands} formula={profileFormula(defaultProfile(settings), settings)} />}
+    </>}
+  </Page>
+}
+
+function Section({ eyebrow, title, info, children, action }: { eyebrow?: string; title: string; info?: ReactNode; children: ReactNode; action?: ReactNode }) {
+  return <Panel className="dash-section" eyebrow={eyebrow} title={title} info={info} action={action}>{children}</Panel>
+}
+function Card({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'danger' | 'warning' | 'ok' }) {
+  return <div className={`dash-card ${tone ? `dash-card-${tone}` : ''}`}><span>{label}</span><strong>{value}</strong>{hint && <small>{hint}</small>}</div>
+}
+function monthSeries(rows: PersonMonth[], months: string[]) {
+  return months.map((month) => { const entries = rows.filter((row) => row.month === month); return { month, status: entries[0]?.status, rows: entries, ...totals(entries), planLines: entries.reduce((sum, row) => sum + row.planLines, 0), blankActuals: entries.reduce((sum, row) => sum + row.blankActuals, 0) } })
+}
+const hasHours = (rows: PersonMonth[]) => rows.some((row) => row.plan > 0 || row.actual > 0)
+// A tab or panel without hours says so instead of drawing empty charts.
+function NoHours({ children, rows, title = 'Nothing planned or recorded for this selection.' }: { children: ReactNode; rows: PersonMonth[]; title?: string }) {
+  return hasHours(rows) ? <>{children}</> : <EmptyState title={title} detail="The people match the filters, but none of their month Tasks in the period carries planned or recorded hours." />
+}
+
+// Planned and actual bars per month with the capacity as a dashed line; partial and future months shaded.
+export function DemandChart({ rows, months }: { rows: PersonMonth[]; months: string[] }) {
+  const series = monthSeries(rows, months)
+  const [labels, setLabels] = useDataLabels('dashboard-demand')
+  const max = Math.max(1, ...series.flatMap((point) => [point.plan, point.actual, point.capacity]))
+  // UI-17: room on the left and below for the axis names.
+  const shift = 26, plotWidth = Math.max(480, months.length * 70), width = plotWidth + shift, height = 258, top = 16, bottom = 210, slot = plotWidth / months.length, bar = Math.min(22, slot / 4)
+  const y = (value: number) => bottom - value / max * (bottom - top)
+  const line = series.map((point, index) => `${index ? 'L' : 'M'}${index * slot + slot / 2},${y(point.capacity)}`).join(' ')
+  return <div className="dash-chart">
+    <div className="legend"><span><i className="dash-dot dash-plan" />Planned</span><span><i className="dash-dot dash-actual" />Recorded</span><span><i className="dash-dot dash-cap" />Net capacity</span><DataLabelsToggle on={labels} set={setLabels} /></div>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Planned and recorded hours against capacity by month">
+      <g transform={`translate(${shift} 0)`}>
+      {series.map((point, index) => <g key={point.month}>
+        {point.status !== 'elapsed' && <rect x={index * slot} y={top} width={slot} height={bottom - top} className="dash-shade" />}
+        <rect x={index * slot + slot / 2 - bar - 1} y={y(point.plan)} width={bar} height={bottom - y(point.plan)} className="dash-plan"><title>{`${monthName(point.month)}: ${formatHours(point.plan)}h planned`}</title></rect>
+        <rect x={index * slot + slot / 2 + 1} y={y(point.actual)} width={bar} height={bottom - y(point.actual)} className="dash-actual"><title>{`${monthName(point.month)}: ${formatHours(point.actual)}h recorded`}</title></rect>
+        {labels && point.plan > 0 && <text className="viz-data-label" x={index * slot + slot / 2 - bar / 2 - 1} y={y(point.plan) - 4} textAnchor="middle">{formatHours(point.plan)}</text>}
+        {labels && point.actual > 0 && <text className="viz-data-label" x={index * slot + slot / 2 + bar / 2 + 1} y={y(point.actual) - 4} textAnchor="middle">{formatHours(point.actual)}</text>}
+        <text x={index * slot + slot / 2} y={bottom + 20} textAnchor="middle">{short(point.month)}</text>
+      </g>)}
+      <path d={line} className="dash-cap-line" />
+      {series.map((point, index) => <circle key={point.month} cx={index * slot + slot / 2} cy={y(point.capacity)} r={3} className="dash-cap-dot"><title>{`${monthName(point.month)}: ${formatHours(point.capacity)}h capacity`}</title></circle>)}
+      {labels && series.map((point, index) => point.capacity > 0 && <text key={point.month} className="viz-data-label viz-data-label-muted" x={index * slot + slot / 2 + 6} y={y(point.capacity) - 6}>{formatHours(point.capacity)}</text>)}
+      </g>
+      <AxisTitles x="Month" y="Hours" left={shift} right={width} bottom={height - 4} height={top + bottom} />
+    </svg>
+    <small className="muted">Shaded: partial and future months.</small>
+  </div>
+}
+
+function GroupTable({ rows, by, label, bands, extra }: { rows: PersonMonth[]; by: (row: PersonMonth) => string; label: string; bands: Bands; extra?: boolean }) {
+  const groups = groupBy(rows, by).sort((a, b) => (b.planUtil ?? 0) - (a.planUtil ?? 0))
+  return <div className="azure-table"><table><thead><tr><th>{label}</th>{extra && <th>Region · role</th>}<th>People</th><th>Capacity h</th>{extra && <th>Absence h</th>}<th>Plan h</th><th>Actual h</th><th>Planned utilization</th><th>Actual utilization</th><th>Actual − plan h</th><th>Capacity − plan h</th></tr></thead><tbody>
+    {groups.map((group) => <tr key={group.name}><td><strong>{group.name}</strong></td>{extra && <td>{[group.rows[0]?.region, group.rows[0]?.role].filter(Boolean).join(' · ') || '—'}</td>}<td>{group.people}</td><td>{h(group.capacity)}</td>{extra && <td>{h(group.absence)}</td>}<td>{h(group.plan)}</td><td>{h(group.actual)}</td><td><Util value={group.planUtil} bands={bands} /></td><td><Util value={group.actualUtil} bands={bands} /></td><td>{signed(Math.round((group.actual - group.plan) * 100) / 100)}</td><td>{signed(group.gap)}</td></tr>)}
+  </tbody></table></div>
+}
+
+type SummaryPart = 'demand' | 'rebalancing' | 'monitor' | 'horizon'
+function SummaryTab({ rows, months, bands, parts }: { rows: PersonMonth[]; months: string[]; bands: Bands; parts: SummaryPart[] }) {
+  const show = (part: SummaryPart) => parts.includes(part)
+  const persistentActual = persistentOverload(rows, months, 'actual', (bands.thresholds ?? defaultInsightThresholds).persistentMonths, bands), persistentPlan = persistentOverload(rows, months, 'plan', (bands.thresholds ?? defaultInsightThresholds).persistentMonths, bands)
+  const covered = new Set(rows.filter((row) => row.actual > 0 || row.tasks > 0).map((row) => row.person)).size
+  const people = groupBy(rows, (row) => row.person)
+  const actualTop = concentration(rows, 'actual', bands)
+  const all = totals(rows), moves = rebalancing(rows), series = monthSeries(rows, months)
+  const withData = series.filter((point) => point.plan > 0 || point.actual > 0 || point.capacity > 0)
+  const elapsed = rows.filter((row) => row.status === 'elapsed')
+  const highest = [...people].filter((person) => person.planUtil != null).sort((a, b) => (b.planUtil ?? 0) - (a.planUtil ?? 0))[0]
+  const overActual = groupBy(elapsed, (row) => row.person).filter((person) => bandOf(person.actualUtil, bands) === 'over')
+  const gapPerson = groupBy(elapsed, (row) => row.person).sort((a, b) => (b.plan - b.actual) - (a.plan - a.actual))[0]
+  return <NoHours rows={rows}>
+    {show('demand') && <div className="dash-grid-wide">
+      <Panel title="Demand against available capacity" info="Monthly hours for the selected people: planned (Original Estimate), recorded (Completed Work) and net capacity (less absence)."><DemandChart rows={rows} months={months} /></Panel>
+      <Panel title="What the numbers mean" info="Findings for the selected period and filters, recalculated with every change.">
+        <dl className="dash-findings">
+          <dt>{signed(all.gap)} capacity − plan</dt><dd>{all.gap >= 0 ? `${formatHours(all.gap)}h of capacity is not yet planned. At most ${formatHours(moves.movable)}h of overload could move to headroom in the same role and month.` : `The plan is ${formatHours(-all.gap)}h above capacity. Review scope, timing and priorities.`}</dd>
+          {highest && <><dt>{highest.name} has the highest planned utilization</dt><dd>{formatHours(highest.plan)}h planned against {formatHours(highest.capacity)}h capacity (<Util value={highest.planUtil} bands={bands} />).</dd></>}
+          <dt>{overActual.length} {overActual.length === 1 ? 'person is' : 'people are'} overloaded on recorded hours</dt><dd>{overActual.length ? overActual.map((person) => person.name).join(', ') + '. ' : ''}Elapsed months only, above {bands.overloadedAt}% of capacity. Recorded hours may include work outside the plan; check completeness before drawing staffing conclusions.</dd>
+          {gapPerson && gapPerson.plan - gapPerson.actual > 0 && <><dt>{gapPerson.name} has a {formatHours(gapPerson.plan - gapPerson.actual)}h plan-to-recorded gap</dt><dd>Elapsed months only: planned {formatHours(gapPerson.plan)}h, recorded {formatHours(gapPerson.actual)}h.</dd></>}
+          <dt>{formatHours(all.absence)}h absence</dt><dd>Leave and public holidays lower capacity; they are not counted as demand.</dd>
+        </dl>
+      </Panel>
+    </div>}
+    {show('rebalancing') && <Section eyebrow="REBALANCING" title="Rebalancing has a limit" info="Overload (plan above capacity, in hours) can only move to headroom of the same role in the same month, and only in current or future months; people without a role are left out of the lists and counted apart.">
+      <div className="dash-cards dash-cards-4"><Card label="Gross monthly overload" value={`${formatHours(moves.overload)}h`} tone={moves.overload ? 'danger' : undefined} hint="Plan above capacity, summed per person and month" /><Card label="Headroom (current & future)" value={`${formatHours(moves.headroom)}h`} hint="Capacity above plan in months not yet over" /><Card label="Movable in same role & month" value={`${formatHours(moves.movable)}h`} hint="The most that could move" /><Card label="Remaining shortfall" value={`${formatHours(moves.shortfall)}h`} tone={moves.shortfall ? 'warning' : undefined} hint="Overload no move can absorb" /></div>
+      {moves.unmapped.people > 0 && <p className="muted">{moves.unmapped.people} {moves.unmapped.people === 1 ? 'person' : 'people'} without a role ({formatHours(moves.unmapped.overload)}h overload, {formatHours(moves.unmapped.headroom)}h headroom) {moves.unmapped.people === 1 ? 'is' : 'are'} left out of the lists below; map them in Admin → People & access → People to include them.</p>}
+      <div className="dash-stack">
+        <div><h3>Largest planned relief needs</h3>{moves.needs.length ? <MoreTable items={moves.needs} head={<tr><th>Person</th><th>Month</th><th>Plan h</th><th>Capacity h</th><th>Relief h</th></tr>} render={(entry) => <tr key={`${entry.person}-${entry.month}`}><td>{entry.person}<small>{[entry.region, entry.role].filter(Boolean).join(' · ')}</small></td><td>{short(entry.month)}</td><td>{h(entry.plan)}</td><td>{h(entry.capacity)}</td><td className="negative">{h(entry.need)}</td></tr>} /> : <p className="muted">Nobody is planned above capacity.</p>}</div>
+        <div><h3>Potential receivers</h3>{moves.receivers.length ? <MoreTable items={moves.receivers} head={<tr><th>Person</th><th>Month</th><th>Plan h</th><th>Headroom h</th></tr>} render={(entry) => <tr key={`${entry.person}-${entry.month}`}><td>{entry.person}<small>{[entry.region, entry.role].filter(Boolean).join(' · ')}</small></td><td>{short(entry.month)}</td><td>{h(entry.plan)}</td><td className="positive">{h(entry.headroom)}</td></tr>} /> : <p className="muted">No headroom in the current or future months of the period.</p>}</div>
+      </div>
+    </Section>}
+    {show('monitor') && <Section eyebrow="WORKLOAD MONITOR" title="Repeated overload & concentration" info={`Persistent overload = above ${bands.overloadedAt}% of capacity in at least 3 consecutive elapsed months of the period; a month without data breaks the streak. Concentration compares the top ${T(bands).concentrationTop}% of people (rounded up) by recorded hours with their share of capacity; an alert at 10 percentage points or more.`}>
+      <div className="dash-cards dash-cards-4">
+        <Card label="Persistent overload · recorded" value={`${persistentActual.length} ${persistentActual.length === 1 ? 'person' : 'people'}`} hint={persistentActual.join(', ') || 'None'} tone={persistentActual.length ? 'danger' : undefined} />
+        <Card label="Persistent overload · planned" value={`${persistentPlan.length} ${persistentPlan.length === 1 ? 'person' : 'people'}`} hint={persistentPlan.join(', ') || 'None'} tone={persistentPlan.length ? 'danger' : undefined} />
+        <Card label="People with entries" value={`${covered} / ${people.length}`} hint="At least one Time Writing Task" />
+        <Card label="Concentration of recorded hours" value={`${actualTop.hoursShare ?? 0}%`} tone={actualTop.alert ? 'warning' : undefined} hint={`Top ${actualTop.top.length} of ${actualTop.of}: ${actualTop.top.map((person) => person.name).join(', ') || '—'} · capacity share ${actualTop.capacityShare ?? 0}%`} />
+      </div>
+    </Section>}
+    {show('horizon') && <TablePanel title="Planning horizon & recording coverage" info="Months of the period with data. Lines with plan > 0 = month Tasks with an Original Estimate; of these, blank actual = no Completed Work entered (a numeric 0 counts as entered). A thin plan in a future month is a reason to validate demand." count={`${withData.length} of ${months.length} month${months.length === 1 ? '' : 's'}`}>
+      {withData.length ? <table><thead><tr><th>Month</th><th>Plan h</th><th>Actual h</th><th>Capacity h</th><th>Planned utilization</th><th>Actual utilization</th><th>Lines with plan &gt; 0</th><th>Of these: blank actual</th><th>Absence h</th></tr></thead><tbody>
+        {withData.map((point) => <tr key={point.month}><td><strong>{monthName(point.month)}</strong>{point.status && <small>{statusLabel[point.status]}</small>}</td><td>{h(point.plan)}</td><td>{h(point.actual)}</td><td>{h(point.capacity)}</td><td><Util value={point.planUtil} bands={bands} /></td><td><Util value={point.actualUtil} bands={bands} /></td><td>{point.planLines}</td><td>{point.blankActuals}</td><td>{h(point.absence)}</td></tr>)}
+      </tbody></table> : <p className="muted">No month of the period has data.</p>}
+      {withData.length < months.length && <small className="muted">{months.length - withData.length} month{months.length - withData.length === 1 ? '' : 's'} without data hidden.</small>}
+    </TablePanel>}
+  </NoHours>
+}
+
+function Bars({ groups, bands }: { groups: ReturnType<typeof groupBy>; bands: Bands }) {
+  const max = Math.max(100, ...groups.flatMap((group) => [group.planUtil ?? 0, group.actualUtil ?? 0]))
+  return <div className="dash-bars">{groups.map((group) => <div key={group.name} className="dash-bar-row">
+    <div className="dash-bar-label"><strong>{group.name}</strong><small>{group.people} {group.people === 1 ? 'person' : 'people'} · {formatHours(group.capacity)}h capacity · {formatHours(group.plan)}h plan · {formatHours(group.actual)}h recorded</small></div>
+    <div className="dash-bar-track"><i className="dash-plan" style={{ width: `${(group.planUtil ?? 0) / max * 100}%` }} /><i className="dash-actual" style={{ width: `${(group.actualUtil ?? 0) / max * 100}%` }} /><b style={{ left: `${bands.overloadedAt / max * 100}%` }} title={`${bands.overloadedAt}% of capacity`} /></div>
+    <div className="dash-bar-values">Plan <Util value={group.planUtil} bands={bands} /> · Recorded <Util value={group.actualUtil} bands={bands} /></div>
+  </div>)}</div>
+}
+
+type Measure = 'actual' | 'plan'
+// A person × month (or group × month) grid of utilization in the Settings bands; a month with Tasks but 0 recorded
+// hours is "0 recorded" (grey), not spare capacity; the tooltip names the hours, capacity and absence.
+function Heatmap({ title, info, lines, months, measure, bands }: { title: string; info: string; lines: { name: string; detail?: string; rows: PersonMonth[] }[]; months: string[]; measure: Measure; bands: Bands }) {
+  return <TablePanel title={title} info={info}><div className="azure-table"><table className="dash-heat"><thead><tr><th>Person / group</th>{months.map((month) => <th key={month}>{short(month)}</th>)}</tr></thead><tbody>
+    {lines.map((line) => <tr key={line.name}><td><strong>{line.name}</strong>{line.detail && <small>{line.detail}</small>}</td>{months.map((month) => {
+      const entries = line.rows.filter((row) => row.month === month); const t = totals(entries)
+      const hours = measure === 'actual' ? t.actual : t.plan, util = measure === 'actual' ? t.actualUtil : t.planUtil
+      const tracked = entries.length > 0 && entries.some((row) => row.tasks)
+      const zero = tracked && hours <= 0
+      const band = tracked && !zero ? bandOf(util, bands) : null
+      const reserved = entries.reduce((sum, row) => sum + row.reserved, 0)
+      const tip = entries.length ? `${formatHours(hours)}h ${measure === 'actual' ? 'recorded' : 'planned'} / ${formatHours(t.capacity)}h capacity${t.absence ? ` · ${formatHours(t.absence)}h absence` : ''}${reserved ? ` · ${formatHours(reserved)}h common activities` : ''}` : 'No entry'
+      return <td key={month} className={zero ? 'heat-zero' : band ? `heat-${band}` : 'heat-none'} title={tip}>{!tracked ? <span className="muted">No entry</span> : zero ? <span className="muted">0 {measure === 'actual' ? 'recorded' : 'planned'}</span> : <Util value={util} bands={bands} />}</td> })}</tr>)}
+  </tbody></table></div></TablePanel>
+}
+
+function MeasureSwitch({ value, onChange }: { value: Measure; onChange: (value: Measure) => void }) {
+  return <div className="chip-row" role="group" aria-label="Measure">{(['actual', 'plan'] as const).map((entry) => <button key={entry} type="button" className={`chip ${value === entry ? 'chip-on' : ''}`} aria-pressed={value === entry} onClick={() => onChange(entry)}>{entry === 'actual' ? 'Recorded' : 'Planned'}</button>)}</div>
+}
+
+function MonthsTab({ rows, months, bands }: { rows: PersonMonth[]; months: string[]; bands: Bands }) {
+  const [measure, setMeasure] = useState<Measure>('actual')
+  const series = monthSeries(rows, months)
+  const withData = series.filter((point) => point.rows.some((row) => row.tasks))
+  const people = groupBy(rows, (row) => row.person).sort((a, b) => a.name.localeCompare(b.name))
+  return <NoHours rows={rows}>
+    <Section eyebrow="BY MONTH" title={`${measure === 'actual' ? 'Recorded' : 'Planned'} utilization by month`} info={`Per month of the period: ${measure === 'actual' ? 'recorded' : 'planned'} hours ÷ net capacity, in the Settings bands. Months without a Time Writing Task are not shown. Partial and future months do not establish spare capacity or results.`} action={<MeasureSwitch value={measure} onChange={setMeasure} />}>
+      <div className="dash-cards dash-cards-4">{withData.map((point) => <Card key={point.month} label={monthName(point.month)} value={<Util value={measure === 'actual' ? point.actualUtil : point.planUtil} bands={bands} />} hint={<>{formatHours(measure === 'actual' ? point.actual : point.plan)}h {measure === 'actual' ? 'recorded' : 'planned'} / {formatHours(point.capacity)}h capacity<br />{point.status ? `${statusLabel[point.status]} month` : ''}{point.absence ? ` · ${formatHours(point.absence)}h absence` : ''}</>} />)}</div>
+      {withData.length < months.length && <small className="muted">{months.length - withData.length} month{months.length - withData.length === 1 ? '' : 's'} without entries hidden.</small>}
+    </Section>
+    <Heatmap measure={measure} bands={bands} title={`${measure === 'actual' ? 'Recorded' : 'Planned'} utilization % · team & people`} info={`${measure === 'actual' ? 'Recorded' : 'Planned'} hours ÷ net capacity per person and month. "No entry" = no Time Writing Task that month; "0 ${measure === 'actual' ? 'recorded' : 'planned'}" = Tasks without hours, which is not spare capacity. Hover a cell for hours, capacity and absence.`} months={months} lines={[{ name: 'Selected team', rows }, ...people.map((person) => ({ name: person.name, detail: [person.rows[0]?.region, person.rows[0]?.role].filter(Boolean).join(' · '), rows: person.rows }))]} />
+    <Heatmap measure={measure} bands={bands} title={`${measure === 'actual' ? 'Recorded' : 'Planned'} utilization % · by role`} info="The same per role (Admin → People & access → People)." months={months} lines={groupBy(rows, (row) => row.role ?? 'No role').map((group) => ({ name: group.name, rows: group.rows }))} />
+    <Comparison rows={rows} months={months} bands={bands} />
+  </NoHours>
+}
+
+function ChangeTable({ title, rows, previous, current, dimension, label }: { title: string; rows: PersonMonth[]; previous: string; current: string; dimension: Dimension; label: string }) {
+  const lines = change(rows, previous, current, dimension)
+  return <TablePanel title={title} info="Recorded hours in both months under the same filters. Missing entries mean nothing was recorded, not zero effort." empty={lines.length ? undefined : 'Nothing recorded in either month.'}>
+    {lines.length > 0 && <table><thead><tr><th>{label}</th><th>{short(previous)} h</th><th>{short(current)} h</th><th>Change h</th><th>Change %</th></tr></thead><tbody>{lines.map((line) => <tr key={line.name}><td>{line.name}</td><td>{h(line.previous)}</td><td>{h(line.current)}</td><td>{line.change == null ? <span className="muted">No comparable entries</span> : signed(line.change)}</td><td>{line.percent == null ? '—' : signed(line.percent, '%')}</td></tr>)}</tbody></table>}
+  </TablePanel>
+}
+
+// Month-on-month comparison of recorded hours: a month against the one before it, for pairs with data in both.
+function Comparison({ rows, months, bands }: { rows: PersonMonth[]; months: string[]; bands: Bands }) {
+  const series = monthSeries(rows, months)
+  const pairs = months.slice(1).filter((_, index) => series[index + 1].actual > 0)
+  const [chosen, setChosen] = useState('')
+  const current = pairs.includes(chosen) ? chosen : pairs[pairs.length - 1]
+  if (!current) return <Section eyebrow="MONTH ON MONTH" title="Recorded hours against the month before"><EmptyState title="Nothing to compare." detail="The comparison needs two consecutive months of the period with recorded hours." /></Section>
+  const previous = months[months.indexOf(current) - 1]
+  const now = series.find((point) => point.month === current)!, before = series.find((point) => point.month === previous)!
+  const max = Math.max(1, ...series.map((point) => point.actual))
+  return <Section eyebrow="MONTH ON MONTH" title={`Recorded hours: ${monthName(current)} against ${monthName(previous)}`} info="Each month is compared with the one before it, under the same filters. Only months with recorded hours are offered." action={pairs.length > 1 ? <div className="chip-row">{pairs.map((month) => <button key={month} type="button" className={`chip ${month === current ? 'chip-on' : ''}`} onClick={() => setChosen(month)}>{short(month)}</button>)}</div> : undefined}>
+    {now.status !== 'elapsed' && <Notice tone="warning">{monthName(current)} is a {now.status} month: its recorded hours are not comparable with a completed month.</Notice>}
+    <div className="dash-cards dash-cards-4">
+      <Card label={`${short(current)} recorded`} value={`${formatHours(now.actual)}h`} hint={<>Utilization <Util value={now.actualUtil} bands={bands} /></>} />
+      <Card label={`${short(previous)} recorded`} value={`${formatHours(before.actual)}h`} hint={<>Utilization <Util value={before.actualUtil} bands={bands} /></>} />
+      <Card label="Change" value={signed(Math.round((now.actual - before.actual) * 100) / 100)} hint={before.actual > 0 ? signedPct(Math.round((now.actual - before.actual) / before.actual * 1000) / 10) : 'New from zero'} />
+      <Card label="People with entries" value={`${new Set(now.rows.filter((row) => row.actual > 0).map((row) => row.person)).size} / ${now.people}`} hint={short(current)} />
+    </div>
+    <div className="dash-columns">{series.map((point) => <div key={point.month} className={point.month === current ? 'is-current' : point.month === previous ? 'is-previous' : ''}><span>{formatHours(point.actual)}</span><i style={{ height: `${point.actual / max * 140}px` }} /><small>{short(point.month)}</small></div>)}</div>
+    <div className="dash-grid-2">
+      <ChangeTable title="Change by role" rows={rows} previous={previous} current={current} dimension={byRole} label="Role" />
+      <ChangeTable title="Change by stream" rows={rows} previous={previous} current={current} dimension={byStream} label="Stream (Epic)" />
+    </div>
+    <ChangeTable title="Change by team member" rows={rows} previous={previous} current={current} dimension={byPerson} label="Person" />
+  </Section>
+}
+
+type Grouping = 'person' | 'role' | 'region'
+// CAP-39: a CAP-38 part summed over a person's months.
+const sumRows = (rows: PersonMonth[], key: 'contractual' | 'work' | 'training' | 'npraOther' | 'activities') => Math.round(rows.reduce((total, row) => total + row[key], 0) * 100) / 100
+
+function PeopleTab({ rows, months, bands, terms = defaultTerms }: { rows: PersonMonth[]; months: string[]; bands: Bands; terms?: Record<TermKey, string> }) {
+  const [grouping, setGrouping] = useState<Grouping>('person')
+  const persistent = new Set(persistentOverload(rows, months, 'actual', (bands.thresholds ?? defaultInsightThresholds).persistentMonths, bands))
+  const by = (row: PersonMonth) => grouping === 'person' ? row.person : grouping === 'role' ? row.role ?? 'No role' : row.region ?? 'No region'
+  const label = grouping === 'person' ? 'Person' : grouping === 'role' ? 'Role' : 'Region'
+  const groups = groupBy(rows, by).sort((a, b) => (b.planUtil ?? 0) - (a.planUtil ?? 0))
+  return <NoHours rows={rows}>
+    <Section eyebrow="WHO" title={`Workload by ${label.toLowerCase()}${grouping === 'person' ? ` · ${groups.length} ${groups.length === 1 ? 'person' : 'people'} · ${formatHours(groups.reduce((sum, group) => sum + group.capacity, 0))}h capacity` : ''}`} info={`Over the period, highest planned utilization first. Actual utilization = Total actual ÷ Available hours (planned utilization: Total planned ÷ Available hours), with the default calculation profile: Contractual hours = working days employed × Funded hours per day; Available hours = Contractual − Absence hours; Total actual = Project work + Training + Other NPRA + Common activities (Completed Work); Total planned = the same from Original Estimate. Also utilization in the Settings bands, and the differences actual − plan and capacity − plan. ⚠ = overloaded on recorded hours in ${T(bands).persistentMonths} or more consecutive elapsed months. Roles and regions come from Admin → People & access → People; people without one are grouped as "No role" / "No region".`} action={<div className="chip-row" role="group" aria-label="Group by">{(['person', 'role', 'region'] as const).map((entry) => <button key={entry} type="button" className={`chip ${grouping === entry ? 'chip-on' : ''}`} aria-pressed={grouping === entry} onClick={() => setGrouping(entry)}>{entry === 'person' ? 'People' : entry === 'role' ? 'Roles' : 'Regions'}</button>)}</div>}>
+      {grouping === 'person' ? <div className="azure-table"><table><thead><tr><th>Person</th><th>Region · role</th><th>{terms.funded}</th><th>{terms.absence}</th><th>{terms.available}</th><th>{terms.work}</th><th>Training</th><th>Other NPRA</th><th>Common activities</th><th>Total planned</th><th>Total actual</th><th>Planned utilization</th><th>Actual utilization</th><th>Actual − plan h</th></tr></thead><tbody>
+        {groups.map((person) => <tr key={person.name}><td><strong>{person.name}{persistent.has(person.name) && <span className="negative" title="Persistent overload on recorded hours"> ⚠</span>}</strong></td><td>{[person.rows[0]?.region, person.rows[0]?.role].filter(Boolean).join(' · ') || '—'}</td><td>{h(sumRows(person.rows, 'contractual'))}</td><td>{h(person.absence)}</td><td>{h(person.capacity)}</td><td>{h(sumRows(person.rows, 'work'))}</td><td>{h(sumRows(person.rows, 'training'))}</td><td>{h(sumRows(person.rows, 'npraOther'))}</td><td>{h(sumRows(person.rows, 'activities'))}</td><td>{h(person.plan)}</td><td>{h(person.actual)}</td><td><Util value={person.planUtil} bands={bands} /></td><td><Util value={person.actualUtil} bands={bands} /></td><td>{signed(Math.round((person.actual - person.plan) * 100) / 100)}</td></tr>)}
+      </tbody></table></div> : <>
+        <Bars groups={groups} bands={bands} />
+        <GroupTable rows={rows} by={by} label={label} bands={bands} />
+      </>}
+    </Section>
+    {grouping === 'person' && <TablePanel title="Where pressure is concentrated" info="Region and role combined, highest planned utilization first."><GroupTable rows={rows} by={(row) => `${row.region ?? 'No region'} · ${row.role ?? 'No role'}`} label="Region · role" bands={bands} /></TablePanel>}
+  </NoHours>
+}
+
+function StreamsTab({ rows, months, items, settings, streamFiltered }: { rows: PersonMonth[]; months: string[]; items: Parameters<typeof monthlyHours>[0]; settings: ReturnType<typeof capacityContext>; streamFiltered: boolean }) {
+  const streams = streamTotals(rows)
+  const max = Math.max(1, ...streams.flatMap((stream) => [stream.plan, stream.actual]))
+  const assignments = streams.map((stream) => ({ stream, people: groupBy(rows.filter((row) => row.streams.some((entry) => entry.key === stream.key)).map((row) => { const entry = row.streams.find((item) => item.key === stream.key)!; return { ...row, plan: entry.plan, actual: entry.actual } }), (row) => row.person).sort((a, b) => b.plan - a.plan) }))
+  const [openStreams, setOpenStreams] = useState<string[]>([])
+  // Epic mix and the Pareto charts read the Tasks themselves over the period's months (region, role and team member
+  // filters applied; the stream filter is not).
+  const span = months.length ? Math.max(1, (Number(months[months.length - 1].slice(0, 4)) - Number(months[0].slice(0, 4))) * 12 + Number(months[months.length - 1].slice(5)) - Number(months[0].slice(5)) + 1) : 1
+  const trend = months.length ? monthlyHours(items, months[months.length - 1], span, settings).filter((point) => months.includes(point.month)) : []
+  const problems = problemBreakdown(items, months, settings)
+  const colors = epicColors(trend)
+  const [overrunLevel, setOverrunLevel] = useState<'feature' | 'epic'>('feature')
+  const sizes = useChartSizes()
+  const [adhocLevel, setAdhocLevel] = useState<'feature' | 'epic'>('epic')
+  const levelToggle = (value: 'feature' | 'epic', onChange: (value: 'feature' | 'epic') => void) => <div className="chip-row" role="group" aria-label="Group by">{(['feature', 'epic'] as const).map((level) => <button key={level} type="button" className={`chip ${value === level ? 'chip-on' : ''}`} aria-pressed={value === level} onClick={() => onChange(level)}>{level === 'feature' ? 'By Feature' : 'By Epic'}</button>)}</div>
+  return <NoHours rows={rows}>
+    <TablePanel title="Where planned demand sits" info="Planned and recorded hours per stream (the Epic above the Time Writing Task); share = share of the planned hours. Absence is excluded." count={`${streams.length} streams`} empty={streams.length ? undefined : 'No hours in this selection.'}>
+      {streams.length > 0 && <table><thead><tr><th>Stream (Epic)</th><th>Plan h</th><th>Actual h</th><th>Actual − plan h</th><th>Share of plan</th><th>People</th><th>Plan vs recorded</th></tr></thead><tbody>
+        {streams.map((stream) => <tr key={stream.key}><td><strong>{stream.title}</strong></td><td>{h(stream.plan)}</td><td>{h(stream.actual)}</td><td>{signed(Math.round((stream.actual - stream.plan) * 100) / 100)}</td><td>{stream.share == null ? '—' : `${stream.share.toFixed(1)}%`}</td><td title={stream.people.join(', ')}>{stream.people.length}</td><td className="dash-pair"><i className="dash-plan" style={{ width: `${stream.plan / max * 100}%` }} /><i className="dash-actual" style={{ width: `${stream.actual / max * 100}%` }} /></td></tr>)}
+      </tbody></table>}
+    </TablePanel>
+    <TablePanel title="Who works on each stream" info="People per stream with their planned and recorded hours on it, largest plan first; the three largest are shown, the rest open per stream.">
+      <table><thead><tr><th>Stream (Epic)</th><th>Person</th><th>Plan h</th><th>Actual h</th></tr></thead><tbody>
+        {assignments.flatMap(({ stream, people }) => { const open = openStreams.includes(stream.key); const shown = open ? people : people.slice(0, 3); return [
+          ...shown.map((person, index) => <tr key={`${stream.key}-${person.name}`}><td>{index === 0 ? <strong>{stream.title}</strong> : ''}</td><td>{person.name}</td><td>{h(person.plan)}</td><td>{h(person.actual)}</td></tr>),
+          ...(people.length > 3 ? [<tr key={`${stream.key}-more`}><td /><td colSpan={3}><button type="button" className="text-button" onClick={() => setOpenStreams(open ? openStreams.filter((key) => key !== stream.key) : [...openStreams, stream.key])}>{open ? 'Show fewer' : `Show all (+${people.length - 3} more)`}</button></td></tr>] : []),
+        ] })}
+      </tbody></table>
+    </TablePanel>
+    {streamFiltered && <Notice tone="info">The stream filter does not apply to the charts below: they show every Epic for the selected people.</Notice>}
+    {/* CHT-19, CHT-48: the charts by stable id on the chart grid, each resizable in grid units (the viewer's own size, else
+        the Tool Owner's for everyone, else full width as before), in their order — not moved. */}
+    {trend.some((point) => point.actual != null) ? <><BuiltInGrid sizes={sizes} ids={[builtInCharts.epicMix, builtInCharts.overrun, builtInCharts.adhoc]} titles={{ [builtInCharts.epicMix]: 'Epic mix by month', [builtInCharts.overrun]: 'Overrun hours', [builtInCharts.adhoc]: 'Ad-hoc hours' }}>
+      <BuiltInChart sizes={sizes} id={builtInCharts.epicMix} title="Epic mix by month" info="Stacked bars: recorded hours per Epic over the period (the five largest keep their colour; the rest are grouped as Other Epics). Line: available hours on the same scale.">
+        <EpicMixChart series={trend} selected={[...trend].reverse().find((point) => point.actual)?.month ?? months[months.length - 1]} colors={colors} />
+      </BuiltInChart>
+      <BuiltInChart sizes={sizes} id={builtInCharts.overrun} title="Overrun hours" detail={`${formatHours(problems.overrun.total)}h above estimate on ${problems.overrun.tasks} Task${problems.overrun.tasks === 1 ? '' : 's'}`} info="Completed Work above Original Estimate per Task, over the period. The few Features or Epics up to the 80% line account for most of the overrun: that is where to look first." action={levelToggle(overrunLevel, setOverrunLevel)}>
+        <ParetoChart items={problems.overrun[overrunLevel]} colors={colors} noun={overrunLevel === 'feature' ? 'Feature' : 'Epic'} measure="overrun hours" shortLabel={overrunLevel === 'feature' ? shortFeatureTitle : undefined} />
+      </BuiltInChart>
+      <BuiltInChart sizes={sizes} id={builtInCharts.adhoc} title="Ad-hoc hours" detail={`${formatHours(problems.adhoc.total)}h on ${problems.adhoc.tasks} Task${problems.adhoc.tasks === 1 ? '' : 's'} — ${formatPercent(problems.adhoc.share)} of recorded hours`} info="Hours on Tasks tagged ad-hoc: unplanned work that arrived after planning locked, over the period." action={levelToggle(adhocLevel, setAdhocLevel)}>
+        <ParetoChart items={problems.adhoc[adhocLevel]} colors={colors} noun={adhocLevel === 'feature' ? 'Feature' : 'Epic'} measure="ad-hoc hours" shortLabel={adhocLevel === 'feature' ? shortFeatureTitle : undefined} />
+      </BuiltInChart>
+    </BuiltInGrid>
+    </> : null}
+  </NoHours>
+}
+
+// Insights: what the numbers say beyond the totals — see insights.ts for every rule; the thresholds are in the Info
+// texts. Colours: green = as planned or healthy; amber = deviates, worth a look; red = above the overloaded
+// threshold; blue = more than planned (not a fault by itself).
+const forecastTone: Record<ForecastStatus, 'open' | 'warning' | 'danger' | 'neutral' | 'info'> = { 'on-track': 'open', ahead: 'info', behind: 'warning', 'over-capacity': 'danger', 'no-data': 'neutral' }
+const forecastLabel: Record<ForecastStatus, string> = { 'on-track': 'On track', ahead: 'More than planned', behind: 'Behind plan', 'over-capacity': 'Heading over capacity', 'no-data': 'Nothing recorded yet' }
+const verdictTone: Record<AccuracyVerdict, 'open' | 'warning' | 'danger' | 'neutral' | 'info'> = { reliable: 'open', 'under-records': 'warning', 'over-runs': 'warning', uneven: 'warning', 'no-plan': 'neutral' }
+const verdictLabel: Record<AccuracyVerdict, string> = { reliable: 'Reliable', 'under-records': 'Under-records', 'over-runs': 'Over-runs', uneven: 'Uneven', 'no-plan': 'No plan' }
+const trendLabel: Record<Momentum, string> = { rising: '↑ Rising', falling: '↓ Falling', steady: '→ Steady', new: '✦ New', gone: '○ Gone' }
+const trendTone: Record<Momentum, 'open' | 'warning' | 'danger' | 'neutral' | 'info'> = { rising: 'info', falling: 'warning', steady: 'neutral', new: 'open', gone: 'neutral' }
+const scoreTone = (value: number | null, bands: Bands) => value == null ? 'neutral' : value >= T(bands).healthGreen ? 'open' : value >= T(bands).healthAmber ? 'warning' : 'danger'
+const scoreClass = (value: number | null, bands: Bands) => value == null ? '' : value >= T(bands).healthGreen ? 'heat-balanced' : value >= T(bands).healthAmber ? 'heat-mid' : 'heat-over'
+type InsightPart = 'health' | 'delivery' | 'forecast' | 'accuracy' | 'momentum' | 'resilience' | 'unusual'
+function InsightsTab({ rows, months, today, bands, delivery, parts }: { rows: PersonMonth[]; months: string[]; today: string; bands: Bands; delivery: StreamCounts[]; parts: InsightPart[] }) {
+  const show = (part: InsightPart) => parts.includes(part)
+  const current = months.find((month) => month === today.slice(0, 7)) ?? months.filter((month) => month <= today.slice(0, 7)).at(-1) ?? months[0]
+  const forecast = monthForecast(rows, current, today, bands)
+  const accuracy = planAccuracy(rows, bands)
+  const momentum = streamMomentum(rows, months, bands)
+  const strength = resilience(rows, bands)
+  const unusual = anomalies(rows, bands)
+  const health = healthScore(rows, months, bands)
+  const attention = forecast.people.filter((entry) => entry.status === 'behind' || entry.status === 'over-capacity')
+  const forecastRows = useMore(forecast.people, 8), accuracyRows = useMore(accuracy.people, 8), streamRows = useMore(strength.streams, 8), personRows = useMore(strength.people, 8), unusualRows = useMore(unusual, 8)
+  return <NoHours rows={rows}>
+    {parts.some((part) => part !== 'delivery') && <p className="muted dash-key">Colours in this tab: <Pill tone="open">green</Pill> as planned or healthy · <Pill tone="warning">amber</Pill> deviates, worth a look · <Pill tone="danger">red</Pill> above {bands.overloadedAt}% of capacity · <Pill tone="info">blue</Pill> more than planned, not a fault by itself.</p>}
+    {show('health') && <Section eyebrow="HEALTH" title="How healthy is the plan?" info={`One score, 0–100, as the average of the components with data: balance = share of people planned in the balanced band (${bands.availableBelow}–${bands.overloadedAt}% of capacity, Admin → Capacity & time); recording = share of planned month Tasks with a recorded actual (elapsed months); resilience = share of streams not resting on one person. Green from ${T(bands).healthGreen}, amber from ${T(bands).healthAmber}, red below.`}>
+      <div className="dash-cards dash-cards-4">
+        <Card label="Health score" value={<Pill tone={scoreTone(health.overall.score, bands)}>{health.overall.score ?? '—'}</Pill>} hint="Average of the three components" />
+        <Card label="Balance" value={pctText(health.overall.balance)} tone={health.overall.balance == null ? undefined : health.overall.balance >= T(bands).healthGreen ? 'ok' : health.overall.balance >= T(bands).healthAmber ? 'warning' : 'danger'} hint={`People planned at ${bands.availableBelow}–${bands.overloadedAt}% of capacity`} />
+        <Card label="Recording" value={pctText(health.overall.recording)} tone={health.overall.recording == null ? undefined : health.overall.recording >= T(bands).healthGreen ? 'ok' : health.overall.recording >= T(bands).healthAmber ? 'warning' : 'danger'} hint="Planned Tasks with an actual (elapsed months)" />
+        <Card label="Resilience" value={pctText(health.overall.resilience)} tone={health.overall.resilience == null ? undefined : health.overall.resilience >= T(bands).healthGreen ? 'ok' : health.overall.resilience >= T(bands).healthAmber ? 'warning' : 'danger'} hint="Streams not resting on one person" />
+      </div>
+      {health.byMonth.some((entry) => entry.score != null) && <div className="azure-table"><table className="dash-heat"><thead><tr><th>Component</th>{months.map((month) => <th key={month}>{short(month)}</th>)}</tr></thead><tbody>
+        {([['Score', 'score'], ['Balance', 'balance'], ['Recording', 'recording'], ['Resilience', 'resilience']] as const).map(([label, key]) => <tr key={key}><td><strong>{label}</strong></td>{health.byMonth.map((entry) => <td key={entry.month} className={scoreClass(entry[key], bands)}>{pctText(entry[key])}</td>)}</tr>)}
+      </tbody></table></div>}
+    </Section>}
+    {show('delivery') && <Section eyebrow="DELIVERY" title="Releases and documents per stream" info="How many releases each stream completed per month of the period, and how many approved documents those releases carry — the same counts as Pulse Check. DP counts from its own query: Completed Releases (DT, Design Transfer: DDT Done in the month) as its releases and Supported Releases (DT, SFV = Start of Verification / Hardening, PRD = PRD Milestone and RPE = Release Planning Event, Done in the month — each release once) in place of documents. A stream marked not set up has no connection yet (Admin → Streams → Stream mapping). The Dashboard filters do not apply here: these are team-wide counts.">
+      <div className="dash-cards dash-cards-4">
+        <Card label="Releases in period" value={delivery.reduce((sum, stream) => sum + stream.releases, 0)} hint={`${delivery.filter((stream) => !stream.notSetUp).length} streams counted`} />
+        <Card label="Documents in period" value={delivery.reduce((sum, stream) => sum + stream.documents, 0)} hint="Approved documents of those releases" />
+        <Card label="Busiest stream" value={[...delivery].sort((a, b) => b.releases - a.releases)[0]?.releases ? [...delivery].sort((a, b) => b.releases - a.releases)[0].name : '—'} hint="Most releases in the period" />
+        <Card label="Not set up" value={delivery.filter((stream) => stream.notSetUp).length} tone={delivery.some((stream) => stream.notSetUp) ? 'warning' : undefined} hint="Streams without a connection" />
+      </div>
+      <div className="azure-table"><table className="dash-heat"><thead><tr><th>Stream</th>{months.map((month) => <th key={month}>{short(month)}</th>)}<th>Releases</th><th>Documents</th></tr></thead><tbody>
+        {delivery.map((stream) => <tr key={stream.id}><td><strong>{stream.name}</strong>{stream.notSetUp && <small>Not set up</small>}</td>{stream.months.map((entry) => <td key={entry.month}>{stream.notSetUp ? <span className="muted">—</span> : <>{entry.releases}<small className="muted"> · {entry.supported != null ? `${entry.supported} supported` : `${entry.documents} docs`}</small></>}</td>)}<td><strong>{stream.notSetUp ? '—' : stream.releases}</strong></td><td>{stream.notSetUp ? '—' : stream.supported != null ? `${stream.supported} supported` : stream.documents}</td></tr>)}
+      </tbody></table></div>
+    </Section>}
+    {show('forecast') && <Section eyebrow="FORECAST" title={`Where ${monthName(current)} is heading`} info={`Run rate: the hours recorded so far, divided by the share of the month's weekdays already gone (today included), project each person's month-end total. On track = within ±${T(bands).forecastOnTrack}% of the plan; behind / more than planned beyond that; heading over capacity = the projection reaches ${bands.overloadedAt}% of net capacity. Holidays and absence are already netted out of capacity. For a past month the projection equals the recorded hours.`}>
+      <div className="dash-cards dash-cards-4">
+        <Card label="Month elapsed" value={`${forecast.share}%`} hint="Share of weekdays gone" />
+        <Card label="Projected hours" value={`${formatHours(forecast.projected)}h`} hint={<>{signed(forecast.vsPlan)} against {formatHours(forecast.plan)}h planned</>} />
+        <Card label="Needs attention" value={attention.length} tone={attention.length ? 'danger' : undefined} hint={`${forecast.counts.behind} behind plan · ${forecast.counts['over-capacity']} heading over capacity`} />
+        <Card label="On track" value={`${forecast.counts['on-track']} / ${forecast.people.length}`} hint={`${forecast.counts.ahead} more than planned · ${forecast.counts['no-data']} nothing recorded yet`} />
+      </div>
+      {forecast.people.length ? <><div className="azure-table"><table><thead><tr><th>Person</th><th>Plan h</th><th>Recorded h</th><th>Projected h</th><th>vs plan</th><th>Capacity h</th><th>Status</th></tr></thead><tbody>
+        {forecastRows.shown.map((entry) => <tr key={entry.person}><td><strong>{entry.person}</strong>{entry.role && <small>{entry.role}</small>}</td><td>{h(entry.plan)}</td><td>{h(entry.actual)}</td><td>{h(entry.projected)}</td><td>{signed(entry.vsPlan)}</td><td>{h(entry.capacity)}</td><td><Pill tone={forecastTone[entry.status]}>{forecastLabel[entry.status]}</Pill></td></tr>)}
+      </tbody></table></div>{forecastRows.button}</> : <EmptyState title={`No rows for ${monthName(current)}.`} />}
+    </Section>}
+    {show('accuracy') && <Section eyebrow="PLAN ACCURACY" title="How well do plans predict the hours?" info="Elapsed months only. Error = Σ|actual − plan| ÷ Σplan per person: how far the recorded hours land from the plan, whichever direction. Bias = (Σactual − Σplan) ÷ Σplan: negative means less recorded than planned (time not written, or plans too generous), positive means over-runs. Reliable at an error of {T(bands).accuracyReliable}% or less; under-records at a bias of −{T(bands).accuracyBias}% or lower; over-runs at +{T(bands).accuracyBias}% or higher; uneven otherwise.">
+      <div className="dash-cards dash-cards-4">
+        <Card label="Team error" value={pctText(accuracy.team.error)} hint={`Over ${accuracy.months} elapsed month${accuracy.months === 1 ? '' : 's'}`} />
+        <Card label="Team bias" value={signedPct(accuracy.team.bias)} hint={accuracy.team.bias == null ? '' : accuracy.team.bias < 0 ? 'Less recorded than planned' : 'More recorded than planned'} />
+        <Card label="Reliable planners" value={`${accuracy.people.filter((entry) => entry.verdict === 'reliable').length} / ${accuracy.people.length}`} hint={`Error ≤ ${T(bands).accuracyReliable}%`} />
+        <Card label="Under-recording" value={accuracy.people.filter((entry) => entry.verdict === 'under-records').length} tone={accuracy.people.some((entry) => entry.verdict === 'under-records') ? 'warning' : undefined} hint={`Bias ≤ −${T(bands).accuracyBias}%: time not written or plans too generous`} />
+      </div>
+      {accuracy.people.length ? <div className="dash-grid-2">
+        <div><div className="azure-table"><table><thead><tr><th>Person</th><th>Months</th><th>Plan h</th><th>Actual h</th><th>Error</th><th>Bias</th><th>Verdict</th></tr></thead><tbody>
+          {accuracyRows.shown.map((entry) => <tr key={entry.person}><td><strong>{entry.person}</strong>{entry.role && <small>{entry.role}</small>}</td><td>{entry.months}</td><td>{h(entry.plan)}</td><td>{h(entry.actual)}</td><td>{pctText(entry.error)}</td><td>{signedPct(entry.bias)}</td><td><Pill tone={verdictTone[entry.verdict]}>{verdictLabel[entry.verdict]}</Pill></td></tr>)}
+        </tbody></table></div>{accuracyRows.button}</div>
+        <div className="azure-table"><table><thead><tr><th>Month</th><th>Plan h</th><th>Actual h</th><th>Error</th><th>Bias</th></tr></thead><tbody>
+          {accuracy.byMonth.map((entry) => <tr key={entry.month}><td><strong>{short(entry.month)}</strong></td><td>{h(entry.plan)}</td><td>{h(entry.actual)}</td><td>{pctText(entry.error)}</td><td>{signedPct(entry.bias)}</td></tr>)}
+        </tbody></table></div>
+      </div> : <EmptyState title="No elapsed months with a plan in the selection." detail="Plan accuracy needs at least one month that has ended." />}
+    </Section>}
+    {show('momentum') && <Section eyebrow="MOMENTUM" title="Which streams gain or lose effort?" info={`Average recorded hours per month over the latest up to ${T(bands).momentumMonths} elapsed months (${momentum.recentMonths.map(short).join(', ') || 'none'}) against the up to ${T(bands).momentumMonths} before them (${momentum.earlierMonths.map(short).join(', ') || 'none'}), with each stream's share of all recorded hours in both windows. Rising / falling at a change of ${T(bands).momentumChange}% or more and at least ${T(bands).momentumMinHours} hours; new = hours only in the recent window; gone = hours only before (a finished Epic looks like this).`}>
+      {momentum.streams.length ? <div className="azure-table"><table><thead><tr><th>Stream (Epic)</th><th>Recent h / month</th><th>Earlier h / month</th><th>Change</th><th>Share now</th><th>Share before</th><th>People</th><th>Trend</th></tr></thead><tbody>
+        {momentum.streams.map((entry) => <tr key={entry.key}><td><strong>{entry.title}</strong></td><td>{h(entry.recent)}</td><td>{momentum.earlierMonths.length ? h(entry.earlier) : '—'}</td><td>{signedPct(entry.change)}</td><td>{pctText(entry.shareRecent)}</td><td>{pctText(entry.shareEarlier)}</td><td>{entry.people}</td><td><Pill tone={trendTone[entry.trend]}>{trendLabel[entry.trend]}</Pill></td></tr>)}
+      </tbody></table></div> : <EmptyState title="No elapsed months with recorded hours in the selection." />}
+      {momentum.recentMonths.length > 0 && !momentum.earlierMonths.length && <p className="muted">Only {momentum.recentMonths.length} elapsed month{momentum.recentMonths.length === 1 ? '' : 's'} in the period: widen it to see a trend.</p>}
+    </Section>}
+    {show('resilience') && <Section eyebrow="RESILIENCE" title="Where does the team depend on one person?" info="Elapsed months. A stream rests on one person when that person recorded {T(bands).resilienceSinglePoint}% or more of its hours: a single point of failure if they are away. A specialist put {T(bands).resilienceSpecialist}% or more of their recorded hours into one stream: little room to move them. Both are facts to weigh, not faults.">
+      <div className="dash-cards dash-cards-4">
+        <Card label="Streams on one person" value={strength.singlePoints} tone={strength.singlePoints ? 'warning' : undefined} hint={`of ${strength.streams.length} with recorded hours`} />
+        <Card label="Specialists" value={strength.specialists} hint={`of ${strength.people.length} people with recorded hours`} />
+      </div>
+      <div className="dash-grid-2">
+        <div><h3>Streams and their main contributor</h3>{strength.streams.length ? <><div className="azure-table"><table><thead><tr><th>Stream</th><th>Hours</th><th>People</th><th>Main contributor</th><th>Share</th></tr></thead><tbody>
+          {streamRows.shown.map((entry) => <tr key={entry.key}><td><strong>{entry.title}</strong></td><td>{h(entry.actual)}</td><td>{entry.people}</td><td>{entry.top}</td><td>{entry.singlePoint ? <Pill tone="warning">{entry.topShare}%</Pill> : `${entry.topShare}%`}</td></tr>)}
+        </tbody></table></div>{streamRows.button}</> : <EmptyState title="No recorded hours in elapsed months." />}</div>
+        <div><h3>People and their main stream</h3>{strength.people.length ? <><div className="azure-table"><table><thead><tr><th>Person</th><th>Hours</th><th>Streams</th><th>Main stream</th><th>Share</th></tr></thead><tbody>
+          {personRows.shown.map((entry) => <tr key={entry.person}><td><strong>{entry.person}</strong>{entry.role && <small>{entry.role}</small>}</td><td>{h(entry.actual)}</td><td>{entry.streams}</td><td>{entry.main}</td><td>{entry.specialist ? <Pill tone="warning">{entry.mainShare}%</Pill> : `${entry.mainShare}%`}</td></tr>)}
+        </tbody></table></div>{personRows.button}</> : <EmptyState title="No recorded hours in elapsed months." />}</div>
+      </div>
+    </Section>}
+    {show('unusual') && <Section eyebrow="UNUSUAL MONTHS" title="Which months stand out for a person?" info="Elapsed months. A person's recorded hours in a month that differ from the median of their other elapsed months by {T(bands).unusualChange}% or more and by at least {T(bands).unusualMinHours} hours; at least {T(bands).unusualMinMonths} elapsed months with data are needed. A spike or a drop is a question to ask, not a verdict: leave, a release push or hours written late all look like this.">
+      {unusual.length ? <><div className="azure-table"><table><thead><tr><th>Person</th><th>Month</th><th>Recorded h</th><th>Typical h</th><th>Change</th><th></th></tr></thead><tbody>
+        {unusualRows.shown.map((entry) => <tr key={`${entry.person}-${entry.month}`}><td><strong>{entry.person}</strong></td><td>{short(entry.month)}</td><td>{h(entry.actual)}</td><td>{h(entry.typical)}</td><td>{signedPct(entry.change)}</td><td><Pill tone={entry.kind === 'spike' ? 'info' : 'warning'}>{entry.kind === 'spike' ? 'Spike' : 'Drop'}</Pill></td></tr>)}
+      </tbody></table></div>{unusualRows.button}</> : <EmptyState title="No unusual months." detail="Nothing differs from a person's typical month by {T(bands).unusualChange}% or more — or fewer than {T(bands).unusualMinMonths} elapsed months with data." />}
+    </Section>}
+  </NoHours>
+}
+
+// CAP-39 Utilization: one month of the period, per person, the CAP-38 split (as Pulse Check → Last month). Region,
+// role and team member filters apply; the team figure adds up the people shown.
+function UtilizationTab({ items, months, headerMonth, settings, filter, profiles, bands, canLock, onLock, onUnlock }: { items: AzureWorkspace['items']; months: string[]; headerMonth: string; settings: ReturnType<typeof capacityContext>; filter: DashboardFilter; profiles: Record<string, { region?: Region; role?: ResourceRole }>; bands: Bands; canLock: boolean; onLock: (month: string) => void; onUnlock: (month: string, reason: string) => void }) {
+  const fallback = months.includes(headerMonth) ? headerMonth : months[months.length - 1]
+  const [picked, setPicked] = useState(fallback)
+  const [unlockReason, setUnlockReason] = useState<string | null>(null)
+  const chosen = months.includes(picked) ? picked : fallback
+  const has = <T,>(list: T[], value: T | undefined) => !list.length || (value != null && list.includes(value))
+  const model = capacityModel(items, chosen, settings)
+  const people = model.people.filter((person) => person.name !== 'Unassigned' && has(filter.regions, profiles[person.name]?.region) && has(filter.roles, profiles[person.name]?.role) && has(filter.people, person.name))
+  const available = people.reduce((total, person) => total + person.available, 0), utilized = people.reduce((total, person) => total + person.utilized, 0), planned = people.reduce((total, person) => total + person.utilizedPlanned, 0)
+  const percentOf = (part: number) => available > 0 ? Math.round(part / available * 10000) / 100 : null
+  // CAP-55: with a typed formula the team figure is the formula on the people's figures added up.
+  const team = groupUtilization(people, model.locked ? undefined : model.profile.definition)
+  const profileLine = (name: string) => [profiles[name]?.role, profiles[name]?.region].filter(Boolean).join(' · ')
+  const info = `${model.profile.formula} ${monthName(chosen)} has ${model.workingDays} working days. Available = the capacity of the profile. The team figure adds up the people shown. Admins can lock the figures of a month (they then stay as locked whatever changes later) and unlock them with a reason.${filter.streams.length ? ' The stream filter does not apply here.' : ''}`
+  const lock = model.locked, history = settings.figureLocks?.[chosen]?.filter((entry) => entry.unlockedOn) ?? []
+  return <Section eyebrow="UTILIZATION" title={`${monthName(chosen)} · ${people.length} ${people.length === 1 ? 'person' : 'people'}`} info={info} action={<label className="dash-select">Month<select value={chosen} onChange={(event) => setPicked(event.target.value)}>{months.map((entry) => <option key={entry} value={entry}>{monthName(entry)}</option>)}</select></label>}>
+    <div className="standard-hours" role="group" aria-label="Figures of the month">
+      {lock ? <strong>🔒 Figures locked on {formatDateTime(lock.lockedOn)} by {lock.lockedBy}, profile {lock.profileName}</strong> : <span>Profile: <strong>{model.profile.name}</strong> · live figures</span>}
+      {canLock && !lock && people.length > 0 && <button type="button" className="ghost" onClick={() => { if (window.confirm(`Lock the figures of ${monthName(chosen)}? They will stay as they are now for everyone, whatever changes later, until an Admin unlocks them.`)) onLock(chosen) }}>Lock figures</button>}
+      {canLock && lock && unlockReason == null && <button type="button" className="ghost" onClick={() => setUnlockReason('')}>Unlock…</button>}
+      {!canLock && <span className="muted"> (Admins lock and unlock figures)</span>}
+      {history.length > 0 && <small className="muted">Unlocked before: {history.map((entry) => `${formatDateTime(entry.unlockedOn!)} by ${entry.unlockedBy} — ${entry.unlockReason}`).join(' · ')}</small>}
+    </div>
+    {canLock && lock && unlockReason != null && <form className="standard-hours" aria-label="Unlock figures" onSubmit={(event) => { event.preventDefault(); if (unlockReason.trim()) { onUnlock(chosen, unlockReason.trim()); setUnlockReason(null) } }}>
+      <label>Reason for unlocking {monthName(chosen)}<input value={unlockReason} maxLength={500} required onChange={(event) => setUnlockReason(event.target.value)} /></label>
+      <div className="button-row"><button type="submit" className="primary" disabled={!unlockReason.trim()}>Unlock figures</button><button type="button" className="ghost" onClick={() => setUnlockReason(null)}>Cancel</button></div>
+    </form>}
+    {!people.length ? <EmptyState title={`No Time Writing data for ${monthName(chosen)}.`} detail="Choose another month or change the filters." /> : <>
+      {model.profile.definition.formula && !model.locked ? <p className="muted" role="note">Team (the profile’s typed formula on everyone’s figures added up): <strong><Util value={team.actual} bands={bands} /> actual utilization</strong> · <Util value={team.planned} bands={bands} /> planned utilization</p>
+        : <p className="muted" role="note">Team: <strong>{formatHours(utilized)}h total actual ÷ {formatHours(available)}h available hours = <Util value={percentOf(utilized)} bands={bands} /> actual utilization</strong> · {formatHours(planned)}h total planned = <Util value={percentOf(planned)} bands={bands} /> planned utilization</p>}
+      <div className="azure-table"><UtilizationTable people={people} profileLine={profileLine} terms={termsOf(settings, defaultProfile(settings).id)} /></div>
+    </>}
+  </Section>
+}
+
+// CAP-35 Old Calculation: one month, per person, every hour against the full capacity (working days employed × funded
+// hours per day) — no absence, holiday, training or NPRA deducted. Region, role and team member filters apply.
+function OldCalculationTab({ items, months, headerMonth, settings, filter, profiles, bands, canEdit, onSaveStandard, onSaveExcluded }: { items: AzureWorkspace['items']; months: string[]; headerMonth: string; settings: ReturnType<typeof capacityContext>; filter: DashboardFilter; profiles: Record<string, { region?: Region; role?: ResourceRole }>; bands: Bands; canEdit: boolean; onSaveStandard: (lines: StandardHourLine[]) => void; onSaveExcluded: (scopes: SharedTimeScope[]) => void }) {
+  const fallback = months.includes(headerMonth) ? headerMonth : months[months.length - 1]
+  const [picked, setPicked] = useState(fallback)
+  const chosen = months.includes(picked) ? picked : fallback
+  const has = <T,>(list: T[], value: T | undefined) => !list.length || (value != null && list.includes(value))
+  const model = capacityModel(items, chosen, settings)
+  const kept = { ...model, people: model.people.filter((person) => has(filter.regions, profiles[person.name]?.region) && has(filter.roles, profiles[person.name]?.role) && has(filter.people, person.name)) }
+  const { rows, totals: sum, standardHours } = oldCalculation(kept)
+  const groupHours = Object.fromEntries(sharedTimeScopes.map((scope) => [scope, model.sharedTime.filter((entry) => entry.scope === scope).reduce((total, entry) => total + entry.hours, 0)])) as Record<SharedTimeScope, number>
+  const info = `Net capacity = working days in ${monthName(chosen)} the person is employed (${model.workingDays} in the month) × ${settings.hoursPerDay}h funded hours per day − ${formatHours(standardHours)}h Standard Hours (never below 0). Planned hours = every planned hour (Original Estimate): work, absence, holidays, training, NPRA and the shared time that applies to the person. Planned utilization = planned ÷ net capacity. Available = net capacity − planned (negative: planned above capacity). Status from the planned utilization: Overloaded above ${bands.overloadedAt}%, Has capacity below ${bands.availableBelow}%, else Balanced. Actual hours = every hour recorded (Completed Work), absence, holidays and NPRA included. Actual utilization = actual ÷ net capacity. Ticked groups (All, All-<Region>: holidays and common activities shared by everyone or a region) are counted in Planned and Actual Hours; unticked groups are left out of both. Removed people are not counted.${filter.streams.length ? ' The stream filter does not apply here.' : ''}`
+  return <Section eyebrow="OLD CALCULATION" title={`${monthName(chosen)} · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}`} info={info} action={<label className="dash-select">Month<select value={chosen} onChange={(event) => setPicked(event.target.value)}>{months.map((entry) => <option key={entry} value={entry}>{monthName(entry)}</option>)}</select></label>}>
+    {model.locked && <p className="muted" role="note">🔒 The hours of {monthName(chosen)} are the figures locked on {formatDateTime(model.locked.lockedOn)} by {model.locked.lockedBy}; Standard Hours and the groups below apply as set now.</p>}
+    <StandardHours lines={settings.standardHours ?? defaultStandardHours} canEdit={canEdit} onSave={onSaveStandard} />
+    <SharedGroups excluded={settings.oldCalcExcludedScopes ?? []} hours={groupHours} canEdit={canEdit} onSave={onSaveExcluded} />
+    {!rows.length ? <EmptyState title={`No Time Writing data for ${monthName(chosen)}.`} detail="Choose another month or change the filters." /> : <div className="azure-table"><table aria-label="Old Calculation">
+      <thead><tr><th>Person</th><th className="num">Net Capacity (h)</th><th className="num">Planned Hours</th><th className="num">Planned Utilisation</th><th className="num">Available Hours</th><th>Status</th><th className="num">Actual Hours</th><th className="num">Actual Utilisation</th></tr></thead>
+      <tbody>{rows.map((row) => <tr key={row.name}><td>{row.name}</td><td className="num">{formatHours(row.netCapacity)}</td><td className="num">{formatHours(row.planned)}</td><td className="num"><Util value={row.plannedUtilization} bands={bands} /></td><td className="num">{row.available < 0 ? '−' : ''}{formatHours(Math.abs(row.available))}</td><td>{row.status}</td><td className="num">{formatHours(row.actual)}</td><td className="num"><Util value={row.actualUtilization} bands={bands} /></td></tr>)}</tbody>
+      <tfoot><tr><th>Total</th><th className="num">{formatHours(sum.netCapacity)}</th><th className="num">{formatHours(sum.planned)}</th><th className="num"><Util value={sum.plannedUtilization} bands={bands} /></th><th className="num">{sum.available < 0 ? '−' : ''}{formatHours(Math.abs(sum.available))}</th><th /><th className="num">{formatHours(sum.actual)}</th><th className="num"><Util value={sum.actualUtilization} bands={bands} /></th></tr></tfoot>
+    </table></div>}
+  </Section>
+}
+
+// CAP-36: Standard Hours, deducted from every person's Net Capacity; the total is the sum of its breakup lines. Editing
+// needs the right to manage shared settings; the change is saved with the planning data (Save to Git shares it).
+// CAP-37: tick boxes for the shared-time groups counted in the Old Calculation (Planned and Actual Hours); the hours
+// beside each are that group's planned hours this month, per person in scope.
+function SharedGroups({ excluded, hours, canEdit, onSave }: { excluded: SharedTimeScope[]; hours: Record<SharedTimeScope, number>; canEdit: boolean; onSave: (scopes: SharedTimeScope[]) => void }) {
+  return <div className="standard-hours" role="group" aria-label="Shared time counted">
+    <strong>Count in this calculation:</strong>
+    {sharedTimeScopes.map((scope) => <label key={scope} className="inline-check" title={canEdit ? undefined : 'Changed by roles that manage shared settings'}>
+      <input type="checkbox" checked={!excluded.includes(scope)} disabled={!canEdit} onChange={(event) => onSave(event.target.checked ? excluded.filter((entry) => entry !== scope) : [...excluded, scope])} />
+      {sharedTimeScopeLabel(scope)} <span className="muted">({formatHours(hours[scope] ?? 0)}h)</span>
+    </label>)}
+  </div>
+}
+
+function StandardHours({ lines, canEdit, onSave }: { lines: StandardHourLine[]; canEdit: boolean; onSave: (lines: StandardHourLine[]) => void }) {
+  const [draft, setDraft] = useState<{ label: string; hours: string }[] | null>(null)
+  const total = standardHoursTotal(lines)
+  const draftTotal = draft ? Math.round(draft.reduce((sum, line) => sum + (Number(line.hours) || 0), 0) * 100) / 100 : 0
+  const invalid = draft?.some((line) => line.hours.trim() === '' || !Number.isFinite(Number(line.hours)) || Number(line.hours) < 0 || Number(line.hours) > 744) ?? false
+  const setLine = (index: number, change: Partial<{ label: string; hours: string }>) => setDraft((current) => current && current.map((line, at) => at === index ? { ...line, ...change } : line))
+  if (!draft) return <div className="standard-hours" role="group" aria-label="Standard Hours">
+    <strong>Standard Hours: {formatHours(total)}h</strong> <span className="muted">deducted from every person's Net Capacity{lines.length ? ` — ${lines.map((line) => `${line.label} ${formatHours(line.hours)}h`).join(' · ')}` : ''}</span>
+    {canEdit ? <button type="button" className="text-button" onClick={() => setDraft(lines.map((line) => ({ label: line.label, hours: String(line.hours) })))}>Edit Standard Hours</button> : <span className="muted"> (changed by roles that manage shared settings)</span>}
+  </div>
+  return <form className="standard-hours" aria-label="Edit Standard Hours" onSubmit={(event) => { event.preventDefault(); if (invalid) return; onSave(draft.map((line) => ({ label: line.label.trim() || 'Standard hours', hours: Number(line.hours) }))); setDraft(null) }}>
+    <div className="azure-table"><table><thead><tr><th>Breakup</th><th className="num">Hours</th><th /></tr></thead><tbody>
+      {draft.map((line, index) => <tr key={index}>
+        <td><input aria-label={`Breakup ${index + 1}`} value={line.label} maxLength={80} placeholder="e.g. Team meetings" onChange={(event) => setLine(index, { label: event.target.value })} /></td>
+        <td className="num"><input aria-label={`Hours ${index + 1}`} type="number" min={0} max={744} step={0.25} value={line.hours} onChange={(event) => setLine(index, { hours: event.target.value })} /></td>
+        <td><button type="button" className="text-button" aria-label={`Remove breakup ${index + 1}`} onClick={() => setDraft((current) => current && current.filter((_, at) => at !== index))}>Remove</button></td>
+      </tr>)}
+    </tbody><tfoot><tr><th>Standard Hours (total)</th><th className="num">{formatHours(draftTotal)}h</th><th /></tr></tfoot></table></div>
+    <div className="button-row">
+      <button type="button" className="ghost" disabled={draft.length >= 20} onClick={() => setDraft((current) => current && [...current, { label: '', hours: '0' }])}>Add breakup line</button>
+      <button type="submit" className="primary" disabled={invalid}>Save Standard Hours</button>
+      <button type="button" className="ghost" onClick={() => setDraft(null)}>Cancel</button>
+    </div>
+    {invalid && <p className="warning-text">Each line needs hours between 0 and 744.</p>}
+  </form>
+}
+
+function DefinitionsTab({ terms, hoursPerDay, absenceEpicId, bands, formula }: { terms: Record<TermKey, string>; hoursPerDay: number; absenceEpicId: number; bands: Bands; formula: string }) {
+  return <Panel title="Definitions, assumptions & source">
+    <dl className="dash-findings">
+      <dt>Calculation profile</dt><dd>{formula} Set in Admin → Capacity & time → Calculation profiles (CAP-41, CAP-42); the definitions below describe the built-in “Current (v4)”. A month whose figures are locked (Utilization tab) keeps the figures it was locked with (CAP-43).</dd>
+      <dt>Source</dt><dd>The Time Writing connection (QMS-0025): month Time Writing Tasks, matched to a month when their title starts or ends with the month and year.</dd>
+      <dt>Total planned</dt><dd>Original Estimate on the month's work, training and other NPRA Tasks, plus the common activities that apply to the person.</dd>
+      <dt>Total actual</dt><dd>Completed Work on the month's work, training and other NPRA Tasks, plus common activities. A blank value is missing, a 0 is recorded zero.</dd>
+      <dt>{terms.available}</dt><dd>{terms.funded} − {terms.absence} (CAP-38, CAP-52): working days employed × {hoursPerDay}h funded hours per day, less absence — PTO, Sick Leave, Unplanned Leave, public holidays (including holidays mapped in Admin → Capacity & time for everyone or a region) and other absence under Epic #{absenceEpicId} — never below 0 per person. Trainings, other NPRA and common activities such as PI Planning are not deducted: they count as utilized hours.</dd>
+      <dt>Utilization and its colours</dt><dd>Planned or recorded hours ÷ capacity. One model for the whole Dashboard, from Admin → Capacity & time: <span className="util util-over">↑ red</span> above {bands.overloadedAt}% (overloaded), <span className="util util-balanced">green</span> balanced, <span className="util util-spare">↓ blue</span> below {bands.availableBelow}% (spare). Colours show capacity position, not performance. Hour differences (+ / −) carry no colour.</dd>
+      <dt>Month status</dt><dd>Elapsed (before the current month), partial (the current month) and future. Partial and future months do not establish spare capacity or results.</dd>
+      <dt>Region and role</dt><dd>From Admin → People & access → People; people without a mapping show as No region / No role and are left out of rebalancing.</dd>
+      <dt>Stream</dt><dd>The Epic above the Task. The stream filter keeps only that stream's hours and the people who book on it (their whole capacity still counts); it does not apply to the Epic mix, Pareto and Delivery panels, which say so.</dd>
+      <dt>Planned overload</dt><dd>A person whose planned utilization over the period is above {bands.overloadedAt}%.</dd>
+      <dt>Persistent overload</dt><dd>Above {bands.overloadedAt}% of capacity in {T(bands).persistentMonths} or more consecutive elapsed months.</dd>
+      <dt>Rebalancing</dt><dd>Overload in hours (plan above capacity) can only move to headroom of the same role in the same month, and only in current or future months.</dd>
+      <dt>Elapsed months: recorded vs planned</dt><dd>Σ recorded ÷ Σ planned over the months of the period that have ended.</dd>
+      <dt>Month-end forecast</dt><dd>Recorded hours so far ÷ the share of the month's weekdays gone (today included). On track within ±{T(bands).forecastOnTrack}% of the plan; heading over capacity when the projection reaches {bands.overloadedAt}% of net capacity.</dd>
+      <dt>Plan accuracy</dt><dd>Elapsed months only. Error = Σ|actual − plan| ÷ Σplan; bias = (Σactual − Σplan) ÷ Σplan. Reliable at an error ≤ {T(bands).accuracyReliable}%; under-records at a bias ≤ −{T(bands).accuracyBias}%; over-runs at ≥ +{T(bands).accuracyBias}%.</dd>
+      <dt>Stream momentum</dt><dd>Average recorded hours per month over the latest up to {T(bands).momentumMonths} elapsed months against the up to {T(bands).momentumMonths} before. Rising / falling at ±{T(bands).momentumChange}% and at least {T(bands).momentumMinHours} hours.</dd>
+      <dt>Resilience</dt><dd>A stream rests on one person when they recorded ≥ {T(bands).resilienceSinglePoint}% of its hours; a specialist put ≥ {T(bands).resilienceSpecialist}% of their hours into one stream. Elapsed months.</dd>
+      <dt>Unusual months</dt><dd>A person's recorded hours differ from the median of their other elapsed months by ≥ {T(bands).unusualChange}% and ≥ {T(bands).unusualMinHours} hours ({T(bands).unusualMinMonths} elapsed months with data needed).</dd>
+      <dt>Health score</dt><dd>Average of the components with data: balance (people planned in the {bands.availableBelow}–{bands.overloadedAt}% band), recording (planned Tasks with a recorded actual, elapsed months) and resilience (streams not resting on one person). Green from {T(bands).healthGreen}, amber from {T(bands).healthAmber}, red below.</dd>
+      <dt>Overrun and ad-hoc</dt><dd>Overrun = Completed Work above Original Estimate per Task; ad-hoc = hours on Tasks tagged ad-hoc. Both over the period, ranked so the few Features or Epics up to the 80% line stand out.</dd>
+    </dl>
+  </Panel>
+}
+
+// The six headline tiles of the Team overview (MYD-10, MYD-11): one figure each with what it means, opening the tab
+// that explains it (delivery opens Pulse Check). Same calculations as the tabs.
+const noViews = { views: { schema: 1, kind: 'personal-views', sections: {}, menu: { pinned: [], hidden: [] }, filters: {} }, note: '', inGit: false, sections: () => undefined, setSections: () => {}, resetSections: () => {}, menu: { pinned: [], hidden: [] }, setMenu: () => {}, filter: () => undefined, setFilter: () => {}, saveAsDefault: async () => ({ merged: false }), defaultsQueue: { waiting: 0, failed: 0, error: '' }, retryDefaults: async () => [] } as unknown as PersonalViewsStore
+function OverviewTiles({ rows, months, today, bands, all, overload, forecast, delivery, open, openPulse }: { rows: PersonMonth[]; months: string[]; today: string; bands: Bands; all: ReturnType<typeof totals>; overload: ReturnType<typeof plannedOverload>; forecast: ReturnType<typeof monthForecast> | null; delivery: StreamCounts[]; open: (tab: Tab) => void; openPulse: () => void }) {
+  const accuracy = planAccuracy(rows, bands)
+  const health = healthScore(rows, months, bands)
+  const releases = delivery.reduce((sum, stream) => sum + stream.releases, 0)
+  const attention = forecast ? forecast.people.filter((entry) => entry.status === 'behind' || entry.status === 'over-capacity').length : 0
+  const tile = (label: string, value: ReactNode, hint: ReactNode, action: string, go: () => void, tone?: 'danger' | 'warning' | 'ok') => <article className={`dash-tile${tone ? ` dash-tile-${tone}` : ''}`}>
+    <span>{label}</span><strong>{value}</strong><small>{hint}</small><button type="button" className="text-button" onClick={go}>{action} →</button>
+  </article>
+  void today
+  return <div className="dash-tiles" role="list" aria-label="Headline tiles">
+    {tile('Utilization', <><Util value={all.planUtil} bands={bands} /> planned</>, <>Recorded <Util value={all.actualUtil} bands={bands} /> · {formatHours(all.capacity)}h capacity · {all.people} {all.people === 1 ? 'person' : 'people'}</>, 'Capacity and workload', () => open('capacity'))}
+    {tile('Overload and headroom', `${overload.over.length} / ${overload.people}`, <>planned above {bands.overloadedAt}% · {signed(all.gap)} unplanned capacity</>, 'Who and when', () => open('capacity'), overload.over.length ? 'danger' : undefined)}
+    {tile('Plan accuracy', pctText(accuracy.team.error), accuracy.months ? <>team error over {accuracy.months} elapsed month{accuracy.months === 1 ? '' : 's'} · bias {signedPct(accuracy.team.bias)}</> : 'No elapsed month with a plan yet', 'Plan quality', () => open('quality'))}
+    {tile('Plan health', health.overall.score ?? '—', 'score 0–100: balance, recording, resilience', 'Plan quality', () => open('quality'), health.overall.score == null ? undefined : health.overall.score >= T(bands).healthGreen ? 'ok' : health.overall.score >= T(bands).healthAmber ? 'warning' : 'danger')}
+    {tile('Delivery', releases, `releases in the period · ${delivery.filter((stream) => !stream.notSetUp).length} streams counted`, 'Pulse Check', openPulse)}
+    {tile('Forecast', forecast && forecast.people.length ? signed(forecast.vsPlan) : '—', forecast && forecast.people.length ? <>{formatHours(forecast.projected)}h projected this month · {attention} need attention</> : 'The period does not include this month', 'Capacity and workload', () => open('capacity'), attention ? 'warning' : undefined)}
+  </div>
+}

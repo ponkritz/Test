@@ -1,0 +1,52 @@
+import type { AppState } from './domain'
+import { csvSafe } from './csv'
+import { withoutMyViews } from './myViews'
+
+function saveBlob(contents: BlobPart, mime: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type: mime }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+const quote = (value: unknown) => `"${csvSafe(value).replaceAll('"', '""')}"`
+
+export function exportEffortCsv(state: AppState, month?: string) {
+  const rows = state.efforts
+    .filter((effort) => !month || effort.month === month)
+    .map((effort) => {
+      const activity = state.activities.find((item) => item.id === effort.activityId)
+      const resource = state.people.find((person) => person.id === activity?.resourceId)
+      return [activity?.name, activity?.type, resource?.name, effort.month, effort.classification, effort.plannedHours, effort.actualHours, effort.baselineHours, effort.notes]
+    })
+  const header = ['Activity', 'Type', 'Resource', 'Month', 'Classification', 'Planned Hours', 'Actual Hours', 'Baseline Hours', 'Notes']
+  saveBlob([header, ...rows].map((row) => row.map(quote).join(',')).join('\r\n'), 'text/csv;charset=utf-8', `demand-planning-${month || 'all'}.csv`)
+}
+
+export function exportStateJson(state: AppState) {
+  // SET-17: the data of My views stays on this computer.
+  saveBlob(JSON.stringify(withoutMyViews(state), null, 2), 'application/json', `demand-planning-backup-${new Date().toISOString().slice(0, 10)}.json`)
+}
+
+
+export function downloadCsv(contents: string, filename: string) {
+  saveBlob(`﻿${contents}`, 'text/csv;charset=utf-8', filename)
+}
+
+export function downloadMarkdown(contents: string, filename: string) {
+  saveBlob(contents, 'text/markdown;charset=utf-8', filename)
+}
+
+export function downloadXlsx(contents: Uint8Array, filename: string) {
+  saveBlob(contents as BlobPart, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename)
+}
+
+export function downloadPptx(contents: Uint8Array, filename: string) {
+  saveBlob(contents as BlobPart, 'application/vnd.openxmlformats-officedocument.presentationml.presentation', filename)
+}
+
+export function downloadJson(contents: string, filename: string) {
+  saveBlob(contents, 'application/json;charset=utf-8', filename)
+}

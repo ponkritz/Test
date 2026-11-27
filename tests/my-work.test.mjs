@@ -1,0 +1,641 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { isMine, isPending, matchesWork, mentions, myPendingWork, monthTaskCandidates, moveCandidates, assignablePeople, byFeatureNumber } from '../src/myWork.ts'
+import { guardAzureWrites, ensureMonthTask, updateAzureWorkItem, workItemUpdatePatch, addChildWorkItem, requestAzure, createUserStory } from '../src/azureDevOps.ts'
+// CON-101: the write guard starts closed (as before the app loads the roles); these tests check the requests, so allow them.
+guardAzureWrites(() => true)
+import { createRequire } from 'node:module'
+
+const base = { organization: 'org', project: 'Quality', state: 'Active', assignedTo: '', areaPath: 'Quality\\A', iterationPath: 'Quality\\PI 2026.4\\Sprint 1', tags: '', url: '', syncedAt: '' }
+const item = (id, workItemType, title, extra = {}) => ({ ...base, key: `org/quality/${id}`, id, workItemType, title, ...extra })
+const me = { email: 'ana@x.com', name: 'Ana Costa' }
+const ana = { assignedTo: 'Ana Costa', assignedToEmail: 'ana@x.com' }, ben = { assignedTo: 'Ben Okafor', assignedToEmail: 'ben@x.com' }
+const items = [
+  item(1, 'Epic', 'CP'), item(2, 'Feature', 'CP | Care Pathways | v3.1', { parentId: 1, ...ana }),
+  item(3, 'User Story', 'CP | Care Pathways | v3.1 - Time Writing', { parentId: 2, ...ana }),
+  item(4, 'Task', 'October 2026 | CP | Care Pathways | v3.1', { parentId: 3, ...ben }),
+  item(5, 'User Story', 'SFV review', { parentId: 2, ...ana, state: 'New' }),
+  item(6, 'Feature', 'DP | Dose Planning | v4.2', { parentId: 1, ...ben }), item(7, 'Task', 'Test DP', { parentId: 6, ...ana }),
+  item(8, 'Feature', 'DP | Dose Planning | v4.1', { parentId: 1, ...ana, state: 'Closed' }),
+  item(9, 'Bug', 'Crash', { parentId: 6, ...ana, state: 'Resolved' }),
+  item(37778, 'Epic', 'Absence'), item(10, 'Feature', 'Ana Costa - Absence', { parentId: 37778, ...ana }),
+]
+
+test('mine and pending: email first, display name as fallback; finished states excluded', () => {
+  assert.equal(isMine({ assignedTo: 'Ana Costa', assignedToEmail: 'ana@x.com' }, { email: 'ANA@x.com' }), true)
+  assert.equal(isMine({ assignedTo: 'Ana Costa', assignedToEmail: 'other@x.com' }, me), false, 'email wins over a same display name')
+  assert.equal(isMine({ assignedTo: 'Ana Costa' }, me), true, 'sample/cached items without email match by name')
+  assert.equal(isMine({ assignedTo: '' }, {}), false)
+  assert.deepEqual(['New', 'Active', 'Resolved', 'Closed', 'Done', 'Removed'].map((state) => isPending({ state })), [true, true, false, false, false, false])
+  assert.deepEqual(myPendingWork(items, me).map(({ item }) => item.id), [2, 10, 3, 5, 7], 'Features first, then stories, then tasks; closed/resolved and other people excluded')
+  assert.deepEqual(myPendingWork(items, me, 37778).map(({ item }) => item.id), [2, 3, 5, 7], 'absence items are not pending work')
+  assert.equal(myPendingWork(items, me).find(({ item }) => item.id === 7).feature.id, 6)
+})
+
+test('month-task candidates: my pending Features or Features holding my pending work; never the absence Epic', () => {
+  const rows = monthTaskCandidates(items, me, 'October 2026', 37778)
+  assert.deepEqual(rows.map((row) => [row.feature.id, row.status]), [[2, 'needs-task'], [6, 'needs-story']], "Ben's task on #2 does not count as mine; #6 is Ben's Feature but holds my Task")
+  const done = monthTaskCandidates([...items, item(11, 'Task', 'October 2026 | CP | Care Pathways | v3.1', { parentId: 3, ...ana })], me, 'October 2026', 37778)
+  assert.equal(done.find((row) => row.feature.id === 2).status, 'exists')
+  const second = monthTaskCandidates([...items, item(12, 'User Story', 'CP | Care Pathways | v3.1 - Time Writing', { parentId: 2 })], me, 'October 2026', 37778).find((row) => row.feature.id === 2)
+  assert.deepEqual([second.status, second.storyTitle], ['needs-task', 'CP | Care Pathways | v3.1 - Time Writing'], 'two stories of the same title: my own one takes the Task (ATM-23)')
+  assert.equal(monthTaskCandidates([...items, item(12, 'User Story', 'CP | Care Pathways | v3.1 - Time Writing', { parentId: 2, ...ana })], me, 'October 2026', 37778).find((row) => row.feature.id === 2).status, 'conflict', 'two of my own: a conflict')
+})
+
+test('shared activities: a Feature owned by someone else is offered when I had a month Task under it or its Description @mentions me (TC-ATM-14)', () => {
+  const shared = [
+    ...items,
+    item(20, 'Feature', 'IOCC | Lab Suite | v1.0', { parentId: 1, ...ben }), item(21, 'User Story', 'IOCC | Lab Suite | v1.0 - Time Writing', { parentId: 20, ...ben }),
+    item(22, 'Task', 'September 2026 | IOCC | Lab Suite | v1.0', { parentId: 21, ...ana, state: 'Closed' }),
+    item(23, 'Feature', 'CT | Scanner | v2', { parentId: 1, ...ben, description: '<div>Contributors: <a href="#" data-vss-mention="version:2.0,abc">@Ana Costa</a></div>' }),
+    item(24, 'Feature', 'CT | Scanner | v3', { parentId: 1, ...ben, description: '<div>@Ana Costanza reviews</div>' }),
+    item(25, 'Feature', 'CT | Scanner | v1', { parentId: 1, ...ben, state: 'Closed', description: '@Ana Costa' }),
+    item(26, 'Feature', 'Ana Costa - Absence 2', { parentId: 37778, ...ben, description: '@Ana Costa' }),
+  ]
+  const rows = monthTaskCandidates(shared, me, 'October 2026', 37778)
+  assert.deepEqual(rows.map((row) => [row.feature.id, row.status, row.shared?.reason ?? '']), [[2, 'needs-task', ''], [23, 'needs-story', 'mention'], [6, 'needs-story', ''], [20, 'needs-task', 'earlier-task']], 'another name starting the same, a closed Feature and the absence Epic are not offered')
+  assert.equal(rows.find((row) => row.feature.id === 20).shared.owner, 'Ben Okafor')
+  assert.equal(rows.find((row) => row.feature.id === 20).storyTitle, 'IOCC | Lab Suite | v1.0 - Time Writing', 'my Task goes under the existing Time Writing story')
+  assert.equal(mentions('<p>Thanks&nbsp;@ana costa.</p>', me), true, 'letter case and entities')
+  assert.equal(mentions('@Ana Costa', { email: 'ana@x.com' }), false, 'no name, no mention')
+})
+
+test('move candidates: only my pending User Stories in a past Sprint; current, future and undated left alone', () => {
+  const sprint = (n, startDate, finishDate) => ({ path: `Quality\\PI 2026.4\\Sprint ${n}`, attributes: { startDate, finishDate } })
+  const iterations = [sprint(1, '2026-09-28', '2026-10-09'), sprint(2, '2026-10-12', '2026-10-23'), sprint(3, '2026-10-26', '2026-11-06')]
+  const target = 'Quality\\PI 2026.4\\Sprint 2', today = new Date('2026-10-20T06:00:00Z')
+  const extra = [
+    item(13, 'User Story', 'In current sprint', { ...ana, iterationPath: target }),
+    item(14, 'User Story', 'In future sprint', { ...ana, iterationPath: 'Quality\\PI 2026.4\\Sprint 3' }),
+    item(15, 'User Story', 'Only in the PI', { ...ana, iterationPath: 'Quality\\PI 2026.4' }),
+    item(16, 'User Story', 'Ben in past sprint', { ...ben }),
+    item(18, 'User Story', 'CP | Care | v1 - Time Writing', { ...ana, iterationPath: 'Quality\\PI 2026.4\\Sprint 1' }),
+  ]
+  assert.deepEqual(moveCandidates([...items, ...extra], me, target, iterations, 37778, today).map(({ item }) => item.id), [5], 'Features, Tasks and Time Writing stories (#3, #18) are never moved; only other stories in Sprint 1 (past)')
+  assert.deepEqual(moveCandidates(items, me, target, [], 37778, today), [], 'without iteration dates nothing is treated as past')
+  const all = [...items, ...extra, item(17, 'User Story', 'Committed in past sprint', { ...ana, state: 'Committed' }), item(19, 'User Story', 'DT review', { parentId: 2, ...ana })]
+  assert.deepEqual(moveCandidates(all, me, target, iterations, 37778, today, 'new').map(({ item }) => item.id), [5], 'New only')
+  assert.deepEqual(moveCandidates(all, me, target, iterations, 37778, today, 'active').map(({ item }) => item.id), [19], 'Active only (#3 is a Time Writing story)')
+  assert.deepEqual(moveCandidates(all, me, target, iterations, 37778, today, 'both').map(({ item }) => item.id), [5, 19], 'both; other pending states are left alone')
+})
+
+const raw = (id, fields) => ({ id, fields: { 'System.TeamProject': 'Quality', 'System.State': 'Active', 'System.AreaPath': 'Quality\\A', 'System.IterationPath': 'Quality\\PI 2026.4\\Sprint 1', ...fields } })
+function fakeAzure(world) {
+  const calls = []
+  let next = 100
+  const transport = async (request) => {
+    calls.push(request)
+    if (request.operation === 'items') return { value: request.ids.map((id) => world.get(id)).filter(Boolean) }
+    if (request.operation === 'query') { const parent = Number(/\[System\.Parent\] = (\d+)/.exec(request.query)[1]); return { workItems: [...world.values()].filter((entry) => entry.fields['System.Parent'] === parent).map((entry) => ({ id: entry.id })) } }
+    if (request.operation === 'create-child') {
+      if (request.validateOnly) return {}
+      const id = ++next, f = request.feature
+      world.set(id, raw(id, { 'System.WorkItemType': request.workItemType, 'System.Title': f.title, 'System.Parent': f.parentId, 'System.AreaPath': f.areaPath, 'System.IterationPath': f.iterationPath, ...(f.assignedTo ? { 'System.AssignedTo': { displayName: 'Ana Costa', uniqueName: f.assignedTo } } : {}), ...(f.adhoc ? { 'System.Tags': 'ad-hoc' } : {}), ...(f.storyPoints != null ? { 'Microsoft.VSTS.Scheduling.StoryPoints': f.storyPoints } : {}), ...(f.priority != null ? { 'Microsoft.VSTS.Common.Priority': f.priority } : {}), ...(f.risk != null ? { 'Microsoft.VSTS.Common.Risk': f.risk } : {}), ...(f.valueArea != null ? { 'Microsoft.VSTS.Common.ValueArea': f.valueArea } : {}) }))
+      return { id }
+    }
+    if (request.operation === 'update-work-item') { const entry = world.get(request.workItemId); if (request.state) entry.fields['System.State'] = request.state; if (request.iterationPath) entry.fields['System.IterationPath'] = request.iterationPath; return {} }
+    throw new Error(`unexpected ${request.operation}`)
+  }
+  return { transport, calls }
+}
+
+test('ensureMonthTask creates story and task once, then reuses them; another person\'s task is not mine', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'CP | Care Pathways | v3.1' })]])
+  const { transport, calls } = fakeAzure(world)
+  const first = await ensureMonthTask(config, 'pat', 2, 'Ana@x.com', 'October 2026', transport)
+  assert.deepEqual([first.status, first.storyCreated, first.story.title, first.task.title, first.task.assignedToEmail, first.task.iterationPath], ['created', true, 'CP | Care Pathways | v3.1 - Time Writing', 'October 2026 | CP | Care Pathways | v3.1', 'ana@x.com', 'Quality'])
+  assert.equal(first.story.iterationPath, config.project, 'a new Time Writing story sits at the project root, not in the Feature’s PI')
+  const second = await ensureMonthTask(config, 'pat', 2, 'ana@x.com', 'October 2026', transport)
+  assert.deepEqual([second.status, second.storyCreated, second.task.id], ['exists', false, first.task.id], 'running again creates nothing')
+  assert.equal(calls.filter((call) => call.operation === 'create-child' && !call.validateOnly).length, 2)
+  const bens = await ensureMonthTask(config, 'pat', 2, 'ben@x.com', 'October 2026', transport)
+  assert.equal(bens.status, 'created', 'same title for another person is a separate task')
+  await assert.rejects(ensureMonthTask(config, 'pat', 2, 'not-an-email', 'October 2026', transport), /email/)
+})
+
+test('updateAzureWorkItem sends only state / iteration, verifies by reading back', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[7, raw(7, { 'System.WorkItemType': 'Task', 'System.Title': 'Test DP' })]])
+  const { transport, calls } = fakeAzure(world)
+  const closed = await updateAzureWorkItem(config, 'pat', 7, { state: 'Closed' }, transport)
+  assert.equal(closed.state, 'Closed')
+  const moved = await updateAzureWorkItem(config, 'pat', 7, { iterationPath: 'Quality\\PI 2026.4\\Sprint 2' }, transport)
+  assert.equal(moved.iterationPath, 'Quality\\PI 2026.4\\Sprint 2')
+  assert.deepEqual(calls.filter((call) => call.operation === 'update-work-item').map((call) => [call.state, call.iterationPath]), [['Closed', undefined], [undefined, 'Quality\\PI 2026.4\\Sprint 2']])
+  await assert.rejects(updateAzureWorkItem(config, 'pat', 7, {}, transport), /Nothing/)
+  await assert.rejects(updateAzureWorkItem(config, 'pat', 7, { state: 'Closed"; DROP' }, transport), /Invalid state/)
+  const stubborn = { transport: async (request) => request.operation === 'items' ? { value: [raw(7, { 'System.WorkItemType': 'Task', 'System.Title': 'x', 'System.State': 'Active' })] } : {} }
+  await assert.rejects(updateAzureWorkItem(config, 'pat', 7, { state: 'Closed' }, stubborn.transport), /reports Active/)
+  assert.deepEqual(workItemUpdatePatch({ state: 'Resolved', iterationPath: 'Q\\S' }), [{ op: 'add', path: '/fields/System.State', value: 'Resolved' }, { op: 'add', path: '/fields/System.IterationPath', value: 'Q\\S' }])
+})
+
+test('Windows app proxy: work-item update is limited to state and iteration path', () => {
+  const { azureWorkItemUpdateRequest } = createRequire(import.meta.url)('../electron/azure-devops.cjs')
+  const request = azureWorkItemUpdateRequest({ organization: 'org', project: 'Quality', team: 'T', pat: 'p', operation: 'update-work-item', workItemId: 7, state: 'Closed', iterationPath: 'Quality\\PI 2026.4\\Sprint 2', fields: { 'System.Title': 'hijack' } })
+  assert.equal(request.url, 'https://dev.azure.com/org/Quality/_apis/wit/workitems/7?api-version=7.1')
+  assert.equal(request.options.method, 'PATCH')
+  assert.deepEqual(JSON.parse(request.options.body).map((op) => op.path), ['/fields/System.State', '/fields/System.IterationPath'])
+  assert.throws(() => azureWorkItemUpdateRequest({ organization: 'org', project: 'Quality', team: 'T', pat: 'p', operation: 'update-work-item', workItemId: 7 }), /Nothing/)
+  assert.throws(() => azureWorkItemUpdateRequest({ organization: 'org', project: 'Quality', team: 'T', pat: 'p', operation: 'update-work-item', workItemId: 0, state: 'Closed' }), /Invalid work item/)
+})
+
+test('new work items are never unassigned: month story and task, Add child, and the request guards', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'CP | Care Pathways | v3.1', 'System.IterationPath': 'Quality\\PI 1' })]])
+  const { transport, calls } = fakeAzure(world)
+  await ensureMonthTask(config, 'pat', 2, 'ana@x.com', 'October 2026', transport)
+  const created = calls.filter((call) => call.operation === 'create-child')
+  assert.ok(created.length && created.every((call) => call.feature.assignedTo === 'ana@x.com'), 'the Time Writing story is assigned too')
+  const story = await addChildWorkItem(config, 'pat', 2, 'User Story', ' New story ', 'Ben@X.com', undefined, transport)
+  assert.deepEqual([story.workItemType, story.title, story.parentId, story.assignedToEmail, story.iterationPath], ['User Story', 'New story', 2, 'ben@x.com', 'Quality\\PI 1'])
+  const task = await addChildWorkItem(config, 'pat', story.id, 'Task', 'Task one', 'chen@x.com', 'Quality\\PI 1\\Sprint 2', transport)
+  assert.deepEqual([task.parentId, task.assignedToEmail, task.iterationPath], [story.id, 'chen@x.com', 'Quality\\PI 1\\Sprint 2'])
+  await assert.rejects(addChildWorkItem(config, 'pat', 2, 'Task', 'x', 'ana@x.com', undefined, transport), /goes under a User Story/)
+  await assert.rejects(addChildWorkItem(config, 'pat', 2, 'User Story', 'x', '', undefined, transport), /assigned to/)
+  // Both transports refuse a create without an assignee, before anything is sent.
+  const sent = []
+  globalThis.window = {}; const original = globalThis.fetch
+  globalThis.fetch = async (url) => { sent.push(url); return new Response('{}', { status: 200 }) }
+  try { await assert.rejects(requestAzure({ ...config, pat: 'p', operation: 'create-child', workItemType: 'Task', validateOnly: true, feature: { parentId: 2, title: 't', description: '', acceptanceCriteria: '', areaPath: 'A' } }), /assigned to someone/) }
+  finally { delete globalThis.window; globalThis.fetch = original }
+  assert.equal(sent.length, 0)
+  const { azureFeatureRequest } = createRequire(import.meta.url)('../electron/azure-devops.cjs')
+  assert.throws(() => azureFeatureRequest({ ...config, pat: 'p', operation: 'create-child', workItemType: 'Task', validateOnly: true, feature: { parentId: 2, title: 't', description: '', acceptanceCriteria: '', areaPath: 'A' } }), /assigned to someone/)
+  assert.doesNotThrow(() => azureFeatureRequest({ ...config, pat: 'p', operation: 'create-child', workItemType: 'Task', validateOnly: true, feature: { parentId: 2, title: 't', description: '', acceptanceCriteria: '', areaPath: 'A', assignedTo: 'ana@x.com' } }))
+})
+
+test('Bulk month Tasks after the planning lock: a new Task is tagged ad-hoc, the story is not; both transports allow only that tag on a Task (TC-MON-08)', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'CP | Care Pathways | v3.1' })]])
+  const { transport, calls } = fakeAzure(world)
+  const late = await ensureMonthTask(config, 'pat', 2, 'ana@x.com', 'October 2026', transport, true)
+  assert.deepEqual([late.task.tags, late.story.tags], ['ad-hoc', ''])
+  assert.deepEqual(calls.filter((call) => call.operation === 'create-child').map((call) => [call.workItemType, call.feature.adhoc]), [['User Story', undefined], ['User Story', undefined], ['Task', true], ['Task', true]])
+  const again = await ensureMonthTask(config, 'pat', 2, 'ana@x.com', 'October 2026', transport, true)
+  assert.equal(again.status, 'exists', 'an existing Task is reused, not re-created')
+  const { azureFeatureRequest } = createRequire(import.meta.url)('../electron/azure-devops.cjs')
+  const request = (workItemType, adhoc) => ({ ...config, pat: 'p', operation: 'create-child', workItemType, validateOnly: true, feature: { parentId: 2, title: 't', description: '', acceptanceCriteria: '', areaPath: 'A', assignedTo: 'ana@x.com', adhoc } })
+  assert.deepEqual(JSON.parse(azureFeatureRequest(request('Task', true)).options.body).at(-1), { op: 'add', path: '/fields/System.Tags', value: 'ad-hoc' })
+  assert.throws(() => azureFeatureRequest(request('User Story', true)), /Only a new Task/)
+  assert.throws(() => azureFeatureRequest(request('Task', 'x; secret')), /Only a new Task/, 'never an arbitrary tag')
+  globalThis.window = {}
+  try {
+    await assert.rejects(requestAzure(request('User Story', true)), /Only a new Task/)
+    await assert.rejects(requestAzure(request('Task', 'other')), /Only a new Task/)
+  } finally { delete globalThis.window }
+})
+
+test('people to assign to: everyone with an email, by name; a shared name shows the email', () => {
+  const items = [item(1, 'Task', 'a', { assignedTo: 'Ana', assignedToEmail: 'ana@x.com' }), item(2, 'Task', 'b', { assignedTo: 'Ana', assignedToEmail: 'ana@x.com' }), item(3, 'Task', 'c', { assignedTo: 'Ben' }), item(4, 'Task', 'd', { assignedTo: 'Chen', assignedToEmail: 'chen@x.com' }), item(5, 'Task', 'e', { assignedTo: 'Chen', assignedToEmail: 'chen2@x.com' })]
+  assert.deepEqual(assignablePeople(items), [{ email: 'ana@x.com', name: 'Ana' }, { email: 'chen@x.com', name: 'Chen (chen@x.com)' }, { email: 'chen2@x.com', name: 'Chen (chen2@x.com)' }])
+})
+
+import { stateChecks, nextStateFor } from '../src/myWork.ts'
+test('state checks: closed stories close the Feature, closed tasks close the story, an Active Feature needs an Active story', () => {
+  const me = { email: 'ana@x.com' }
+  const mine = (id, type, state, parentId, extra = {}) => item(id, type, `${type} ${id}`, { state, parentId, assignedTo: 'Ana', assignedToEmail: 'ana@x.com', ...extra })
+  const items = [
+    mine(1, 'Feature', 'Active'), mine(11, 'User Story', 'Closed', 1), mine(12, 'User Story', 'Closed', 1), mine(13, 'User Story', 'Removed', 1),
+    mine(2, 'Feature', 'Active'), mine(21, 'User Story', 'New', 2), mine(22, 'User Story', 'Resolved', 2),
+    mine(3, 'Feature', 'Active'), mine(31, 'User Story', 'Active', 3), mine(311, 'Task', 'Closed', 31), mine(312, 'Task', 'Closed', 31),
+    mine(4, 'Feature', 'New'), mine(5, 'Feature', 'Active'),
+    mine(6, 'Feature', 'Closed'), mine(61, 'User Story', 'Closed', 6),
+    item(7, 'Feature', 'Ben feature', { state: 'Active', assignedTo: 'Ben', assignedToEmail: 'ben@x.com' }),
+    mine(90, 'Epic', 'Active'), mine(9, 'Feature', 'Active', 90), mine(91, 'User Story', 'Closed', 9),
+  ]
+  const checks = stateChecks(items, me, 90)
+  assert.deepEqual(checks.map((check) => [check.kind, check.item.id]), [
+    ['close-feature', 1], ['feature-needs-active-story', 2], ['feature-needs-active-story', 5], ['close-story', 31],
+  ])
+  assert.deepEqual(checks[0].children.map((child) => child.id), [11, 12], 'Removed stories are ignored')
+  assert.deepEqual([nextStateFor({ workItemType: 'Feature', state: 'New' }), nextStateFor({ workItemType: 'Feature', state: 'Active' }), nextStateFor({ workItemType: 'Feature', state: 'Resolved' }), nextStateFor({ workItemType: 'Task', state: 'New' })],
+    [{ state: 'Active', label: 'Set Feature to Active' }, { state: 'Closed', label: 'Close Feature' }, null, { state: 'Closed', label: 'Close Task' }])
+  assert.deepEqual([nextStateFor({ workItemType: 'User Story', state: 'New' }), nextStateFor({ workItemType: 'User Story', state: 'Active' }), nextStateFor({ workItemType: 'User Story', state: 'Resolved' }), nextStateFor({ workItemType: 'Bug', state: 'Active' })],
+    [{ state: 'Active', label: 'Set User Story to Active' }, { state: 'Closed', label: 'Close User Story' }, null, { state: 'Closed', label: 'Close Bug' }], 'User Stories follow the Feature logic; Bugs and Tasks close directly')
+})
+
+test('My Tasks [Board] search: every word must match, across ID, title, type, state, Feature, Epic, paths and tags', () => {
+  const rows = myPendingWork(items, me)
+  const find = (query) => rows.filter((row) => matchesWork(row, query)).map(({ item }) => item.id)
+  assert.deepEqual(find(''), rows.map(({ item }) => item.id), 'blank search shows everything')
+  assert.deepEqual(find('#7'), [7], 'an ID with or without #')
+  assert.deepEqual(find('dose planning'), [7], 'a Feature title finds my work under it')
+  assert.deepEqual(find('sfv NEW'), [5], 'words in any order and case; state matches')
+  assert.deepEqual(find('user story'), [3, 5], 'type matches')
+  assert.deepEqual(find('sprint 1 cp'), [2, 3, 5, 7], 'Iteration Path and Epic title combine (the absence Feature has no Epic CP)')
+  assert.deepEqual(find('nothing-like-this'), [])
+})
+
+test('featureChildren: stories, bugs and tasks under a Feature with their own children, any person, Removed left out', async () => {
+  const { featureChildren } = await import('../src/myWork.ts')
+  const data = [...items, item(11, 'Task', 'Removed task', { parentId: 2, ...ana, state: 'Removed' }), item(12, 'Task', 'Direct task', { parentId: 2, ...ben }), item(13, 'Feature', 'Other project', { parentId: 2, project: 'Elsewhere' })]
+  const tree = featureChildren(data, data.find((entry) => entry.id === 2))
+  assert.deepEqual(tree.map(({ item, children }) => [item.id, children.map((child) => child.id)]), [[3, [4]], [5, []], [12, []]], 'ascending ID; Ben\'s task under Ana\'s story is included; Removed and other projects are not')
+  assert.deepEqual(featureChildren(data, data.find((entry) => entry.id === 8)), [])
+})
+
+test('Complete children only for a Feature without optional User Stories (the Time Writing story does not count)', async () => {
+  const { hasOptionalStories } = await import('../src/myWork.ts')
+  const feature = items.find((entry) => entry.id === 2)
+  assert.equal(hasOptionalStories(items, feature), true, '#5 "SFV review" is an optional story')
+  const onlyTimeWriting = items.filter((entry) => entry.id !== 5)
+  assert.equal(hasOptionalStories(onlyTimeWriting, feature), false, 'only the Time Writing story #3: offer Complete children')
+  assert.equal(hasOptionalStories(items.filter((entry) => entry.id !== 3 && entry.id !== 4 && entry.id !== 5), feature), false, 'no stories at all')
+  assert.equal(hasOptionalStories([...onlyTimeWriting, item(20, 'User Story', 'Removed story', { parentId: 2, state: 'Removed' })], feature), false, 'Removed stories do not count')
+})
+
+import { closeFollowUp, closeStates, followUpQuestion } from '../src/myWork.ts'
+import { closeRelated } from '../src/closeChain.ts'
+test('closing a Feature offers its open User Stories; closing the last open User Story offers the Feature (ATM-20)', async () => {
+  const mk = (id, type, state, parentId, extra = {}) => item(id, type, `${type} ${id}`, { state, parentId, ...extra })
+  const items = [
+    mk(1, 'Feature', 'Active'), mk(11, 'User Story', 'Closed', 1), mk(12, 'User Story', 'Active', 1), mk(13, 'User Story', 'New', 1), mk(14, 'User Story', 'Removed', 1), mk(15, 'Task', 'Active', 1),
+    mk(2, 'Feature', 'Active'), mk(21, 'User Story', 'Closed', 2), mk(22, 'User Story', 'Active', 2),
+    mk(3, 'Feature', 'Closed'), mk(31, 'User Story', 'Active', 3),
+    mk(4, 'Feature', 'New'), mk(41, 'User Story', 'Active', 4),
+    mk(5, 'Feature', 'Resolved'), mk(51, 'User Story', 'Active', 5),
+  ]
+  const feature = closeFollowUp(items, items[0])
+  assert.deepEqual([feature.kind, feature.stories.map((story) => story.id)], ['stories', [12, 13]], 'open stories only: Closed, Removed and Tasks left out')
+  assert.deepEqual(closeFollowUp(items, mk(2, 'Feature', 'Active')).stories.map((story) => story.id), [22], 'only the open story of Feature 2')
+  assert.equal(closeFollowUp(items, mk(3, 'Feature', 'Closed')).kind, 'stories', 'a Feature closed with an open story still asks for it')
+  assert.deepEqual(closeFollowUp(items, mk(22, 'User Story', 'Closed', 2)).kind, 'feature', 'the last open story of Feature 2')
+  assert.equal(closeFollowUp(items, mk(12, 'User Story', 'Closed', 1)), null, 'story 13 is still open under Feature 1')
+  assert.equal(closeFollowUp(items, mk(31, 'User Story', 'Closed', 3)), null, 'a Closed Feature is left alone')
+  assert.equal(closeFollowUp(items, mk(15, 'Task', 'Closed', 1)), null, 'Tasks have no follow-up')
+  assert.deepEqual([closeStates({ workItemType: 'User Story', state: 'New' }), closeStates({ workItemType: 'Feature', state: 'Active' }), closeStates({ workItemType: 'Feature', state: 'Resolved' }), closeStates({ workItemType: 'Task', state: 'New' })], [['Active', 'Closed'], ['Closed'], [], ['Closed']], 'the staged order: New → Active → Closed')
+  assert.match(followUpQuestion(feature), /^Feature #1 is Closed\. Also close its 2 open User Stories in Azure DevOps\?\n#12 User Story 12 \(Active\)\n#13 User Story 13 \(New\)$/)
+  assert.match(followUpQuestion(closeFollowUp(items, mk(22, 'User Story', 'Closed', 2))), /^#22 was the last open User Story of Feature #2 “Feature 2” \(Active\)\. Also close the Feature in Azure DevOps\?$/)
+  // The chain: confirmed → each open story in its staged order, read back; declined → nothing written.
+  const writes = []
+  const write = async (_config, _pat, id, update) => { writes.push([id, update.state]); return { ...items.find((entry) => entry.id === id), state: update.state } }
+  const config = { organization: 'o', project: 'p', team: 't' }
+  const done = await closeRelated(config, 'pat', items, { ...items[0], state: 'Closed' }, () => true, write)
+  assert.deepEqual([done.confirmed, done.closed.map((entry) => [entry.id, entry.state]), writes], [true, [[12, 'Closed'], [13, 'Closed']], [[12, 'Closed'], [13, 'Active'], [13, 'Closed']]])
+  writes.length = 0
+  const declined = await closeRelated(config, 'pat', items, { ...items[0], state: 'Closed' }, () => false, write)
+  assert.deepEqual([declined.confirmed, declined.closed, writes], [false, [], []], 'declined: nothing written')
+  const none = await closeRelated(config, 'pat', items, { ...items[1], state: 'Closed' }, () => { throw new Error('must not ask') }, write)
+  assert.equal(none.follow, null, 'no question without a follow-up')
+  // A Feature that cannot be closed from here (Resolved) is reported, not asked for.
+  const resolved = await closeRelated(config, 'pat', items, mk(51, 'User Story', 'Closed', 5), () => { throw new Error('must not ask') }, write)
+  assert.deepEqual([resolved.follow.kind, resolved.confirmed, resolved.skipped], ['feature', false, ['#5 is Resolved and cannot be closed from here']])
+  // A New Feature is set to Active, then Closed.
+  const staged = await closeRelated(config, 'pat', items, mk(41, 'User Story', 'Closed', 4), () => true, write)
+  assert.deepEqual(writes.slice(-2), [[4, 'Active'], [4, 'Closed']]); assert.equal(staged.closed[0].state, 'Closed')
+  // A failed write is reported and does not stop the others.
+  const failing = async (_c, _p, id, update) => { if (id === 12) throw new Error('refused'); return { ...items.find((entry) => entry.id === id), state: update.state } }
+  const partly = await closeRelated(config, 'pat', items, { ...items[0], state: 'Closed' }, () => true, failing)
+  assert.deepEqual([partly.closed.map((entry) => entry.id), partly.failed], [[13], ['#12: refused']])
+})
+
+test('New User Story under a Feature: the Azure DevOps story fields, the Feature\'s Area, the Sprint chosen; only fixed values on a new story (TC-BKL-10)', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'CP | Care Pathways | v3.1', 'System.AreaPath': 'Quality\\QMS-0025' })], [3, raw(3, { 'System.WorkItemType': 'Epic', 'System.Title': 'Epic' })]])
+  const { transport, calls } = fakeAzure(world)
+  const input = { parentId: 2, title: ' Verify the release ', description: 'Why', acceptanceCriteria: 'Done when', iterationPath: 'Quality\\PI 26.4\\Sprint 2', assignedTo: 'Ana@X.com', storyPoints: 3, priority: 2, risk: '2 - Medium', valueArea: 'Business' }
+  const story = await createUserStory(config, 'pat', input, transport)
+  assert.deepEqual([story.workItemType, story.title, story.parentId, story.areaPath, story.iterationPath, story.assignedToEmail, story.storyPoints], ['User Story', 'Verify the release', 2, 'Quality\\QMS-0025', 'Quality\\PI 26.4\\Sprint 2', 'ana@x.com', 3])
+  const created = calls.filter((call) => call.operation === 'create-child')
+  assert.deepEqual(created.map((call) => call.validateOnly), [true, false], 'validated before it is saved')
+  assert.deepEqual([created[1].feature.description, created[1].feature.acceptanceCriteria, created[1].feature.priority, created[1].feature.risk, created[1].feature.valueArea], ['Why', 'Done when', 2, '2 - Medium', 'Business'])
+  await assert.rejects(createUserStory(config, 'pat', { ...input, parentId: 3 }, transport), /not an accessible Feature/)
+  await assert.rejects(createUserStory(config, 'pat', { ...input, priority: 7 }, transport), /Priority must be/)
+  await assert.rejects(createUserStory(config, 'pat', { ...input, storyPoints: -1 }, transport), /Story Points/)
+  await assert.rejects(createUserStory(config, 'pat', { ...input, iterationPath: ' ' }, transport), /PI → Sprint/)
+  const { azureFeatureRequest } = createRequire(import.meta.url)('../electron/azure-devops.cjs')
+  const request = (workItemType, extra) => ({ ...config, pat: 'p', operation: 'create-child', workItemType, validateOnly: true, feature: { parentId: 2, title: 't', description: '', acceptanceCriteria: '', areaPath: 'A', assignedTo: 'ana@x.com', ...extra } })
+  const body = JSON.parse(azureFeatureRequest(request('User Story', { storyPoints: 5, priority: 1, risk: '1 - High', valueArea: 'Architectural' })).options.body)
+  assert.deepEqual(body.slice(-4).map((entry) => [entry.path, entry.value]), [['/fields/Microsoft.VSTS.Scheduling.StoryPoints', 5], ['/fields/Microsoft.VSTS.Common.Priority', 1], ['/fields/Microsoft.VSTS.Common.Risk', '1 - High'], ['/fields/Microsoft.VSTS.Common.ValueArea', 'Architectural']])
+  assert.throws(() => azureFeatureRequest(request('Task', { priority: 1 })), /new User Story only/)
+  assert.throws(() => azureFeatureRequest(request('User Story', { valueArea: 'Anything' })), /Value area/)
+  assert.throws(() => azureFeatureRequest(request('User Story', { risk: 'x' })), /Risk/)
+  globalThis.window = {}
+  try {
+    await assert.rejects(requestAzure(request('Task', { storyPoints: 1 })), /new User Story only/)
+    await assert.rejects(requestAzure(request('User Story', { priority: 9 })), /Priority/)
+  } finally { delete globalThis.window }
+})
+
+test('Bulk month Tasks up to the Target date: the months after this one up to the Feature’s Target month (TC-ATM-13)', async () => {
+  const { monthsUntilTarget } = await import('../src/myWork.ts')
+  assert.deepEqual(monthsUntilTarget('October 2026', '2027-01-15T00:00:00Z'), ['November 2026', 'December 2026', 'January 2027'])
+  assert.deepEqual(monthsUntilTarget('October 2026', '2026-10-30'), [], 'Target this month: nothing more')
+  assert.deepEqual(monthsUntilTarget('October 2026', '2026-08-01'), [], 'Target already past')
+  assert.deepEqual(monthsUntilTarget('October 2026', undefined), [], 'no Target date')
+  assert.equal(monthsUntilTarget('October 2026', '2035-01-01').length, 24, 'at most 24 months')
+  // Each later month goes through ensureMonthTask with its own label: a new Task, never a duplicate.
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'CP | Care Pathways | v3.1' })]])
+  const { transport } = fakeAzure(world)
+  const titles = []
+  for (const label of ['October 2026', ...monthsUntilTarget('October 2026', '2026-12-10')]) titles.push((await ensureMonthTask(config, 'pat', 2, 'ana@x.com', label, transport)).task.title)
+  assert.deepEqual(titles, ['October 2026 | CP | Care Pathways | v3.1', 'November 2026 | CP | Care Pathways | v3.1', 'December 2026 | CP | Care Pathways | v3.1'])
+  assert.equal((await ensureMonthTask(config, 'pat', 2, 'ana@x.com', 'November 2026', transport)).status, 'exists', 'running again creates nothing')
+})
+
+test("a Feature shared by two people: each one's own User Story brings the Feature up for their month Task (TC-ATM-15)", () => {
+  const shared = [
+    item(1, 'Epic', 'CT'), item(37778, 'Epic', 'Absence'),
+    // Ben owns the Feature; Ana and Ben each have their own User Story, Ana's own Time Writing story holds her month Tasks.
+    item(30, 'Feature', 'CT | Scanner | v5', { parentId: 1, ...ben }),
+    item(31, 'User Story', 'CT | Scanner | v5 - Time Writing', { parentId: 30, ...ben }),
+    item(32, 'User Story', 'Ana - Scanner v5 hours', { parentId: 30, ...ana }), item(33, 'Task', 'September 2026 | CT | Scanner | v5', { parentId: 32, ...ana, state: 'Closed' }),
+    // A Feature where Ana's only User Story is already Closed, while the Feature is still active.
+    item(40, 'Feature', 'CT | Scanner | v6', { parentId: 1, ...ben }), item(41, 'User Story', 'Verification plan', { parentId: 40, ...ana, state: 'Closed' }),
+    // Not offered: a Removed story of Ana's, a closed Feature, and a Feature with nothing of Ana's.
+    item(50, 'Feature', 'CT | Scanner | v7', { parentId: 1, ...ben }), item(51, 'User Story', 'Old work', { parentId: 50, ...ana, state: 'Removed' }),
+    item(60, 'Feature', 'CT | Scanner | v4', { parentId: 1, ...ben, state: 'Closed' }), item(61, 'User Story', 'Work', { parentId: 60, ...ana }),
+    item(70, 'Feature', 'CT | Scanner | v8', { parentId: 1, ...ben }), item(71, 'User Story', 'Ben work', { parentId: 70, ...ben }),
+  ]
+  const rows = monthTaskCandidates(shared, me, 'October 2026', 37778)
+  assert.deepEqual(rows.map((row) => row.feature.id).sort(), [30, 40], 'my own story (Time Writing or not, open or closed) brings the active Feature up')
+  const scanner = rows.find((row) => row.feature.id === 30)
+  assert.deepEqual([scanner.status, scanner.storyTitle], ['needs-task', 'Ana - Scanner v5 hours'], "my month Task goes under my own Time Writing story, not Ben's")
+  assert.equal(rows.find((row) => row.feature.id === 40).status, 'needs-story', 'no Time Writing story of mine yet: one is created')
+  // Ben sees the same Feature for his own month Task, under his own story.
+  const forBen = monthTaskCandidates(shared, { email: 'ben@x.com', name: 'Ben Okafor' }, 'October 2026', 37778).find((row) => row.feature.id === 30)
+  assert.deepEqual([forBen.status, forBen.storyTitle], ['needs-task', 'CT | Scanner | v5 - Time Writing'])
+})
+
+test('Team Holidays and Training: my Training story is offered in the leave and training list, not as missing work (TC-CAP-06)', async () => {
+  const { leaveTaskCandidates } = await import('../src/myWork.ts')
+  const rows = [
+    item(1, 'Epic', 'CP'), item(37778, 'Epic', 'Team Holidays and Training'),
+    item(80, 'Feature', 'Training', { parentId: 37778, ...ben }), item(81, 'User Story', 'Training - Time Writing', { parentId: 80, ...ana }),
+    item(82, 'Task', 'September 2026 | Training', { parentId: 81, ...ana, state: 'Closed' }),
+    item(90, 'Feature', 'Ana Costa - PTO', { parentId: 37778, ...ana }), item(91, 'User Story', 'Ana - Time Writing', { parentId: 90, ...ana }),
+  ]
+  assert.deepEqual(monthTaskCandidates(rows, me, 'October 2026', 37778), [], 'nothing under the Epic counts as missing work')
+  const leave = leaveTaskCandidates(rows, me, 'October 2026', 37778)
+  assert.deepEqual(leave.map((row) => [row.feature.id, row.story?.id, row.kind, row.status]), [[90, 91, 'PTO', 'needs-task'], [80, 81, 'Training', 'needs-task']], 'my Training story and my PTO story, each with its type')
+})
+
+test('leave in Bulk actions: my Features under the Epic (leave and training), apart from work; others not (TC-ATM-16)', async () => {
+  const { leaveTaskCandidates } = await import('../src/myWork.ts')
+  const rows = [
+    item(1, 'Epic', 'CP'), item(37778, 'Epic', 'Team Holidays and Training'),
+    item(90, 'Feature', 'Ana Costa - PTO', { parentId: 37778, ...ana }), item(91, 'User Story', 'Ana - Time Writing', { parentId: 90, ...ana }),
+    item(92, 'Feature', 'Leave - Sick', { parentId: 37778, ...ben }), item(93, 'User Story', 'Ana sick leave', { parentId: 92, ...ana, state: 'Closed' }),
+    item(94, 'Feature', 'Ben Okafor - PTO', { parentId: 37778, ...ben }),
+    item(80, 'Feature', 'Training', { parentId: 37778, ...ben }), item(81, 'User Story', 'Training - Time Writing', { parentId: 80, ...ana }),
+    item(95, 'Feature', 'Ana Costa - Unplanned leave', { parentId: 37778, ...ana, state: 'Closed' }),
+    item(2, 'Feature', 'CP | Care Pathways | v3.1', { parentId: 1, ...ana }),
+  ]
+  const leave = leaveTaskCandidates(rows, me, 'October 2026', 37778)
+  assert.deepEqual(leave.map((row) => [row.feature.id, row.story?.id, row.leave, row.status, row.kind]), [[90, 91, true, 'needs-task', 'PTO'], [92, undefined, true, 'needs-story', 'Sick Leave'], [80, 81, true, 'needs-task', 'Training']], "mine (or holding my story), open, not Ben's, not work; a Feature named after one type offers only that type")
+  assert.equal(leave[1].storyTitle, 'Ana Costa | Sick Leave | Time Writing', 'my closed sick-leave story: a new one is offered')
+  assert.deepEqual(monthTaskCandidates(rows, me, 'October 2026', 37778).map((row) => row.feature.id), [2], 'work only: leave and training are never counted as missing')
+  assert.deepEqual(leaveTaskCandidates(rows, me, 'October 2026', undefined), [], 'no Epic set, no leave')
+})
+
+test('a leave Feature with one story per leave type lists one row per story of mine, never "Choose story" (TC-ATM-18)', async () => {
+  const { leaveTaskCandidates } = await import('../src/myWork.ts')
+  const rows = [
+    item(37778, 'Epic', 'Team Holidays and Training'), item(37795, 'Feature', 'Ana Costa', { parentId: 37778, ...ana }),
+    item(96, 'User Story', 'PTO', { parentId: 37795, ...ana }), item(97, 'User Story', 'Sick Leave', { parentId: 37795, ...ana }),
+    item(98, 'Task', 'October 2026 | Sick Leave', { parentId: 97, ...ana }), item(99, 'User Story', 'Unplanned Leave', { parentId: 37795, ...ana, state: 'Closed' }),
+    item(100, 'User Story', 'PTO', { parentId: 37795, ...ben }),
+  ]
+  const leave = leaveTaskCandidates(rows, me, 'October 2026', 37778)
+  assert.deepEqual(leave.filter((row) => row.story).map((row) => [row.feature.id, row.story.id, row.status, row.taskTitle]), [[37795, 96, 'needs-task', 'October 2026 | PTO'], [37795, 97, 'exists', 'October 2026 | Sick Leave']], 'my open stories only, each with its own status; Ben\'s and closed ones not listed')
+  // ATM-27: the types without an open story of mine are offered as "<Name> | <Type> | Time Writing" (story + task).
+  assert.deepEqual(leave.filter((row) => !row.story).map((row) => [row.kind, row.status, row.storyTitle, row.taskTitle]), [
+    ['Training', 'needs-story', 'Ana Costa | Training | Time Writing', 'October 2026 | Ana Costa | Training | Time Writing'],
+    ['Unplanned Leave', 'needs-story', 'Ana Costa | Unplanned Leave | Time Writing', 'October 2026 | Ana Costa | Unplanned Leave | Time Writing'],
+  ])
+})
+
+test('ensureStoryMonthTask creates the month Task under the given story once, then reuses it (TC-ATM-18)', async () => {
+  const { ensureStoryMonthTask } = await import('../src/azureDevOps.ts')
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[96, raw(96, { 'System.WorkItemType': 'User Story', 'System.Title': 'PTO', 'System.Parent': 37795 })], [5, raw(5, { 'System.WorkItemType': 'Feature', 'System.Title': 'F' })]])
+  const { transport, calls } = fakeAzure(world)
+  const first = await ensureStoryMonthTask(config, 'pat', 96, 'Ana@x.com', 'October 2026', transport)
+  assert.deepEqual([first.status, first.storyCreated, first.story.id, first.task.title, first.task.assignedToEmail, first.task.parentId], ['created', false, 96, 'October 2026 | PTO', 'ana@x.com', 96])
+  const again = await ensureStoryMonthTask(config, 'pat', 96, 'ana@x.com', 'October 2026', transport)
+  assert.deepEqual([again.status, again.task.id], ['exists', first.task.id], 'running again creates nothing')
+  assert.equal(calls.filter((call) => call.operation === 'create-child' && !call.validateOnly).length, 1)
+  await assert.rejects(ensureStoryMonthTask(config, 'pat', 5, 'ana@x.com', 'October 2026', transport), /not an accessible User Story/)
+})
+
+test('QMS-0025 shows mine by default: my items with everything above and below; featureOf finds the Feature of a Story (TC-BKL-12)', async () => {
+  const { mineWithContext, featureOf } = await import('../src/myWork.ts')
+  const tree = [
+    item(1, 'Epic', 'CP'), item(2, 'Feature', 'CP | A', { parentId: 1, ...ben }), item(3, 'User Story', 'Mine', { parentId: 2, ...ana }), item(4, 'Task', 'Under mine', { parentId: 3, ...ben }),
+    item(5, 'Feature', 'CP | B', { parentId: 1, ...ana }), item(6, 'User Story', 'Ben under my Feature', { parentId: 5, ...ben }),
+    item(7, 'Feature', 'CP | C', { parentId: 1, ...ben }), item(8, 'User Story', 'Ben only', { parentId: 7, ...ben }),
+    item(9, 'Epic', 'Other'),
+  ]
+  assert.deepEqual(mineWithContext(tree, me).map((row) => row.id), [1, 2, 3, 4, 5, 6], 'context above (Epic, Feature), work below; nothing of Ben only, no empty Epic')
+  assert.equal(featureOf(tree, tree[3]).id, 2, 'a Task finds its Feature through its Story')
+  assert.equal(featureOf(tree, tree[1]).id, 2, 'a Feature is its own')
+  assert.equal(featureOf(tree, tree[0]), undefined, 'an Epic has none')
+})
+
+test('BKL-46: the Assigned to filter keeps the chosen people’s items with everything above and below; Unassigned picks items with no one (TC-BKL-35)', async () => {
+  const { withContext } = await import('../src/myWork.ts')
+  const cara = { assignedTo: 'Cara Diaz', assignedToEmail: 'cara@x.com' }
+  const tree = [
+    item(1, 'Epic', 'CP'), item(2, 'Feature', 'CP | A', { parentId: 1, ...ben }), item(3, 'User Story', 'Ana', { parentId: 2, ...ana }), item(4, 'Task', 'Under Ana', { parentId: 3, ...cara }),
+    item(5, 'Feature', 'CP | B', { parentId: 1, ...cara }), item(6, 'User Story', 'Cara only', { parentId: 5, ...cara }),
+    item(7, 'Feature', 'CP | C', { parentId: 1 }), item(8, 'Epic', 'Other'),
+  ]
+  const of = (emails) => withContext(tree, (row) => emails.includes(row.assignedToEmail ?? '')).map((row) => row.id)
+  assert.deepEqual(of(['ana@x.com', 'ben@x.com']), [1, 2, 3, 4], 'Ben’s Feature with all below it, Ana’s Story inside it; nothing of Cara’s own Feature')
+  assert.deepEqual(of(['cara@x.com']), [1, 2, 3, 4, 5, 6], 'Cara’s Task brings its Story, Feature and Epic as context')
+  assert.deepEqual(withContext(tree, (row) => !row.assignedTo, (row) => Boolean(row.assignedTo)).map((row) => row.id), [1, 7, 8], 'Unassigned: the unassigned items with their context above, not everything below an unassigned Epic')
+  assert.deepEqual(of([]), [], 'nobody chosen by the predicate: nothing (the board then shows everyone without calling it)')
+})
+
+test('a shared leave Feature where everyone keeps a story of the same title: mine is used, or a new one of mine — never "Choose story" (TC-ATM-17)', async () => {
+  const { leaveTaskCandidates } = await import('../src/myWork.ts')
+  const cara = { assignedTo: 'Cara Diaz', assignedToEmail: 'cara@x.com' }
+  const rows = [
+    item(37778, 'Epic', 'Team Holidays and Training'),
+    item(100, 'Feature', 'PTO', { parentId: 37778, ...ana }),
+    item(101, 'User Story', 'PTO - Time Writing', { parentId: 100, ...ben }), item(102, 'Task', 'September 2026 | PTO', { parentId: 101, ...ben }),
+    item(103, 'User Story', 'PTO - Time Writing', { parentId: 100, ...cara }), item(104, 'Task', 'September 2026 | PTO', { parentId: 103, ...cara }),
+  ]
+  const none = leaveTaskCandidates(rows, me, 'October 2026', 37778)
+  assert.deepEqual(none.map((row) => [row.feature.id, row.status]), [[100, 'needs-story']], 'Ben’s and Cara’s stories are theirs: a story of mine is created')
+  const mineToo = leaveTaskCandidates([...rows, item(105, 'User Story', 'Ana Costa PTO', { parentId: 100, ...ana })], me, 'October 2026', 37778)
+  assert.deepEqual(mineToo.map((row) => [row.status, row.storyTitle]), [['needs-task', 'Ana Costa PTO']], 'my own story, whatever its title')
+})
+
+test('ensureAbsenceStoryMonthTask creates "<Name> | <Type> | Time Writing" and its month Task once, or uses my story of that type (TC-ATM-19)', async () => {
+  const { ensureAbsenceStoryMonthTask } = await import('../src/azureDevOps.ts')
+  const { absenceStoryType } = await import('../src/myWork.ts')
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([
+    [37795, raw(37795, { 'System.WorkItemType': 'Feature', 'System.Title': 'Ana Costa' })],
+    [96, raw(96, { 'System.WorkItemType': 'User Story', 'System.Title': 'Ana Costa | PTO', 'System.Parent': 37795, 'System.AssignedTo': { displayName: 'Ana Costa', uniqueName: 'ana@x.com' } })],
+  ])
+  const { transport, calls } = fakeAzure(world)
+  const training = await ensureAbsenceStoryMonthTask(config, 'pat', 37795, 'Training', 'Ana Costa | Training | Time Writing', absenceStoryType, 'ana@x.com', 'October 2026', transport)
+  assert.deepEqual([training.status, training.storyCreated, training.story.title, training.story.parentId, training.task.title, training.task.parentId], ['created', true, 'Ana Costa | Training | Time Writing', 37795, 'October 2026 | Ana Costa | Training | Time Writing', training.story.id])
+  const again = await ensureAbsenceStoryMonthTask(config, 'pat', 37795, 'Training', 'Ana Costa | Training | Time Writing', absenceStoryType, 'ana@x.com', 'October 2026', transport)
+  assert.deepEqual([again.status, again.story.id, again.task.id], ['exists', training.story.id, training.task.id], 'running again creates nothing')
+  const pto = await ensureAbsenceStoryMonthTask(config, 'pat', 37795, 'PTO', 'Ana Costa | PTO | Time Writing', absenceStoryType, 'ana@x.com', 'October 2026', transport)
+  assert.deepEqual([pto.storyCreated, pto.story.id, pto.task.title], [false, 96, 'October 2026 | Ana Costa | PTO'], 'my existing PTO story (another title) is used')
+  assert.equal(calls.filter((call) => call.operation === 'create-child' && !call.validateOnly).length, 3, 'two for training (story, task), one for PTO (task)')
+  await assert.rejects(ensureAbsenceStoryMonthTask(config, 'pat', 96, 'PTO', 'x', absenceStoryType, 'ana@x.com', 'October 2026', transport), /not an accessible Feature/)
+})
+
+import { activateFeatureOf } from '../src/closeChain.ts'
+test('ATM-28: a Feature becomes Active only when one of its User Stories is Active', async () => {
+  const me = { email: 'ana@x.com' }
+  const mine = (id, type, state, parentId) => item(id, type, `${type} ${id}`, { state, parentId, assignedTo: 'Ana', assignedToEmail: 'ana@x.com' })
+  const items = [mine(1, 'Feature', 'New'), mine(11, 'User Story', 'New', 1), mine(2, 'Feature', 'New'), mine(21, 'User Story', 'Active', 2), mine(22, 'User Story', 'Removed', 2)]
+  // Offered on My Tasks [Board] only with an Active story; the state check flags a New Feature with one.
+  assert.equal(nextStateFor(items[0], items), null, 'no Active User Story: not offered')
+  assert.deepEqual(nextStateFor(items[2], items), { state: 'Active', label: 'Set Feature to Active' })
+  assert.deepEqual(stateChecks(items, me).map((check) => [check.kind, check.item.id, check.children.map((child) => child.id)]), [['activate-feature', 2, [21]]])
+  // A User Story set to Active makes its New Feature Active; nothing else is written.
+  const writes = []
+  const write = async (_config, _pat, id, update) => { writes.push([id, update.state]); return { ...items.find((entry) => entry.id === id), state: update.state } }
+  const story = { ...items[1], state: 'Active' }
+  assert.equal((await activateFeatureOf({}, 'pat', items, story, write)).state, 'Active')
+  assert.deepEqual(writes, [[1, 'Active']])
+  assert.equal(await activateFeatureOf({}, 'pat', items, items[1], write), null, 'a New story changes nothing')
+  const activeFeature = items.map((entry) => entry.id === 1 ? { ...entry, state: 'Active' } : entry)
+  assert.equal(await activateFeatureOf({}, 'pat', activeFeature, story, write), null, 'an Active Feature is left as it is')
+  assert.equal(writes.length, 1)
+})
+
+import { addUserStory } from '../src/azureDevOps.ts'
+test('BKL-27: addUserStory — a current or future Sprint only (checked fresh), the Feature\'s Area Path, the optional comment', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[2, raw(2, { 'System.WorkItemType': 'Feature', 'System.Title': 'Plan', 'System.AreaPath': 'Quality\\QMS-0025' })]])
+  const { transport: base, calls } = fakeAzure(world)
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10) + 'T00:00:00Z'
+  const schedule = [{ name: 'PI 1', path: 'Quality\\PI 1', attributes: { startDate: day(-30), finishDate: day(60) } }, { name: 'Sprint 3', path: 'Quality\\PI 1\\Sprint 3', attributes: { startDate: day(-5), finishDate: day(5) } }, { name: 'Sprint 1', path: 'Quality\\PI 1\\Sprint 1', attributes: { startDate: day(-30), finishDate: day(-20) } }]
+  let commentFails = false
+  const transport = async (request) => {
+    if (request.operation === 'iterations') return { value: schedule }
+    if (request.operation === 'iteration-tree') throw new Error('not used')
+    if (request.operation === 'add-comment') { calls.push(request); if (commentFails) throw new Error('refused'); return { id: 1, text: request.comment, createdBy: { displayName: 'Ana' }, createdDate: '2026-11-07T00:00:00Z' } }
+    return base(request)
+  }
+  const input = { parentId: 2, title: 'Write the plan', description: 'Why', acceptanceCriteria: '', iterationPath: 'Quality\\PI 1\\Sprint 3', assignedTo: 'ana@x.com', comment: ' First note ' }
+  const { story, commentError } = await addUserStory(config, 'pat', input, transport)
+  assert.deepEqual([story.areaPath, story.iterationPath, commentError], ['Quality\\QMS-0025', 'Quality\\PI 1\\Sprint 3', undefined])
+  assert.equal(calls.find((call) => call.operation === 'add-comment').comment, 'First note')
+  // A past Sprint is refused before anything is written.
+  const before = calls.length
+  await assert.rejects(addUserStory(config, 'pat', { ...input, iterationPath: 'Quality\\PI 1\\Sprint 1' }, transport), /no longer current/)
+  assert.equal(calls.length, before, 'nothing written')
+  // A failed comment is reported; the story stays.
+  commentFails = true
+  const partly = await addUserStory(config, 'pat', input, transport)
+  assert.deepEqual([partly.story.workItemType, partly.commentError], ['User Story', 'refused'])
+})
+
+import { addTask } from '../src/azureDevOps.ts'
+test('ACT-17: addTask — a work Task under a User Story by the User Story rules; never a Time Writing Task', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const world = new Map([[5, raw(5, { 'System.WorkItemType': 'User Story', 'System.Title': 'Write the plan', 'System.AreaPath': 'Quality\\QMS-0025' })], [6, raw(6, { 'System.WorkItemType': 'User Story', 'System.Title': 'Plan - Time Writing' })]])
+  const { transport: base, calls } = fakeAzure(world)
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10) + 'T00:00:00Z'
+  const schedule = [{ name: 'PI 1', path: 'Quality\\PI 1', attributes: { startDate: day(-30), finishDate: day(60) } }, { name: 'Sprint 3', path: 'Quality\\PI 1\\Sprint 3', attributes: { startDate: day(-5), finishDate: day(5) } }]
+  const transport = async (request) => {
+    if (request.operation === 'iterations') return { value: schedule }
+    if (request.operation === 'iteration-tree') throw new Error('not used')
+    if (request.operation === 'add-comment') { calls.push(request); return { id: 1, text: request.comment, createdBy: { displayName: 'Ana' }, createdDate: '2026-11-07T00:00:00Z' } }
+    return base(request)
+  }
+  const input = { storyId: 5, title: 'Review the draft', description: 'Why', iterationPath: 'Quality\\PI 1\\Sprint 3', assignedTo: 'ana@x.com', comment: 'Note' }
+  const { task, commentError } = await addTask(config, 'pat', input, transport)
+  assert.deepEqual([task.workItemType, task.parentId, task.areaPath, task.iterationPath, task.assignedToEmail, commentError], ['Task', 5, 'Quality\\QMS-0025', 'Quality\\PI 1\\Sprint 3', 'ana@x.com', undefined])
+  assert.equal(calls.filter((call) => call.operation === 'create-child').at(-1).feature.description, 'Why')
+  await assert.rejects(addTask(config, 'pat', { ...input, title: 'November 2026 | Review' }, transport), /Time Writing Task/)
+  await assert.rejects(addTask(config, 'pat', { ...input, storyId: 6 }, transport), /Time Writing story/)
+  await assert.rejects(addTask(config, 'pat', { ...input, iterationPath: 'Quality\\PI 0\\Sprint 1' }, transport), /no longer current/)
+})
+
+test('ATM-29: State checks expand to the User Stories of a Feature or the Tasks of a User Story; only my New User Stories can be set Active there (TC-ATM-22)', async () => {
+  const { stateCheckChildren, canActivateHere } = await import('../src/myWork.ts')
+  const list = [
+    item(20, 'Feature', 'F', { ...ana }),
+    item(22, 'User Story', 'B', { parentId: 20, ...ben, state: 'New' }),
+    item(21, 'User Story', 'A', { parentId: 20, ...ana, state: 'New' }),
+    item(23, 'User Story', 'Gone', { parentId: 20, ...ana, state: 'Removed' }),
+    item(24, 'Task', 'T', { parentId: 21, ...ana }),
+    item(25, 'Task', 'Other project', { parentId: 20, ...ana, project: 'Other' }),
+  ]
+  assert.deepEqual(stateCheckChildren(list, list[0]).map((entry) => entry.id), [21, 22], 'User Stories of the Feature, in ID order, Removed ones left out')
+  assert.deepEqual(stateCheckChildren(list, list[2]).map((entry) => entry.id), [24], 'Tasks of the User Story')
+  assert.equal(canActivateHere(list[2], me), true, 'my New User Story')
+  assert.equal(canActivateHere(list[1], me), false, 'not mine')
+  assert.equal(canActivateHere({ ...list[2], state: 'Active' }, me), false, 'already Active')
+  assert.equal(canActivateHere(list[4], me), false, 'a Task')
+})
+
+test('ATM-30: an Active Feature left in an older PI than its Active User Stories is flagged with the PI to move to (TC-ATM-23)', async () => {
+  const { stateChecks, piPathOf } = await import('../src/myWork.ts')
+  assert.equal(piPathOf('Quality\\PI 2026.4\\Sprint 2'), 'Quality\\PI 2026.4')
+  assert.equal(piPathOf('Quality\\Release 3'), undefined)
+  const list = [
+    item(30, 'Feature', 'Old PI', { ...ana, iterationPath: 'Quality\\PI 2026.1' }),
+    item(31, 'User Story', 'Now', { parentId: 30, ...ana, iterationPath: 'Quality\\PI 2026.4\\Sprint 2' }),
+    item(32, 'User Story', 'Old', { parentId: 30, ...ana, state: 'Closed', iterationPath: 'Quality\\PI 2026.1\\Sprint 1' }),
+    item(40, 'Feature', 'Same PI', { ...ana, iterationPath: 'Quality\\PI 2026.4' }),
+    item(41, 'User Story', 'Now', { parentId: 40, ...ana, iterationPath: 'Quality\\PI 2026.4\\Sprint 2' }),
+    item(50, 'Feature', 'Later PI', { ...ana, iterationPath: 'Quality\\PI 2026.10' }),
+    item(51, 'User Story', 'Earlier', { parentId: 50, ...ana, iterationPath: 'Quality\\PI 2026.9\\Sprint 1' }),
+    item(60, 'Feature', 'New one', { ...ana, state: 'New', iterationPath: 'Quality\\PI 2026.1' }),
+    item(61, 'User Story', 'Now', { parentId: 60, ...ana, iterationPath: 'Quality\\PI 2026.4\\Sprint 2' }),
+  ]
+  const flagged = stateChecks(list, me).filter((check) => check.kind === 'feature-old-pi')
+  assert.deepEqual(flagged.map((check) => [check.item.id, check.targetPi, check.children.map((child) => child.id)]), [[30, 'Quality\\PI 2026.4', [31]]], 'only the Active Feature behind its Active stories; 2026.10 is later than 2026.9; a New Feature gets the Active check first')
+})
+
+test('ACT-21: Time Writing lists in order of Feature number — a Task or story by the Feature above it; rows without a Feature after (TC-ACT-16)', () => {
+  const all = [item(1, 'Epic', 'E'), item(40, 'Feature', 'Zeta', { parentId: 1 }), item(7, 'Feature', 'Alpha', { parentId: 1 }), item(12, 'Feature', 'Mid', { parentId: 1 }), item(50, 'User Story', 'Ana - PTO', { parentId: 12 }), item(3, 'Task', 'Loose task')]
+  const by = (id) => all.find((entry) => entry.id === id)
+  const rows = [{ key: 'a', link: by(40) }, { key: 'b', link: by(3) }, { key: 'c', link: by(50) }, { key: 'd', link: by(7) }, { key: 'e' }]
+  assert.deepEqual([...rows].sort(byFeatureNumber(all)).map((row) => row.key), ['d', 'c', 'a', 'b', 'e'], 'Feature #7, the story under #12, #40; then a Task with no Feature, then a row with no item')
+})
+
+test('TC-ATM-24: the Time Writing User Story has its own bucket "Auto Time Writing US"; the buckets add up (ATM-31)', async () => {
+  const { bucketCounts, inBucket, workBucketOf, workBuckets, timeWritingBucket } = await import('../src/myWork.ts')
+  const { timeWritingStoryIds } = await import('../src/azureInsights.ts')
+  const data = [...items, item(14, 'User Story', 'Holds month tasks', { parentId: 6, ...ana }), item(15, 'Task', 'November 2026 | DP', { parentId: 14, ...ana }), item(16, 'Issue', 'Something else', { ...ana })]
+  const storyIds = timeWritingStoryIds(data)
+  assert.equal(timeWritingBucket, 'Auto Time Writing US')
+  assert.deepEqual([...workBuckets], ['Feature', 'User Story', 'Auto Time Writing US', 'Bug', 'Task'], 'the new bucket sits after User Story')
+  assert.equal(workBucketOf(data.find((entry) => entry.id === 3), storyIds), 'Auto Time Writing US', 'title says Time Writing')
+  assert.equal(workBucketOf(data.find((entry) => entry.id === 14), storyIds), 'Auto Time Writing US', 'holds a month Task')
+  assert.equal(workBucketOf(data.find((entry) => entry.id === 5), storyIds), 'User Story')
+  assert.equal(workBucketOf(data.find((entry) => entry.id === 16), storyIds), 'Other')
+  const pending = myPendingWork(data, me)
+  const counts = bucketCounts(pending, storyIds)
+  assert.deepEqual(counts, { Feature: 2, 'User Story': 1, 'Auto Time Writing US': 2, Bug: 0, Task: 2, Other: 1 })
+  assert.equal(Object.values(counts).reduce((sum, count) => sum + count, 0), pending.length, 'every pending item in exactly one bucket')
+  assert.deepEqual(pending.filter(({ item }) => inBucket(item, 'User Story', storyIds)).map(({ item }) => item.id), [5], 'User Story no longer lists the Time Writing stories')
+  assert.deepEqual(pending.filter(({ item }) => inBucket(item, 'Auto Time Writing US', storyIds)).map(({ item }) => item.id).sort((a, b) => a - b), [3, 14])
+  assert.equal(pending.filter(({ item }) => inBucket(item, 'All', storyIds)).length, pending.length)
+})
+
+test('TC-ATM-25: a Time Writing User Story opens to its Month Tasks, any assignee, Removed and other projects left out (ATM-32)', async () => {
+  const { storyChildren } = await import('../src/myWork.ts')
+  const data = [...items, item(17, 'Task', 'November 2026 | CP', { parentId: 3, ...ana }), item(18, 'Task', 'December 2026 | CP', { parentId: 3, ...ana, state: 'Removed' }), item(19, 'Task', 'Elsewhere', { parentId: 3, project: 'Other' })]
+  assert.deepEqual(storyChildren(data, data.find((entry) => entry.id === 3)).map((entry) => entry.id), [4, 17], "ascending ID; Ben's Task included")
+  assert.deepEqual(storyChildren(data, data.find((entry) => entry.id === 5)), [])
+})
+
+test('BKL-52: the web transport takes a Priority (1–4) on a new Feature only, before anything is fetched (TC-BKL-41)', async () => {
+  const config = { organization: 'org', project: 'Quality', team: 'T' }
+  const request = (operation, priority, workItemType) => ({ ...config, pat: 'p', operation, ...(workItemType ? { workItemType } : {}), validateOnly: true, feature: { parentId: 2, title: 't', description: 'Feature DoD: x', acceptanceCriteria: '', areaPath: 'A', assignedTo: 'ana@x.com', priority } })
+  const sent = []
+  globalThis.window = {}; const original = globalThis.fetch
+  globalThis.fetch = async (url, options) => { sent.push(JSON.parse(options.body)); return new Response('{"id":0}', { status: 200, headers: { 'Content-Type': 'application/json' } }) }
+  try {
+    await requestAzure(request('create-feature', 3))
+    await assert.rejects(requestAzure(request('create-feature', 7)), /Priority must be 1, 2, 3 or 4/)
+    await assert.rejects(requestAzure(request('create-child', 1, 'Task')), /set on a new User Story only/)
+  } finally { delete globalThis.window; globalThis.fetch = original }
+  assert.equal(sent.length, 1, 'only the valid Feature create was sent')
+  assert.deepEqual(sent[0].find((entry) => entry.path === '/fields/Microsoft.VSTS.Common.Priority'), { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 3 })
+})
