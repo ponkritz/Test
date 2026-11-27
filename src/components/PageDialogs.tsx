@@ -33,7 +33,7 @@ export function OwnersField({ label, value, onChange, help, disabled = '' }: { l
   const reasons = new Map(options.map((option) => [option.key, option.disabled]))
   return <div className="pgb-owners"><MultiSelect label={label} search selectAll={false} emptyLabel="Nobody" disabled={Boolean(disabled)} title={disabled || undefined} options={options.map((option) => [option.key, option.label])} value={value} onChange={(keys) => onChange(ownersFromList(keys))} disabledReason={(key) => reasons.get(key) ?? ''} /><small>{disabled || help} {disabled ? '' : ownersHelp}</small></div>
 }
-const queryNote = '; the page file keeps only the query’s reference — server, project, query id and name, never a PAT, never rows: each viewer reads the rows from Azure DevOps with their own PAT when the page opens'
+const queryNote = (mode: 'saved' | 'wiql') => `; the page file keeps only the query — ${mode === 'wiql' ? 'server, project, name and its WIQL' : 'the saved query’s reference: server, project, query id and name'}, never a PAT, never rows: each viewer reads the rows from Azure DevOps with their own PAT when the page opens`
 function IconField({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
   return <label>Icon<select aria-label="Icon" value={value} onChange={(event) => onChange(event.target.value)}>{pageIcons.map((entry) => <option key={entry.icon} value={entry.icon}>{entry.icon} {entry.label}</option>)}</select><small>Shown next to the page’s name in the menu and on Home.</small></label>
 }
@@ -109,7 +109,7 @@ export function AddPageDialog({ viewer, layout, group: preset, azure, onCancel, 
       </select><small>The groups that accept added pages{viewer.manager ? ', or a new group of your own' : ' and that you co-own'}.</small></label>
       {group === newGroupKey && <label>New group name<input aria-label="New group name" required maxLength={40} value={groupName} onChange={(event) => { setGroupName(event.target.value); setError('') }} /><small>Shown as a heading of its own in the menu, after On-Demand; it accepts added pages.</small></label>}
       <OwnersField label="Page co-owners (optional)" value={owners} onChange={setOwners} help={kind === 'dashboard' ? 'They may build this dashboard (add, edit, reorder and remove its blocks, tabs and filters).' : choice.query ? 'They may set up this page’s insights; its rows come from the query.' : 'They may set up this page (columns, options, key prefix, insights) and edit its rows.'} />
-      <small className="muted">The page is created in Git at once (on-demand/page-id.json) and its place in the menu is saved to menu-layout.json{kind === 'dashboard' ? '; its blocks are saved to dashboards/page-id.json when the first one is added' : choice.query ? queryNote : ''}.</small>
+      <small className="muted">The page is created in Git at once (on-demand/page-id.json) and its place in the menu is saved to menu-layout.json{kind === 'dashboard' ? '; its blocks are saved to dashboards/page-id.json when the first one is added' : choice.query ? queryNote(choice.queryMode) : ''}.</small>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions">{typeReason && !error && <span className="muted">{typeReason}</span>}<button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy || Boolean(clash) || Boolean(typeReason)}>{busy ? 'Saving to Git…' : 'Add page'}</button></div>
     </form>

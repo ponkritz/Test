@@ -3,13 +3,15 @@ import { ViewActions } from '../components/ViewActions'
 import { runInBackground, recordJob } from '../backgroundJobs'
 import { DataTable, type DataColumn } from '../components/DataTable'
 import { ResultTabs } from '../components/ResultTabs'
-import { EmptyState, Notice, Page, SaveQueueStatus, TablePanel, WriteBlocked } from '../components/ui'
+import { EmptyState, Modal, Notice, Page, SaveQueueStatus, SettingsSummary, TablePanel, WriteBlocked } from '../components/ui'
 import { outcomeText } from '../gitSaveQueue'
 import { formatDateTime } from '../format'
 import { cellSortValue, cellText, displayText, filterRows, hasOptions, renamePage, valuesOf, type OnDemandPage as PageFile, type OnDemandRow } from '../onDemand'
 import { fieldIdOf, maxQueryColumns, maxQueryRows } from '../azureQuerySources'
-import { serverLabel, type AzureQueryRef } from '../azureQueryRef'
-import { useAzureQueries } from '../useAzureQueries'
+import { serverLabel } from '../azureQueryRef'
+import { useAzureQueries, type QueryToRead } from '../useAzureQueries'
+import { useTableQueryPicker } from '../useTableQueryPicker'
+import type { QueryPickerOptions } from '../useAzureQueryPicker'
 import { useWriteBlock } from '../useCan'
 import type { GitStorage } from '../useGitStorage'
 import type { OnDemandStore } from '../useOnDemand'
@@ -18,7 +20,7 @@ import type { MenuLayoutStore } from '../useMenuLayout'
 import type { PersonalViewsStore } from '../usePersonalViews'
 import type { AzureConnectionProfileSummary } from '../azureCredentials'
 import { ExportNoteContext } from '../exportNote'
-import { sourceProblem } from '../pageType'
+import { changedQuery, changeQueryReason, isWiql, queryOfPage, sourceProblem, type PageSource, type TableQuery } from '../pageType'
 import { InsightsTab } from './OnDemandInsights'
 import { PageNameDialog, RemovePageDialog } from './OnDemandPage'
 
@@ -29,17 +31,21 @@ import { PageNameDialog, RemovePageDialog } from './OnDemandPage'
 // ＋ Add row, no row drawer, no Edit / Hide, no Set up columns, Replace…, Excel template / upload, row files or Sample —
 // those controls do not exist for this source. A Table + Insights page's Insights tab reads the same rows (the "linked"
 // data); its charts and tables are kept in the page's file like a Build your own page's (OND-16). PGB-27: a source the
-// app cannot use is shown with its reason, and no rows are read.
-export interface QueryPageAzure { profiles: AzureConnectionProfileSummary[]; viewingAs: boolean }
+// app cannot use is shown with its reason, and no rows are read. PGB-28…PGB-31: the query is a saved query's reference
+// or a custom WIQL query (read through the runner of the stream queries, columns and order from its SELECT / ORDER BY);
+// the page's owners change it with ⋯ → Change query… (the table's source stays a query, PGB-26).
+export interface QueryPageAzure { profiles: AzureConnectionProfileSummary[]; viewingAs: boolean; queryConnections?: QueryPickerOptions['connections']; servers?: string[] }
 export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', menu, viewer, addPageReason = '', onAddPage, views, azure, embedded = false }: { git: GitStorage; store: OnDemandStore; pageId: string; onOpen: (id: string) => void; kind?: PageKind; menu: MenuLayoutStore; viewer: Viewer; addPageReason?: string; onAddPage: () => void; views?: PersonalViewsStore; azure?: QueryPageAzure; embedded?: boolean }) {
   const listed = store.pages.find((entry) => entry.id === pageId)
   const page = (listed && store.full(listed.id)) || listed
   const source = page?.source
-  // The one reference read (useAzureQueries keys its reads by server, project and query id, so a new list is harmless).
-  const refs: AzureQueryRef[] = source?.kind === 'query' ? [source.query] : []
+  // The one query read (useAzureQueries keys its reads by server, project and query id or WIQL text, so a new list is
+  // harmless).
+  const query = queryOfPage(source)
+  const refs: QueryToRead[] = !query ? [] : isWiql(query) ? [{ id: 'wiql', name: query.name, server: query.server, project: query.project, queryId: '', wiql: query }] : [query]
   const queries = useAzureQueries(refs, () => true, { profiles: azure?.profiles ?? [], viewingAs: azure?.viewingAs })
   const [search, setSearch] = useState('')
-  const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | null>(null)
+  const [pageDialog, setPageDialog] = useState<'rename' | 'remove' | 'query' | null>(null)
   const shownRef = useRef<OnDemandRow[]>([])
   const block = useWriteBlock()
   const data = queries.datasets[0]
@@ -55,9 +61,13 @@ export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', men
   const groupName = findGroup(menu.layout, placement.group)?.name ?? 'On-Demand'
   const path = store.filePath(page.id)
   const invalid = sourceProblem(source)
-  const ref = source?.kind === 'query' ? source.query : null
+  const ref = query
+  const what = ref && isWiql(ref) ? 'custom query (WIQL)' : 'saved query'
   const columnsRead = Boolean(data && !data.problem && data.page.columns.length)
-  const setupReason = gitReason || (rights.setup ? '' : block.noteFor('on this page', 'ondemand.setup')) || (columnsRead ? '' : 'The query’s columns are not read yet: its rows are read from Azure DevOps with your own PAT.')
+  const ownerReason = gitReason || (rights.setup ? '' : block.noteFor('on this page', 'ondemand.setup'))
+  const setupReason = ownerReason || (columnsRead ? '' : 'The query’s columns are not read yet: its rows are read from Azure DevOps with your own PAT.')
+  // PGB-31: Change query… — the page's owners (its setup right); the table's source itself stays a query.
+  const queryReason = ownerReason || changeQueryReason(source)
   const queue = store.queue(page.id)
   const pending = store.pending(page.id)
   const retry = () => void inBackground(`Retry · ${page.name}`, async () => { await store.retry(page.id); return { value: null, text: `Saved to Git. ${path}` } }).catch(() => undefined)
@@ -85,17 +95,19 @@ export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', men
       render: (row) => column.id === idColumn ? linkOf(row) : displayText(column, row.cells[column.id]),
     })),
   ] : []
-  const readText = ref && data && !data.problem ? `Rows of the saved query ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with your own PAT${data.readAt ? ` at ${formatDateTime(data.readAt)}` : ''}.` : ref ? `Rows of the saved query ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with each viewer’s own PAT.` : undefined
+  const readText = ref && data && !data.problem ? `Rows of the ${what} ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with your own PAT${data.readAt ? ` at ${formatDateTime(data.readAt)}` : ''}.` : ref ? `Rows of the ${what} ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with each viewer’s own PAT.` : undefined
   const loading = Boolean(data?.problem && queries.reading)
+  const unresolved = (data && !data.problem && queries.unresolved[0]) || []
 
   const table = <TablePanel className="od-panel" eyebrow={groupName.toUpperCase()} title={page.name} detail={page.description || readText}
-    info={<>The rows and columns of a saved Azure DevOps query, read when the page opens and again with ↻ Refresh — with your own PAT, so Azure DevOps decides what you may see. Read only: rows are changed in Azure DevOps, not here, and nothing is written to Azure DevOps. Only the query’s reference (server, project, query id and name) is kept in {path} in Git — never a PAT, never rows. At most {maxQueryRows.toLocaleString('en-US')} rows and {maxQueryColumns} columns are read.{page.description && readText ? ` ${readText}` : ''}</>}
+    info={<>The rows and columns of an Azure DevOps query (a saved query, or a custom WIQL query whose SELECT and ORDER BY give the columns and their order), read when the page opens and again with ↻ Refresh — with your own PAT, so Azure DevOps decides what you may see. Read only: rows are changed in Azure DevOps, not here, and nothing is written to Azure DevOps. Only the query is kept in {path} in Git — a saved query’s reference (server, project, query id and name) or a custom query’s server, project, name and WIQL — never a PAT, never rows. At most {maxQueryRows.toLocaleString('en-US')} rows and {maxQueryColumns} columns are read.{page.description && readText ? ` ${readText}` : ''}</>}
     action={ref ? <button type="button" className="ghost" aria-label={`Read ${ref.name} again from Azure DevOps`} disabled={queries.reading} onClick={queries.refresh}>↻ Refresh</button> : undefined}>
-    {invalid ? <EmptyState title="The rows cannot be read." detail={`${invalid} A Tool Owner fixes ${path} in Git, or adds a new Table (Query) page.`} />
+    {invalid ? <EmptyState title="The rows cannot be read." detail={`${invalid} A page owner sets the query again with ⋯ → Change query…, or a Tool Owner fixes ${path} in Git.`} />
       : loading ? <p className="muted" role="status">Loading the rows of {ref?.name} from Azure DevOps…</p>
       : !data || data.problem ? <EmptyState title="The rows cannot be shown." detail={data?.problem ?? 'The query is not read yet.'} />
       : <>
         {data.capped && <Notice tone="warning">{data.capped}</Notice>}
+        {unresolved.length > 0 && <Notice tone="warning">Not shown: {unresolved.map((entry) => `“${entry}”`).join(', ')} {unresolved.length === 1 ? 'is' : 'are'} not a field of the project. Check the spelling in the query’s SELECT (reference name such as System.Title, or the field name such as Assigned To), then Change query….</Notice>}
         <DataTable id={`on-demand:${page.id}`} columns={columns} rows={rows} rowKey={(row) => row.id} exportName={page.name} groupFilter shownRef={shownRef}
           toolbar={<input className="search" type="search" aria-label={`Search ${page.name}`} placeholder="Search all columns" value={search} onChange={(event) => setSearch(event.target.value)} />}
           status={(shown) => `${shown} of ${data.page.rows.length} row${data.page.rows.length === 1 ? '' : 's'}`}
@@ -111,9 +123,10 @@ export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', men
     return { value: saved, text: `${outcomeText(saved)} ${store.filePath(page.id)}${saved.commitUrl ? ` — ${saved.commitUrl}` : ''}` }
   }).catch(() => undefined)
 
-  return <ExportNoteContext.Provider value={data?.capped ? { prefix: 'Capped-', line: data.capped } : null}><Page className="on-demand-page od-query-page" embedded={embedded} intro={embedded ? undefined : 'A table of a saved Azure DevOps query, read with your own PAT; read only.'}
+  return <ExportNoteContext.Provider value={data?.capped ? { prefix: 'Capped-', line: data.capped } : null}><Page className="on-demand-page od-query-page" embedded={embedded} intro={embedded ? undefined : 'A table of an Azure DevOps query (saved or custom WIQL), read with your own PAT; read only.'}
     actions={<ViewActions label={`page ${page.name}`} primary={embedded || gitReason || addPageReason ? undefined : <button type="button" className="ghost" onClick={onAddPage}>＋ Add page…</button>} items={[
       ...(!embedded && (gitReason || addPageReason) ? [{ key: 'add', label: '＋ Add page…', disabled: true, title: gitReason || addPageReason }] : []),
+      { key: 'query', label: 'Change query…', disabled: Boolean(queryReason), title: queryReason || undefined, onClick: () => setPageDialog('query') },
       ...(embedded ? [] : [
         { key: 'rename', label: 'Rename page…', disabled: Boolean(menuReason), title: menuReason || undefined, onClick: () => setPageDialog('rename') },
         { key: 'hide', label: hidden ? 'Show page' : 'Hide page', disabled: Boolean(hidingReason), title: hidingReason || undefined, onClick: toggleHidden },
@@ -133,6 +146,10 @@ export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', men
       await inBackground(`Save to Git · ${page.name} · rename`, async () => { const saved = await store.update(page.id, (base) => renamePage(base, name, description), `On-Demand: rename ${page.name} to ${name.trim()}`); return { value: saved, text: `${outcomeText(saved)} ${store.filePath(page.id)}` } })
       setPageDialog(null)
     }} />}
+    {pageDialog === 'query' && <ChangeQueryDialog pageName={page.name} source={source} current={ref} azure={{ connections: azure?.queryConnections ?? [], servers: azure?.servers ?? [], profiles: azure?.profiles ?? [], viewingAs: azure?.viewingAs }} onCancel={() => setPageDialog(null)} onSave={async (next) => {
+      await inBackground(`Save to Git · ${page.name} · query`, async () => { const saved = await store.update(page.id, (base) => ({ ...base, source: next }), `On-Demand: change the query of ${page.name}`); return { value: saved, text: `${outcomeText(saved)} ${store.filePath(page.id)} — the page now reads the ${'wiql' in next ? 'custom' : 'saved'} query ${queryOfPage(next)?.name ?? ''}.` } })
+      setPageDialog(null)
+    }} />}
     {pageDialog === 'remove' && <RemovePageDialog page={page} inGit={store.inGit(page.id)} path={path} onCancel={() => setPageDialog(null)} onRemove={async () => {
       await store.remove(page.id, `On-Demand: delete the page ${page.name} (a Table (Query) page)`)
       if (menu.layout.pages[page.id]) await menu.save(removePlacement(menu.layout, page.id), `Pages & menu: remove the page ${page.name}`)
@@ -140,6 +157,33 @@ export function QueryTablePage({ git, store, pageId, onOpen, kind = 'table', men
       setPageDialog(null); const next = store.pages.find((entry) => entry.id !== page.id); if (next) onOpen(next.id)
     }} />}
   </Page></ExportNoteContext.Provider>
+}
+
+// PGB-31 Change query… (UI-STANDARDS §3/§4): the page's query — Saved query | Custom query (WIQL), the picker of Add page
+// (PGB-28) — changed by the page's owners and saved to Git; the table's source stays a query (PGB-26). The current query
+// is summarised; a custom one opens for editing, a saved one is picked again.
+function ChangeQueryDialog({ pageName, source, current, azure, onCancel, onSave }: { pageName: string; source: PageSource | undefined; current: TableQuery | null; azure: QueryPickerOptions; onCancel: () => void; onSave: (next: PageSource) => Promise<void> }) {
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const picker = useTableQueryPicker(azure, { radioName: 'change-query-how', onEdit: () => setError(''), initial: current && isWiql(current) ? current : null })
+  const next = typeof picker.result === 'string' ? picker.result : changedQuery(source, picker.result)
+  const reason = typeof next === 'string' ? next : ''
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (typeof next === 'string') { setError(next); return }
+    setBusy(true); setError('')
+    try { await onSave(next) } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setBusy(false) }
+  }
+  const now = current ? `${isWiql(current) ? 'Custom query (WIQL)' : 'Saved query'} “${current.name}” · ${serverLabel(current.server)} · ${current.project}` : sourceProblem(source) || '—'
+  return <Modal eyebrow={`ON-DEMAND · ${pageName.toUpperCase()}`} title="Change the query" onClose={() => { if (!busy) onCancel() }}>
+    <form onSubmit={(event) => void submit(event)} className="pgb-form">
+      <SettingsSummary rows={[['Query now', now]]} />
+      {picker.fields}
+      <small className="muted">The table stays a Table (Query) page: its source is fixed, only the query changes. Its charts and tables are kept; one over a column the new query does not have says so. Saved to Git for everyone at once — the query only, never a PAT, never rows.</small>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="modal-actions">{reason && !error && <span className="muted">{reason}</span>}<button type="button" className="ghost" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy || Boolean(reason)}>{busy ? 'Saving to Git…' : 'Save to Git'}</button></div>
+    </form>
+  </Modal>
 }
 
 // A save as a Background job (UI-STANDARDS §8), as on a Build your own page.

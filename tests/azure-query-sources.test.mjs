@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { capText, connectionDatasets, connectionSources, fieldIdOf, fieldTypeOf, listSavedQueries, maxQueryColumns, maxQueryRows, missingConnection, patForServer, personName, queryConfig, queryDataset, queryFailure, queryReadReason, readSavedQuery, withoutEmails } from '../src/azureQuerySources.ts'
+import { capText, connectionDatasets, connectionSources, fieldIdOf, fieldTypeOf, listSavedQueries, maxQueryColumns, maxQueryRows, missingConnection, patForServer, personName, queryConfig, queryDataset, queryFailure, queryReadReason, readSavedQuery, readWiqlQuery, wiqlTestText, withoutEmails } from '../src/azureQuerySources.ts'
 import { newQueryRef, parseQueryRefs, queryFromUrl } from '../src/azureQueryRef.ts'
 import { blankBlock, blockData, copyBlock, emptyDashboard, mergeDashboardText, narrowRows, parseDashboard, serializeDashboard, sourcePattern } from '../src/dashboardPages.ts'
 import { entryOf, mySourcePattern, sourceEntries } from '../src/dashboardSources.ts'
@@ -241,4 +241,42 @@ test('DSH-23, MYD-26: rights and why not — Release Details for the streams and
   assert.equal(patForServer(server, [], storage({ 'demand-planning-server-pats-v1': JSON.stringify({ 'https://dev.azure.com/example': 'mine' }) })), 'mine')
   assert.equal(patForServer('https://dev.azure.com/other', [], storage({ 'demand-planning-server-pats-v1': JSON.stringify({ 'https://dev.azure.com/example': 'mine' }) })), '', 'a PAT only for its own server')
   assert.equal(patForServer(server, [], storage({})), '')
+})
+
+test('PGB-30: a custom WIQL query is read with the viewer’s PAT through the runner of the stream queries — reads only, columns and order from its SELECT / ORDER BY (TC-PGB-21)', async () => {
+  const calls = []
+  const bugs = [[31, 'Seal leaks', 'Active', 'Ana Costa'], [32, 'Label faded', 'New', 'Bo Li'], [33, 'Wrong torque', 'Active', 'Ana Costa']]
+  const transport = async (request) => {
+    calls.push(request)
+    if (request.operation === 'fields') return { value: [{ referenceName: 'System.Title', name: 'Title', type: 'string' }, { referenceName: 'System.State', name: 'State', type: 'string' }, { referenceName: 'System.AssignedTo', name: 'Assigned To', type: 'string', isIdentity: true }] }
+    if (request.operation === 'query') return { workItems: /\[System\.Id\] > 0 /.test(request.query) ? bugs.map(([id]) => ({ id })) : [] }
+    if (request.operation === 'items') return { value: request.ids.map((wanted) => bugs.find(([id]) => id === wanted)).filter(Boolean).map(([id, title, state, who]) => ({ id, fields: { 'System.Id': id, 'System.Title': title, 'System.State': state, 'System.AssignedTo': identity(who, `${who.split(' ')[0].toLowerCase()}@example.com`), 'System.Description': 'not selected' } })) }
+    throw new Error(`unexpected ${request.operation}`)
+  }
+  const wiql = { name: 'Open bugs', server, project: 'DHP', text: "SELECT [System.Id], [Title], [System.AssignedTo], [System.State], [Not A Field] FROM WorkItems WHERE [System.WorkItemType] = 'Bug' ORDER BY [System.State] ASC, [System.Id] DESC" }
+  const result = await readWiqlQuery(wiql, ' viewer-pat ', transport, () => '2026-11-27T08:00:00Z')
+  assert.deepEqual(calls.map((call) => call.operation), ['fields', 'query', 'items', 'query'])
+  assert.ok(calls.every((call) => call.pat === 'viewer-pat' && call.organization === 'example' && call.project === 'DHP'), 'the viewer’s PAT, to the query’s own server')
+  assert.equal(calls[1].query, "SELECT [System.Id] FROM WorkItems WHERE ([System.WorkItemType] = 'Bug') AND [System.Id] > 0 ORDER BY [System.Id] ASC", 'the stream queries’ paged read')
+  for (const call of calls.filter((entry) => entry.operation === 'query')) assert.doesNotThrow(() => azureReadRequest({ ...call }), 'the desktop proxy accepts it as a read')
+  assert.deepEqual(result.columns, [{ ref: 'System.Id', name: 'ID' }, { ref: 'System.Title', name: 'Title' }, { ref: 'System.AssignedTo', name: 'Assigned To' }, { ref: 'System.State', name: 'State' }])
+  assert.deepEqual(result.unresolved, ['Not A Field'])
+  assert.deepEqual(result.items.map((item) => [item.id, item.values['System.State'], item.values['System.AssignedTo']]), [[33, 'Active', 'Ana Costa'], [31, 'Active', 'Ana Costa'], [32, 'New', 'Bo Li']], 'ORDER BY State, then ID descending; identities by name')
+  assert.equal(result.items[0].url, 'https://dev.azure.com/example/DHP/_workitems/edit/33')
+  assert.equal(result.readAt, '2026-11-27T08:00:00Z')
+  const dataset = queryDataset('azq:wiql', 'Open bugs', 'Azure DevOps query', 'n', result)
+  assert.deepEqual(dataset.page.columns.map((column) => column.name), ['ID', 'Title', 'Assigned To', 'State'])
+  assert.equal(JSON.stringify(dataset).includes('@example.com'), false, 'never an email')
+  assert.equal(wiqlTestText(result), '3 work items · columns ID, Title, Assigned To, State · not a field of this project: “Not A Field”.')
+  // A tree query: sent as written with SELECT [System.Id], one call, the items in the order met.
+  const tree = { ...wiql, text: "SELECT [System.Id], [System.Title] FROM WorkItemLinks WHERE ([Source].[System.WorkItemType] = 'Epic') MODE (Recursive)" }
+  const treeCalls = []
+  const treeResult = await readWiqlQuery(tree, 'pat', async (request) => { treeCalls.push(request); if (request.operation === 'fields') throw new Error('no field list'); if (request.operation === 'query') return { workItemRelations: [{ source: null, target: { id: 32 } }, { source: { id: 32 }, target: { id: 31 } }] }; return transport(request) })
+  assert.equal(treeCalls.find((call) => call.operation === 'query').query, "SELECT [System.Id] FROM WorkItemLinks WHERE ([Source].[System.WorkItemType] = 'Epic') MODE (Recursive)")
+  assert.deepEqual(treeResult.items.map((item) => item.id), [32, 31], 'parents before their children')
+  // Refused like a stream query; no PAT, nothing sent.
+  await assert.rejects(readWiqlQuery({ ...wiql, text: "SELECT [System.Id] FROM WorkItems WHERE [System.Id] > 0 ASOF '2026-01-01'" }, 'pat', transport), /Historical \(ASOF\)/)
+  const before = calls.length
+  await assert.rejects(readWiqlQuery(wiql, '  ', transport), /No PAT/)
+  assert.equal(calls.length, before)
 })
