@@ -26,7 +26,8 @@ import { cellOf, clampClass, columnGap, columns, columnWidth, contentWidth, fixe
 import { epicRank, ownerOfEpic, showsOwners } from './piMeetingData.ts'
 import { isAdhocTask } from './workItemEdit.ts'
 import { defaultMeetingSettings, fillPlaceholders, teamLabel, type MeetingSettings, type PresentingTeam } from './piMeetingSettings.ts'
-import { accentOf, completionSlides, execStyle, executiveSlides, hoursSlides, longRunningSlides, piTrendSlides, releaseSlides, repeatSlides, topicSlides, trendSlides, utilizationSlides } from './piMeetingExec.ts'
+import { movedLabel } from './piMeetingMoved.ts'
+import { accentOf, completionSlides, execStyle, executiveSlides, featureTitleCell, hoursSlides, longRunningSlides, piTrendSlides, releaseSlides, repeatSlides, topicSlides, trendSlides, utilizationSlides } from './piMeetingExec.ts'
 import type { MeetingExec } from './piMeetingData.ts'
 export { displayName, scrub, text } from './piMeetingText.ts'
 export { isMeetingPath, maxMeetingBytes, meetingBuiltOf, meetingBytes, meetingFileName, meetingFolder, meetingPath, meetingsFolder, meetingStamp, piSlug } from './piMeetingFile.ts'
@@ -41,8 +42,10 @@ export interface MeetingReview {
   author: string; date: string; from: SplitFrom; learnings: string; struggles: string; move: string; moveValue?: MoveValue; movePi: string
   mode: string; reviewMode?: ReviewMode; remarks: string; fields: { label: string; text: string }[]; text: string
 }
-// PIR-51: closedDate, createdDate and adhoc (tagged ad-hoc) for the executive slides.
-export interface MeetingFeature { id: number; title: string; epic: string; epicId?: number; assignedTo: string; state: string; closedDate?: string; createdDate?: string; adhoc?: boolean; status: MeetingStatus; error?: string; review?: MeetingReview }
+// PIR-51: closedDate, createdDate and adhoc (tagged ad-hoc) for the executive slides. PIR-91, PIR-92: movedTo — a Feature
+// moved to a later PI in Azure DevOps ("PI 27.1": its history shows it in this PI), wasIn — the PIs its Iteration Path
+// was in.
+export interface MeetingFeature { id: number; title: string; epic: string; epicId?: number; assignedTo: string; state: string; closedDate?: string; createdDate?: string; adhoc?: boolean; status: MeetingStatus; error?: string; review?: MeetingReview; movedTo?: string; wasIn?: string[] }
 // pi: "PI 26.4"; builtAt: the build's date and time as shown (the builder's clock and time zone); builtBy: a display name;
 // start: "PI Review starts from" (YYYY-MM-DD).
 // PIR-51…PIR-62: exec — the executive figures worked out at build time (piMeetingData.ts); settings — the Meeting
@@ -60,9 +63,10 @@ export const meetingTitle = (pi: string) => `${meetingName} — ${pi}`
 // PIR-42: the Features of the PI with their review, taken from the Discussions read (only the comments on or after the
 // start date count — applied here again, whatever the Discussion was read with). PIR-49: pi — the PI of the meeting
 // ("PI 26.4"); only a review headed for it counts.
-export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: AzureWorkItem }[], discussionOf: (key: string) => Discussion | undefined, setup: PiFormSetup, start: string, pi: string): MeetingFeature[] {
-  return rows.map(({ item, epic }) => {
-    const base = { id: item.id, title: item.title, epic: epic ? epic.title || `#${epic.id}` : '', ...(epic ? { epicId: epic.id } : {}), assignedTo: item.assignedTo, state: item.state, ...(item.closedDate ? { closedDate: item.closedDate } : {}), ...(item.createdDate ? { createdDate: item.createdDate } : {}), ...(isAdhocTask(item.tags ?? '') ? { adhoc: true } : {}) }
+// PIR-91: a row may be a Feature moved to a later PI (movedTo, wasIn from its history).
+export function meetingFeatures(rows: readonly { item: AzureWorkItem; epic?: AzureWorkItem; movedTo?: string; wasIn?: string[] }[], discussionOf: (key: string) => Discussion | undefined, setup: PiFormSetup, start: string, pi: string): MeetingFeature[] {
+  return rows.map(({ item, epic, movedTo, wasIn }) => {
+    const base = { id: item.id, title: item.title, epic: epic ? epic.title || `#${epic.id}` : '', ...(epic ? { epicId: epic.id } : {}), assignedTo: item.assignedTo, state: item.state, ...(item.closedDate ? { closedDate: item.closedDate } : {}), ...(item.createdDate ? { createdDate: item.createdDate } : {}), ...(isAdhocTask(item.tags ?? '') ? { adhoc: true } : {}), ...(movedTo ? { movedTo, wasIn: [...(wasIn ?? [])] } : {}) }
     const entry = discussionOf(item.key)
     if (entry?.state === 'error') return { ...base, status: 'error', error: entry.error }
     if (entry?.state !== 'done') return { ...base, status: 'unread' }
@@ -167,6 +171,8 @@ function featureBlocks(feature: MeetingFeature, owner = ''): Block[] {
   const suggested = review.from === 'Keywords'
   const full = (label: string, value: string) => section(sectionOf(label, lines(value), contentWidth))
   return [
+    // PIR-92: a Feature moved to a later PI says so first.
+    ...(feature.movedTo ? [paragraph('moved', movedLabel(feature.movedTo), { font: 14, lineHeight: 20, max: 1, padding: 6 })] : []),
     facts([{ label: 'Epic', value: feature.epic || noEpic }, ...(owner ? [{ label: 'Product Owner', value: owner }] : []), { label: 'Assigned to', value: displayName(feature.assignedTo || 'Unassigned') }, { label: 'State', value: feature.state }], 'facts', 1),
     ...(suggested ? [paragraph('muted', 'Suggested from keywords: the comment has no headings.')] : []),
     ...(review.from === 'None' ? [full('Comment', review.text)] : [
@@ -222,11 +228,12 @@ const epicLabel = (meeting: Meeting, id: number) => { const title = meeting.feat
 // reviewed stay in the one "Features not reviewed" list (PIR-60 links to it).
 function sectionSlides(meeting: Meeting, section: TeamSection, at: number, teams: number): Slide[] {
   const { team, features } = section, counts = meetingCounts(features)
-  const notReviewed = counts.none + counts.unread
+  const notReviewed = counts.none + counts.unread, moved = features.filter((feature) => feature.movedTo).length
   const divider = flowSlides('team', team ? `PRESENTING TEAM · ${at + 1} OF ${teams}` : 'OTHER FEATURES', team ? team.name : 'Other Features', [
     ...(team?.short ? [paragraph('big', team.short, { font: 20, lineHeight: 28, max: 1 })] : []),
     tiles([
-      { label: 'Features in the PI', value: String(counts.features) },
+      // PIR-94: the moved Features count in their team's Features in the PI.
+      { label: 'Features in the PI', value: String(counts.features), detail: moved ? `${moved} moved to a later PI` : '' },
       { label: 'Reviewed', value: String(counts.reviewed), detail: notReviewed ? `${notReviewed} not reviewed — in “Features not reviewed”` : features.length ? 'every Feature' : '' },
       { label: 'Discuss during Meeting', value: String(counts.discuss), detail: counts.discuss ? 'one slide each, next' : '' },
       { label: 'Offline Review', value: String(counts.offline), detail: counts.noMode ? `${counts.noMode} not given` : '' },
@@ -245,7 +252,7 @@ const notReviewedSlides = (meeting: Meeting): Slide[] => {
   if (!features.length) return [{ kind: 'not-reviewed', eyebrow: 'NOT REVIEWED', title: 'Features not reviewed', body: '<p>None: every Feature of the PI has a review.</p>' }]
   return flowSlides('not-reviewed', `NOT REVIEWED · ${plural(features.length, 'FEATURE')}`, 'Features not reviewed', [table({ label: 'Features not reviewed',
     columns: po ? [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 28 }, { label: 'Epic', width: 16 }, { label: 'Product Owner', width: 14 }, { label: 'Assigned to', width: 14 }, { label: 'Why', width: 20 }] : [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 20 }, { label: 'Assigned to', width: 16 }, { label: 'Why', width: 22 }],
-    rows: features.map((feature) => [cellOf(feature.id), cellOf(feature.title), cellOf(epicName(feature)), ...(po ? [cellOf(ownerOfEpic(meeting, feature.epicId) || '—')] : []), cellOf(displayName(feature.assignedTo || 'Unassigned')), cellOf(why(feature, meeting.start))]) })])
+    rows: features.map((feature) => [cellOf(feature.id), featureTitleCell(feature.title, feature.movedTo), cellOf(epicName(feature)), ...(po ? [cellOf(ownerOfEpic(meeting, feature.epicId) || '—')] : []), cellOf(displayName(feature.assignedTo || 'Unassigned')), cellOf(why(feature, meeting.start))]) })])
 }
 // PIR-45: the Themes — every Learning, then every Struggle, each with its Feature ID; a "None" answer is left out.
 export function themeItems(meeting: Meeting, which: 'learnings' | 'struggles'): { id: number; text: string; suggested: boolean }[] {
@@ -374,6 +381,8 @@ p{margin:0}
 .note,.rule{font-size:13px;--lh:18px;color:#56657a}
 .rule{font-weight:600}
 .byline{font-size:14px;--lh:20px;color:#56657a}
+.moved{align-self:flex-start;padding:2px 10px;border:1px solid #c27c0e;border-radius:12px;background:#fff6e5;font-size:14px;--lh:20px;font-weight:600;color:#7a4b00}
+td .moved,p .moved{display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;font-size:12px;--lh:16px;line-height:16px;vertical-align:baseline}
 .tiles{display:grid;grid-auto-rows:${tileHeight}px;gap:${gap}px;margin:0}
 .tiles.n1{grid-template-columns:minmax(0,1fr)}.tiles.n2{grid-template-columns:repeat(2,minmax(0,1fr))}.tiles.n3{grid-template-columns:repeat(3,minmax(0,1fr))}.tiles.n4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .tile{height:${tileHeight}px;overflow:hidden;padding:10px 16px;border:1px solid #d5dbe3;border-radius:8px;background:#f7f9fb}

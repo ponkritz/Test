@@ -57,11 +57,17 @@ export function epicOf(items: AzureWorkItem[], item: AzureWorkItem, byId = new M
 // Epic are left out (as the state checks do). Sorted by ID.
 export function piFeatures(items: AzureWorkItem[], pi: string, { absenceEpicId, withStories = false }: { absenceEpicId?: number; withStories?: boolean } = {}): AzureWorkItem[] {
   if (!pi) return []
-  const byId = new Map(items.map((item) => [item.id, item]))
-  const underAbsence = (item: AzureWorkItem) => { if (absenceEpicId == null) return false; const seen = new Set<number>(); for (let current: AzureWorkItem | undefined = item; current && !seen.has(current.id); current = current.parentId == null ? undefined : byId.get(current.parentId)) { if (current.id === absenceEpicId) return true; seen.add(current.id) } return false }
+  const counted = reviewableFeature(items, absenceEpicId)
   const inPi = (item: AzureWorkItem) => samePi(piPathOf(item.iterationPath), pi)
   const storyFeatures = new Set(withStories ? items.filter((item) => item.workItemType === 'User Story' && !isRemoved(item) && item.parentId != null && inPi(item)).map((item) => item.parentId!) : [])
-  return items.filter((item) => item.workItemType === 'Feature' && !isRemoved(item) && !underAbsence(item) && (inPi(item) || storyFeatures.has(item.id))).sort((a, b) => a.id - b.id)
+  return items.filter((item) => counted(item) && (inPi(item) || storyFeatures.has(item.id))).sort((a, b) => a.id - b.id)
+}
+// PIR-03 (PIR-91 uses it too): a Feature that can be counted in a PI at all — a Feature, not Removed, not under the
+// absence Epic.
+export function reviewableFeature(items: AzureWorkItem[], absenceEpicId?: number): (item: AzureWorkItem) => boolean {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const underAbsence = (item: AzureWorkItem) => { if (absenceEpicId == null) return false; const seen = new Set<number>(); for (let current: AzureWorkItem | undefined = item; current && !seen.has(current.id); current = current.parentId == null ? undefined : byId.get(current.parentId)) { if (current.id === absenceEpicId) return true; seen.add(current.id) } return false }
+  return (item) => item.workItemType === 'Feature' && !isRemoved(item) && !underAbsence(item)
 }
 
 // PIR-33: the comments on or after "PI Review starts from" (its UTC day compared with the date, YYYY-MM-DD) — a comment
