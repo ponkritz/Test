@@ -6,11 +6,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url))
 const skillsDir = join(root, '.claude/skills')
 const skills = readdirSync(skillsDir).filter((name) => name.startsWith('ui-')).sort()
-const read = (name) => readFileSync(join(skillsDir, name, 'SKILL.md'), 'utf8')
+// Line endings as checked out (CRLF on Windows) are read as LF.
+const read = (name) => readFileSync(join(skillsDir, name, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n')
 
 // `Name` — `path` pairs in the "## Building blocks" section of a skill.
 export function buildingBlocks(text) {
@@ -51,7 +53,7 @@ test('CI-13: every building block a skill names exists in the code where the ski
 test('CI-13: the index skill routes to every UI skill and every section of UI-STANDARDS (TC-CI-09)', () => {
   const index = read('ui-design-system')
   for (const name of skills.filter((skill) => skill !== 'ui-design-system')) assert.match(index, new RegExp(`\`${name}\``), `index names ${name}`)
-  const standard = readFileSync(join(root, 'docs/UI-STANDARDS.md'), 'utf8')
+  const standard = readFileSync(join(root, 'docs/UI-STANDARDS.md'), 'utf8').replace(/\r\n/g, '\n')
   const sections = [...standard.matchAll(/^## (\d+a?)\. /gm)].map(([, number]) => number)
   assert.ok(sections.length >= 12)
   for (const number of sections) assert.match(index, new RegExp(`\\| §${number} \\|`), `index routes §${number}`)
