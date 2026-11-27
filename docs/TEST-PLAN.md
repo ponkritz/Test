@@ -2197,6 +2197,14 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PGB-16 Co-owners from the Azure DevOps team at start** — Req PGB-21, PGB-18, CAP-30 — L1 `page-builder.test.mjs` ("PGB-21: the Time Writing team is read once per session and its members are offered as co-owners; a refused read offers the others, silently (TC-PGB-16)"); E2E `page-builder.e2e.mjs` ("TC-PGB-16: the co-owner list offers the Azure DevOps team members read at start — without opening People & roles, once per session"); browser check: after a fresh start (without opening Admin → People & access) Edit a page → Page co-owners lists a team member who has no fetched work, by name with the work email; groups are not listed; with a PAT that may not read the team the list has the other people and no message.
 
+**TC-PGB-17 Page type tick boxes: only valid combinations, the others disabled with the reason** — Req PGB-22, PGB-01, PGB-05 — L1 `page-type.test.mjs` ("PGB-22: the four tick boxes in order, Table (Build your own) ticked by default", "PGB-22: every one of the 16 combinations of the four ticks is a page type or says why not (TC-PGB-17)", "PGB-22: a tick that would make a combination that is not a type is disabled with its reason; unticking is free (TC-PGB-17)", "PGB-22, PGB-23: what Add page creates — a Table (Query) needs its reference; no other combination is created (TC-PGB-17, TC-PGB-18)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: …"), `page-builder.e2e.mjs`, `dashboard-pages.e2e.mjs`, `tool-validations.e2e.mjs` (the tick boxes in Add page and ＋ Add tab…); browser check: ＋ Add page… shows the four boxes in order with Table (Build your own) ticked and "This page: Table · rows the team adds itself"; Table (Query) and Dashboard are disabled with their reason under them; unticking everything shows "Choose a page type." beside the disabled Add page; Insights alone says it needs a table source; Tool Validations → Setup → Tabs → ＋ Add tab… shows the same boxes.
+
+**TC-PGB-18 A Table (Query) page from a saved query — only its reference in Git, rows read live with each viewer's PAT, read only, Insights over the same rows** — Req PGB-23, PGB-24, PGB-25, DSH-18, DSH-19 — **UAT** — L1 `page-type.test.mjs` ("PGB-23, PGB-27: page files — without a source unchanged; a query page keeps only its reference and insights, never rows (TC-PGB-18, TC-PGB-20)", "PGB-24: a Table (Query) page is not offered as a dashboard data source (it holds no rows in Git) (TC-PGB-18)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: a Tool Owner adds a Table (Query) + Insights page from a saved query — only its reference in Git; the rows read live, read only, searched and charted; Edit keeps the source; a viewer without a PAT sees the reason"); UAT: as a Tool Owner with your PAT, ＋ Add page… → tick Table (Query) and Insights (Table (Build your own) unticked first), list the saved queries of a connection, pick one under Shared Queries, name the page, Add page — the page opens with the query's rows and columns; search, sort, Columns, Export and Group by work; there is no ＋ Add row, Edit or Set up columns…; ↻ Refresh reads the query again; add a bar chart on the Insights tab; check in Git that the page file holds only `source` with the reference and the chart (no rows, no PAT); a second person without a PAT for that server opens the page and sees "The rows cannot be shown." with the reason.
+
+**TC-PGB-19 Edit page: the table's source is fixed, Insights switches** — Req PGB-26, PGB-07, DSH-01 — L1 `page-type.test.mjs` ("PGB-26: Edit page — the family and the table source are fixed, only Insights switches (TC-PGB-19)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: …"); browser check: Edit a Table (Query) page in Admin → Pages & reports → Menu groups & pages — Table (Build your own) disabled with "The table's rows come from a saved Azure DevOps query; add a new page for the other source.", Dashboard disabled with the reason of DSH-01; untick Insights and Save to Git — the Insights tab is hidden, its charts kept; on a Build your own page Table (Query) is disabled with the reason.
+
+**TC-PGB-20 The table source validated when read; older page files unchanged** — Req PGB-27, PGB-23 — L1 `page-type.test.mjs` ("PGB-27: the table source is validated when read — absent is Build your own, a bad one is kept read only with its reason (TC-PGB-20)", "PGB-23, PGB-27: page files — without a source unchanged; a query page keeps only its reference and insights, never rows (TC-PGB-18, TC-PGB-20)"); browser check: hand-edit a Table (Query) page's file in Git with a query id that is not a GUID — the page opens read only with the warning "The table's query reference is not valid — …" and "The rows cannot be read.", nothing is read from Azure DevOps; a page file without `source` (CoNQ) works as before.
+
 ### 6.31 On-Demand Dashboard pages
 
 **TC-DSH-01 A Tool Owner adds an On-Demand Dashboard, builds it and filters it by period** — Req DSH-01, DSH-02, DSH-03, DSH-05, DSH-06, DSH-07, DSH-08, DSH-10, DSH-11, DSH-12 — **UAT** — L1 `dashboard-pages.test.mjs` ("DSH-07: the period keeps the rows whose month is in it; rows without a date are counted apart; the filter row narrows its source (TC-DSH-05)"); E2E `dashboard-pages.e2e.mjs` ("TC-DSH-01: a Tool Owner adds a Dashboard page, builds it from a KPI tile, a bar chart and a summary table over a table page’s rows and filters it by period — saved in Git"); UAT: with your work email set, Git storage that can save and the Tool Owner role, and a table page with a Dropdown, a Currency and a Date column and rows of this year and last year: ＋ Add page… → Page type **On-Demand Dashboard**, name "Quality dashboard" — the page opens with "No blocks yet."; ＋ Add block… → KPI tile "Issues" over the table page (Period filter on: the Date column), Add block — the tile shows this year's rows; add a **Bar chart** by the Dropdown column and a **Summary table** with Sum of the Currency column — largest first, the first 10 rows with Show all, Export (CSV) opens in Excel with the values as text where they look like formulas; Background jobs names `dashboards/quality-dashboard.json`; tick last year in **Year** — the tile, chart and table follow and the line names the period; a month without rows shows "No data for this selection."; Reset filters goes back to this year; reload — your period comes back; Tabs and filters… → tabs Overview and Cost and a filter on the Dropdown column: tiles open their tab; a colleague without the right sees the dashboard read only with the reason; on a phone and in dark mode the tiles, charts and the pop-up are readable.
@@ -3336,13 +3344,13 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | CON-112 | TC-CON-68 |
 | CON-113 | TC-CON-70, TC-PIR-16, TC-PIR-26, TC-PIR-38 |
 | CON-114 | TC-CON-71, TC-PIR-23, TC-PIR-24, TC-PIR-31 |
-| PGB-01 | TC-PGB-01, TC-PGB-07 |
+| PGB-01 | TC-PGB-01, TC-PGB-07, TC-PGB-17 |
 | PGB-02 | TC-PGB-01, TC-PGB-03, TC-PGB-04 |
 | PGB-03 | TC-PGB-01, TC-PGB-02, TC-PGB-08 |
 | PGB-04 | TC-PGB-01, TC-PGB-03, TC-PGB-11 |
-| PGB-05 | TC-PGB-01, TC-PGB-09 |
+| PGB-05 | TC-PGB-01, TC-PGB-09, TC-PGB-17 |
 | PGB-06 | TC-PGB-01, TC-PGB-04, TC-PGB-11 |
-| PGB-07 | TC-PGB-11 |
+| PGB-07 | TC-PGB-11, TC-PGB-19 |
 | PGB-08 | TC-PGB-01, TC-PGB-05, TC-PGB-06 |
 | PGB-09 | TC-PGB-05, TC-PGB-09 |
 | PGB-10 | TC-PGB-05 |
@@ -3356,6 +3364,12 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PGB-19 | TC-PGB-15 |
 | PGB-20 | TC-PGB-15 |
 | PGB-21 | TC-PGB-16 |
+| PGB-22 | TC-PGB-17 |
+| PGB-23 | TC-PGB-18, TC-PGB-20 |
+| PGB-24 | TC-PGB-18 |
+| PGB-25 | TC-PGB-18 |
+| PGB-26 | TC-PGB-19 |
+| PGB-27 | TC-PGB-20 |
 | DSH-01 | TC-DSH-01, TC-DSH-02, TC-DSH-10 |
 | DSH-02 | TC-DSH-01, TC-DSH-09 |
 | DSH-03 | TC-DSH-01, TC-DSH-08, TC-DSH-11, TC-DSH-16, TC-TVL-12, TC-DSH-17 |
@@ -3684,7 +3698,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03, TC-STT-04, TC-STT-05, TC-STT-06 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…137, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
-| UC-38 | TC-PGB-01…16, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
+| UC-38 | TC-PGB-01…20, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…61, TC-PIR-64…68, TC-PIR-75…79, TC-PIR-81…86, TC-EPS-10, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
