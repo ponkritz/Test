@@ -9,13 +9,15 @@ import { personMonths, totals } from './dashboard.ts'
 import { defaultCapacitySettings, type CapacitySettings } from './capacity.ts'
 import { commentsFrom, latestReviewFor, reviewSplit, type Discussion } from './piReview.ts'
 import { piName } from './myWork.ts'
+import { isSamePi } from './piMeetingMoved.ts'
 import { isLongRunning, longRunningOf, type EpicOrder, type MeetingSettings } from './piMeetingSettings.ts'
 import type { PiFormSetup } from './piReviewSetup.ts'
 import type { AzureIteration } from './azureRead.ts'
 import type { AzureWorkItem } from './domain'
 
-// The Feature as the executive slides need it (a subset of MeetingFeature, piMeeting.ts).
-export interface ExecFeature { id: number; title: string; epic: string; epicId?: number; state: string; closedDate?: string; createdDate?: string; adhoc?: boolean; status: string; review?: { moveValue?: string; movePi: string } }
+// The Feature as the executive slides need it (a subset of MeetingFeature, piMeeting.ts). PIR-91, PIR-92: movedTo — the
+// later PI the Feature was moved to in Azure DevOps ("PI 27.1"), wasIn — the PIs its Iteration Path was in (its history).
+export interface ExecFeature { id: number; title: string; epic: string; epicId?: number; state: string; closedDate?: string; createdDate?: string; adhoc?: boolean; status: string; review?: { moveValue?: string; movePi: string }; movedTo?: string; wasIn?: string[] }
 
 // ---- the PI's dates ----
 // start / end: YYYY-MM-DD (UTC days, both included); sprints: the PI's dated child iterations, in date order.
@@ -60,8 +62,11 @@ export const monthLabel = (month: string) => `${monthNames[Number(month.slice(5,
 export const isClosedState = (state: string) => ['closed', 'done'].includes(lower(state))
 // PIR-51: Closed in the PI — state Closed or Done AND the Closed Date inside the PI's dates.
 export const closedInPi = (feature: Pick<ExecFeature, 'state' | 'closedDate'>, span: Pick<PiSpan, 'start' | 'end'> | undefined) => Boolean(span && isClosedState(feature.state) && inSpan(span, feature.closedDate))
-// PIR-51: Carried forward — the latest review headed for the PI says Move to next PI = Yes.
-export const carriedForward = (feature: Pick<ExecFeature, 'status' | 'review'>) => feature.status === 'reviewed' && feature.review?.moveValue === 'Yes'
+// PIR-51: Carried forward — the latest review headed for the PI says Move to next PI = Yes. PIR-94: or the Feature was
+// moved to a later PI in Azure DevOps (the move itself is the evidence); a Feature with both counts once.
+export const carriedForward = (feature: Pick<ExecFeature, 'status' | 'review' | 'movedTo'>) => Boolean(feature.movedTo) || (feature.status === 'reviewed' && feature.review?.moveValue === 'Yes')
+// PIR-94: where a carried-forward Feature goes — the PI it was moved to, else the next PI its review names.
+export const carriedTo = (feature: Pick<ExecFeature, 'review' | 'movedTo'>) => feature.movedTo || feature.review?.movePi || 'the next PI (not named)'
 
 // ---- the Epics, in the chosen order (PIR-62) ----
 export const noEpic = 'No Epic'
@@ -90,14 +95,16 @@ export const showsOwners = (meeting: { owners?: Record<string, string> }) => Obj
 
 // ---- PIR-53: repeat carry-overs ----
 // The PIs a Feature was carried forward in, one after another, back from the meeting's PI: the latest review headed for
-// each PI says Move to next PI = Yes. pis: the meeting's PI first, then the earlier ones, newest first.
-export function carryStreak(discussion: Discussion | undefined, setup: PiFormSetup, start: string, pis: readonly string[]): string[] {
-  if (discussion?.state !== 'done') return []
-  const comments = commentsFrom(discussion.comments, start).comments
+// each PI says Move to next PI = Yes. pis: the meeting's PI first, then the earlier ones, newest first. PIR-94: wasIn —
+// for a Feature moved to a later PI, the PIs its Iteration Path was in: it was moved out of each of them, so each counts.
+export function carryStreak(discussion: Discussion | undefined, setup: PiFormSetup, start: string, pis: readonly string[], wasIn: readonly string[] = []): string[] {
+  const comments = discussion?.state === 'done' ? commentsFrom(discussion.comments, start).comments : []
   const streak: string[] = []
   for (const pi of pis) {
-    const review = latestReviewFor(comments, pi)
-    if (!review || reviewSplit(review.text, setup).moveValue !== 'Yes') break
+    if (!wasIn.some((seen) => isSamePi(seen, pi))) {
+      const review = latestReviewFor(comments, pi)
+      if (!review || reviewSplit(review.text, setup).moveValue !== 'Yes') break
+    }
     streak.push(pi)
   }
   return streak
@@ -254,7 +261,7 @@ export interface PreviousPi { pi: string; closed: number | null; carried: number
 export interface MeetingExec {
   span?: PiSpan; spanWhy: string
   previous?: PreviousPi; previousWhy: string
-  streaks: { id: number; title: string; epic: string; epicId?: number; pis: string[] }[]; streakWhy: string
+  streaks: { id: number; title: string; epic: string; epicId?: number; movedTo?: string; pis: string[] }[]; streakWhy: string
   hours: HoursFigures; utilization: UtilizationFigures
   trendsBy: string; trends: Trend[]
   releases: StreamReleases[]; releasesWhy: string
@@ -291,17 +298,19 @@ export function meetingExec(input: ExecInput): MeetingExec {
     const beforeHours = hoursAndUtilization(input.items, beforeMonths, input.today, input.capacity).hours
     const tooEarly = Boolean(before.span && before.span.end < input.start)
     const unread = features.filter((feature) => feature.status === 'unread' || feature.status === 'error').length
+    // PIR-94: before PI Review started only the moves count (there are no headed reviews); without a moved Feature "—".
+    const moved = features.filter((feature) => feature.movedTo).length
     previous = {
       pi, adhoc: features.filter((feature) => feature.adhoc).length,
       closed: before.span ? features.filter((feature) => closedInPi(feature, before.span)).length : null,
-      carried: tooEarly || !features.length ? null : features.filter(carriedForward).length,
+      carried: !features.length || (tooEarly && !moved) ? null : tooEarly ? moved : features.filter(carriedForward).length,
       hours: beforeHours.why ? null : beforeHours.total,
-      why: { closed: before.why, carried: tooEarly ? `${pi} ended before PI Review starts: it has no headed reviews.` : !features.length ? `No Features in ${pi}.` : unread ? `${unread} Discussion${unread === 1 ? ' was' : 's were'} not read: counted as not carried forward.` : '', hours: beforeHours.why },
+      why: { closed: before.why, carried: tooEarly ? moved ? `${pi} ended before PI Review starts: only the Features moved to a later PI count.` : `${pi} ended before PI Review starts: it has no headed reviews.` : !features.length ? `No Features in ${pi}.` : unread ? `${unread} Discussion${unread === 1 ? ' was' : 's were'} not read: counted as not carried forward.` : '', hours: beforeHours.why },
     }
   }
   // PIR-53: Features carried forward in two or more PIs in a row (back from the meeting's PI).
   const chain = at >= 0 ? input.pis.slice(at).map((pi) => piName(pi)) : [input.pi]
-  const streaks = input.features.filter(carriedForward).map((feature) => ({ id: feature.id, title: feature.title, epic: feature.epic || noEpic, ...(feature.epicId != null ? { epicId: feature.epicId } : {}), pis: carryStreak(input.discussionOf(feature), input.setup, input.start, chain) })).filter((entry) => entry.pis.length >= 2)
+  const streaks = input.features.filter(carriedForward).map((feature) => ({ id: feature.id, title: feature.title, epic: feature.epic || noEpic, ...(feature.epicId != null ? { epicId: feature.epicId } : {}), ...(feature.movedTo ? { movedTo: feature.movedTo } : {}), pis: carryStreak(input.discussionOf(feature), input.setup, input.start, chain, feature.wasIn) })).filter((entry) => entry.pis.length >= 2)
   const releases = input.settings.streams.length ? piReleases(input.releases, span, months, spanWhy) : []
   return {
     ...(span ? { span } : {}), spanWhy, ...(previous ? { previous } : {}), previousWhy,

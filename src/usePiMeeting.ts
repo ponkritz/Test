@@ -14,6 +14,8 @@ import type { AzureConnectionProfileSummary } from './azureCredentials'
 import type { EpicSetupFile } from './epicSetup'
 import { meetingOwners, streamOwners } from './epicOwners'
 import { readDiscussionInto, type ReviewViewer } from './piReviewPost'
+import { requestAzure } from './azureClient'
+import { historyOf, movedCandidates, movedFeatures, movedReadNote, readHistories, type HistoryRead } from './piMeetingMoved'
 import { exportStamp } from './printExport'
 import { downloadHtml } from './publishTarget'
 import { buildMeetingHtml, canConductMeeting, isMeetingHtml, maxMeetingBytes, meetingBytes, meetingFeatures, meetingFileName, meetingFolder, meetingName, meetingPath, meetingPi, meetingSaveBlock, meetingSlides, meetingTitle } from './piMeeting'
@@ -31,7 +33,7 @@ export interface MeetingGit {
   connected: boolean; readOnly: boolean; isSample: boolean
   listMeetings: (folder: string) => Promise<string[]>; readMeeting: (path: string) => Promise<string>; writeMeeting: (path: string, html: string, commitMessage: string) => Promise<{ sha: string; commitUrl: string }>
 }
-type Row = { item: AzureWorkItem; epic?: AzureWorkItem }
+type Row = { item: AzureWorkItem; epic?: AzureWorkItem; movedTo?: string; wasIn?: string[] }
 // PIR-51…PIR-57: what the executive slides are worked out from — every fetched item (hours, utilization, the previous PI,
 // long-running Features), the iteration tree (the PI's dates), the capacity settings, the Release Details data and the
 // Epic setup (releases and their Release Classification).
@@ -95,11 +97,27 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
     const previousRows: Row[] = ctx && previousPath ? piFeatures(ctx.items, previousPath, { absenceEpicId: ctx.absenceEpicId, withStories: ctx.withStories }).map((item) => ({ item, epic: epicOf(ctx.items, item, byId) })) : []
     const { span } = piSpanOf(ctx?.iterations, name)
     const streamEpics = meetingStreamEpics(settings.streams, ctx?.releaseState.releaseSourceSettings)
+    // PIR-91, PIR-93: the Features now in a later PI — of this PI and of the previous one (trend) — whose history tells
+    // whether they were in it.
+    const movedOf = { here: ctx ? movedCandidates(ctx.items, pi, { absenceEpicId: ctx.absenceEpicId, known: snapshot.map((row) => row.item.id) }) : [], before: ctx && previousPath ? movedCandidates(ctx.items, previousPath, { absenceEpicId: ctx.absenceEpicId, known: previousRows.map((row) => row.item.id) }) : [] }
+    const historyRead: HistoryRead | null = config ? (operation, extra) => requestAzure({ ...config, pat, operation, ...extra }) : null
     const candidates = ctx ? longRunning({ items: ctx.items, streamEpics, streams: settings.streams, settings, span, spanWhy: '', today, moveOf: () => '' }).rows.map((row) => byId.get(row.id)).filter((item): item is AzureWorkItem => Boolean(item)) : []
     const file = meetingFileName(name, at), target = git
     setNote(null)
     runInBackground(meetingJobKey, `${meetingName} · ${name}`, async (progress) => {
-      const toRead = new Map([...snapshot.map((row) => row.item), ...previousRows.map((row) => row.item), ...candidates].map((item) => [item.key, item]))
+      // PIR-93: the histories first (GETs only, a few at a time, once per page load); a candidate not read is left out.
+      const toCheck = [...new Map([...movedOf.here, ...movedOf.before].map((item) => [item.id, item])).values()]
+      let historyWhy = readBlocked || (historyRead ? '' : 'Connect the Time Writing connection (with its PAT) to read the history')
+      if (toCheck.length && !historyWhy && historyRead) {
+        progress(`Reading history · 0 of ${toCheck.length}`)
+        const result = await readHistories(toCheck, historyRead, { rateWait: rateLimitWait, onProgress: (done, total) => progress(`Reading history · ${done} of ${total}`) })
+        historyWhy = result.stopped === 'access' ? 'access to the history was refused' : result.stopped === 'rate-limit' ? 'Azure DevOps asked to slow down' : 'the history could not be read'
+      }
+      const here = movedFeatures(movedOf.here, pi), before = previousPath ? movedFeatures(movedOf.before, previousPath) : { moved: [], unread: 0 }
+      const historyNote = movedReadNote(toCheck.filter((item) => !historyOf(item)).length, historyWhy)
+      const withMoved = (base: Row[], moved: typeof here.moved) => [...base, ...moved.map(({ item, movedTo, pis: wasIn }) => ({ item, epic: ctx ? epicOf(ctx.items, item, byId) : undefined, movedTo, wasIn }))].sort((a, b) => a.item.id - b.item.id)
+      const own = withMoved(snapshot, here.moved), earlier = withMoved(previousRows, before.moved)
+      const toRead = new Map([...own.map((row) => row.item), ...earlier.map((row) => row.item), ...candidates].map((item) => [item.key, item]))
       const unread = [...toRead.values()].filter((item) => discussionOf(item.key)?.state !== 'done')
       let readNote = ''
       if (unread.length && !readBlocked && config) {
@@ -107,16 +125,17 @@ export function usePiMeeting({ pi, rows, setup, start, inRange, config, pat, rea
         progress(`Reading Discussions · 0 of ${unread.length}`)
         const result = await readDiscussions(unread.map((item) => item.id), (id) => readDiscussionInto(config, pat, byId.get(id)!), { rateWait: rateLimitWait, onProgress: (done, total) => progress(`Reading Discussions · ${done} of ${total}`) })
         // The PI's own Features whose Discussion is still not read (the earlier PI's and the long-running ones count apart).
-        const missing = snapshot.filter((row) => discussionOf(row.item.key)?.state !== 'done').length
+        const missing = own.filter((row) => discussionOf(row.item.key)?.state !== 'done').length
         if (missing) readNote = ` ${missing} Discussion${missing === 1 ? '' : 's'} could not be read: listed as not reviewed.`
         else if (result.failed + result.unread.length) readNote = ` ${result.failed + result.unread.length} Discussion${result.failed + result.unread.length === 1 ? '' : 's'} of the previous PI or of long-running Features could not be read.`
-      } else if (unread.length) { const own = snapshot.filter((row) => discussionOf(row.item.key)?.state !== 'done').length; if (own) readNote = ` ${own} Discussion${own === 1 ? ' was' : 's were'} not read (${readBlocked.replace(/\.$/, '')}): listed as not reviewed.` }
+      } else if (unread.length) { const missing = own.filter((row) => discussionOf(row.item.key)?.state !== 'done').length; if (missing) readNote = ` ${missing} Discussion${missing === 1 ? ' was' : 's were'} not read (${readBlocked.replace(/\.$/, '')}): listed as not reviewed.` }
+      readNote += historyNote
       progress('Building the slides…')
-      const features = meetingFeatures(snapshot, discussionOf, setup, start, name)
-      const keyOf = new Map(snapshot.map((row) => [row.item.id, row.item.key]))
+      const features = meetingFeatures(own, discussionOf, setup, start, name)
+      const keyOf = new Map(own.map((row) => [row.item.id, row.item.key]))
       const exec = ctx ? meetingExec({
         pi: name, features, iterations: ctx.iterations, items: ctx.items, capacity: ctx.capacity, today, start, setup, settings, pis,
-        previousFeatures: previousPath ? meetingFeatures(previousRows, discussionOf, setup, start, piName(previousPath)) : [],
+        previousFeatures: previousPath ? meetingFeatures(earlier, discussionOf, setup, start, piName(previousPath)) : [],
         discussionOf: (feature: ExecFeature) => discussionOf(keyOf.get(feature.id) ?? ''),
         releases: span && settings.streams.length ? meetingReleaseInputs(settings.streams, monthsTouching(span.start, span.end), ctx.releaseState, ctx.profiles, ctx.epicFile) : [],
         streamEpics, moveOf: (item) => latestMove(item, setup, start),

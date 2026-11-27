@@ -6,7 +6,8 @@
 // print-friendly colours, each with a table of the same numbers; every value goes through text().
 // PIR-64…PIR-66: every slide is a 16:9 canvas — each maker gives blocks (piMeetingLayout.ts) that run on to "(n of N)"
 // slides; the charts are drawn at the canvas width in CSS px (a viewBox of the same size, so 1 unit = 1 px).
-import { carriedForward, closedInPi, epicGroups, monthLabel, ownerOfEpic, showsOwners, spikeFactor, type EpicGroup, type MeetingExec, type Trend } from './piMeetingData.ts'
+import { movedLabel } from './piMeetingMoved.ts'
+import { carriedForward, carriedTo, closedInPi, epicGroups, monthLabel, ownerOfEpic, showsOwners, spikeFactor, type EpicGroup, type MeetingExec, type Trend } from './piMeetingData.ts'
 import { defaultMeetingSettings, isHexColour, monthsLabel, type MeetingSettings } from './piMeetingSettings.ts'
 import { displayName, lines, plural, text } from './piMeetingText.ts'
 import { charWidth, cellOf, contentWidth, fixed, flowSlides, paragraph, table, tiles, type Block, type Cell, type Column, type Tile } from './piMeetingLayout.ts'
@@ -95,6 +96,9 @@ export function lineChart(trend: Trend): Block {
 const groupsOf = (meeting: Meeting) => epicGroups(meeting.features, settingsOf(meeting).epicOrder)
 const orderNote = (meeting: Meeting) => `Epics by ${settingsOf(meeting).epicOrder === 'features' ? 'number of Features (most first)' : 'Epic ID'}; click a column header to re-sort.`
 const html = (value: string, plain: string, sort?: number | string): Cell => ({ html: value, plain, ...(sort != null ? { value: sort } : {}) })
+// PIR-92: a Feature's title in a table, with the label "Moved to PI 27.1" when it was moved to a later PI (sorted by title).
+export const movedTag = (movedTo: string) => `<span class="moved">${text(movedLabel(movedTo))}</span>`
+export const featureTitleCell = (title: string, movedTo?: string): Cell => movedTo ? { html: `${text(title)} ${movedTag(movedTo)}`, plain: `${title} ${movedLabel(movedTo)}`, value: title } : cellOf(title)
 const sortable = (label: string, columns: Column[], rows: Cell[][], foot = ''): Block => table({ label, columns, rows, sortable: true, ...(foot ? { foot } : {}) })
 // PIR-68: the Product Owner column of a per-Epic table (display names only; "—" for an Epic without one) — only when the
 // meeting has Product Owners; the other columns then give it their share (the widths still add up to 100).
@@ -112,7 +116,7 @@ export function executiveSlides(meeting: Meeting): Slide[] {
   const sum = (pick: (line: EpicLine) => number) => list.reduce((total, line) => total + pick(line), 0)
   const closedTotal = exec?.span ? sum((line) => line.closed ?? 0) : null
   const next = new Map<string, number>()
-  for (const feature of meeting.features.filter(carriedForward)) { const pi = feature.review?.movePi || 'the next PI (not named)'; next.set(pi, (next.get(pi) ?? 0) + 1) }
+  for (const feature of meeting.features.filter(carriedForward)) { const pi = carriedTo(feature); next.set(pi, (next.get(pi) ?? 0) + 1) }
   const nextText = [...next].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([pi, count]) => `${count} to ${pi}`).join(', ')
   const why = !exec ? noData : exec.span ? '' : exec.spanWhy
   const head = tiles([{ label: 'Features in the PI', value: number(meeting.features.length) }, { label: 'Closed in the PI', value: closedTotal == null ? '—' : number(closedTotal), detail: closedTotal == null ? why : 'Closed / Done with the Closed Date in the PI' }, { label: 'Carried forward', value: number(sum((line) => line.carried)), detail: nextText || 'Move to next PI = Yes: none' }, { label: 'Ad-hoc Features covered', value: number(sum((line) => line.adhoc)), detail: 'tagged ad-hoc' }])
@@ -122,7 +126,7 @@ export function executiveSlides(meeting: Meeting): Slide[] {
   const rows = sortable('Executive summary per Epic', [{ label: 'Epic', width: po ? 28 : 40 }, ...(po ? [ownerColumn] : []), { label: 'Epic ID', width: po ? 8 : 12, num: true }, { label: 'Features', width: po ? 10 : 12, num: true }, { label: 'Closed in the PI', width: po ? 14 : 12, num: true }, { label: 'Carried forward', width: po ? 12 : 12, num: true }, { label: 'Ad-hoc', width: po ? 12 : 12, num: true }],
     list.map((line) => [cellOf(line.group.name), ...(po ? [ownerCell(meeting, line.group.epicId)] : []), cellOf(line.group.epicId != null ? `#${line.group.epicId}` : '—', line.group.epicId ?? Number.MAX_SAFE_INTEGER), cellOf(line.features), line.closed == null ? cellOf('—', -1) : cellOf(line.closed), cellOf(line.carried), cellOf(line.adhoc)]),
     `<tr><th scope="row">All Epics</th>${po ? '<td></td>' : ''}<td></td><td class="num">${list.reduce((total, line) => total + line.features, 0)}</td><td class="num">${closedTotal == null ? '—' : closedTotal}</td><td class="num">${sum((line) => line.carried)}</td><td class="num">${sum((line) => line.adhoc)}</td></tr>`)
-  return single('executive', 'EXECUTIVE SUMMARY', 'Executive summary', [head, ...(why ? [missingBlock(`Closed in the PI: ${why}`)] : []), chart, rows, note(`${orderNote(meeting)} A Feature both closed and carried forward counts as closed in the chart. Carried forward: the latest review headed for ${meeting.pi} says Move to next PI = Yes.`)])
+  return single('executive', 'EXECUTIVE SUMMARY', 'Executive summary', [head, ...(why ? [missingBlock(`Closed in the PI: ${why}`)] : []), chart, rows, note(`${orderNote(meeting)} A Feature both closed and carried forward counts as closed in the chart. Carried forward: the latest review headed for ${meeting.pi} says Move to next PI = Yes, or the Feature was moved to a later PI in Azure DevOps (counted once).`)])
 }
 
 // PIR-60: Review completion per Epic — % reviewed (a review headed for the PI), the not reviewed count linking to the
@@ -171,9 +175,9 @@ export function repeatSlides(meeting: Meeting): Slide[] {
   if (!exec) return single('repeat', 'RISK', 'Repeat carry-overs', [missingBlock(noData)])
   if (!exec.streaks.length) return single('repeat', 'RISK', 'Repeat carry-overs', [exec.streakWhy ? missingBlock(exec.streakWhy) : paragraph('', 'None: no Feature was carried forward in two or more PIs in a row.')])
   const rows = [...exec.streaks].sort((a, b) => b.pis.length - a.pis.length || a.id - b.id)
-  return single('repeat', `RISK · ${plural(rows.length, 'FEATURE')}`, 'Repeat carry-overs', [paragraph('warning', 'Risk: these Features were carried forward (Move to next PI = Yes) in two or more PIs in a row.', { padding: 16, max: 2 }),
-    showsOwners(meeting) ? sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 28 }, { label: 'Epic', width: 14 }, { ...ownerColumn, width: 14 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 26 }], rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), ownerCell(meeting, entry.epicId), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))
-      : sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 18 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 30 }], rows.map((entry) => [cellOf(entry.id), cellOf(entry.title), cellOf(entry.epic), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))])
+  return single('repeat', `RISK · ${plural(rows.length, 'FEATURE')}`, 'Repeat carry-overs', [paragraph('warning', 'Risk: these Features were carried forward (Move to next PI = Yes, or moved to a later PI in Azure DevOps) in two or more PIs in a row.', { padding: 16, max: 2 }),
+    showsOwners(meeting) ? sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 28 }, { label: 'Epic', width: 14 }, { ...ownerColumn, width: 14 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 26 }], rows.map((entry) => [cellOf(entry.id), featureTitleCell(entry.title, entry.movedTo), cellOf(entry.epic), ownerCell(meeting, entry.epicId), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))
+      : sortable('Repeat carry-overs', [{ label: 'ID', width: 8, num: true }, { label: 'Title', width: 34 }, { label: 'Epic', width: 18 }, { label: 'PIs in a row', width: 10, num: true }, { label: 'Carried forward in', width: 30 }], rows.map((entry) => [cellOf(entry.id), featureTitleCell(entry.title, entry.movedTo), cellOf(entry.epic), cellOf(entry.pis.length), cellOf([...entry.pis].reverse().join(' → '))]))])
 }
 
 // PIR-60: Topics for discussion — each point (Learnings, Struggles, Additional Remarks lines) of the Features marked
@@ -183,13 +187,13 @@ export function topicItems(meeting: Meeting) {
   const keyOf = (feature: MeetingFeature) => feature.epicId != null ? `#${feature.epicId}` : feature.epic ? `name:${feature.epic}` : ''
   return meeting.features.filter((feature) => feature.status === 'reviewed' && feature.review?.reviewMode === 'Discuss during Meeting')
     .sort((a, b) => (order.get(keyOf(a)) ?? 0) - (order.get(keyOf(b)) ?? 0) || a.id - b.id)
-    .flatMap((feature) => (['learnings', 'struggles', 'remarks'] as const).flatMap((which) => lines(feature.review![which]).filter((line) => !isNoneText(line)).map((line) => ({ id: feature.id, title: feature.title, point: which === 'learnings' ? 'Learning' : which === 'struggles' ? 'Struggle' : 'Remark', text: line, by: displayName(feature.review!.author), when: feature.review!.date }))))
+    .flatMap((feature) => (['learnings', 'struggles', 'remarks'] as const).flatMap((which) => lines(feature.review![which]).filter((line) => !isNoneText(line)).map((line) => ({ id: feature.id, title: feature.title, point: which === 'learnings' ? 'Learning' : which === 'struggles' ? 'Struggle' : 'Remark', ...(feature.movedTo ? { movedTo: feature.movedTo } : {}), text: line, by: displayName(feature.review!.author), when: feature.review!.date }))))
 }
 export function topicSlides(meeting: Meeting): Slide[] {
   const items = topicItems(meeting)
   if (!items.length) return single('topics', 'TOPICS FOR DISCUSSION', 'Topics for discussion', [paragraph('muted', 'No point was raised in a review marked “Discuss during Meeting”.')])
   return single('topics', `TOPICS FOR DISCUSSION · ${plural(items.length, 'POINT')}`, 'Topics for discussion', [sortable('Topics for discussion', [{ label: 'Feature', width: 26 }, { label: 'Point', width: 9 }, { label: 'Raised', width: 37, lines: 3 }, { label: 'By', width: 12 }, { label: 'When', width: 16 }],
-    items.map((item) => [html(`<span class="fid">#${item.id}</span> ${text(item.title)}`, `#${item.id}xxx ${item.title}`, item.id), cellOf(item.point), cellOf(item.text), cellOf(item.by), cellOf(item.when)]))])
+    items.map((item) => [html(`<span class="fid">#${item.id}</span> ${text(item.title)}${item.movedTo ? ` ${movedTag(item.movedTo)}` : ''}`, `#${item.id}xxx ${item.title}${item.movedTo ? ` ${movedLabel(item.movedTo)}` : ''}`, item.id), cellOf(item.point), cellOf(item.text), cellOf(item.by), cellOf(item.when)]))])
 }
 
 // PIR-54: Releases in the PI — per ticked stream the releases and their Release Classification counts.

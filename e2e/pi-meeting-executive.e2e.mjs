@@ -73,14 +73,17 @@ function fakeAzure(state) {
     if (path.endsWith('/_apis/work/teamsettings/iterations')) return json({ value: [] })
     if (path.endsWith('/_apis/wit/classificationnodes/iterations')) return json(tree())
     if (/\/teams\/[^/]+\/members/.test(path)) return json({ value: [] })
+    // PIR-93: a work item's history (updates) — 'fail' answers 500; none known: no updates.
+    const history = /\/_apis\/wit\/workItems\/(\d+)\/updates$/.exec(path)
+    if (history) { const id = Number(history[1]), list = state.updates?.[id]; state.reads?.push({ id, method: request.method() }); return list === 'fail' ? json({ message: 'Server error' }, 500) : json({ count: (list ?? []).length, value: list ?? [] }) }
     const found = /\/_apis\/wit\/workItems\/(\d+)\/comments$/.exec(path)
     if (found) { const list = state.comments[Number(found[1])] ?? []; return json({ comments: list, count: list.length }) }
     return json({ value: [] })
   }
 }
 const policy = () => { const value = defaultPolicy(); value.defaultRole = 'Team Member'; if (!value.roles['Scrum Master'].areas.includes('insights')) value.roles['Scrum Master'].areas.push('insights'); value.members = { 'rita.gomez@example.com': ['Scrum Master'] }; return serializeAccess(value) }
-async function open(gh, more = []) {
-  const state = { world: [...world(), ...more], comments: comments() }
+async function open(gh, more = [], extra = {}) {
+  const state = { world: [...world(), ...more], comments: comments(), ...extra }
   const profile = { id: 'tw-exec', url: 'https://dev.azure.com/example/Project/_backlogs/backlog/Team%20A/Features', reason: 'Time Writing', token: 'x'.repeat(52), role: 'time-tracking', creatorEmail: 'rita.gomez@example.com' }
   const { page, context, errors } = await openPage(app, { width: 1440, height: 900, scale: shots ? 2 : undefined, init: ({ connection }) => {
     localStorage.setItem('demand-planning-azure-connection-profiles-v1', JSON.stringify([connection]))
@@ -95,7 +98,7 @@ async function open(gh, more = []) {
   await page.addLocatorHandler(guide, () => guide.getByRole('button', { name: 'Close', exact: true }).last().click())
   await page.reload()
   await page.locator('.sidebar nav').waitFor()
-  return { page, context, errors }
+  return { page, context, errors, state }
 }
 const until = async (check, what) => { for (const end = Date.now() + 60000; Date.now() < end;) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 50)) } assert.fail(`timed out waiting for ${what}`) }
 async function openFile(html, name) {
@@ -333,6 +336,77 @@ test('TC-PIR-92: the Scrum Master sets up the presenting teams (an Epic of anoth
   assert.deepEqual(requests, [], 'no request leaves the file')
   assert.deepEqual(problems, [])
   await close()
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+// PIR-91…PIR-95 (TC-PIR-98 UAT): Features moved to a later PI in Azure DevOps. Synthetic Features now in PI 2027.1: 214
+// (Audits) was in PI 2026.4 Sprint 1 and has a review headed for PI 2026.4 with Move = No; 216 (Tools) was in PI 2026.3
+// and PI 2026.4, without a review; 217 was never in PI 2026.4; 215's history cannot be read (500). 202 (in PI 2026.4
+// now) came from PI 2026.3. The history is the work item's updates (GET), mocked like the other reads.
+const iterationUpdate = (rev, from, to) => ({ id: rev, rev, revisedDate: `${dayFromToday(-90 + rev)}T08:00:00Z`, fields: { 'System.IterationPath': { ...(from ? { oldValue: from } : {}), newValue: to } } })
+const updates = () => ({
+  202: [iterationUpdate(1, '', 'Project\\PI 2026.3'), iterationUpdate(2, 'Project\\PI 2026.3', 'Project\\PI 2026.4\\Sprint 2')],
+  214: [iterationUpdate(1, '', 'Project\\PI 2026.4\\Sprint 1'), iterationUpdate(2, 'Project\\PI 2026.4\\Sprint 1', 'Project\\PI 2027.1')],
+  215: 'fail',
+  216: [iterationUpdate(1, '', 'Project\\PI 2026.3'), iterationUpdate(2, 'Project\\PI 2026.3', 'project\\pi 2026.4'), iterationUpdate(3, 'project\\pi 2026.4', 'Project\\PI 2027.1')],
+  217: [iterationUpdate(1, '', 'Project\\PI 2027.1')],
+})
+test('TC-PIR-98: the Scrum Master conducts the meeting with Features moved to a later PI — each in its PI labelled "Moved to PI 2027.1", counted as carried forward once, the unreadable history left out and said', async () => {
+  const gh = fakeGitHub({ files: { 'access.json': policy(), 'pi-review-form.json': serializePiFormSetup({ ...builtInFormSetup(), reviewStart: start }) } })
+  const later = 'Project\\PI 2027.1'
+  const more = [raw(214, 'Feature', 'Audit trail export', later, 110), raw(215, 'Feature', 'Gauge database', later, 100), raw(216, 'Feature', 'Rig booking tool', later, 100), raw(217, 'Feature', 'Next year plan', later, 110)]
+  const comments214 = { 214: [review(41, -20, { learnings: 'Scope grew', mode: 'Offline Review', move: 'No' })] }
+  const { page, context, errors, state } = await open(gh, more, { updates: updates(), reads: [] })
+  Object.assign(state.comments, comments214)
+  await navigate(page, 'PI Review')
+  await page.locator('.pir-table tr[data-row-key="example/project/213"]').waitFor()
+  // PIR-95: the PI Review page itself is unchanged — the moved Features are not in its table.
+  assert.equal(await page.locator('.pir-table tr[data-row-key="example/project/214"]').count(), 0)
+  const panel = page.locator('article.table-panel', { has: page.getByRole('heading', { name: 'PI Review Meetings' }) })
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Conduct PI Meeting', exact: true }).click()])
+  // The job result says how many Features were left out and why.
+  await panel.locator('.notice', { hasText: '1 Feature now in a later PI was not checked for a move out of this PI or the previous one (the history could not be read): left out.' }).waitFor()
+  // Only GETs of the updates, for the Features now in a later PI than PI 2026.3 / PI 2026.4.
+  assert.deepEqual([...new Set(state.reads.map((entry) => entry.method))], ['GET'])
+  assert.deepEqual([...new Set(state.reads.map((entry) => entry.id))].sort(), [201, 202, 211, 212, 213, 214, 215, 216, 217])
+  const html = readFileSync(await download.path(), 'utf8')
+  const { file, requests, problems, close } = await openFile(html, download.suggestedFilename())
+  const total = await file.locator('.slide').count()
+  const titles = []
+  for (let at = 0; at < total; at += 1) titles.push(await text(file.locator('.slide').nth(at).locator('h1, h2').first()))
+  assert.ok(titles.includes('#214 Audit trail export'), 'the moved Feature with its review has its slide')
+  assert.ok(!titles.some((title) => /Gauge database|Next year plan/.test(title)))
+  const go = async (title) => { const at = titles.indexOf(title); await file.keyboard.press('Home'); await file.locator('#counter', { hasText: `1 / ${total}` }).waitFor(); for (let step = 0; step < at; step += 1) await file.keyboard.press('ArrowRight'); await file.locator('#counter', { hasText: `${at + 1} / ${total}` }).waitFor() }
+  await go('#214 Audit trail export')
+  assert.equal(await text(current(file).locator('p.moved')), 'Moved to PI 2027.1')
+  await shot(file, 'pi-moved-1-feature')
+  // Executive summary: 202 and 212 (Move = Yes), 214 (moved, its review says No) and 216 (moved) — each once.
+  await go('Executive summary')
+  assert.match(await text(current(file).locator('.tiles')), /Features in the PI 7 .*Carried forward 4 4 to PI 2027\.1/)
+  // Review completion: 7 Features, 4 with a review.
+  await go('Review completion per Epic')
+  assert.match(await text(current(file)), /4 of 7 Features have a review headed for PI 2026\.4/)
+  // PI-over-PI: PI 2026.3 ended before PI Review starts — only its moved Features count (202, 216).
+  await go('PI-over-PI trend: PI 2026.3 → PI 2026.4')
+  assert.match(await text(current(file)), /Carried forward 2 4 ▲ 2 .*only the Features moved to a later PI count/)
+  // Repeat carry-overs: 216 moved out of PI 2026.3 and PI 2026.4, labelled; 202 by its reviews.
+  await go('Repeat carry-overs')
+  assert.match(await text(current(file)), /216 Rig booking tool Moved to PI 2027\.1 Tools 2 PI 2026\.3 → PI 2026\.4/)
+  assert.match(await text(current(file)), /202 Fixture library refresh Tools 2/)
+  await shot(file, 'pi-moved-2-repeat')
+  // Features not reviewed: 216 with its label.
+  await go('Features not reviewed')
+  assert.match(await text(current(file)), /216 Rig booking tool Moved to PI 2027\.1 Tools/)
+  assert.deepEqual(requests, [], 'no request leaves the file')
+  assert.deepEqual(problems, [])
+  await close()
+
+  // Built again in the same page load: only the unreadable history is read again.
+  state.reads.length = 0
+  // The download comes after the histories were read.
+  await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Conduct PI Meeting', exact: true }).click()])
+  assert.deepEqual([...new Set(state.reads.map((entry) => entry.id))], [215])
   assert.deepEqual(errors, [])
   await context.close()
 })
