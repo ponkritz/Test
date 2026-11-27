@@ -1,0 +1,7 @@
+allowBuilds:
+  electron: true
+  electron-winstaller: false
+# Security fixes for packages pulled in only by electron-builder (build time), until it ships them itself.
+overrides:
+  minimatch@9: ^11.0.1
+  minimatch@10: ^11.0.1

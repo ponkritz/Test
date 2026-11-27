@@ -1,0 +1,121 @@
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { AzureWorkItem } from '../domain'
+import type { WorkItemNode } from '../azureHierarchy'
+import { backlogColumns, defaultBacklogColumns, normalizeBacklogColumns, plainAzureText, visibleBacklogRows, type BacklogColumn, type BacklogRow } from '../backlogView'
+import { Modal } from './ui'
+
+// BKL-45: one scroll bar on the board — the table fills the screen down to the footer, so the page itself does not scroll
+// and the table's own scroll bars (with its sticky headers) are the only ones. Phones (≤ 700 px) scroll the page instead.
+// The table is never shorter than about three rows; only a window too short for that scrolls the page as well.
+const minTableHeight = 120
+function useFitToScreen() {
+  const ref = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const fit = () => {
+      if (window.matchMedia('(max-width: 700px)').matches) { element.style.removeProperty('max-height'); return }
+      const box = element.getBoundingClientRect(), content = element.closest('.content'), footer = document.querySelector('.app-footer')
+      const below = content ? content.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(content).marginBottom) || 0) - box.bottom : 0
+      const height = `${Math.max(minTableHeight, Math.floor(window.innerHeight - (box.top + window.scrollY) - below - (footer?.getBoundingClientRect().height ?? 0)))}px`
+      if (element.style.maxHeight !== height) element.style.maxHeight = height
+      // Whatever the measurement above misses (rounding at 125 % display scaling, a platform's own spacing) still
+      // shows as page overflow: take exactly that off the table, so the page never scrolls by a few pixels.
+      const over = document.documentElement.scrollHeight - window.innerHeight
+      if (over > 0) { const fitted = `${Math.max(minTableHeight, parseFloat(element.style.maxHeight) - over)}px`; if (element.style.maxHeight !== fitted) element.style.maxHeight = fitted }
+    }
+    fit()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit)
+    observer?.observe(document.body)
+    observer?.observe(element)
+    window.addEventListener('resize', fit)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', fit) }
+  }, [])
+  return ref
+}
+
+export function BacklogTable({ tree, expanded, expandAll, searching, scope, onToggle, onExpand, onNewFeature, onComplete, canComplete, onAddChild, onEdit, onMonthTask, monthBusy = 0, why = {}, tabs, teamColumns, onSaveForEveryone, onClearForEveryone }: { teamColumns?: BacklogColumn[]; onSaveForEveryone?: (columns: BacklogColumn[]) => Promise<void>; onClearForEveryone?: () => Promise<void>;  onMonthTask?: (item: AzureWorkItem) => void; monthBusy?: number; why?: { create?: string; edit?: string }; onEdit?: (item: AzureWorkItem) => void; canComplete?: (item: AzureWorkItem) => boolean; tree: WorkItemNode[]; expanded: Set<string>; expandAll: boolean; searching: boolean; scope: string; onToggle: (key: string) => void; onExpand: (value: boolean) => void; onNewFeature?: (item: AzureWorkItem) => void; onComplete?: (item: AzureWorkItem) => void; onAddChild?: (item: AzureWorkItem) => void; tabs?: React.ReactNode }) {
+  const scrollRef = useFitToScreen()
+  const preferenceKey = `demand-planning-backlog-columns:${scope.toLowerCase()}`
+  // BKL-47: my own column order (this browser) wins; without one, the team default a Tool Owner saved for everyone;
+  // without that, the built-in order.
+  const [own, setOwn] = useState<BacklogColumn[] | null>(() => { try { const saved = localStorage.getItem(preferenceKey); return saved ? normalizeBacklogColumns(JSON.parse(saved)) : null } catch { return null } })
+  const baseline = teamColumns?.length ? normalizeBacklogColumns(teamColumns) : defaultBacklogColumns
+  const columns = own ?? baseline
+  const [sharing, setSharing] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<BacklogColumn[]>([])
+  const [notice, setNotice] = useState('')
+  const [level, setLevel] = useState('Epic')
+  const [page, setPage] = useState(0)
+  const rows = useMemo(() => visibleBacklogRows(tree, expanded, expandAll, searching, level), [tree, expanded, expandAll, searching, level])
+  const pageSize = 200
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
+  const shown = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+  function move(id: BacklogColumn, offset: number) {
+    setDraft((current) => { const next = [...current], index = next.indexOf(id), target = index + offset; if (index >= 0 && target >= 0 && target < next.length) [next[index], next[target]] = [next[target], next[index]]; return next })
+  }
+  function apply() {
+    const next = normalizeBacklogColumns(draft)
+    setOwn(next); setEditing(false)
+    try { localStorage.setItem(preferenceKey, JSON.stringify(next)); setNotice('Column preferences saved in this browser.') } catch { setNotice('Columns updated for this session; browser storage is unavailable.') }
+  }
+  async function saveForEveryone() {
+    if (!onSaveForEveryone) return
+    const next = normalizeBacklogColumns(draft)
+    setSharing(true)
+    try {
+      await onSaveForEveryone(next)
+      setOwn(null); try { localStorage.removeItem(preferenceKey) } catch { /* nothing kept */ }
+      setEditing(false); setNotice('Saved as the view for everyone. People who saved their own order keep it until they choose Reset to the team default.')
+    } catch (failure) { setNotice(`The view for everyone was not saved: ${failure instanceof Error ? failure.message : String(failure)}`) }
+    finally { setSharing(false) }
+  }
+  // BKL-47: Clear the view for everyone (confirmed in the pop-up): people without their own order get the built-in one.
+  async function clearForEveryone() {
+    if (!onClearForEveryone) return
+    setSharing(true); setConfirmClear(false)
+    try { await onClearForEveryone(); setDraft([...defaultBacklogColumns]); setNotice('The view for everyone is cleared; people without their own order see the built-in order.') }
+    catch (failure) { setNotice(`The view for everyone was not cleared: ${failure instanceof Error ? failure.message : String(failure)}`) }
+    finally { setSharing(false) }
+  }
+  function cell(id: BacklogColumn, row: BacklogRow): ReactNode {
+    const { node, depth, order, open } = row, item = node.item
+    switch (id) {
+      case 'order': return order || ''
+      case 'id': return <a href={item.url} target="_blank" rel="noreferrer">{item.id}</a>
+      case 'type': return item.workItemType
+      case 'title': return <div className="backlog-title" style={{ paddingLeft: Math.min(depth, 20) * 20 }}>
+        {node.children.length ? <button type="button" className="tree-toggle" aria-label={`${open ? 'Collapse' : 'Expand'} ${item.workItemType} ${item.id}`} aria-expanded={open} disabled={searching} onClick={() => onToggle(item.key)}>{open ? '⌄' : '›'}</button> : <span className="tree-toggle" />}
+        <span className={`backlog-type-icon backlog-type-${item.workItemType.toLowerCase().replaceAll(' ', '-')}`} aria-hidden="true">{item.workItemType === 'Epic' ? '♛' : item.workItemType === 'Feature' ? '♜' : item.workItemType === 'Task' ? '☑' : '▣'}</span>
+        <a href={item.url} target="_blank" rel="noreferrer" title={item.title}>{item.title}</a>
+        {node.context && <span className="backlog-context" title="Parent retained to show the hierarchy, outside the selected state or search">Context</span>}
+        {node.parentMissing && <span className="backlog-context" title={`Parent #${item.parentId} is not in the displayed source`}>Parent outside view</span>}
+      </div>
+      case 'description': { const text = plainAzureText(item.description || ''); return <span className="backlog-description" title={text}>{text}</span> }
+      case 'state': return <span className="backlog-state"><i className={`state-dot state-${item.state.toLowerCase().replaceAll(' ', '-')}`} />{item.state}</span>
+      case 'storyPoints': return item.storyPoints ?? '—'
+      case 'assignedTo': return item.assignedTo || 'Unassigned'
+      case 'iterationPath': return item.iterationPath
+      case 'areaPath': return item.areaPath
+      case 'targetDate': return item.targetDate?.slice(0, 10) || '—'
+      case 'closedDate': return item.closedDate?.slice(0, 10) || '—'
+      case 'tags': return item.tags
+      case 'actions': {
+        // Edit (Feature, User Story, Task) after the row's add / complete actions.
+        // CON-102: disabled with the reason as tooltip when the viewer lacks the permission (the line above the board says why).
+        const create = { disabled: Boolean(why.create), title: why.create || undefined }
+        const edit = <>{onMonthTask && (item.workItemType === 'Feature' || item.workItemType === 'User Story') && <button className="backlog-action" disabled={monthBusy > 0 || create.disabled} title={why.create || 'Add your Time Writing Task for the month in the header under this Feature (or the Feature above this Story)'} onClick={() => onMonthTask(item)}>{monthBusy === item.id ? 'Adding…' : '＋ Time Writing Task'}</button>}{onEdit && ['Feature', 'User Story', 'Task'].includes(item.workItemType) ? <button className="backlog-action" disabled={Boolean(why.edit)} title={why.edit || undefined} onClick={() => onEdit(item)}>Edit</button> : null}</>
+        return <span className="button-row nowrap">{item.workItemType === 'Epic' && onNewFeature ? <button className="backlog-action" {...create} onClick={() => onNewFeature(item)}>＋ Feature</button> : item.workItemType === 'Feature' && (onComplete || onAddChild) ? <>{onAddChild && <button className="backlog-action" {...create} onClick={() => onAddChild(item)}>＋ User Story</button>}{onComplete && (canComplete?.(item) ?? true) && <button className="backlog-action" {...create} onClick={() => onComplete(item)}>Complete children</button>}</> : item.workItemType === 'User Story' && onAddChild ? <button className="backlog-action" {...create} onClick={() => onAddChild(item)}>＋ Task</button> : null}{edit}</span>
+      }
+    }
+  }
+  return <>
+    <div className="backlog-toolbar">{tabs ?? <div className="backlog-tab">Backlog</div>}<div className="backlog-toolbar-actions"><label className="backlog-level">Backlog level<select value={level} onChange={(event) => { setLevel(event.target.value); setPage(0) }}><option value="Epic">Epics</option><option value="Feature">Features</option><option value="User Story">User Stories</option><option value="Task">Tasks</option></select></label><button className="ghost" onClick={() => { setDraft([...columns]); setEditing(true) }}>⚙ Column Options</button></div></div>
+    {notice && <p className="muted backlog-preference-status" role="status">{notice}</p>}
+    <div className="backlog-table-scroll" ref={scrollRef}><table className="backlog-table" style={{ width: 66 + columns.reduce((sum, id) => sum + backlogColumns.find((column) => column.id === id)!.width, 0) }} aria-label="Backlogs hierarchy"><colgroup><col style={{ width: 66 }} />{columns.map((id) => <col key={id} style={{ width: backlogColumns.find((column) => column.id === id)!.width }} />)}</colgroup><thead><tr><th className="backlog-expand-controls"><button aria-label="Expand all backlog items" title="Expand all" onClick={() => onExpand(true)}>＋</button><button aria-label="Collapse all backlog items" title="Collapse all" onClick={() => onExpand(false)}>−</button></th>{columns.map((id) => <th key={id} scope="col">{backlogColumns.find((column) => column.id === id)!.label}</th>)}</tr></thead><tbody>{shown.map((row) => <tr key={row.node.item.key} className={row.node.context ? 'backlog-parent-context' : ''}><td className="backlog-row-marker" />{columns.map((id) => <td className={`backlog-cell-${id}`} key={id}>{cell(id, row)}</td>)}</tr>)}</tbody></table>{!rows.length && <p className="empty-state backlog-empty">No work items match this level and the selected filters.</p>}</div>
+    <div className="backlog-footer"><span>{rows.length ? `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, rows.length)} of ${rows.length} expanded rows` : '0 rows'} · Removed items excluded</span>{rows.length > pageSize && <div className="button-row"><button className="ghost" disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>Previous</button><button className="ghost" disabled={(currentPage + 1) * pageSize >= rows.length} onClick={() => setPage(currentPage + 1)}>Next</button></div>}</div>
+    {editing && <Modal title="Column Options" eyebrow="BACKLOG PREFERENCES" onClose={() => setEditing(false)}><p className="muted">Choose and reorder columns. Title stays visible so you can expand the hierarchy. Apply keeps your choice in this browser only; nothing changes in Azure DevOps.{teamColumns?.length ? ' A team default order is set.' : ''}</p><div className="backlog-column-options">{[...draft, ...backlogColumns.map((column) => column.id).filter((id) => !draft.includes(id))].map((id) => <div className="backlog-column-choice" key={id}><label className="checkbox-label"><input type="checkbox" checked={draft.includes(id)} disabled={id === 'title'} onChange={(event) => setDraft((current) => event.target.checked ? [...current, id] : current.filter((value) => value !== id))} />{backlogColumns.find((column) => column.id === id)!.label}{id === 'title' ? ' (required)' : ''}</label><div className="button-row"><button className="ghost" aria-label={`Move ${id} column up`} disabled={!draft.includes(id) || draft.indexOf(id) === 0} onClick={() => move(id, -1)}>↑</button><button className="ghost" aria-label={`Move ${id} column down`} disabled={!draft.includes(id) || draft.indexOf(id) === draft.length - 1} onClick={() => move(id, 1)}>↓</button></div></div>)}</div>{confirmClear && <div className="notice warning" role="alertdialog" aria-label="Clear the view for everyone?"><p>Clear the view for everyone? The order saved for everyone is removed from the shared views defaults in Git; people without their own order see the built-in order, people with their own keep theirs.</p><div className="button-row"><button className="ghost" onClick={() => setConfirmClear(false)}>Cancel</button><button className="primary" onClick={() => void clearForEveryone()}>Clear the view for everyone</button></div></div>}<div className="modal-actions"><button className="ghost" onClick={() => setDraft([...baseline])}>{teamColumns?.length ? 'Reset to the team default' : 'Reset defaults'}</button>{onClearForEveryone && teamColumns?.length ? <button className="text-button danger-text" disabled={sharing} onClick={() => setConfirmClear(true)}>Clear the view for everyone</button> : null}{onSaveForEveryone && <button className="ghost" disabled={sharing} title="Saves this order as the view for everyone (shared views defaults in Git); people who saved their own order keep it" onClick={() => void saveForEveryone()}>{sharing ? 'Saving…' : 'Save view for everyone'}</button>}<button className="ghost" onClick={() => setEditing(false)}>Cancel</button><button className="primary" onClick={apply}>Apply</button></div></Modal>}
+  </>
+}

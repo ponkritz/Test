@@ -1,0 +1,159 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { buildMonthlyPack, capacityLine, defaultPackSetup, emptyNotes, epicDescendants, kpiValue, mergeBullets, typedBullets, withBullets, packSlides, parsePackNotes, parsePackSetup, sameMonthLastYear, serializePackNotes, serializePackSetup, slideText, supportedLine, yearMonths, yoyLine } from '../src/monthlyPack.ts'
+import { writePptx } from '../src/pptx.ts'
+
+const item = (id, type, state, extra = {}) => ({ key: `o/p/${id}`, id, organization: 'o', project: 'p', title: `Item ${id}`, workItemType: type, state, assignedTo: '', areaPath: 'P', iterationPath: 'P', tags: '', url: '', syncedAt: '', ...extra })
+
+test('setup and notes files: parse, clean and serialise (PCK-01, PCK-02)', () => {
+  const setup = parsePackSetup(serializePackSetup(defaultPackSetup))
+  assert.deepEqual(setup, defaultPackSetup, 'the default setup round-trips')
+  const cleaned = parsePackSetup(JSON.stringify({ schema: 1, lines: [{ id: 'bad id!', label: '', streams: ['DP', 'DP', ''], epicIds: [5, 5, -1, 'x'] }, { id: 'a', label: 'A' }, { id: 'a', label: 'Dup' }], kpis: [{ id: 'k', label: 'K', epicId: 7, metric: 'nope' }] }))
+  assert.deepEqual(cleaned.lines, [{ id: 'line-1', label: 'Line 1', streams: ['DP'], epicIds: [5] }, { id: 'a', label: 'A', streams: [], epicIds: [] }], 'ids repaired, duplicates and bad values dropped')
+  assert.deepEqual(cleaned.kpis, [{ id: 'k', label: 'K', epicId: 7, metric: 'manual' }], 'an unknown metric becomes manual')
+  assert.throws(() => parsePackSetup('{"schema":2}'), /schema 1/)
+  const notes = parsePackNotes(serializePackNotes({ ...emptyNotes('2026-10'), text: { summary: 'All good\r\nSecond', risks: '  ' }, kpiValues: { teds: '99%', 'bad key!': 'x' } }), '2026-10')
+  assert.deepEqual(notes, { schema: 1, month: '2026-10', text: { summary: 'All good\nSecond' }, kpiValues: { teds: '99%' } }, 'blank text and bad keys are dropped, CRLF normalised')
+})
+
+test('PCK-10: typed bullets placed below a generated bullet round-trip through Git and keep their place on the slide', () => {
+  let notes = emptyNotes('2026-10')
+  notes = withBullets(notes, 'deliverables', [{ text: 'Hot-fix 4.1.1 shipped', after: 0 }, { text: '', after: 0 }, { text: 'Closing note', after: -1 }])
+  notes = withBullets(notes, 'focusAreas', [{ text: 'Plan PI 27', after: -1 }])
+  const saved = serializePackNotes(notes)
+  const json = JSON.parse(saved)
+  assert.deepEqual(json.text, { deliverables: 'Hot-fix 4.1.1 shipped\nClosing note', focusAreas: 'Plan PI 27' }, 'empty bullets are not saved')
+  assert.deepEqual(json.anchors, { deliverables: [0, -1] }, 'anchors only for a box with a bullet below a generated one')
+  const read = parsePackNotes(saved, '2026-10')
+  assert.deepEqual(typedBullets(read, 'deliverables'), [{ text: 'Hot-fix 4.1.1 shipped', after: 0 }, { text: 'Closing note', after: -1 }])
+  assert.deepEqual(mergeBullets(['DP - 4.1, 4.2', 'CP - 3.2'], typedBullets(read, 'deliverables')), ['DP - 4.1, 4.2', 'Hot-fix 4.1.1 shipped', 'CP - 3.2', 'Closing note'], 'below its generated bullet; the rest at the end')
+  assert.deepEqual(mergeBullets(['Only one'], [{ text: 'Was below line 3', after: 2 }]), ['Only one', 'Was below line 3'], 'a bullet whose generated line is gone goes to the end')
+  const old = parsePackNotes(JSON.stringify({ schema: 1, month: '2026-10', text: { risks: 'A\nB' }, kpiValues: {} }), '2026-10')
+  assert.deepEqual(typedBullets(old, 'risks'), [{ text: 'A', after: -1 }, { text: 'B', after: -1 }], 'files from before v6.3.0: every typed line at the end, as before')
+  assert.equal(old.anchors, undefined)
+  const pack = buildMonthlyPack({ month: '2026-10', setup: defaultPackSetup, notes: read, items: [], streamsOf: () => [], utilization: { month: null, ytd: null, qeMonth: null } })
+  assert.deepEqual(packSlides(pack)[0].boxes[0].lines, ['Hot-fix 4.1.1 shipped', 'Closing note'], 'no generated bullets this month: the typed ones still show')
+})
+
+test('Epic counts: descendants without Tasks, open / closed in month / closed YTD / closed share (PCK-04)', () => {
+  const items = [
+    item(1, 'Epic', 'Active'), item(2, 'Feature', 'Closed', { parentId: 1, closedDate: '2026-10-05T00:00:00Z' }), item(3, 'User Story', 'Active', { parentId: 2 }), item(4, 'Task', 'Closed', { parentId: 3 }),
+    item(5, 'Bug', 'Done', { parentId: 1, changedDate: '2026-03-02T00:00:00Z' }), item(6, 'Feature', 'Removed', { parentId: 1 }), item(7, 'Feature', 'New', { parentId: 9 }),
+  ]
+  assert.deepEqual(epicDescendants(items, [1]).map((entry) => entry.id), [2, 3, 5], 'Tasks, Removed items and other Epics left out')
+  const util = { month: 107.5, ytd: 103.2, qeMonth: 111.9 }
+  const value = (metric, typed) => kpiValue({ id: 'k', label: 'K', epicId: 1, metric }, items, '2026-10', util, typed, 'UTC')
+  assert.deepEqual([value('open'), value('closed-month'), value('closed-ytd'), value('percent-closed')], ['1', '1', '2', '67%'])
+  assert.deepEqual([value('utilization-month'), value('utilization-ytd'), value('manual', '99%'), value('manual')], ['107.5%', '103.2%', '99%', ''])
+  assert.equal(kpiValue({ id: 'k', label: 'K', metric: 'open' }, items, '2026-10', util, 'typed'), 'typed', 'an Epic metric without an Epic shows the typed value')
+  assert.deepEqual([yearMonths('2026-03'), sameMonthLastYear('2026-10')], [['2026-01', '2026-02', '2026-03'], '2025-10'])
+})
+
+test('the pack: releases per line, supported counts, YoY from last year, capacity lines and slide text (PCK-03, PCK-05)', () => {
+  const streams = { '2026-10': [{ name: 'DP', releases: ['DoseNav 2.1.0'], supported: 3 }, { name: 'IOCC', releases: ['Gateway 5.0 (Core)'], supported: 1 }, { name: 'S&S IT', releases: ['CareLink 3.2'], supported: 1 }], '2026-09': [{ name: 'DP', releases: [], supported: 2 }], '2025-10': [{ name: 'DP', releases: [], supported: 2 }], '2025-04': [{ name: 'IOCC', releases: [], supported: 2 }] }
+  const items = [item(1, 'Epic', 'Active'), item(2, 'Feature', 'Closed', { parentId: 1, closedDate: '2026-10-09T00:00:00Z', title: 'PPU rollout' }), item(3, 'Feature', 'Closed', { parentId: 1, closedDate: '2025-02-09T00:00:00Z' })]
+  const setup = { ...defaultPackSetup, lines: defaultPackSetup.lines.map((line) => line.id === 'ppu' ? { ...line, epicIds: [1] } : line) }
+  const notes = { ...emptyNotes('2026-10'), text: { focusAreas: 'Agent governance\nDashboard releases' }, kpiValues: { teds: '99%' } }
+  const pack = buildMonthlyPack({ month: '2026-10', setup, notes, items, streamsOf: (month) => streams[month] ?? [], utilization: { month: 107.5, ytd: 104.1, qeMonth: 111.9 }, timeZone: 'UTC' })
+  const line = (id) => pack.lines.find((entry) => entry.id === id)
+  assert.deepEqual([line('dp').releases, line('dp').supported, line('dp').ytd, line('dp').lastYtd, line('dp').change], [['DoseNav 2.1.0'], 3, 5, 2, 150], 'DP: October + September this year vs. October last year')
+  assert.deepEqual([line('ppu').releases, line('ppu').supported, line('ppu').ytd, line('ppu').lastYtd], [['PPU rollout'], 1, 1, 1], 'an Epic-mapped line counts the Features closed under it')
+  assert.deepEqual([line('iocc').ytd, line('iocc').lastYtd, line('iocc').change], [1, 2, -50])
+  assert.deepEqual(pack.overall, { supported: 6, ytd: 8, lastYtd: 5, change: 60 })
+  assert.equal(capacityLine(pack), 'Capacity: 107.5% utilization (Oct) – QE – 111.9% (Oct)')
+  assert.equal(yoyLine(pack), 'YoY support change of +60% overall – with +150% in Digital Platform, -50% in IOCC, 0% in PPU (Oct YTD vs. last year)')
+  assert.equal(supportedLine(pack), 'Serviceability = 1; Digital Platform = 3; IOCC = 1; PPU = 1')
+  assert.deepEqual(pack.kpis.map((row) => [row.label, row.value, row.manual]).slice(0, 2), [['Utilization (YTD)', '104.1%', false], ['TEDs Compliance', '99%', true]])
+  const [first, second] = packSlides(pack)
+  assert.deepEqual(first.boxes.map((box) => box.title), ['Actions/Deliverables Realized', 'Observations, Challenges & Risks', 'Focus Areas for Next Months', 'Support Requested / Topics to Highlight'])
+  assert.deepEqual(first.boxes[0].lines, ['Serviceability - CareLink 3.2', 'Digital Platform - DoseNav 2.1.0', 'IOCC - Gateway 5.0 (Core)', 'PPU - PPU rollout'])
+  assert.deepEqual(first.boxes[2].lines, ['Agent governance', 'Dashboard releases'], 'typed text fills a box')
+  assert.ok(second.boxes.find((box) => box.key === 'risks').lines[0].startsWith('Overload: 107.5%'), 'overload above 100% is a risk line')
+  assert.match(slideText(second), /Performance Pulse update — October 2026 Update\n\nSummary\n• Actual utilization was 107\.5% in October 2026\./)
+  assert.match(slideText(second), /KPI Pulse\n• Utilization \(YTD\): 104\.1%\n• TEDs Compliance: 99%\n• AI-augmented productivity \(YTD\): —/)
+})
+
+test('the .pptx writer: a zip with the presentation parts, one slide per input, text escaped (PCK-06)', () => {
+  const bytes = writePptx([{ title: 'A & B', subtitle: 'Sub', columns: 2, rows: 1, boxes: [{ title: 'Box <1>', lines: ['x "y" z'], col: 0, row: 0 }] }, { title: 'Two', columns: 1, rows: 1, boxes: [] }])
+  const content = new TextDecoder('latin1').decode(bytes)
+  assert.equal(bytes[0] * 256 + bytes[1], 0x504b, 'starts with the zip signature')
+  for (const part of ['[Content_Types].xml', 'ppt/presentation.xml', 'ppt/slideMasters/slideMaster1.xml', 'ppt/slideLayouts/slideLayout1.xml', 'ppt/theme/theme1.xml', 'ppt/slides/slide1.xml', 'ppt/slides/slide2.xml', 'ppt/slides/_rels/slide2.xml.rels']) assert.ok(content.includes(part), part)
+  assert.ok(!content.includes('ppt/slides/slide3.xml'))
+  assert.ok(content.includes('<a:t>A &amp; B</a:t>') && content.includes('<a:t>Box &lt;1&gt;</a:t>') && content.includes('<a:t>x &quot;y&quot; z</a:t>'), 'XML special characters are escaped')
+  assert.ok(content.includes('<p:sldSz cx="12192000" cy="6858000"/>'), '16:9')
+})
+
+import { packUtilization, rowsUtilization } from '../src/packInputs.ts'
+import { sampleDataset, sampleProfiles } from '../src/sampleData.ts'
+import { capacityContext } from '../src/capacity.ts'
+import { personMonths } from '../src/dashboard.ts'
+test('the utilisation from person-month rows equals the capacity model pass used by the pack (PCK-04, WSP-02)', () => {
+  const config = { organization: 'o', project: 'p', team: 't' }
+  const sample = sampleDataset(config, '2026-10')
+  const settings = capacityContext({ resourceProfiles: sampleProfiles })
+  const months = Array.from({ length: 10 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`)
+  const rows = personMonths(sample.items, months, '2026-10-29', settings)
+  const fromRows = rowsUtilization(rows, '2026-10', settings), fromModel = packUtilization(sample.items, '2026-10', settings)
+  assert.ok(fromModel.month != null && fromModel.ytd != null && fromModel.qeMonth != null, 'the sample has bookings')
+  for (const key of ['month', 'ytd', 'qeMonth']) assert.ok(Math.abs(fromRows[key] - fromModel[key]) <= 0.1, `${key}: ${fromRows[key]} vs ${fromModel[key]}`)
+})
+
+test('every KPI can be overridden for the month; a typed utilisation also replaces it in the generated lines (TC-PCK-05)', () => {
+  const setup = { ...defaultPackSetup, kpis: [...defaultPackSetup.kpis, { id: 'util-month', label: 'Utilization (month)', metric: 'utilization-month' }, { id: 'open', label: 'Open', epicId: 1, metric: 'open' }] }
+  const inputs = { month: '2026-10', setup, items: [], streamsOf: () => [], utilization: { month: 107.5, ytd: 104.1, qeMonth: null }, timeZone: 'UTC' }
+  const calculated = buildMonthlyPack({ ...inputs, notes: emptyNotes('2026-10') })
+  const util = (pack, id) => pack.kpis.find((row) => row.id === id)
+  assert.deepEqual([util(calculated, 'util').value, util(calculated, 'util').overridden, util(calculated, 'util-month').value], ['104.1%', false, '107.5%'])
+  const typed = buildMonthlyPack({ ...inputs, notes: { ...emptyNotes('2026-10'), kpiValues: { util: '95%', 'util-month': ' 90 ', open: '12' } } })
+  assert.deepEqual([util(typed, 'util').value, util(typed, 'util').computed, util(typed, 'util').overridden], ['95%', '104.1%', true], 'Utilization (YTD) overridden, the calculated value kept for reference')
+  assert.deepEqual([util(typed, 'open').value, util(typed, 'open').overridden], ['12', true], 'an Epic KPI too')
+  assert.deepEqual([typed.utilization.month, typed.utilization.ytd], [90, 95])
+  assert.equal(capacityLine(typed), 'Capacity: 90.0% utilization (Oct)')
+  assert.match(packSlides(typed)[1].boxes[0].lines[0], /Actual utilization was 90.0% in October 2026/)
+})
+
+test('typing in the pack does not recount the data: releases and Epic counts are kept while only the text changes (TC-PCK-07)', () => {
+  let calls = 0
+  const streamsOf = () => { calls += 1; return [{ name: 'DP', releases: ['DoseNav 2.1'], supported: 1 }] }
+  const inputs = { month: '2026-10', setup: defaultPackSetup, items: [], streamsOf, utilization: { month: 100, ytd: 99, qeMonth: null }, timeZone: 'UTC' }
+  const first = buildMonthlyPack({ ...inputs, notes: emptyNotes('2026-10') })
+  const counted = calls
+  assert.ok(counted >= 10, 'the first build reads this year and last year month by month')
+  const typed = buildMonthlyPack({ ...inputs, notes: { ...emptyNotes('2026-10'), text: { summary: 'Typing…' }, kpiValues: { util: '95%' } } })
+  assert.equal(calls, counted, 'no month is read again while typing')
+  assert.deepEqual([typed.lines, typed.overall], [first.lines, first.overall])
+  assert.deepEqual([typed.kpis[0].value, typed.kpis[0].computed, typed.utilization.ytd], ['95%', '99.0%', 95], 'the typed text and overrides still apply')
+  buildMonthlyPack({ ...inputs, items: [], notes: emptyNotes('2026-10') })
+  assert.ok(calls > counted, 'new data is counted again')
+})
+
+test('PCK-11: Capabilities (Projects & Services) — unique Features under the chosen Epics with hours recorded in the month', async () => {
+  const { capabilityFeatures } = await import('../src/monthlyPack.ts')
+  const items = [
+    item(1, 'Epic', 'Active', { title: 'Projects' }), item(2, 'Epic', 'Active', { title: 'Services' }), item(3, 'Epic', 'Active', { title: 'Other' }),
+    item(10, 'Feature', 'Active', { parentId: 1, title: 'Alpha rollout' }), item(11, 'Feature', 'Active', { parentId: 2, title: 'Beta support' }),
+    item(12, 'Feature', 'Active', { parentId: 1, title: 'Gamma (no hours)' }), item(13, 'Feature', 'Active', { parentId: 3, title: 'Delta (other Epic)' }),
+    item(20, 'User Story', 'Active', { parentId: 10 }), item(21, 'User Story', 'Active', { parentId: 11 }), item(22, 'User Story', 'Active', { parentId: 12 }), item(23, 'User Story', 'Active', { parentId: 13 }),
+    item(30, 'Task', 'Active', { parentId: 20, title: 'October 2026 | Alpha rollout', completedWork: 6 }),
+    item(31, 'Task', 'Active', { parentId: 20, title: 'October 2026 | Alpha rollout', completedWork: 2 }),
+    item(32, 'Task', 'Active', { parentId: 21, title: 'October 2026 | Beta support', completedWork: 1.5 }),
+    item(33, 'Task', 'Active', { parentId: 22, title: 'October 2026 | Gamma', completedWork: 0, originalEstimate: 8 }),
+    item(34, 'Task', 'Active', { parentId: 22, title: 'September 2026 | Gamma', completedWork: 4 }),
+    item(35, 'Task', 'Active', { parentId: 23, title: 'October 2026 | Delta', completedWork: 3 }),
+  ]
+  assert.deepEqual(capabilityFeatures(items, [1, 2], '2026-10'), ['Alpha rollout', 'Beta support'], 'each Feature once; no hours or another month or another Epic: not counted')
+  assert.deepEqual(capabilityFeatures(items, [], '2026-10'), [])
+  const setup = parsePackSetup(JSON.stringify({ ...defaultPackSetup, capabilities: { label: '', epicIds: [1, 2, 2, -1] } }))
+  assert.deepEqual(setup.capabilities, { label: 'Capabilities (Projects & Services)', epicIds: [1, 2] }, 'checked; the default label when blank')
+  assert.equal(parsePackSetup(JSON.stringify({ ...defaultPackSetup, capabilities: { label: 'X', epicIds: [] } })).capabilities, undefined, 'no Epics: no bullet')
+  const pack = buildMonthlyPack({ month: '2026-10', setup, notes: emptyNotes('2026-10'), items, streamsOf: () => [], utilization: { month: null, ytd: null, qeMonth: null } })
+  assert.deepEqual(packSlides(pack)[0].boxes[0].generated, ['Capabilities (Projects & Services) [2]: Alpha rollout, Beta support'], 'in Actions/Deliverables Realized, after the release lines')
+})
+
+test('PCK-12: Key takeaways — the Capabilities count joins the Supported line', () => {
+  const pack = { month: '2026-10', lines: [{ label: 'Content', supported: 3 }, { label: 'IOCC', supported: 0 }], capabilities: { label: 'Capabilities (Projects & Services)', features: ['Alpha rollout', 'Beta support'] } }
+  assert.equal(supportedLine(pack), 'Content = 3; Capabilities (Projects & Services) = 2')
+  assert.equal(supportedLine({ ...pack, lines: [] }), 'Capabilities (Projects & Services) = 2', 'shown without release lines')
+  assert.equal(supportedLine({ ...pack, capabilities: { ...pack.capabilities, features: [] } }), 'Content = 3', 'no Feature with hours: no count')
+  assert.equal(supportedLine({ ...pack, capabilities: undefined }), 'Content = 3', 'no Epics set: no count')
+})

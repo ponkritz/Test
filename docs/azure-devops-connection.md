@@ -1,0 +1,86 @@
+# Azure DevOps work-item trial
+
+Open **Azure DevOps** in the app. The supplied organization/project/team are prefilled from the backlog URL. Fetch and preview only read Azure DevOps. Feature creation is an explicit, separate action.
+
+## Connect
+
+1. In Azure DevOps User settings → Personal access tokens, create a token for the required organization. Select custom scopes → **Work Items → Read** and a short expiry (seven days for the trial), subject to organization policy.
+2. Paste the token into the app's password field and choose **Save PAT on this browser**, or fetch once to save it. Never paste it in chat, a repository, a URL, or a GitHub Actions variable.
+3. Select **Fetch preview**. The app reads the team's configured area paths, queries all work-item types in that scope, and reads their details in batches of at most 200. **Include all accessible project Epics** is enabled by default, adding Epics outside team areas without duplicate IDs. Their out-of-team children are not fetched automatically. Parent IDs and hierarchy relations are preserved.
+4. Open **Board** from the sidebar or **Review in Board**. Review the hierarchy, states and source dates. Select **Save fetched work items** to retain the source records. Unsaved previews survive navigation between Board and connection settings within the app session. Re-fetching upserts by organization/project/ID without creating duplicate source records. Previously saved items missing from a later fetch are retained for review.
+
+The PAT is saved in a separate localStorage entry scoped to the organization/project, as requested for this trial. Fetch and create reuse it across sessions on the same browser profile. It is never included in AppState, JSON backups or audit records. **Forget PAT** removes that local copy; revocation must be done in Azure DevOps. Anyone with access to the browser profile can use the saved token. It is not a managed credential vault. GitHub Secrets are not needed.
+
+## Hierarchy and Feature creation
+
+The separate **Board** view shows fetched Epics, Features, User Stories, Tasks and other work-item types using real parent IDs (with reverse hierarchy relations as a fallback). Expand individual branches or use Expand all. Active / New / Closed filters match the source state exactly. Matching children keep their ancestors as context; custom states remain visible under All. Parents outside the fetched team scope are labelled, rather than guessed. **Azure DevOps** only contains connection, PAT, fetch and preview-save controls; source details and Feature creation live in Board.
+
+Select **+ Feature** on an Epic or **New Feature** to choose from all fetched Epics in the project. Enter a title, the required **Acceptance Criteria (Feature DoD)** (written at the top of the Description as `Feature DoD: …`), the **Priority** (1–4, default 2, sent as `Microsoft.VSTS.Common.Priority` and verified after creation), optional assignee/date/Description (a new Feature writes no `Microsoft.VSTS.Common.AcceptanceCriteria`: the web app and the desktop proxy refuse it, BKL-53) and a PAT with **Work Items → Read & Write**. The PU description preset is `Feature DoD: DT finished. This is a PU release.` The Release preset is `Feature DoD: IQOQ finished and Checklist uploaded into the Feature.` Preset text is editable before creation.
+
+Review Area Path (defaults to the Epic's area but can be overridden) and Iteration Path. **Load iteration paths** combines team iterations and the project's iteration tree; choose the actual full path in the picker. Short names resolve only when they have one unambiguous match. "Current PI" is a name, not a built-in Azure DevOps macro. If no actual iteration has that name, select the correct full PI path. Internal classification-node `Iteration` segments are removed when constructing work-item paths. Missing/ambiguous names stop before Feature creation. The connector reads the parent to confirm it is an Epic, validates the payload with `validateOnly=true`, creates one Feature with a reverse hierarchy link, then reads it back to verify the type, parent, area and iteration. It does not bypass project rules or set an invented initial state. Custom required fields may block validation and will be reported.
+
+The saved PAT is reused for creation. There is no automatic retry of a create request. If a response is lost, check the Azure DevOps backlog before retrying. Successful operations display source links and save verified records in the app.
+
+### Automatic children
+
+Feature titles use `Program | Service | vRelease`. The review identifier is `Service Release` (without the version prefix `v`).
+
+- PU: optional SFV, DT and IQOQ review User Stories.
+- Full Release: optional PRD, SFV, DT and IQOQ review User Stories.
+- Each selected review is named `<Milestone> : Review of Deliverables (<Service> <Release>)`.
+- Both types always include `<Feature title> - Time Writing` as a User Story, even if all milestones are skipped.
+- That story always gets a Task named `<Month Year> | <Feature title>`, for the current calendar month in UTC (NAV-51).
+- User Stories inherit the Feature's area and resolved iteration. The Time Writing Task inherits its area but uses the **project-root iteration** (`Patient Safety and Quality` for the configured project).
+
+Every child is validated, saved, linked and read back. Multi-item creation is not atomic: Azure DevOps cannot create this entire hierarchy in one transaction. If a later child fails, known successful IDs are retained and reported. **Complete children** on the existing Feature checks direct children by type/title/parent and creates only missing selected stories and the current month Task. Duplicates or conflicting area/iteration values stop completion for review. Using it in a later month creates only that missing Task. No rollback or deletion is performed automatically.
+
+## Web and desktop transport
+
+The web app sends HTTPS requests directly to `dev.azure.com`; organization/network/browser restrictions can block cross-origin requests. The desktop package uses a narrow preload/IPC bridge for source reads and explicitly requested Feature creation. Neither mode sends tokens through GitHub. Requests do not follow redirects with credentials; errors are shown without logging tokens.
+
+**Discussions (comments).** The Edit form (BKL-20) and **PI Review** (PIR-05) read a work item's comments with `GET {collection}/{project}/_apis/wit/workItems/{id}/comments?api-version=7.1-preview.4&order=desc&$top=200`, a preview API on dev.azure.com. When the answer carries a `continuationToken`, the next page is read by sending it back URL-encoded as `&continuationToken=…`, until no token comes back or 1,000 comments are read. The PAT needs **Work Items → Read** only (adding a comment from the Edit form needs Read & Write). The desktop proxy accepts the token on this read only, as a text of at most 2,048 characters, on the same fixed host and path (DSK-11). An HTTP 429 answer is reported with its Retry-After seconds; PI Review's Read all Discussions waits that long (at most 60 s) and tries once more. The comment HTML is turned into plain text before it is shown (a list as one line per item); no HTML is rendered. A comment is added with `POST …/comments?api-version=7.1-preview.4` and the body `{ "text": … }`: plain text escaped with line breaks as `<br>`, or — a PI review only (PIR-14) — the app's own nested list (`<ul>`, `<ol>`, `<li>`, `<p>` without attributes, every text escaped), which the web app and the desktop proxy check against that allowlist before sending (SM-183). The API's `format` parameter is not sent: the text is taken as HTML, as Azure DevOps returns the comments it stores (LIM-98).
+
+Saved source records use the existing app store: local browser/device storage; shared setup goes to the Git data repository. Azure DevOps connectivity does not by itself centralize planning data or enforce app roles.
+
+## Mapping still to confirm with live evidence
+
+This initial connector reads Azure Boards work items, not Azure Pipelines deployments. An Epic is not assumed to be a release. It stores work-item types and states verbatim and preserves standard Target Date, Closed Date, iteration and parent fields when supplied. It does not infer closure from Changed Date or assign missing dates.
+
+Custom release types, milestone fields, cross-team descendants and historical state revisions require project-specific mapping. Per-release feature/bug totals and historical YoY trends are not claimed by this initial source preview. The existing manual release dashboard stays separate until that mapping is confirmed.
+
+Live reading was confirmed by the user. No production PAT was available to the coding agent for creating a Feature. Contract tests cover area scoping, paging, batching, missing fields, refreshes, incomplete responses, parent/type verification, hierarchy/state filters, iteration resolution, PU/Release descriptions and web/desktop payload parity. A real write still requires the user's PAT in the app.
+
+## Sharing connections and data through Git
+
+With Git storage connected (Settings → Storage), **Settings → Views in Git → Save N connections to Git** writes the connection setup (names, view names, queries, URLs, roles — never PATs) to `azure-views.json` in the data repository. Every app that connects to the same repository takes it as its default at start: missing connections are added, unchanged ones follow Git, ones changed locally are kept; **Restore from Git** brings a connection back to Git's version. A restored connection without a PAT shows the data saved to Git (view only) until a PAT is entered. A PAT typed for the restore is for **one server**, chosen or confirmed in **Server of this PAT** next to it; connections on other servers stay without a PAT (CON-141).
+
+Since CON-119 `azure-views.json` (the Streams file) holds the **Stream mapping only** (Time Writing, the streams, DP's data sets). Each person's **Other views** are kept in their own file, `other-views/<work email>.json` (never a PAT), and only that person's app loads them; the Other views of an older shared setup wait in `other-views/unassigned.json` until an admin assigns them (Admin → Data & history → Other views → Unassigned Other views). When the Streams file changes, every app asks once to **Load everything from Git** (GIT-29).
+
+Every fresh fetch of an on-prem view is saved automatically to `azure-data/<connection>.json` (also when the data is unchanged — the fetch time is new; needs a Git token that can write). The web app loads it at start; each on-prem view has **Load from Git**, and a fetch that fails or has no PAT falls back to it.
+
+## Saved queries as dashboard data sources
+
+An On-Demand Dashboard's builders can add a saved Azure DevOps query as a data source (DSH-18). The dashboard's file in Git keeps only its **reference** — server, project, query id and name — never a PAT or rows. Each viewer reads it with **their own PAT** for that server (one PAT per server, My settings → Servers and PATs) when the dashboard opens, **read only**:
+
+- `GET {collection}/{project}/_apis/wit/wiql/{id}?$top=5001` — the saved query run by its id (a GUID): its columns and work-item ids (a tree or links query: the links);
+- `GET {collection}/{project}/_apis/wit/fields` — the field names and types (the existing read);
+- `POST {collection}/{project}/_apis/wit/workitemsbatch` — the work items, 200 at a time (the existing read);
+- `GET {collection}/{project}/_apis/wit/queries?$depth=2` — the saved queries of a project, for the builder's picker.
+
+The desktop proxy accepts the two new reads (`saved-query`, `saved-queries`) as GET only, checks the id is a GUID again and builds the URL itself (SM-200); on-premises servers stay read-only. At most 5,000 rows and 30 columns are used (LIM-120). The queries the app already reads (stream queries, Tool Validations, My views) are offered from their fetched data, without a read of their own (DSH-17).
+
+## Two connections for one stream
+
+A stream can have more than one connection named like it. CP reads its release-folder tree and, for the names, a second connection such as "CP Releases". **Tool Validations** reads a **Tools** query and a **Signed documents** query (TVL-19), named **Tool List** and **Validation Documents** in the app (TVL-33): the Signed documents connection is the one chosen under Stream mapping → Tool Validations queries, else the one named with "documents", "docs", "signed" or "signatures" ("Tool Validations Signed documents", as its Add query names it), else the one whose query selects `[System.Parent]` and an `ApproverName` column; **Add query** on a Tool Validations row asks the category, pre-selected that way, and saves the confirmed choice there; both are read only. **Parent names** (TVL-31): when ↻ on the Tool Validations page has fetched both queries, the app reads the **System.Title** of each document Parent that is not a tool of the Tools query (e.g. a retired tool) by its work item ID — the same read-only batch read as the queries' rows (`POST …/_apis/wit/workitemsbatch`, at most 200 IDs per request; the desktop app through its read proxy), on the Signed documents connection with its server's PAT, never a write, on-premises servers included — and keeps the names with the fetched documents. A batch that fails is read one item at a time; a rejected PAT, refused access or an unreachable server stops at once, and the names not read show as #ID with the reason.
+
+## One Time Writing connection
+
+Only the active Time Writing (QMS-0025) connection is used. If there is more than one, Settings → Connections names the duplicates and offers **Keep "…", remove the others**; with a Git token that can save, the connection setup in Git is updated in the same step so they do not come back. Like **Use as Time Writing**, this changes the shared Stream mapping, so only a Tool Owner (“Change the stream mapping”) can do it; for everyone else both are disabled with the reason, and Git storage refuses the write too (CON-133). Removing a connection does not revoke its PAT in Azure DevOps.
+
+## References
+
+- https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1
+- https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1
+- https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-id?view=azure-devops-rest-7.1
+- https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/queries/list?view=azure-devops-rest-7.1
+- https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops

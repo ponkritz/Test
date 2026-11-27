@@ -1,0 +1,79 @@
+{
+  "name": "demandplanning",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "version": "14.8.0",
+  "description": "Demand planning, capacity and release tracking desktop application",
+  "author": "Demand Planning Team",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:e2e": "node --test \"e2e/*.e2e.mjs\"",
+    "swbom": "node scripts/swbom.mjs",
+    "trace": "node scripts/traceability.mjs",
+    "docs:shots": "node scripts/user-guide-shots.mjs",
+    "docs:videos": "node scripts/user-guide-shots.mjs --videos",
+    "test:azure": "node --test tests/azure-devops.test.mjs tests/browser-state.test.mjs tests/app-update.test.mjs tests/cloud-snapshots.test.mjs tests/azure-insights.test.mjs",
+    "dev": "vite",
+    "dev:desktop": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "pnpm build:web && electron-builder --win nsis",
+    "build:web": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "start:desktop": "electron .",
+    "build:mac": "pnpm build:web && electron-builder --mac dmg --universal"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.1",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
+    "electron": "^44.11.6",
+    "electron-builder": "^26.18.0",
+    "fake-indexeddb": "^6.2.8",
+    "oxlint": "^1.94.0",
+    "playwright": "1.56.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.8",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.demandplanning.desktop",
+    "productName": "Demand Planning Hub",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Demand-Planning-Hub-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "Demand-Planning-Hub-mac.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Demand-Planning-Hub-mac.${ext}"
+    }
+  }
+}
