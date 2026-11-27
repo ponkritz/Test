@@ -829,8 +829,9 @@ test('TC-PIR-80: Update review for (n) where comments are in place already — m
   state.comments[208].length = 0
   assert.deepEqual(await bulkUpdate(page, ids, 'Book the rig early', state), ['replace', 'replace', 'New comment', 'New comment', 'New comment', 'replace'])
   await jobDone(page, 'PI review for 6 Features', 'Posted 3 (#206, #207, #208) · Replaced 3 (#201, #205, #209) · Failed 0.')
-  assert.deepEqual(state.edits.map((entry) => [entry.id, entry.commentId]), [[201, 61], [205, 62], [209, 66]])
-  assert.deepEqual(state.posts.map((post) => post.id), [206, 207, 208])
+  // Writes run 3 at a time, so they reach Azure DevOps in any order.
+  assert.deepEqual(state.edits.map((entry) => [entry.id, entry.commentId]).sort((x, y) => x[0] - y[0]), [[201, 61], [205, 62], [209, 66]])
+  assert.deepEqual(state.posts.map((post) => post.id).sort(), [206, 207, 208])
   for (const id of ids) await rowOf(page, id).locator('.pill', { hasText: /^Reviewed$/ }).waitFor()
   // Again, in the same page load: every one now has my review of the PI — all six are replaced.
   assert.deepEqual(await bulkUpdate(page, ids, 'Book the rig earlier'), ids.map(() => 'replace'))
