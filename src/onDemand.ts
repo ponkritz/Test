@@ -840,7 +840,8 @@ export const mergeOnDemandText: Merge = (baseText, mineText, theirsText, mineLat
   const colors = later(base?.colors, mine.colors, theirs.colors, mineLater)
   // OND-52: the Insights filter row's setup is one entry, the later save's where both changed it.
   const insightFilters = later(base?.insightFilters, mine.insightFilters, theirs.insightFilters, mineLater)
-  // PGB-26: the table's source is set when the page is added and never changed by the app: the later save's where both differ.
+  // PGB-26, PGB-31: the table's source is set when the page is added; only its query changes (Change query…). It merges as
+  // one entry: the side that changed it, the later save's where both did.
   const source = later(base ? pageSourceOut(base.source) : undefined, pageSourceOut(mine.source), pageSourceOut(theirs.source), mineLater) ?? pageSourceOut(mine.source)
   // Read back through the parser: values of columns that are gone are dropped, every rule of the file applies.
   return serializeOnDemandPage(parseOnDemandPage(JSON.stringify({ schema: 1, kind: 'on-demand-page', id: mine.id, ...head, columns: ordered, rows, insights: orderedInsights.map(insightOut), ...(colors ? { colors } : {}), ...(mine.storage === 'rows' || theirs.storage === 'rows' ? { storage: 'rows' } : {}), ...(Math.max(mine.lastSeq ?? 0, theirs.lastSeq ?? 0) ? { lastSeq: Math.max(mine.lastSeq ?? 0, theirs.lastSeq ?? 0) } : {}), ...insightFiltersPart(insightFilters), ...source }), mine.id))

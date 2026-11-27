@@ -2,17 +2,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AzureConnectionProfileSummary } from './azureCredentials'
 import { missingDataset, type Dataset } from './dashboardPages'
 import { querySource, serverKeyOf, serverLabel, type AzureQueryRef } from './azureQueryRef'
-import { patForServer, queryDataset, queryFailure, queryReadReason, readSavedQuery, type QueryResult } from './azureQuerySources'
+import { patForServer, queryDataset, queryFailure, queryReadReason, readSavedQuery, readWiqlQuery, type QueryResult } from './azureQuerySources'
+import type { WiqlQuery } from './wiqlQuery'
 import { formatDateTime } from './format'
 
 // DSH-19, DSH-22 The saved Azure queries of a dashboard as data sources, read with the viewer's own PAT when the
 // dashboard opens — only those a block or a filter uses, all of them while the block pop-up is open — and again with
 // ↻ Refresh Azure queries (no polling). The rows stay in this page's memory only: never in Git, a backup or the browser.
+// PGB-30: a Table (Query) page of a custom WIQL query reads it the same way — the reference then carries the query
+// (wiql), read through the runner of the stream queries (readWiqlQuery) instead of by a saved query's id.
 type Read = { state: 'reading'; previous?: QueryResult } | { state: 'done'; result: QueryResult } | { state: 'failed'; error: string }
 const kind = 'Azure DevOps query'
-const readKey = (ref: AzureQueryRef) => `${serverKeyOf(ref.server)}|${ref.project.toLowerCase()}|${ref.queryId}`
+export type QueryToRead = AzureQueryRef & { wiql?: WiqlQuery }
+const readKey = (ref: QueryToRead) => `${serverKeyOf(ref.server)}|${ref.project.toLowerCase()}|${ref.wiql ? `wiql:${ref.wiql.text}` : ref.queryId}`
 
-export function useAzureQueries(refs: AzureQueryRef[], wanted: (key: string) => boolean, options: { profiles: AzureConnectionProfileSummary[]; viewingAs?: boolean }) {
+export function useAzureQueries(refs: QueryToRead[], wanted: (key: string) => boolean, options: { profiles: AzureConnectionProfileSummary[]; viewingAs?: boolean }) {
   const [reads, setReads] = useState<Record<string, Read>>({})
   const [round, setRound] = useState(0)
   const started = useRef(new Set<string>())
@@ -33,7 +37,7 @@ export function useAzureQueries(refs: AzureQueryRef[], wanted: (key: string) => 
         setReads((current) => { const before = current[key]; return { ...current, [key]: { state: 'reading', ...(before?.state === 'done' ? { previous: before.result } : before?.state === 'reading' && before.previous ? { previous: before.previous } : {}) } } })
         const pat = pats[ref.id] ?? ''
         try {
-          const result = await readSavedQuery(ref, pat)
+          const result = ref.wiql ? await readWiqlQuery(ref.wiql, pat) : await readSavedQuery(ref, pat)
           if (mounted.current) setReads((current) => ({ ...current, [key]: { state: 'done', result } }))
         } catch (failure) {
           if (mounted.current) setReads((current) => ({ ...current, [key]: { state: 'failed', error: queryFailure(failure, pat) } }))
@@ -52,10 +56,12 @@ export function useAzureQueries(refs: AzureQueryRef[], wanted: (key: string) => 
     const result = read?.state === 'done' ? read.result : read?.state === 'reading' ? read.previous : undefined
     if (read?.state === 'failed') return blocked(read.error)
     if (!result) return blocked(`Reading ${ref.name} from Azure DevOps with your PAT…`)
-    return queryDataset(key, ref.name, kind, `The saved query ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with your own PAT at ${formatDateTime(result.readAt ?? '')}`, result)
+    return queryDataset(key, ref.name, kind, `The ${ref.wiql ? 'custom query (WIQL)' : 'saved query'} ${ref.name} on ${serverLabel(ref.server)}, project ${ref.project}, read from Azure DevOps with your own PAT at ${formatDateTime(result.readAt ?? '')}`, result)
   })
   const reading = Object.values(reads).some((read) => read.state === 'reading')
+  // PGB-30: the SELECT entries of a custom query that are no field of its project, per query.
+  const unresolved = refs.map((ref) => { const read = reads[readKey(ref)]; return read?.state === 'done' ? read.result.unresolved ?? [] : [] })
   // ↻ Refresh Azure queries: every used query read again (the rows shown until the new ones are there).
   const refresh = () => setRound((value) => value + 1)
-  return { datasets, refresh, reading }
+  return { datasets, refresh, reading, unresolved }
 }

@@ -3,7 +3,10 @@ import type { AppState } from './domain'
 import { loadAzureConnectionProfile, loadServerPat, serverKey, type AzureConnectionProfileSummary } from './azureCredentials.ts'
 import { projectApiBase, requestAzure, type AzureConfig, type AzureTransport } from './azureClient.ts'
 import { datasetPage, missingDataset, type Dataset } from './dashboardPages.ts'
-import { cellValue, columnName, defaultViewColumns, htmlToText, queryLayout } from './queryView.ts'
+import { cellValue, columnName, defaultViewColumns, htmlToText, pickFields, queryLayout, sortItems } from './queryView.ts'
+import { mapAzureWorkItem } from './azureRead.ts'
+import { isLinkQuery, runWorkItemQuery } from './releaseSource.ts'
+import type { WiqlQuery } from './wiqlQuery.ts'
 import { allStreams, defaultStreams, profilesForStream, toolQueries, toolRoleLabel } from './streams.ts'
 import { viewSource } from './viewSources.ts'
 import { serverKeyOf, serverLabel, type AzureQueryRef } from './azureQueryRef.ts'
@@ -28,7 +31,8 @@ export interface AzureFieldInfo { referenceName: string; name?: string; type?: s
 export type QueryValue = string | number | boolean | null | undefined | Record<string, unknown>
 export interface QueryItem { id: number; url?: string; values: Record<string, QueryValue> }
 // A query's result as the sources build it: the fields (capped), the items (capped), whether more were returned.
-export interface QueryResult { columns: { ref: string; name: string }[]; items: QueryItem[]; more: boolean; info?: Record<string, AzureFieldInfo>; readAt?: string }
+// unresolved: SELECT entries of a custom WIQL query that are no field of the project (PGB-30).
+export interface QueryResult { columns: { ref: string; name: string }[]; items: QueryItem[]; more: boolean; info?: Record<string, AzureFieldInfo>; readAt?: string; unresolved?: string[] }
 
 // ---- field types ----
 const lower = (ref: string) => ref.toLowerCase()
@@ -228,11 +232,7 @@ export async function readSavedQuery(ref: AzureQueryRef, pat: string, transport:
   const more = ids.length > maxQueryRows
   const wantedIds = (ids as number[]).slice(0, maxQueryRows)
   const columns = (result.columns ?? []).flatMap((column) => typeof column.referenceName === 'string' && /^[\w.@-]{1,128}$/.test(column.referenceName) ? [{ ref: column.referenceName, name: typeof column.name === 'string' ? column.name.slice(0, 80) : '' }] : [])
-  let info: Record<string, AzureFieldInfo> = {}
-  try {
-    const fields = await request('fields') as { value?: AzureFieldInfo[] }
-    info = Object.fromEntries((fields.value ?? []).filter((field) => typeof field?.referenceName === 'string').map((field) => [field.referenceName, { referenceName: field.referenceName, ...(typeof field.name === 'string' ? { name: field.name } : {}), ...(typeof field.type === 'string' ? { type: field.type } : {}), ...(field.isPicklist === true ? { isPicklist: true } : {}), ...(field.isIdentity === true ? { isIdentity: true } : {}) }]))
-  } catch { info = {} }
+  const info = await readFieldInfo(() => request('fields'))
   const refs = (columns.length ? columns : defaultViewColumns.map((ref) => ({ ref, name: '' }))).slice(0, maxQueryColumns).map((column) => column.ref)
   const base = projectApiBase(config)
   const items: QueryItem[] = []
@@ -249,6 +249,38 @@ export async function readSavedQuery(ref: AzureQueryRef, pat: string, transport:
     }
   }
   return { columns, items, more, info, readAt: now() }
+}
+
+// The project's field list (types and names), {} when it cannot be read (the types then come from the values).
+async function readFieldInfo(read: () => Promise<unknown>): Promise<Record<string, AzureFieldInfo>> {
+  try {
+    const fields = await read() as { value?: AzureFieldInfo[] }
+    return Object.fromEntries((fields.value ?? []).filter((field) => typeof field?.referenceName === 'string').map((field) => [field.referenceName, { referenceName: field.referenceName, ...(typeof field.name === 'string' ? { name: field.name } : {}), ...(typeof field.type === 'string' ? { type: field.type } : {}), ...(field.isPicklist === true ? { isPicklist: true } : {}), ...(field.isIdentity === true ? { isIdentity: true } : {}) }]))
+  } catch { return {} }
+}
+
+// PGB-30 A custom WIQL query of a Table (Query) page, read with the viewer's own PAT through the runner of the stream
+// queries (runWorkItemQuery, CON-78: a flat query paged by ID, a tree / links query in one call of up to 20,000 links,
+// read only; the desktop proxy accepts only SELECT [System.Id] FROM WorkItems | WorkItemLinks). The columns and their
+// order come from the query's SELECT (resolved against the project's field list, as a stream's view), the rows of a
+// flat query follow its ORDER BY (a tree keeps its order, parents before their children). The text is only ever the
+// body of that read; nothing is written to Azure DevOps.
+export async function readWiqlQuery(query: WiqlQuery, pat: string, transport: AzureTransport = requestAzure, now: () => string = () => new Date().toISOString()): Promise<QueryResult> {
+  if (!pat.trim()) throw new Error('No PAT for this server.')
+  const config = queryConfig(query)
+  const info = await readFieldInfo(() => transport({ ...config, pat: pat.trim(), operation: 'fields' }))
+  const names = Object.fromEntries(Object.values(info).flatMap((field) => field.name ? [[field.referenceName, field.name]] : []))
+  const layout = queryLayout(query.text, names)
+  const read = await runWorkItemQuery(config, pat, query.text, transport, (item) => ({ ...mapAzureWorkItem(item, config), fields: pickFields(item.fields, layout.columns) }))
+  const items = !isLinkQuery(query.text) && layout.orderBy.length ? sortItems(read, layout.orderBy) : read
+  const columns = layout.columns.map((ref) => ({ ref, name: columnName(ref, names) }))
+  return { columns, items: items.map((item) => ({ id: item.id, url: item.url, values: Object.fromEntries(layout.columns.map((ref) => [ref, (lower(ref) === 'system.id' ? item.id : cellValue(item, ref)) as QueryValue])) })), more: false, info, readAt: now(), ...(layout.unresolved.length ? { unresolved: layout.unresolved } : {}) }
+}
+// The result of Test query in the form (PGB-28): "n work items · columns …".
+export function wiqlTestText(result: Pick<QueryResult, 'columns' | 'items' | 'unresolved'>) {
+  const { fields, dropped } = queryFields({ columns: result.columns, items: result.items })
+  const count = result.items.length
+  return `${plural(count, 'work item')} · columns ${fields.map((field) => field.name).join(', ')}${dropped ? ` (and ${plural(dropped, 'more column')}, left out)` : ''}${count > maxQueryRows ? ` · only the first ${maxQueryRows.toLocaleString('en-US')} rows are shown` : ''}${result.unresolved?.length ? ` · not a field of this project: ${result.unresolved.map((entry) => `“${entry}”`).join(', ')}` : ''}.`
 }
 
 // The saved queries of a project (Shared Queries and the viewer's My Queries, two folder levels deep), for the picker.

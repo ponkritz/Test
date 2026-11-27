@@ -117,6 +117,9 @@ export function streamEpics(settings: unknown, stream: string): number[] {
 // direct-links query (FROM WorkItemLinks … MODE (…)). A flat query keeps only its WHERE clause so paging and the
 // read-only guard in the Electron proxy ("SELECT [System.Id] FROM WorkItems|WorkItemLinks WHERE …") stay in force; a
 // tree / link query is sent as written, with SELECT [System.Id], and every work item on either end of its links is read.
+// The longest query text accepted (the WHERE clause of a flat query, the rest of a tree / links query; PGB-29 caps a
+// Table (Query) page's whole WIQL text with the same number).
+export const maxWiqlLength = 50000
 const linkQuery = /^SELECT\s+.+?\s+FROM\s+WorkItemLinks\s+WHERE\s+(.+)$/i
 export const isLinkQuery = (wiql: string) => linkQuery.test(wiql.replace(/\s+/g, ' ').trim())
 export function linkQueryText(wiql: string) {
@@ -127,7 +130,7 @@ export function linkQueryText(wiql: string) {
   if (/\bASOF\b/i.test(rest)) throw new Error('Historical (ASOF) queries are not supported.')
   const mode = /\bMODE\s*\(\s*([a-z, ]+)\)\s*$/i.exec(rest)?.[1]
   if (mode && !mode.split(',').every((part) => /^(?:MustContain|MayContain|DoesNotContain|Recursive|ReturnMatchingChildren)$/i.test(part.trim()))) throw new Error('Unsupported MODE in the tree or links query.')
-  if (rest.length > 50000) throw new Error('The query is too long.')
+  if (rest.length > maxWiqlLength) throw new Error('The query is too long.')
   return `SELECT [System.Id] FROM WorkItemLinks WHERE ${rest}`
 }
 // Checks a pasted query of either kind (on saving a connection).
@@ -138,7 +141,7 @@ export function releaseQueryWhere(wiql: string) {
   if (!match) throw new Error('Paste a work-item query: SELECT … FROM WorkItems WHERE … (flat list) or SELECT … FROM WorkItemLinks WHERE … MODE (…) (tree or direct links).')
   const where = match[1].trim()
   if (/\bASOF\b|\bMODE\s*\(/i.test(where)) throw new Error('Historical (ASOF) and link-mode queries are not supported.')
-  if (where.length > 50000) throw new Error('The query is too long.')
+  if (where.length > maxWiqlLength) throw new Error('The query is too long.')
   return where
 }
 

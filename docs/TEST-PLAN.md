@@ -2213,9 +2213,15 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 
 **TC-PGB-18 A Table (Query) page from a saved query — only its reference in Git, rows read live with each viewer's PAT, read only, Insights over the same rows** — Req PGB-23, PGB-24, PGB-25, DSH-18, DSH-19 — **UAT** — L1 `page-type.test.mjs` ("PGB-23, PGB-27: page files — without a source unchanged; a query page keeps only its reference and insights, never rows (TC-PGB-18, TC-PGB-20)", "PGB-24: a Table (Query) page is not offered as a dashboard data source (it holds no rows in Git) (TC-PGB-18)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: a Tool Owner adds a Table (Query) + Insights page from a saved query — only its reference in Git; the rows read live, read only, searched and charted; Edit keeps the source; a viewer without a PAT sees the reason"); UAT: as a Tool Owner with your PAT, ＋ Add page… → tick Table (Query) and Insights (Table (Build your own) unticked first), list the saved queries of a connection, pick one under Shared Queries, name the page, Add page — the page opens with the query's rows and columns; search, sort, Columns, Export and Group by work; there is no ＋ Add row, Edit or Set up columns…; ↻ Refresh reads the query again; add a bar chart on the Insights tab; check in Git that the page file holds only `source` with the reference and the chart (no rows, no PAT); a second person without a PAT for that server opens the page and sees "The rows cannot be shown." with the reason.
 
-**TC-PGB-19 Edit page: the table's source is fixed, Insights switches** — Req PGB-26, PGB-07, DSH-01 — L1 `page-type.test.mjs` ("PGB-26: Edit page — the family and the table source are fixed, only Insights switches (TC-PGB-19)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: …"); browser check: Edit a Table (Query) page in Admin → Pages & reports → Menu groups & pages — Table (Build your own) disabled with "The table's rows come from a saved Azure DevOps query; add a new page for the other source.", Dashboard disabled with the reason of DSH-01; untick Insights and Save to Git — the Insights tab is hidden, its charts kept; on a Build your own page Table (Query) is disabled with the reason.
+**TC-PGB-19 Edit page: the table's source is fixed, Insights switches** — Req PGB-26, PGB-07, DSH-01 — L1 `page-type.test.mjs` ("PGB-26: Edit page — the family and the table source are fixed, only Insights switches (TC-PGB-19)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-18, TC-PGB-17, TC-PGB-19: …"); browser check: Edit a Table (Query) page in Admin → Pages & reports → Menu groups & pages — Table (Build your own) disabled with "The table's rows come from an Azure DevOps query; add a new page for the other source.", Dashboard disabled with the reason of DSH-01; untick Insights and Save to Git — the Insights tab is hidden, its charts kept; on a Build your own page Table (Query) is disabled with the reason.
 
 **TC-PGB-20 The table source validated when read; older page files unchanged** — Req PGB-27, PGB-23 — L1 `page-type.test.mjs` ("PGB-27: the table source is validated when read — absent is Build your own, a bad one is kept read only with its reason (TC-PGB-20)", "PGB-23, PGB-27: page files — without a source unchanged; a query page keeps only its reference and insights, never rows (TC-PGB-18, TC-PGB-20)"); browser check: hand-edit a Table (Query) page's file in Git with a query id that is not a GUID — the page opens read only with the warning "The table's query reference is not valid — …" and "The rows cannot be read.", nothing is read from Azure DevOps; a page file without `source` (CoNQ) works as before.
+
+**TC-PGB-21 A Table (Query) page from a custom WIQL query — checked as a stream query, tested in the form, only the query in Git, rows read live in the query's order** — Req PGB-28, PGB-29, PGB-30, PGB-23, CON-78 — **UAT** — L1 `page-type.test.mjs` ("PGB-28: a custom query is checked with the rules and messages of a stream connection’s query (CON-78) (TC-PGB-21)"), `azure-query-sources.test.mjs` ("PGB-30: a custom WIQL query is read with the viewer’s PAT through the runner of the stream queries — reads only, columns and order from its SELECT / ORDER BY (TC-PGB-21)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-21, TC-PGB-23: a Tool Owner adds a Table (Query) page from a custom WIQL query — checked as a stream query, tested in the form, only the query in Git, the rows read live in the query’s order; Change query… edits the WIQL; a viewer without a PAT sees the reason"); UAT: as a Tool Owner with your PAT, open a query in Azure DevOps → Edit query → WIQL and copy it; ＋ Add page… → tick Table (Query) (Table (Build your own) unticked first) — **Query** shows Saved query chosen; choose **Custom query (WIQL)**, keep the connection, paste the WIQL — Add page says "Enter a query name."; add `ASOF '2026-01-01'` — the message of a stream connection's query, Test query disabled; remove it, **Test query** — "{n} work items · columns …" as in Azure DevOps; name the query and the page, Add page — the rows and columns of the query in its ORDER BY; search, sort, Columns and Export work, no ＋ Add row; check in Git that the page file holds `source.wiql` (name, server, project, text) and no rows, no PAT; a tree query pasted the same way lists parents before their children; a second person without a PAT for that server opens the page and sees "The rows cannot be shown." with the reason.
+
+**TC-PGB-22 The custom query validated when read — exactly one query, only its keys, the WIQL capped** — Req PGB-29, PGB-27 — L1 `page-type.test.mjs` ("PGB-29: the page file keeps a saved query or a custom query — exactly one, only their keys, the WIQL capped; a bad one read only with its reason (TC-PGB-22)"); browser check: hand-edit a custom query page's file in Git with `ASOF` in its text — the page opens read only with "The table's custom query is not valid — …" and "The rows cannot be read.", nothing is sent to Azure DevOps; add a `query` reference next to `wiql` — "The table's source has both a saved query and a custom query …"; a saved-query page (TC-PGB-18) and a page without `source` work as before.
+
+**TC-PGB-23 Change query… — the query changes, the table's source stays fixed** — Req PGB-31, PGB-26, PGB-28 — L1 `page-type.test.mjs` ("PGB-31: Change query… — the query of a Table (Query) page changes (saved ↔ custom, or the WIQL edited), the table’s source stays fixed (TC-PGB-23)", "PGB-26: Edit page — the family and the table source are fixed, only Insights switches (TC-PGB-19)"); E2E `query-table-pages.e2e.mjs` ("TC-PGB-21, TC-PGB-23: …"); browser check: on a custom query page as its owner ⋯ → Change query… — "Query now" names the custom query, its WIQL opens for editing; drop a column from the SELECT and Save to Git — the table follows, the chart over another column stays, Background jobs names the page file; switch to Saved query, pick a saved query, Save to Git — the page reads it; Edit page still disables Table (Build your own) with the reason; as a person without the page's setup right Change query… is disabled with the reason; a Build your own page has no Change query….
 
 ### 6.31 On-Demand Dashboard pages
 
@@ -3396,11 +3402,15 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | PGB-20 | TC-PGB-15 |
 | PGB-21 | TC-PGB-16 |
 | PGB-22 | TC-PGB-17 |
-| PGB-23 | TC-PGB-18, TC-PGB-20 |
-| PGB-24 | TC-PGB-18 |
+| PGB-23 | TC-PGB-18, TC-PGB-20, TC-PGB-21 |
+| PGB-24 | TC-PGB-18, TC-PGB-21 |
 | PGB-25 | TC-PGB-18 |
-| PGB-26 | TC-PGB-19 |
-| PGB-27 | TC-PGB-20 |
+| PGB-26 | TC-PGB-19, TC-PGB-23 |
+| PGB-27 | TC-PGB-20, TC-PGB-22 |
+| PGB-28 | TC-PGB-21, TC-PGB-23 |
+| PGB-29 | TC-PGB-21, TC-PGB-22 |
+| PGB-30 | TC-PGB-21 |
+| PGB-31 | TC-PGB-23 |
 | DSH-01 | TC-DSH-01, TC-DSH-02, TC-DSH-10 |
 | DSH-02 | TC-DSH-01, TC-DSH-09 |
 | DSH-03 | TC-DSH-01, TC-DSH-08, TC-DSH-11, TC-DSH-16, TC-TVL-12, TC-DSH-17 |
@@ -3734,7 +3744,7 @@ Expected (L3): an India holiday applies only to people mapped to India, and a pe
 | UC-35 | TC-ADM-01, TC-ADM-02, TC-ADM-03 |
 | UC-36 | TC-STT-01, TC-STT-02, TC-STT-03, TC-STT-04, TC-STT-05, TC-STT-06 |
 | UC-37 | TC-OND-01…34, TC-OND-40…65, TC-OND-90…103, TC-OND-120…126, TC-OND-128, TC-OND-129, TC-OND-131…143, TC-CHT-01…42, TC-CHT-50…72, TC-UI-20, TC-UI-25 |
-| UC-38 | TC-PGB-01…20, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
+| UC-38 | TC-PGB-01…23, TC-OND-129, TC-OND-131, TC-OND-133, TC-OND-135…137, TC-DSH-01…23, TC-CHT-02, TC-CHT-11, TC-CHT-13…27, TC-CHT-29…37, TC-CHT-39, TC-CHT-40, TC-CHT-42, TC-CHT-50…57, TC-CHT-59, TC-CHT-60…69, TC-CHT-71, TC-CHT-72, TC-TVL-12, TC-TVL-23 |
 | UC-39 | TC-TVL-01…33 |
 | UC-40 | TC-PIR-01…61, TC-PIR-64…68, TC-PIR-75…79, TC-PIR-81…92, TC-EPS-10, TC-UI-27 |
 | UC-41 | TC-LST-01…11, TC-OND-98, TC-OND-99 |
