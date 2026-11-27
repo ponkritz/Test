@@ -80,11 +80,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       const base = process.argv[3] ?? ''
       if (!/^[0-9a-f]{40}$/.test(base)) throw new Error('give the base commit (40 hex characters)')
       const added = git('diff', '--name-only', '--diff-filter=A', `${base}...HEAD`, '--', changesDir).split('\n').filter((file) => file.endsWith('.md') && !file.endsWith('/README.md'))
-      const before = JSON.parse(git('show', `${base}:package.json`)).version
+      // A base without package.json is the first import of the app into a repository: no version to keep.
+      const baseFiles = git('ls-tree', '--name-only', base).split('\n')
+      const before = baseFiles.includes('package.json') ? JSON.parse(git('show', `${base}:package.json`)).version : undefined
       const now = JSON.parse(readFileSync(path('package.json'), 'utf8')).version
       const problems = []
       if (!added.length) problems.push(`Add a change note ${changesDir}/<name>.md (see ${changesDir}/README.md).`)
-      if (before !== now) problems.push(`Leave the version in package.json at ${before}: CI sets it from the change notes after the merge.`)
+      if (before !== undefined && before !== now) problems.push(`Leave the version in package.json at ${before}: CI sets it from the change notes after the merge.`)
       readNotes()
       if (problems.length) throw new Error(problems.join('\n'))
       console.log(`Change note${added.length === 1 ? '' : 's'}: ${added.join(', ')}.`)
